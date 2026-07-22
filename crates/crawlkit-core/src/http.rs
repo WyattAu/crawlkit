@@ -144,7 +144,6 @@ impl HttpClient {
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
             .https_only(true)
-            .http2_prior_knowledge()
             .build()?;
 
         Ok(Self { client, config })

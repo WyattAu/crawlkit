@@ -119,6 +119,10 @@ enum Commands {
         /// Enable JavaScript rendering (requires Chrome)
         #[arg(long)]
         javascript: bool,
+
+        /// Follow links to external domains (default: only follow same-domain links)
+        #[arg(long)]
+        allow_external: bool,
     },
 
     /// Compare two crawl results
@@ -203,6 +207,7 @@ async fn main() -> Result<()> {
             include,
             exclude,
             javascript,
+            allow_external,
         } => {
             run_crawl(
                 &url,
@@ -223,6 +228,7 @@ async fn main() -> Result<()> {
                 include,
                 exclude,
                 javascript,
+                allow_external,
             )
             .await
         }
@@ -256,6 +262,7 @@ async fn run_crawl(
     include: Vec<String>,
     exclude: Vec<String>,
     javascript: bool,
+    allow_external: bool,
 ) -> Result<()> {
     use crawlkit_core::analyzers::AnalyzerRegistry;
     use crawlkit_core::http::HttpClient;
@@ -271,13 +278,14 @@ async fn run_crawl(
     let timeout_secs = timeout.unwrap_or(30);
 
     tracing::info!(
-        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={})",
+        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={}, allow_external={})",
         url,
         max_pages,
         delay,
         concurrency,
         depth,
         javascript,
+        allow_external,
     );
 
     let pb = ProgressBar::new(max_pages as u64);
@@ -333,7 +341,10 @@ async fn run_crawl(
 
     let mut pages_crawled = 0;
     let mut pages_stored = 0;
+    let mut issues_found: usize = 0;
+    let mut skipped_external: usize = 0;
     let mut visited = std::collections::HashSet::new();
+    let seed_domain = seed_url.host_str().unwrap_or("").to_string();
 
     // Crawl loop
     while pages_crawled < max_pages {
@@ -356,6 +367,16 @@ async fn run_crawl(
         // Rate limit
         let _ = rate_limiter.acquire(entry.url.host_str().unwrap_or("")).await;
 
+        // Update progress with queue size
+        let queue_len = {
+            let q = queue.lock().await;
+            q.len()
+        };
+        pb.set_message(format!(
+            "[q={queue_len}] Crawling: {}",
+            entry.url
+        ));
+
         // Fetch
         let start = std::time::Instant::now();
         let result = match client.fetch(&entry.url).await {
@@ -369,7 +390,10 @@ async fn run_crawl(
 
         pages_crawled += 1;
         pb.set_position(pages_crawled as u64);
-        pb.set_message(format!("Fetched: {}", entry.url));
+        pb.set_message(format!(
+            "[q={queue_len}] Fetched: {} (issues: {issues_found})",
+            entry.url
+        ));
 
         // Parse HTML
         let body_text = result.body.clone();
@@ -417,6 +441,7 @@ async fn run_crawl(
         }
 
         // Store findings
+        issues_found += findings.len();
         for finding in &findings {
             let issue = crawlkit_core::storage::Issue {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -443,7 +468,19 @@ async fn run_crawl(
             if visited.contains(&link_url.to_string()) {
                 continue;
             }
-            let is_internal = link_url.host_str() == entry.url.host_str();
+            let is_internal = link_url.host_str() == Some(&seed_domain);
+
+            // Enforce domain filtering
+            if !is_internal && !allow_external {
+                skipped_external += 1;
+                tracing::debug!(
+                    "Skipping external link: {} (host={})",
+                    link_url,
+                    link_url.host_str().unwrap_or("<none>")
+                );
+                continue;
+            }
+
             if !include.is_empty() && !include.iter().any(|p| link.href.contains(p)) {
                 continue;
             }
@@ -463,8 +500,8 @@ async fn run_crawl(
     }
 
     pb.finish_with_message(format!(
-        "Crawl complete: {} pages crawled, {} stored",
-        pages_crawled, pages_stored
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external links skipped",
+        pages_crawled, pages_stored, issues_found, skipped_external
     ));
 
     storage.finish_crawl(&crawl_id, pages_crawled, 0)?;
@@ -487,9 +524,11 @@ async fn run_crawl(
     }
 
     tracing::info!(
-        "Crawl complete: {} pages crawled, {} stored. Database: {}",
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external links skipped. Database: {}",
         pages_crawled,
         pages_stored,
+        issues_found,
+        skipped_external,
         db_path.display()
     );
     Ok(())

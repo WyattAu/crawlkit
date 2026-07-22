@@ -1,0 +1,28 @@
+[package]
+name = "crawlkit-api"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "crawlkit-api"
+path = "src/main.rs"
+
+[dependencies]
+crawlkit-core = { path = "../crawlkit-core" }
+tokio.workspace = true
+axum = { version = "0.8", features = ["macros"] }
+tower = { version = "0.5", features = ["full"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+chrono.workspace = true
+url.workspace = true
+dashmap.workspace = true

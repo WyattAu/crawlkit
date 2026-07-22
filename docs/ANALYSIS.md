@@ -105,6 +105,8 @@
 
 ## 2. Comparative Matrix
 
+> **Note**: A comprehensive competitive analysis with 25 competitors and 8 quantitative matrices is available in [`COMPETITIVE_ANALYSIS.md`](./COMPETITIVE_ANALYSIS.md).
+
 ### 2.1 Language & Platform Comparison
 
 | Tool | Language | Open Source | Self-Hosted | Binary Distribution | Runtime Dependencies |

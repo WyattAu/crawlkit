@@ -223,6 +223,11 @@ pub struct Storage {
 }
 
 impl Storage {
+    /// Lock and return the underlying connection guard.
+    pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
+        self.conn.lock().unwrap()
+    }
+
     /// Open or create a SQLite database at the given path.
     ///
     /// Enables WAL mode and creates the schema if it doesn't exist.

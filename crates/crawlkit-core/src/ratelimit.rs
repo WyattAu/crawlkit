@@ -100,7 +100,9 @@ impl RateLimiter {
                 let mut bucket = self
                     .domain_buckets
                     .entry(domain.to_string())
-                    .or_insert_with(|| TokenBucket::new(self.per_domain_rps, self.per_domain_burst));
+                    .or_insert_with(|| {
+                        TokenBucket::new(self.per_domain_rps, self.per_domain_burst)
+                    });
                 bucket.refill();
 
                 if bucket.try_consume(1) {
@@ -328,7 +330,10 @@ mod tests {
         let limiter = RateLimiter::new(5.0, 20.0);
         let tokens = limiter.domain_tokens("example.com");
         // Bucket is created lazily with burst = ceil(5.0 * 2.0) = 10
-        assert!(tokens >= 9.0 && tokens <= 11.0, "expected ~10.0, got {tokens}");
+        assert!(
+            tokens >= 9.0 && tokens <= 11.0,
+            "expected ~10.0, got {tokens}"
+        );
     }
 
     #[test]
@@ -373,7 +378,7 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_acquire_timeout() {
         let limiter = RateLimiter::new(0.001, 0.001); // very low RPS
-        // Consume the initial burst token
+                                                      // Consume the initial burst token
         let _ = limiter
             .acquire_with_timeout("example.com", Duration::from_secs(1))
             .await;

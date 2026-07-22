@@ -219,8 +219,7 @@ async fn main() -> Result<()> {
                 depth,
                 user_agent.or_else(|| config.crawl.as_ref().and_then(|c| c.user_agent.clone())),
                 timeout.or_else(|| config.crawl.as_ref().and_then(|c| c.timeout_secs)),
-                respect_robots
-                    .or_else(|| config.crawl.as_ref().and_then(|c| c.respect_robots_txt)),
+                respect_robots.or_else(|| config.crawl.as_ref().and_then(|c| c.respect_robots_txt)),
                 include,
                 exclude,
                 javascript,
@@ -283,8 +282,12 @@ async fn run_crawl(
 
     // Initialize storage
     let output_dir = output.unwrap_or_else(|| PathBuf::from("."));
-    std::fs::create_dir_all(&output_dir)
-        .with_context(|| format!("Failed to create output directory: {}", output_dir.display()))?;
+    std::fs::create_dir_all(&output_dir).with_context(|| {
+        format!(
+            "Failed to create output directory: {}",
+            output_dir.display()
+        )
+    })?;
     let db_path = output_dir.join("crawlkit.db");
     let storage = Storage::new(&db_path)
         .with_context(|| format!("Failed to open storage at {}", db_path.display()))?;

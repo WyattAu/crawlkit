@@ -68,7 +68,10 @@ impl UserAgentRotator {
     ///
     /// Panics if `agents` is empty.
     pub fn new(agents: Vec<String>) -> Self {
-        assert!(!agents.is_empty(), "UserAgentRotator requires at least one user-agent");
+        assert!(
+            !agents.is_empty(),
+            "UserAgentRotator requires at least one user-agent"
+        );
         Self {
             agents,
             index: AtomicUsize::new(0),
@@ -157,7 +160,8 @@ impl HttpClient {
     /// Returns a `FetchResult` with the final URL, status, headers, and body.
     /// Follows redirects manually up to `max_redirects` to record each hop.
     pub async fn fetch(&self, url: &Url) -> Result<FetchResult, CrawlError> {
-        self.fetch_with_redirects(url, self.config.max_redirects).await
+        self.fetch_with_redirects(url, self.config.max_redirects)
+            .await
     }
 
     /// Fetches a URL, following up to `max_hops` redirects manually.
@@ -307,12 +311,8 @@ impl HttpClient {
                     let final_url = response.url().clone();
 
                     let body = if self.config.max_body_size > 0 {
-                        let bytes = response
-                            .bytes()
-                            .await
-                            .map_err(CrawlError::RequestFailed)?;
-                        let limited =
-                            &bytes[..bytes.len().min(self.config.max_body_size)];
+                        let bytes = response.bytes().await.map_err(CrawlError::RequestFailed)?;
+                        let limited = &bytes[..bytes.len().min(self.config.max_body_size)];
                         String::from_utf8_lossy(limited).to_string()
                     } else {
                         response.text().await.map_err(CrawlError::RequestFailed)?

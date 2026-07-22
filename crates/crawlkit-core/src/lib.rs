@@ -7,17 +7,15 @@ use url::Url;
 pub mod analyzers;
 pub mod storage;
 
-pub use storage::{
-    Issue, IssueCategory, IssueFilter, Severity, StorageError, CrawlStats,
-};
+pub use storage::{CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError};
 
 pub use analyzers::{
-    AnalysisContext, Analyzer, AnalyzerRegistry, Finding, HttpStatusAnalyzer,
-    RedirectChainAnalyzer, CanonicalUrlValidator, HreflangValidator, SitemapAnalyzer,
-    SitemapEntry, RobotsTxtAnalyzer, RobotsRule, MetaTagAnalyzer, HeadingHierarchyAnalyzer,
-    LinkAnalyzer, LinkInfo, ImageAnalyzer, ImageInfo, StructuredDataValidator,
-    ContentQualityAnalyzer, WordCountAnalyzer, SecurityHeaderAnalyzer, SslCertificateValidator,
-    SslCertificateInfo, MobileFriendlinessChecker,
+    AccessibilityAnalyzer, AnalysisContext, Analyzer, AnalyzerRegistry, CanonicalUrlValidator,
+    ContentQualityAnalyzer, Finding, HeadingHierarchyAnalyzer, HreflangValidator,
+    HttpStatusAnalyzer, ImageAnalyzer, ImageInfo, LinkAnalyzer, LinkInfo, MetaTagAnalyzer,
+    MobileFriendlinessChecker, RedirectChainAnalyzer, RobotsRule, RobotsTxtAnalyzer,
+    SecurityHeaderAnalyzer, SitemapAnalyzer, SitemapEntry, SocialMediaAnalyzer, SslCertificateInfo,
+    SslCertificateValidator, StructuredDataValidator, WordCountAnalyzer,
 };
 
 pub mod meta;
@@ -25,8 +23,8 @@ pub mod parser;
 
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{
-    ExtractedForm, ExtractedImage, ExtractedLink, Heading, HtmlParser, ParseError, ParsedPage,
-    ScriptInfo, StructuredData, StyleInfo,
+    ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParseError,
+    ParsedPage, ScriptInfo, StructuredData, StyleInfo,
 };
 
 pub mod http;

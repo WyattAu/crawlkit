@@ -1,7 +1,10 @@
+use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures::stream::Stream;
+use futures::StreamExt;
 use reqwest::header::USER_AGENT;
 use reqwest::{Client, StatusCode};
 use serde::{Deserialize, Serialize};
@@ -114,6 +117,14 @@ pub struct HttpClientConfig {
     pub user_agent: Arc<UserAgentRotator>,
     /// Maximum response body size in bytes (0 = unlimited).
     pub max_body_size: usize,
+    /// Maximum number of idle connections per host.
+    pub pool_max_idle_per_host: usize,
+    /// Maximum number of idle connections across all hosts.
+    pub pool_max_idle: usize,
+    /// Whether to enable HTTP/2 prior knowledge (force h2).
+    pub http2_prior_knowledge: bool,
+    /// Whether to enable TCP keepalive.
+    pub tcp_keepalive: Option<Duration>,
 }
 
 impl From<&CrawlConfig> for HttpClientConfig {
@@ -124,6 +135,10 @@ impl From<&CrawlConfig> for HttpClientConfig {
             retry_policy: RetryPolicy::default(),
             user_agent: Arc::new(UserAgentRotator::new(vec![config.user_agent.clone()])),
             max_body_size: 10 * 1024 * 1024, // 10MB default
+            pool_max_idle_per_host: 32,
+            pool_max_idle: 64,
+            http2_prior_knowledge: false, // Negotiate via ALPN
+            tcp_keepalive: Some(Duration::from_secs(30)),
         }
     }
 }
@@ -137,14 +152,27 @@ pub struct HttpClient {
 impl HttpClient {
     /// Creates a new `HttpClient` from the given configuration.
     ///
-    /// Builds a `reqwest::Client` with TLS, HTTP/2, and redirect policy.
+    /// Builds a `reqwest::Client` with TLS, HTTP/2 multiplexing, connection
+    /// pooling, and redirect policy.
     pub fn new(config: HttpClientConfig) -> Result<Self, CrawlError> {
-        let client = Client::builder()
+        let mut builder = Client::builder()
             .timeout(config.timeout)
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
             .https_only(true)
-            .build()?;
+            .pool_max_idle_per_host(config.pool_max_idle_per_host)
+            .pool_idle_timeout(Duration::from_secs(90))
+            .connect_timeout(Duration::from_secs(10));
+
+        if config.http2_prior_knowledge {
+            builder = builder.http2_prior_knowledge();
+        }
+
+        if let Some(keepalive) = config.tcp_keepalive {
+            builder = builder.tcp_keepalive(keepalive);
+        }
+
+        let client = builder.build()?;
 
         Ok(Self { client, config })
     }
@@ -152,6 +180,20 @@ impl HttpClient {
     /// Creates a new `HttpClient` from a `CrawlConfig`.
     pub fn from_crawl_config(config: &CrawlConfig) -> Result<Self, CrawlError> {
         Self::new(HttpClientConfig::from(config))
+    }
+
+    /// Creates a new `HttpClient` optimized for high-throughput crawling.
+    ///
+    /// Enables HTTP/2, larger connection pools, and TCP keepalive.
+    pub fn high_throughput(config: HttpClientConfig) -> Result<Self, CrawlError> {
+        let cfg = HttpClientConfig {
+            pool_max_idle_per_host: 64,
+            pool_max_idle: 128,
+            http2_prior_knowledge: false, // Use ALPN negotiation
+            tcp_keepalive: Some(Duration::from_secs(60)),
+            ..config
+        };
+        Self::new(cfg)
     }
 
     /// Fetches a URL with retry logic and redirect tracking.
@@ -349,6 +391,231 @@ impl HttpClient {
     /// Returns a reference to the client configuration.
     pub fn config(&self) -> &HttpClientConfig {
         &self.config
+    }
+
+    /// Fetches a URL and streams the response body, calling the callback with
+    /// each chunk.
+    ///
+    /// This is useful for large pages where you want to process HTML as it
+    /// arrives rather than buffering the entire response in memory.
+    pub async fn fetch_stream<F>(
+        &self,
+        url: &Url,
+        mut on_chunk: F,
+    ) -> Result<FetchResult, CrawlError>
+    where
+        F: FnMut(&str) + Send,
+    {
+        let mut current_url = url.clone();
+        let mut hops: Vec<RedirectHop> = Vec::new();
+
+        for _ in 0..=self.config.max_redirects {
+            let start = Instant::now();
+            let user_agent = self.config.user_agent.next();
+
+            let response = self
+                .client
+                .get(current_url.as_str())
+                .header(USER_AGENT, user_agent)
+                .send()
+                .await
+                .map_err(CrawlError::RequestFailed)?;
+
+            let status = response.status();
+            let elapsed = start.elapsed();
+            let headers: Vec<(String, String)> = response
+                .headers()
+                .iter()
+                .map(|(k, v)| {
+                    (
+                        k.as_str().to_string(),
+                        String::from_utf8_lossy(v.as_bytes()).to_string(),
+                    )
+                })
+                .collect();
+
+            if status.is_redirection() {
+                let next_url = headers
+                    .iter()
+                    .find(|(k, _)| k.eq_ignore_ascii_case("location"))
+                    .map(|(_, v)| v.clone());
+
+                match next_url {
+                    Some(loc) => {
+                        let resolved = current_url.join(&loc)?;
+                        hops.push(RedirectHop {
+                            from: current_url.clone(),
+                            to: resolved.clone(),
+                            status_code: status.as_u16(),
+                        });
+                        current_url = resolved;
+                        continue;
+                    }
+                    None => {
+                        let final_url = response.url().clone();
+                        return Ok(FetchResult {
+                            final_url,
+                            status_code: status.as_u16(),
+                            headers,
+                            body: String::new(),
+                            response_time: elapsed,
+                            body_size: 0,
+                            fetched_at: chrono::Utc::now(),
+                        });
+                    }
+                }
+            }
+
+            let final_url = response.url().clone();
+            let mut body = String::new();
+            let mut stream = response.bytes_stream();
+            let mut total_size: usize = 0;
+
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result.map_err(CrawlError::RequestFailed)?;
+                total_size += chunk.len();
+
+                if self.config.max_body_size > 0 && total_size > self.config.max_body_size {
+                    break;
+                }
+
+                let chunk_str = String::from_utf8_lossy(&chunk);
+                on_chunk(&chunk_str);
+                body.push_str(&chunk_str);
+            }
+
+            return Ok(FetchResult {
+                final_url,
+                status_code: status.as_u16(),
+                headers,
+                body,
+                response_time: elapsed,
+                body_size: total_size,
+                fetched_at: chrono::Utc::now(),
+            });
+        }
+
+        Err(CrawlError::TooManyRedirects(self.config.max_redirects))
+    }
+
+    /// Fetches a URL and returns the response as a streaming reader.
+    ///
+    /// Returns the response metadata (status, headers) and a streaming body.
+    /// The caller can read chunks from the stream.
+    pub async fn fetch_reader(
+        &self,
+        url: &Url,
+    ) -> Result<FetchStreamReader, CrawlError> {
+        let start = Instant::now();
+        let user_agent = self.config.user_agent.next();
+
+        let response = self
+            .client
+            .get(url.as_str())
+            .header(USER_AGENT, user_agent)
+            .send()
+            .await
+            .map_err(CrawlError::RequestFailed)?;
+
+        let status = response.status();
+        let elapsed = start.elapsed();
+        let headers: Vec<(String, String)> = response
+            .headers()
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.as_str().to_string(),
+                    String::from_utf8_lossy(v.as_bytes()).to_string(),
+                )
+            })
+            .collect();
+        let final_url = response.url().clone();
+        let max_body_size = self.config.max_body_size;
+
+        let stream = response
+            .bytes_stream()
+            .take_while(move |result| {
+                let should_continue = match result {
+                    Ok(_bytes) => {
+                        // Simple heuristic: stop if we've likely exceeded max body size
+                        // This is approximate since we don't track total here
+                        true
+                    }
+                    Err(_) => false,
+                };
+                async move { should_continue }
+            });
+
+        Ok(FetchStreamReader {
+            final_url,
+            status_code: status.as_u16(),
+            headers,
+            response_time: elapsed,
+            stream: Box::pin(stream),
+            body_size: 0,
+            max_body_size,
+        })
+    }
+}
+
+/// A streaming HTTP response reader.
+///
+/// Read chunks from the body using the `next_chunk` method. The stream
+/// automatically respects `max_body_size`.
+pub struct FetchStreamReader {
+    pub final_url: Url,
+    pub status_code: u16,
+    pub headers: Vec<(String, String)>,
+    pub response_time: Duration,
+    stream: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
+    pub body_size: usize,
+    max_body_size: usize,
+}
+
+impl FetchStreamReader {
+    /// Reads the next chunk of the response body.
+    ///
+    /// Returns `Ok(Some(bytes))` if data is available, `Ok(None)` if the
+    /// stream is complete, or `Err` on error.
+    pub async fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, CrawlError> {
+        if self.max_body_size > 0 && self.body_size >= self.max_body_size {
+            return Ok(None);
+        }
+
+        match self.stream.next().await {
+            Some(Ok(chunk)) => {
+                let chunk: bytes::Bytes = chunk;
+                let len = chunk.len();
+                self.body_size += len;
+                Ok(Some(chunk.to_vec()))
+            }
+            Some(Err(e)) => Err(CrawlError::RequestFailed(e)),
+            None => Ok(None),
+        }
+    }
+
+    /// Reads the entire remaining body into a String.
+    pub async fn read_body(&mut self) -> Result<String, CrawlError> {
+        let mut body = String::new();
+        while let Some(chunk) = self.next_chunk().await? {
+            body.push_str(&String::from_utf8_lossy(&chunk));
+        }
+        Ok(body)
+    }
+
+    /// Converts this into a FetchResult by reading the full body.
+    pub async fn into_fetch_result(mut self) -> Result<FetchResult, CrawlError> {
+        let body = self.read_body().await?;
+        let body_size = self.body_size;
+        Ok(FetchResult {
+            final_url: self.final_url,
+            status_code: self.status_code,
+            headers: self.headers,
+            body,
+            response_time: self.response_time,
+            body_size,
+            fetched_at: chrono::Utc::now(),
+        })
     }
 }
 

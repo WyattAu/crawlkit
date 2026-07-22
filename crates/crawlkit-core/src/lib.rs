@@ -7,19 +7,27 @@ use url::Url;
 pub mod analyzers;
 pub mod backlinks;
 pub mod compare;
+pub mod dns;
 pub mod export;
+pub mod http;
+pub mod queue;
+pub mod ratelimit;
 pub mod storage;
-
-pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
-pub use storage::{CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError};
 
 pub use analyzers::{
     AccessibilityAnalyzer, AnalysisContext, Analyzer, AnalyzerRegistry, CanonicalUrlValidator,
-    ContentQualityAnalyzer, Finding, HeadingHierarchyAnalyzer, HreflangValidator,
-    HttpStatusAnalyzer, ImageAnalyzer, ImageInfo, LinkAnalyzer, LinkInfo, MetaTagAnalyzer,
+    ContentQualityAnalyzer, EcommerceSignalsAnalyzer, EnhancedReadabilityAnalyzer, EntityAnalyzer,
+    Finding, HeadingHierarchyAnalyzer, HreflangValidator, HttpStatusAnalyzer, ImageAnalyzer,
+    ImageInfo, InternationalSeoAnalyzer, KeywordAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer,
     MobileFriendlinessChecker, RedirectChainAnalyzer, RobotsRule, RobotsTxtAnalyzer,
     SecurityHeaderAnalyzer, SitemapAnalyzer, SitemapEntry, SocialMediaAnalyzer, SslCertificateInfo,
     SslCertificateValidator, StructuredDataValidator, WordCountAnalyzer,
+};
+pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
+pub use dns::{DnsCache, DnsError, DnsPrefetcher};
+pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
+pub use storage::{
+    CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
 
 pub mod meta;
@@ -30,10 +38,6 @@ pub use parser::{
     ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParseError,
     ParsedPage, ScriptInfo, StructuredData, StyleInfo,
 };
-
-pub mod http;
-pub mod queue;
-pub mod ratelimit;
 
 mod duration_ms {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};

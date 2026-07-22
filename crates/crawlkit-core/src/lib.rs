@@ -15,6 +15,8 @@ pub use analyzers::{
     AnalysisContext, Analyzer, AnalyzerRegistry, Finding, HttpStatusAnalyzer,
     RedirectChainAnalyzer, CanonicalUrlValidator, HreflangValidator, SitemapAnalyzer,
     SitemapEntry, RobotsTxtAnalyzer, RobotsRule, MetaTagAnalyzer, HeadingHierarchyAnalyzer,
+    LinkAnalyzer, LinkInfo, ImageAnalyzer, ImageInfo, StructuredDataValidator,
+    ContentQualityAnalyzer, WordCountAnalyzer,
 };
 
 pub mod meta;

@@ -584,6 +584,8 @@ COMMANDS:
     help         Print help
 
 SUBCOMMAND OPTIONS:
+    schedule:      Schedule recurring crawls
+    export:        Export crawl data to various formats
     crawl:
         -u, --url <URL>              Seed URL (can be repeated)
         -c, --config <FILE>          Configuration file path

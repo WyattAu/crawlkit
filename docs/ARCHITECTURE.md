@@ -113,6 +113,28 @@ crawlkit is a high-performance, Rust-based website crawler designed to surpass c
 ## Core Components
 
 ### Crawler Engine
+#### Politeness Layer
+
+Per-domain rate limiting with robots.txt compliance:
+
+```rust
+pub struct PolitenessLayer {
+    domain_semaphores: DashMap<String, Arc<Semaphore>>,
+    robots_cache: CacheLayer,
+    crawl_delay_default: Duration,
+}
+```
+#### Cache Layer
+
+Caches DNS lookups and robots.txt with TTL-based invalidation:
+
+```rust
+pub struct CacheLayer {
+    dns_cache: DashMap<String, DnsEntry>,
+    robots_cache: DashMap<String, RobotsEntry>,
+    default_ttl: Duration,
+}
+```
 
 The crawler engine is responsible for fetching web pages with full HTTP semantics.
 
@@ -120,10 +142,10 @@ The crawler engine is responsible for fetching web pages with full HTTP semantic
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│                   CrawlerEngine                         │
+│                   CrawlEngine                         │
 │                                                         │
 │  ┌──────────────────────────────────────────────────┐  │
-│  │                  URLQueue                         │  │
+│  │                  UrlFrontier                         │  │
 │  │  ┌─────────────────────────────────────────────┐ │  │
 │  │  │ PriorityQueue<UrlEntry>                     │ │  │
 │  │  │  - Priority (depth, importance)             │ │  │
@@ -160,8 +182,8 @@ The crawler engine is responsible for fetching web pages with full HTTP semantic
 
 ```rust
 /// Configuration for the crawler engine
-pub struct CrawlerConfig {
-    pub max_concurrent_requests: usize,      // Default: 10
+pub struct CrawlConfig {
+    pub max_concurrent_requests: usize,      // Default: 64
     pub requests_per_second: f64,            // Default: 5.0
     pub per_domain_rps: f64,                 // Default: 2.0
     pub max_redirects: usize,                // Default: 20
@@ -581,7 +603,7 @@ The HTML report is a self-contained, interactive SPA bundled into a single HTML 
 Report Structure:
 ┌─────────────────────────────────────────────────────────┐
 │  crawlkit Report                                        │
-│  Generated: 2025-01-15 10:30 UTC                        │
+│  Generated: 2026-07-22 10:30 UTC                        │
 ├─────────────────────────────────────────────────────────┤
 │  ┌─────────────────────────────────────────────────┐   │
 │  │ Executive Summary                                │   │
@@ -828,7 +850,7 @@ pub struct Crawl {
     pub start_time: DateTime<Utc>,
     pub end_time: Option<DateTime<Utc>>,
     pub target_url: Url,
-    pub config: CrawlerConfig,
+    pub config: CrawlConfig,
     pub stats: CrawlStats,
 }
 
@@ -1414,6 +1436,6 @@ compression = true
 
 ---
 
-*Last updated: 2025-01-15*
+*Last updated: 2026-07-22*
 *Version: 1.0.0*
 *Author: crawlkit team*

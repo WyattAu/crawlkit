@@ -321,6 +321,10 @@ async fn run_crawl(
             user_agent.unwrap_or_else(|| "crawlkit/0.1.0".to_string()),
         ])),
         max_body_size: 10 * 1024 * 1024,
+        pool_max_idle_per_host: 32,
+        pool_max_idle: 64,
+        http2_prior_knowledge: false,
+        tcp_keepalive: Some(std::time::Duration::from_secs(30)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let scope = crawlkit_core::queue::ScopeConfig {

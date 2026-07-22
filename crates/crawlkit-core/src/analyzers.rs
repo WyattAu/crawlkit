@@ -3563,6 +3563,1334 @@ impl Analyzer for SocialMediaAnalyzer {
 }
 
 // ---------------------------------------------------------------------------
+// 19. Entity Analyzer
+// ---------------------------------------------------------------------------
+
+const PERSON_INDICATORS: &[&str] = &[
+    "mr.", "mrs.", "ms.", "dr.", "prof.", "sir", "lord", "president", "ceo", "cto",
+    "founder", "author", "by", "written by", "edited by", "interview with",
+];
+
+const ORG_INDICATORS: &[&str] = &[
+    "inc.", "llc", "ltd.", "corp.", "corporation", "company", "organization",
+    "university", "institute", "foundation", "association", "group", "partners",
+];
+
+const LOCATION_INDICATORS: &[&str] = &[
+    "city", "state", "country", "province", "district", "region", "street",
+    "avenue", "boulevard", "road", "lane", "square", "park", "mountain",
+    "river", "lake", "island", "bay", "coast", "valley",
+];
+
+pub struct EntityAnalyzer;
+
+impl EntityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn detect_people(text: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let lower = text.to_lowercase();
+        for indicator in PERSON_INDICATORS {
+            if lower.contains(indicator) {
+                let words: Vec<&str> = text.split_whitespace().collect();
+                let indicator_word = indicator.trim_end_matches('.');
+                for (i, word) in words.iter().enumerate() {
+                    let clean: String = word
+                        .chars()
+                        .filter(|c| c.is_alphanumeric())
+                        .collect();
+                    if clean.to_lowercase() == indicator_word && i + 1 < words.len() {
+                        let mut name_parts = Vec::new();
+                        for w in words.iter().skip(i + 1) {
+                            let w_clean: String =
+                                w.chars().filter(|c| c.is_alphanumeric() || *c == '-').collect();
+                            let w_lower = w_clean.to_lowercase();
+                            if w_clean
+                                .chars()
+                                .next()
+                                .map(|c| c.is_uppercase())
+                                .unwrap_or(false)
+                                || w_lower == "de"
+                                || w_lower == "van"
+                                || w_lower == "von"
+                                || w_lower == "la"
+                                || w_lower == "le"
+                            {
+                                name_parts.push(w_clean);
+                            } else {
+                                break;
+                            }
+                        }
+                        let name = name_parts.join(" ");
+                        if !name.is_empty() {
+                            found.push(name);
+                        }
+                    }
+                }
+            }
+        }
+        found.sort();
+        found.dedup();
+        found
+    }
+
+    fn detect_organizations(text: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let lower = text.to_lowercase();
+        for indicator in ORG_INDICATORS {
+            if lower.contains(indicator) {
+                for sentence in text.split(|c| c == '.' || c == '!' || c == '?') {
+                    let words: Vec<&str> = sentence.split_whitespace().collect();
+                    for (i, word) in words.iter().enumerate() {
+                        if word.to_lowercase().contains(indicator) {
+                            let start = i.saturating_sub(2);
+                            let org: String = words[start..=i.min(words.len() - 1)]
+                                .iter()
+                                .map(|w| w.to_string())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if org.len() > 3 {
+                                found.push(org);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found.sort();
+        found.dedup();
+        found
+    }
+
+    fn detect_locations(text: &str) -> Vec<String> {
+        let mut found = Vec::new();
+        let lower = text.to_lowercase();
+        for indicator in LOCATION_INDICATORS {
+            if lower.contains(indicator) {
+                for sentence in text.split(|c| c == '.' || c == '!' || c == '?') {
+                    let words: Vec<&str> = sentence.split_whitespace().collect();
+                    for (i, word) in words.iter().enumerate() {
+                        if word.to_lowercase().contains(indicator) {
+                            let start = i.saturating_sub(2);
+                            let loc: String = words[start..=i.min(words.len() - 1)]
+                                .iter()
+                                .map(|w| w.to_string())
+                                .collect::<Vec<_>>()
+                                .join(" ");
+                            if loc.len() > 3 {
+                                found.push(loc);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        found.sort();
+        found.dedup();
+        found
+    }
+
+    fn detect_topics(headings: &[crate::parser::Heading], word_count: usize) -> Vec<String> {
+        if word_count == 0 {
+            return Vec::new();
+        }
+        let mut freq: HashMap<String, usize> = HashMap::new();
+        for heading in headings {
+            for word in heading.text.split_whitespace() {
+                let lower = word
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>();
+                if lower.len() > 3 && !STOP_WORDS.contains(&lower.as_str()) {
+                    *freq.entry(lower).or_default() += 1;
+                }
+            }
+        }
+        let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
+        terms.sort_by(|a, b| b.1.cmp(&a.1));
+        terms.into_iter().take(5).map(|(w, _)| w).collect()
+    }
+
+    fn analyze_sentiment(text: &str) -> (f64, &'static str) {
+        let positive_words = [
+            "good", "great", "excellent", "amazing", "wonderful", "best", "love",
+            "happy", "fantastic", "superb", "outstanding", "perfect", "beautiful",
+            "brilliant", "awesome", "nice", "pleasant", "delightful", "impressive",
+            "remarkable", "magnificent", "splendid", "fabulous", "terrific",
+        ];
+        let negative_words = [
+            "bad", "terrible", "horrible", "awful", "worst", "hate", "sad",
+            "ugly", "poor", "disappointing", "boring", "annoying", "frustrating",
+            "difficult", "broken", "failed", "error", "wrong", "problem", "issue",
+            "bug", "fail", "crash", "dead",
+        ];
+        let words: Vec<String> = text
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect()
+            })
+            .collect();
+        if words.is_empty() {
+            return (0.0, "neutral");
+        }
+        let pos_count = words
+            .iter()
+            .filter(|w| positive_words.contains(&w.as_str()))
+            .count();
+        let neg_count = words
+            .iter()
+            .filter(|w| negative_words.contains(&w.as_str()))
+            .count();
+        let total = words.len() as f64;
+        let score = ((pos_count as f64 - neg_count as f64) / total * 100.0).round() / 100.0;
+        let label = if score > 0.05 {
+            "positive"
+        } else if score < -0.05 {
+            "negative"
+        } else {
+            "neutral"
+        };
+        (score, label)
+    }
+}
+
+impl Default for EntityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for EntityAnalyzer {
+    fn name(&self) -> &str {
+        "entity-analyzer"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let headings_text: String = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let text = &headings_text;
+
+        let people = Self::detect_people(text);
+        let organizations = Self::detect_organizations(text);
+        let locations = Self::detect_locations(text);
+        let topics = Self::detect_topics(&ctx.page.headings, ctx.page.word_count);
+        let (sentiment_score, sentiment_label) = Self::analyze_sentiment(text);
+
+        if !people.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "ENTITY001".to_string(),
+                title: "People entities detected".to_string(),
+                description: format!(
+                    "Found {} people entity(ies): {}.",
+                    people.len(),
+                    people.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "People entities can boost E-E-A-T signals. Link to author \
+                                 profiles when applicable."
+                    .to_string(),
+            });
+        }
+
+        if !organizations.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "ENTITY002".to_string(),
+                title: "Organization entities detected".to_string(),
+                description: format!(
+                    "Found {} organization entity(ies): {}.",
+                    organizations.len(),
+                    organizations.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Organization entities help establish topical authority. \
+                                 Consider adding Organization schema markup."
+                    .to_string(),
+            });
+        }
+
+        if !locations.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "ENTITY003".to_string(),
+                title: "Location entities detected".to_string(),
+                description: format!(
+                    "Found {} location entity(ies): {}.",
+                    locations.len(),
+                    locations.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Location entities are important for local SEO. Ensure \
+                                 NAP consistency across the site."
+                    .to_string(),
+            });
+        }
+
+        if !topics.is_empty() {
+            let topic_display = topics.join(", ");
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "ENTITY004".to_string(),
+                title: "Detected topics and themes".to_string(),
+                description: format!("Primary topics: {topic_display}."),
+                url: url.clone(),
+                recommendation: "Ensure these topics align with the target keywords and \
+                                 page intent."
+                    .to_string(),
+            });
+        }
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "ENTITY005".to_string(),
+            title: "Content sentiment analysis".to_string(),
+            description: format!(
+                "Sentiment score: {sentiment_score} ({sentiment_label})."
+            ),
+            url: url.clone(),
+            recommendation: if sentiment_label == "negative" {
+                "Content has a negative sentiment tone. Consider revising for a more \
+                 neutral or positive tone."
+                    .to_string()
+            } else if sentiment_label == "positive" {
+                "Positive sentiment detected. This can improve user engagement.".to_string()
+            } else {
+                "Neutral sentiment detected.".to_string()
+            },
+        });
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "ENTITY006".to_string(),
+            title: "Entity counts per page".to_string(),
+            description: format!(
+                "People: {}, Organizations: {}, Locations: {}, Topics: {}.",
+                people.len(),
+                organizations.len(),
+                locations.len(),
+                topics.len()
+            ),
+            url: url.clone(),
+            recommendation: String::new(),
+        });
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 20. Enhanced Readability Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct EnhancedReadabilityAnalyzer;
+
+impl EnhancedReadabilityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn count_letters(text: &str) -> usize {
+        text.chars().filter(|c| c.is_alphabetic()).count()
+    }
+
+    fn count_sentences(text: &str) -> usize {
+        if text.trim().is_empty() {
+            return 1;
+        }
+        text.chars()
+            .filter(|&c| c == '.' || c == '!' || c == '?')
+            .count()
+            .max(1)
+    }
+
+    fn count_syllables(word: &str) -> usize {
+        let word = word.to_lowercase();
+        let chars: Vec<char> = word.chars().collect();
+        if chars.is_empty() {
+            return 0;
+        }
+        if chars.len() <= 2 {
+            return 1;
+        }
+
+        let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+        let mut count = 0;
+        let mut prev_vowel = false;
+
+        for &c in &chars {
+            let is_vowel = vowels.contains(&c);
+            if is_vowel && !prev_vowel {
+                count += 1;
+            }
+            prev_vowel = is_vowel;
+        }
+
+        if chars.last() == Some(&'e') && count > 1 {
+            count -= 1;
+        }
+
+        count.max(1)
+    }
+
+    fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {
+        if words == 0 || sentences == 0 {
+            return 0.0;
+        }
+        0.39 * (words as f64 / sentences as f64)
+            + 11.8 * (syllables as f64 / words as f64)
+            - 15.59
+    }
+
+    fn coleman_liau_index(letters: usize, words: usize, sentences: usize) -> f64 {
+        if words == 0 {
+            return 0.0;
+        }
+        let l = letters as f64 / words as f64 * 100.0;
+        let s = sentences as f64 / words as f64 * 100.0;
+        0.0588 * l - 0.296 * s - 15.8
+    }
+
+    fn automated_readability_index(
+        characters: usize,
+        words: usize,
+        sentences: usize,
+    ) -> f64 {
+        if words == 0 || sentences == 0 {
+            return 0.0;
+        }
+        4.71 * (characters as f64 / words as f64)
+            + 0.5 * (words as f64 / sentences as f64)
+            - 21.43
+    }
+
+    fn gunning_fog_index(words: usize, sentences: usize, complex_words: usize) -> f64 {
+        if words == 0 || sentences == 0 {
+            return 0.0;
+        }
+        0.4 * (words as f64 / sentences as f64 + 100.0 * complex_words as f64 / words as f64)
+    }
+
+    fn flesch_reading_ease(words: usize, sentences: usize, syllables: usize) -> f64 {
+        if words == 0 || sentences == 0 {
+            return 0.0;
+        }
+        let score = 206.835
+            - 1.015 * (words as f64 / sentences as f64)
+            - 84.6 * (syllables as f64 / words as f64);
+        score.clamp(0.0, 100.0)
+    }
+
+    fn reading_ease_label(score: f64) -> &'static str {
+        if score >= 90.0 {
+            "very easy"
+        } else if score >= 80.0 {
+            "easy"
+        } else if score >= 70.0 {
+            "fairly easy"
+        } else if score >= 60.0 {
+            "standard"
+        } else if score >= 50.0 {
+            "fairly difficult"
+        } else if score >= 30.0 {
+            "difficult"
+        } else {
+            "very difficult"
+        }
+    }
+
+    fn grade_label(grade: f64) -> &'static str {
+        if grade < 1.0 {
+            "kindergarten"
+        } else if grade < 6.0 {
+            "elementary school"
+        } else if grade < 9.0 {
+            "middle school"
+        } else if grade < 13.0 {
+            "high school"
+        } else if grade < 16.0 {
+            "college"
+        } else {
+            "postgraduate"
+        }
+    }
+}
+
+impl Default for EnhancedReadabilityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for EnhancedReadabilityAnalyzer {
+    fn name(&self) -> &str {
+        "enhanced-readability"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.word_count == 0 {
+            return findings;
+        }
+
+        let text = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if text.trim().is_empty() {
+            return findings;
+        }
+
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let word_count = words.len();
+        let sentence_count = Self::count_sentences(&text);
+        let letter_count = Self::count_letters(&text);
+        let syllable_count: usize = words.iter().map(|w| Self::count_syllables(w)).sum();
+        let complex_words = Self::complex_words_count(&words);
+
+        let fk_grade = Self::flesch_kincaid_grade(word_count, sentence_count, syllable_count);
+        let cl_index = Self::coleman_liau_index(letter_count, word_count, sentence_count);
+        let ari = Self::automated_readability_index(letter_count, word_count, sentence_count);
+        let fog = Self::gunning_fog_index(word_count, sentence_count, complex_words);
+        let fre = Self::flesch_reading_ease(word_count, sentence_count, syllable_count);
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "READ001".to_string(),
+            title: "Flesch-Kincaid Grade Level".to_string(),
+            description: format!(
+                "Grade level: {fk_grade:.1} ({})",
+                Self::grade_label(fk_grade)
+            ),
+            url: url.clone(),
+            recommendation: if fk_grade > 12.0 {
+                "Content is at a college reading level. Consider simplifying for broader \
+                 audiences."
+                    .to_string()
+            } else if fk_grade > 8.0 {
+                "Content is at a high school reading level. Suitable for most web audiences."
+                    .to_string()
+            } else {
+                "Content is easy to read for most audiences.".to_string()
+            },
+        });
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "READ002".to_string(),
+            title: "Coleman-Liau Index".to_string(),
+            description: format!("Index: {cl_index:.1}"),
+            url: url.clone(),
+            recommendation: if cl_index > 12.0 {
+                "High Coleman-Liau index. Consider reducing sentence complexity."
+                    .to_string()
+            } else {
+                "Readability is within acceptable range.".to_string()
+            },
+        });
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "READ003".to_string(),
+            title: "Automated Readability Index".to_string(),
+            description: format!("ARI: {ari:.1}"),
+            url: url.clone(),
+            recommendation: if ari > 12.0 {
+                "High ARI score. Content may be difficult for general audiences."
+                    .to_string()
+            } else {
+                "Readability is within acceptable range.".to_string()
+            },
+        });
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "READ004".to_string(),
+            title: "Gunning Fog Index".to_string(),
+            description: format!("Fog index: {fog:.1}"),
+            url: url.clone(),
+            recommendation: if fog > 17.0 {
+                "Very high Fog index. Content is extremely complex. Simplify vocabulary \
+                 and shorten sentences."
+                    .to_string()
+            } else if fog > 12.0 {
+                "High Fog index. Consider simplifying for a broader audience.".to_string()
+            } else {
+                "Fog index is within acceptable range.".to_string()
+            },
+        });
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "READ005".to_string(),
+            title: "Flesch Reading Ease score".to_string(),
+            description: format!(
+                "Score: {fre:.1}/100 ({})",
+                Self::reading_ease_label(fre)
+            ),
+            url: url.clone(),
+            recommendation: if fre < 30.0 {
+                "Very difficult to read. Aim for a score of 60+ for general audiences."
+                    .to_string()
+            } else if fre < 50.0 {
+                "Fairly difficult. Consider simplifying language.".to_string()
+            } else if fre < 70.0 {
+                "Standard readability. Suitable for most web content.".to_string()
+            } else {
+                "Easy to read. Good for broad audiences.".to_string()
+            },
+        });
+
+        findings
+    }
+}
+
+impl EnhancedReadabilityAnalyzer {
+    fn complex_words_count(words: &[&str]) -> usize {
+        words
+            .iter()
+            .filter(|w| Self::count_syllables(w) >= 3)
+            .count()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 21. Keyword Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct KeywordAnalyzer {
+    corpus_tf: HashMap<String, f64>,
+}
+
+impl KeywordAnalyzer {
+    pub fn new() -> Self {
+        Self {
+            corpus_tf: HashMap::new(),
+        }
+    }
+
+    pub fn with_corpus_tf(corpus_tf: HashMap<String, f64>) -> Self {
+        Self { corpus_tf }
+    }
+
+    fn tokenize(text: &str) -> Vec<String> {
+        text.split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect()
+            })
+            .filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect()
+    }
+
+    fn compute_tf(tokens: &[String]) -> HashMap<String, f64> {
+        let mut freq: HashMap<String, usize> = HashMap::new();
+        for token in tokens {
+            *freq.entry(token.clone()).or_default() += 1;
+        }
+        let total = tokens.len() as f64;
+        freq.into_iter()
+            .map(|(term, count)| (term, count as f64 / total))
+            .collect()
+    }
+
+    fn compute_tfidf(tf: &HashMap<String, f64>, corpus_tf: &HashMap<String, f64>) -> HashMap<String, f64> {
+        let total_docs = corpus_tf.len().max(1) as f64;
+        tf.iter()
+            .map(|(term, tf_val)| {
+                let df = corpus_tf.get(term).copied().unwrap_or(0.0);
+                let idf = if df > 0.0 {
+                    (total_docs / df).ln() + 1.0
+                } else {
+                    1.0
+                };
+                (term.clone(), tf_val * idf)
+            })
+            .collect()
+    }
+
+    fn keyword_density(tokens: &[String], total_words: usize) -> HashMap<String, f64> {
+        if total_words == 0 {
+            return HashMap::new();
+        }
+        let mut freq: HashMap<String, usize> = HashMap::new();
+        for token in tokens {
+            *freq.entry(token.clone()).or_default() += 1;
+        }
+        freq.into_iter()
+            .map(|(term, count)| {
+                (term, count as f64 / total_words as f64 * 100.0)
+            })
+            .collect()
+    }
+
+    fn detect_prominent_keywords(density: &HashMap<String, f64>) -> Vec<(String, f64)> {
+        let mut prominent: Vec<(String, f64)> = density
+            .iter()
+            .filter(|(_, &d)| d >= 1.5)
+            .map(|(k, &v)| (k.clone(), v))
+            .collect();
+        prominent.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        prominent
+    }
+
+    fn cooccurrence(tokens: &[String], window: usize) -> Vec<((String, String), usize)> {
+        let mut pairs: HashMap<(String, String), usize> = HashMap::new();
+        for i in 0..tokens.len() {
+            let end = (i + window + 1).min(tokens.len());
+            for j in (i + 1)..end {
+                let mut pair = [tokens[i].clone(), tokens[j].clone()];
+                pair.sort();
+                *pairs.entry((pair[0].clone(), pair[1].clone()))
+                    .or_default() += 1;
+            }
+        }
+        let mut result: Vec<((String, String), usize)> = pairs.into_iter().collect();
+        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result
+    }
+}
+
+impl Default for KeywordAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for KeywordAnalyzer {
+    fn name(&self) -> &str {
+        "keyword-analyzer"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.word_count == 0 {
+            return findings;
+        }
+
+        let text = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if text.trim().is_empty() {
+            return findings;
+        }
+
+        let tokens = Self::tokenize(&text);
+        if tokens.is_empty() {
+            return findings;
+        }
+
+        let tf = Self::compute_tf(&tokens);
+        let tfidf = Self::compute_tfidf(&tf, &self.corpus_tf);
+        let density = Self::keyword_density(&tokens, ctx.page.word_count);
+        let prominent = Self::detect_prominent_keywords(&density);
+        let cooccur = Self::cooccurrence(&tokens, 3);
+
+        let mut tfidf_sorted: Vec<(&String, &f64)> = tfidf.iter().collect();
+        tfidf_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let top_tfidf: Vec<String> = tfidf_sorted
+            .iter()
+            .take(10)
+            .map(|(k, v)| format!("{k} ({v:.2})"))
+            .collect();
+
+        if !top_tfidf.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "KW001".to_string(),
+                title: "Top TF-IDF keywords".to_string(),
+                description: format!("Top keywords by TF-IDF score: {}.", top_tfidf.join(", ")),
+                url: url.clone(),
+                recommendation: "TF-IDF highlights the most distinctive terms on this page. \
+                                 Ensure these align with your target keywords."
+                    .to_string(),
+            });
+        }
+
+        let mut density_sorted: Vec<(&String, &f64)> = density.iter().collect();
+        density_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let top_density: Vec<String> = density_sorted
+            .iter()
+            .take(10)
+            .map(|(k, v)| format!("{k} ({v:.1}%)"))
+            .collect();
+
+        if !top_density.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "KW002".to_string(),
+                title: "Keyword density".to_string(),
+                description: format!(
+                    "Top keyword densities (of {} words): {}.",
+                    ctx.page.word_count,
+                    top_density.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Ideal keyword density is 1-2%. Higher may indicate keyword \
+                                 stuffing."
+                    .to_string(),
+            });
+        }
+
+        if !prominent.is_empty() {
+            let display: Vec<String> = prominent
+                .iter()
+                .map(|(k, v)| format!("\"{k}\" ({v:.1}%)"))
+                .collect();
+            findings.push(Finding {
+                severity: if prominent.iter().any(|(_, d)| *d > 3.0) {
+                    Severity::Warning
+                } else {
+                    Severity::Info
+                },
+                category: IssueCategory::Content,
+                code: "KW003".to_string(),
+                title: "Prominent keywords detected".to_string(),
+                description: format!(
+                    "Keywords with density >= 1.5%: {}.",
+                    display.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: if prominent.iter().any(|(_, d)| *d > 3.0) {
+                    "Some keywords exceed 3% density. This may be flagged as keyword \
+                     stuffing by search engines."
+                        .to_string()
+                } else {
+                    "Keyword densities are within acceptable range.".to_string()
+                },
+            });
+        }
+
+        if !cooccur.is_empty() {
+            let display: Vec<String> = cooccur
+                .iter()
+                .take(5)
+                .map(|((a, b), c)| format!("\"{a}\" + \"{b}\" ({c})"))
+                .collect();
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "KW004".to_string(),
+                title: "Keyword co-occurrence".to_string(),
+                description: format!("Top keyword pairs: {}.", display.join(", ")),
+                url: url.clone(),
+                recommendation: "Co-occurring keywords help search engines understand topic \
+                                 relationships."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 22. E-commerce Signals Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct EcommerceSignalsAnalyzer;
+
+impl EcommerceSignalsAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn detect_product_schema(sd: &crate::parser::StructuredData) -> bool {
+        sd.r#type
+            .as_deref()
+            .map(|t| t == "Product" || t == "IndividualProduct" || t == "AggregateOffer")
+            .unwrap_or(false)
+    }
+
+    fn extract_price(data: &serde_json::Value) -> Option<String> {
+        let direct = data
+            .get("price")
+            .or_else(|| data.get("lowPrice"))
+            .or_else(|| data.get("highPrice"));
+        if let Some(v) = direct {
+            return Self::value_to_price(v);
+        }
+        let offers = data.get("offers")?;
+        let offer = if offers.is_array() {
+            offers.get(0)?
+        } else {
+            offers
+        };
+        let price_val = offer
+            .get("price")
+            .or_else(|| offer.get("lowPrice"))
+            .or_else(|| offer.get("highPrice"))?;
+        Self::value_to_price(price_val)
+    }
+
+    fn value_to_price(v: &serde_json::Value) -> Option<String> {
+        if let Some(s) = v.as_str() {
+            if !s.is_empty() {
+                return Some(s.to_string());
+            }
+        }
+        v.as_f64().map(|p| format!("{p}"))
+    }
+
+    fn extract_availability(data: &serde_json::Value) -> Option<String> {
+        data.get("availability")
+            .and_then(|v| v.as_str().map(String::from))
+            .or_else(|| {
+                data.get("offers")
+                    .and_then(|o| o.get("availability"))
+                    .and_then(|v| v.as_str().map(String::from))
+            })
+    }
+
+    fn detect_reviews(sd: &crate::parser::StructuredData) -> Vec<String> {
+        let mut reviews = Vec::new();
+        if let Some(obj) = sd.data.as_object() {
+            if let Some(rating) = obj.get("aggregateRating") {
+                if let Some(score) = rating.get("ratingValue").and_then(|v| {
+                    v.as_f64()
+                        .or_else(|| v.as_str().and_then(|s| s.parse::<f64>().ok()))
+                }) {
+                    reviews.push(format!("rating: {score}"));
+                }
+            }
+            if let Some(r) = obj.get("reviewCount").or_else(|| obj.get("ratingCount")) {
+                if let Some(count) = r
+                    .as_f64()
+                    .or_else(|| r.as_str().and_then(|s| s.parse::<f64>().ok()))
+                {
+                    reviews.push(format!("reviews: {count}"));
+                }
+            }
+        }
+        reviews
+    }
+
+    fn detect_offers(sd: &crate::parser::StructuredData) -> bool {
+        sd.data
+            .get("offers")
+            .or_else(|| sd.data.get("hasOffersCatalog"))
+            .map(|v| !v.is_null())
+            .unwrap_or(false)
+    }
+}
+
+impl Default for EcommerceSignalsAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for EcommerceSignalsAnalyzer {
+    fn name(&self) -> &str {
+        "ecommerce-signals"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.structured_data.is_empty() {
+            return findings;
+        }
+
+        let mut has_product = false;
+        let mut prices_found = Vec::new();
+        let mut availability_found = Vec::new();
+        let mut reviews_found = Vec::new();
+        let mut offers_found = false;
+
+        for sd in &ctx.page.structured_data {
+            if Self::detect_product_schema(sd) {
+                has_product = true;
+
+                if let Some(price) = Self::extract_price(&sd.data) {
+                    prices_found.push(price);
+                }
+                if let Some(avail) = Self::extract_availability(&sd.data) {
+                    availability_found.push(avail);
+                }
+                reviews_found.extend(Self::detect_reviews(sd));
+                if Self::detect_offers(sd) {
+                    offers_found = true;
+                }
+            }
+
+            if sd.r#type.as_deref() == Some("Offer") || sd.r#type.as_deref() == Some("AggregateOffer") {
+                if let Some(price) = Self::extract_price(&sd.data) {
+                    prices_found.push(price);
+                }
+            }
+
+            if sd.r#type.as_deref() == Some("Review") || sd.r#type.as_deref() == Some("AggregateRating") {
+                reviews_found.extend(Self::detect_reviews(sd));
+            }
+        }
+
+        if has_product {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "ECOM001".to_string(),
+                title: "Product schema detected".to_string(),
+                description: "Product structured data found. This enables rich product \
+                              results in search."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Ensure all required Product properties are present (name, \
+                                 image, description, offers)."
+                    .to_string(),
+            });
+        }
+
+        if !prices_found.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "ECOM002".to_string(),
+                title: "Price information detected".to_string(),
+                description: format!(
+                    "Prices found in structured data: {}.",
+                    prices_found.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Verify prices match the visible page content.".to_string(),
+            });
+        }
+
+        if !availability_found.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "ECOM003".to_string(),
+                title: "Availability information detected".to_string(),
+                description: format!(
+                    "Availability: {}.",
+                    availability_found.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Availability status should match the actual product state."
+                    .to_string(),
+            });
+        }
+
+        if !reviews_found.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "ECOM004".to_string(),
+                title: "Review/rating information detected".to_string(),
+                description: format!("Review data: {}.", reviews_found.join(", ")),
+                url: url.clone(),
+                recommendation: "Ratings and reviews enhance search result CTR. Keep them \
+                                 updated."
+                    .to_string(),
+            });
+        }
+
+        if offers_found {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "ECOM005".to_string(),
+                title: "Offer schema detected".to_string(),
+                description: "Offer structured data found in product schema.".to_string(),
+                url: url.clone(),
+                recommendation: "Ensure offer includes price, priceCurrency, and availability."
+                    .to_string(),
+            });
+        }
+
+        if !has_product && !prices_found.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Schema,
+                code: "ECOM006".to_string(),
+                title: "Price data without Product schema".to_string(),
+                description: "Price information found but no Product schema type detected. \
+                              Search engines may not interpret this as product data."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add Product schema to wrap price and availability data."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 23. International SEO Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct InternationalSeoAnalyzer {
+    known_hrefs: HashMap<String, Vec<String>>,
+}
+
+impl InternationalSeoAnalyzer {
+    pub fn new() -> Self {
+        Self {
+            known_hrefs: HashMap::new(),
+        }
+    }
+
+    pub fn with_known_hrefs(known_hrefs: HashMap<String, Vec<String>>) -> Self {
+        Self { known_hrefs }
+    }
+
+    fn detect_locale_from_url(url: &str) -> Option<String> {
+        if let Ok(parsed) = Url::parse(url) {
+            let segments: Vec<&str> = parsed
+                .path_segments()
+                .map(|s| s.filter(|s| !s.is_empty()).collect())
+                .unwrap_or_default();
+            if let Some(first) = segments.first() {
+                if Self::is_locale_segment(first) {
+                    return Some(first.to_string());
+                }
+            }
+        }
+        None
+    }
+
+    fn is_locale_segment(s: &str) -> bool {
+        let parts: Vec<&str> = s.split('-').collect();
+        match parts.len() {
+            1 => {
+                let lang = parts[0];
+                lang.len() >= 2 && lang.len() <= 3 && lang.chars().all(|c| c.is_ascii_alphabetic())
+            }
+            2 => {
+                let lang = parts[0];
+                let region = parts[1];
+                lang.len() >= 2
+                    && lang.len() <= 3
+                    && lang.chars().all(|c| c.is_ascii_alphabetic())
+                    && ((region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
+                        || (region.len() == 4 && region.chars().all(|c| c.is_ascii_digit())))
+            }
+            _ => false,
+        }
+    }
+
+    fn detect_multilang_content(
+        hreflang: &[crate::meta::HreflangTag],
+        html_lang: &Option<String>,
+    ) -> bool {
+        if !hreflang.is_empty() {
+            return true;
+        }
+        if let Some(lang) = html_lang {
+            let parts: Vec<&str> = lang.split('-').collect();
+            if parts.len() >= 2 {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+impl Default for InternationalSeoAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for InternationalSeoAnalyzer {
+    fn name(&self) -> &str {
+        "international-seo"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let hreflang_tags = &ctx.page.meta.hreflang;
+
+        if !hreflang_tags.is_empty() {
+            for tag in hreflang_tags {
+                if let Some(locale) = Self::detect_locale_from_url(tag.url.as_str()) {
+                    let locale_lower = locale.to_lowercase();
+                    let tag_lang_lower = tag.lang.to_lowercase();
+                    if locale_lower != tag_lang_lower
+                        && !tag_lang_lower.starts_with(&locale_lower)
+                        && !locale_lower.starts_with(&tag_lang_lower)
+                    {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Seo,
+                            code: "ISEO001".to_string(),
+                            title: "Hreflang URL locale mismatch".to_string(),
+                            description: format!(
+                                "Hreflang tag lang=\"{}\" points to URL \"{}\" which has \
+                                 locale segment \"{}\".",
+                                tag.lang, tag.url, locale
+                            ),
+                            url: url.clone(),
+                            recommendation: "Ensure the hreflang URL path segment matches \
+                                             the language code in the hreflang tag."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+
+            let has_x_default = hreflang_tags.iter().any(|t| t.lang == "x-default");
+            if !has_x_default {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ISEO002".to_string(),
+                    title: "Missing x-default in enhanced hreflang".to_string(),
+                    description: "No x-default hreflang found. This tag specifies the fallback \
+                                  page for unmatched locales."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add <link rel=\"alternate\" hreflang=\"x-default\" \
+                                     href=\"...\"> pointing to the default language version."
+                        .to_string(),
+                });
+            }
+
+            let lang_count: HashMap<String, usize> =
+                hreflang_tags.iter().fold(HashMap::new(), |mut acc, t| {
+                    *acc.entry(t.lang.clone()).or_insert(0) += 1;
+                    acc
+                });
+            for (lang, count) in &lang_count {
+                if *count > 1 && lang != "x-default" {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Seo,
+                        code: "ISEO003".to_string(),
+                        title: "Duplicate hreflang language".to_string(),
+                        description: format!(
+                            "Language \"{lang}\" appears {count} times. Each language code \
+                             must be unique per page."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Remove duplicate hreflang tags for the same language."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        let locale_in_url = Self::detect_locale_from_url(url);
+        if locale_in_url.is_none() && ctx.page.meta.hreflang.is_empty() {
+            if ctx.page.html_lang.is_some() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "ISEO004".to_string(),
+                    title: "Single-language page without hreflang".to_string(),
+                    description: "Page has a lang attribute but no hreflang tags. If this \
+                                  site serves multiple languages, add hreflang annotations."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "For multilingual sites, add hreflang tags to all language \
+                                     variants of each page."
+                        .to_string(),
+                });
+            }
+        }
+
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            if let Some(&ref hop_from) = self.known_hrefs.get(url) {
+                for hop_url in hop_from {
+                    if let Some(target_canonical) = self.known_hrefs.get(hop_url.as_str()) {
+                        if !target_canonical.is_empty() {
+                            let canonical_str = canonical.to_string();
+                            if target_canonical.iter().any(|c| c == &canonical_str) {
+                                findings.push(Finding {
+                                    severity: Severity::Info,
+                                    category: IssueCategory::Seo,
+                                    code: "ISEO005".to_string(),
+                                    title: "Canonical chain detected".to_string(),
+                                    description: format!(
+                                        "URL \"{url}\" canonical points to \"{}\", which is \
+                                         itself canonicalized. This forms a chain.",
+                                        canonical
+                                    ),
+                                    url: url.clone(),
+                                    recommendation: "Ensure all pages point to the same \
+                                                     final canonical URL to avoid crawl \
+                                                     confusion."
+                                        .to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let is_multilang =
+            Self::detect_multilang_content(hreflang_tags, &ctx.page.html_lang);
+        if is_multilang {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "ISEO006".to_string(),
+                title: "Multi-language content detected".to_string(),
+                description: "Page appears to be part of a multilingual setup. Ensure all \
+                              language variants cross-reference each other via hreflang."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Each language version should have reciprocal hreflang tags \
+                                 pointing to all other versions."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Analyzer Registry
 // ---------------------------------------------------------------------------
 
@@ -3593,6 +4921,11 @@ impl AnalyzerRegistry {
                 Box::new(MobileFriendlinessChecker::new()),
                 Box::new(AccessibilityAnalyzer::new()),
                 Box::new(SocialMediaAnalyzer::new()),
+                Box::new(EntityAnalyzer::new()),
+                Box::new(EnhancedReadabilityAnalyzer::new()),
+                Box::new(KeywordAnalyzer::new()),
+                Box::new(EcommerceSignalsAnalyzer::new()),
+                Box::new(InternationalSeoAnalyzer::new()),
             ],
         }
     }
@@ -4405,7 +5738,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 18);
+        assert_eq!(registry.len(), 23);
         assert!(!registry.is_empty());
     }
 
@@ -6299,5 +7632,588 @@ mod tests {
                 "Card type {card_type} should be valid"
             );
         }
+    }
+
+    // =========================================================================
+    // EntityAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_entity_analyzer_empty_page() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EntityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ENTITY005"));
+        assert!(findings.iter().any(|f| f.code == "ENTITY006"));
+    }
+
+    #[test]
+    fn test_entity_detect_people() {
+        let text = "Written by Dr. John Smith and edited by Prof. Jane Doe.";
+        let people = EntityAnalyzer::detect_people(text);
+        assert!(!people.is_empty());
+    }
+
+    #[test]
+    fn test_entity_detect_organizations() {
+        let text = "This product is made by Acme Corporation and Widget Inc.";
+        let orgs = EntityAnalyzer::detect_organizations(text);
+        assert!(!orgs.is_empty());
+    }
+
+    #[test]
+    fn test_entity_detect_locations() {
+        let text = "The city of London and the mountain region are beautiful.";
+        let locs = EntityAnalyzer::detect_locations(text);
+        assert!(!locs.is_empty());
+    }
+
+    #[test]
+    fn test_entity_topics() {
+        let headings = vec![
+            Heading {
+                level: 1,
+                text: "Rust Programming Language Tutorial".to_string(),
+                length: 33,
+            },
+            Heading {
+                level: 2,
+                text: "Advanced Rust Programming Concepts".to_string(),
+                length: 35,
+            },
+        ];
+        let topics = EntityAnalyzer::detect_topics(&headings, 500);
+        assert!(topics.iter().any(|t| t.contains("rust") || t.contains("programming")));
+    }
+
+    #[test]
+    fn test_entity_sentiment_positive() {
+        let (score, label) = EntityAnalyzer::analyze_sentiment(
+            "This is a great and amazing product, truly wonderful and excellent!",
+        );
+        assert!(score > 0.0);
+        assert_eq!(label, "positive");
+    }
+
+    #[test]
+    fn test_entity_sentiment_negative() {
+        let (score, label) = EntityAnalyzer::analyze_sentiment(
+            "This is a terrible and horrible product, truly awful and bad!",
+        );
+        assert!(score < 0.0);
+        assert_eq!(label, "negative");
+    }
+
+    #[test]
+    fn test_entity_sentiment_neutral() {
+        let (score, label) = EntityAnalyzer::analyze_sentiment(
+            "The page contains information about the topic.",
+        );
+        assert_eq!(label, "neutral");
+        assert!(score >= -0.05 && score <= 0.05);
+    }
+
+    #[test]
+    fn test_entity_analyzer_with_people() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Interview with Dr. Alice Smith".to_string(),
+            length: 29,
+        }];
+        page.word_count = 500;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EntityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ENTITY001"));
+    }
+
+    // =========================================================================
+    // EnhancedReadabilityAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_readability_empty_page() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_readability_simple_text() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 100;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "The cat sat on the mat. The dog ran in the park.".to_string(),
+            length: 48,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "READ001"));
+        assert!(findings.iter().any(|f| f.code == "READ005"));
+        let fre = findings.iter().find(|f| f.code == "READ005").unwrap();
+        assert!(fre.description.contains("Score:"));
+    }
+
+    #[test]
+    fn test_readability_complex_text() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 200;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "The implementation of sophisticated algorithmic methodologies \
+                   necessitates comprehensive understanding of computational complexity \
+                   and theoretical frameworks"
+                .to_string(),
+            length: 150,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "READ001"));
+        let fk = findings.iter().find(|f| f.code == "READ001").unwrap();
+        assert!(fk.description.contains("Grade level:"));
+    }
+
+    #[test]
+    fn test_readability_syllable_counting() {
+        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("cat"), 1);
+        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("hello"), 2);
+        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("beautiful"), 3);
+        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("a"), 1);
+        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables(""), 0);
+    }
+
+    #[test]
+    fn test_readability_indices() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 500;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "A comprehensive guide to understanding modern web development \
+                   practices and techniques for beginners and experienced developers"
+                .to_string(),
+            length: 140,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "READ001"));
+        assert!(findings.iter().any(|f| f.code == "READ002"));
+        assert!(findings.iter().any(|f| f.code == "READ003"));
+        assert!(findings.iter().any(|f| f.code == "READ004"));
+        assert!(findings.iter().any(|f| f.code == "READ005"));
+    }
+
+    #[test]
+    fn test_readability_grade_label() {
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(0.5), "kindergarten");
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(4.0), "elementary school");
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(7.0), "middle school");
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(10.0), "high school");
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(14.0), "college");
+        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(18.0), "postgraduate");
+    }
+
+    #[test]
+    fn test_readability_ease_label() {
+        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(95.0), "very easy");
+        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(85.0), "easy");
+        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(75.0), "fairly easy");
+        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(65.0), "standard");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(55.0),
+            "fairly difficult"
+        );
+        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(35.0), "difficult");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(20.0),
+            "very difficult"
+        );
+    }
+
+    // =========================================================================
+    // KeywordAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_keyword_analyzer_empty_page() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_keyword_analyzer_with_content() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 500;
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "Rust Programming Language Tutorial for Beginners".to_string(),
+                length: 48,
+            },
+            Heading {
+                level: 2,
+                text: "Learn Rust Programming Today".to_string(),
+                length: 28,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "KW001"));
+        assert!(findings.iter().any(|f| f.code == "KW002"));
+    }
+
+    #[test]
+    fn test_keyword_tokenize() {
+        let tokens = KeywordAnalyzer::tokenize("Rust Programming Language Tutorial");
+        assert!(tokens.contains(&"rust".to_string()));
+        assert!(tokens.contains(&"programming".to_string()));
+        assert!(tokens.contains(&"language".to_string()));
+        assert!(tokens.contains(&"tutorial".to_string()));
+    }
+
+    #[test]
+    fn test_keyword_tf() {
+        let tokens = vec![
+            "rust".to_string(),
+            "programming".to_string(),
+            "rust".to_string(),
+            "language".to_string(),
+        ];
+        let tf = KeywordAnalyzer::compute_tf(&tokens);
+        assert!(*tf.get("rust").unwrap() > 0.4);
+    }
+
+    #[test]
+    fn test_keyword_density() {
+        let tokens = vec![
+            "rust".to_string(),
+            "programming".to_string(),
+            "rust".to_string(),
+        ];
+        let density = KeywordAnalyzer::keyword_density(&tokens, 100);
+        assert!(*density.get("rust").unwrap() > 1.5);
+    }
+
+    #[test]
+    fn test_keyword_prominent_detection() {
+        let mut density = HashMap::new();
+        density.insert("rust".to_string(), 3.5);
+        density.insert("programming".to_string(), 1.0);
+        let prominent = KeywordAnalyzer::detect_prominent_keywords(&density);
+        assert_eq!(prominent.len(), 1);
+        assert_eq!(prominent[0].0, "rust");
+    }
+
+    #[test]
+    fn test_keyword_cooccurrence() {
+        let tokens = vec![
+            "rust".to_string(),
+            "programming".to_string(),
+            "language".to_string(),
+            "rust".to_string(),
+            "programming".to_string(),
+        ];
+        let cooccur = KeywordAnalyzer::cooccurrence(&tokens, 2);
+        assert!(!cooccur.is_empty());
+    }
+
+    #[test]
+    fn test_keyword_analyzer_prominent_warning() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 100;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "rust rust rust rust rust rust rust rust rust rust rust".to_string(),
+            length: 55,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        let kw003 = findings.iter().find(|f| f.code == "KW003");
+        assert!(kw003.is_some());
+        assert_eq!(kw003.unwrap().severity, Severity::Warning);
+    }
+
+    // =========================================================================
+    // EcommerceSignalsAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_ecom_empty_page() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ecom_product_schema() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "offers": {
+                    "@type": "Offer",
+                    "price": "29.99",
+                    "priceCurrency": "USD",
+                    "availability": "https://schema.org/InStock"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ECOM001"));
+        assert!(findings.iter().any(|f| f.code == "ECOM002"));
+        assert!(findings.iter().any(|f| f.code == "ECOM003"));
+        assert!(findings.iter().any(|f| f.code == "ECOM005"));
+    }
+
+    #[test]
+    fn test_ecom_product_with_reviews() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "aggregateRating": {
+                    "@type": "AggregateRating",
+                    "ratingValue": "4.5",
+                    "reviewCount": "120"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ECOM004"));
+    }
+
+    #[test]
+    fn test_ecom_price_without_product() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "19.99",
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ECOM006"));
+    }
+
+    #[test]
+    fn test_ecom_no_price() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ECOM001"));
+        assert!(!findings.iter().any(|f| f.code == "ECOM002"));
+    }
+
+    #[test]
+    fn test_ecom_non_product_schema() {
+        let mut page = make_page("https://example.com/article");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.is_empty());
+    }
+
+    // =========================================================================
+    // InternationalSeoAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_iseo_empty_page() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ISEO004"));
+    }
+
+    #[test]
+    fn test_iseo_detect_locale_from_url() {
+        assert_eq!(
+            InternationalSeoAnalyzer::detect_locale_from_url("https://example.com/en/page"),
+            Some("en".to_string())
+        );
+        assert_eq!(
+            InternationalSeoAnalyzer::detect_locale_from_url("https://example.com/fr/page"),
+            Some("fr".to_string())
+        );
+        assert_eq!(
+            InternationalSeoAnalyzer::detect_locale_from_url("https://example.com/en-US/page"),
+            Some("en-US".to_string())
+        );
+        assert_eq!(
+            InternationalSeoAnalyzer::detect_locale_from_url("https://example.com/page"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_iseo_is_locale_segment() {
+        assert!(InternationalSeoAnalyzer::is_locale_segment("en"));
+        assert!(InternationalSeoAnalyzer::is_locale_segment("fr"));
+        assert!(InternationalSeoAnalyzer::is_locale_segment("en-US"));
+        assert!(InternationalSeoAnalyzer::is_locale_segment("zh-CN"));
+        assert!(!InternationalSeoAnalyzer::is_locale_segment("page"));
+        assert!(!InternationalSeoAnalyzer::is_locale_segment("e"));
+    }
+
+    #[test]
+    fn test_iseo_hreflang_url_locale_mismatch() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "fr".to_string(),
+            url: Url::parse("https://example.com/en/about").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ISEO001"));
+    }
+
+    #[test]
+    fn test_iseo_missing_x_default() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ISEO002"));
+    }
+
+    #[test]
+    fn test_iseo_duplicate_language() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en-uk").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ISEO003"));
+    }
+
+    #[test]
+    fn test_iseo_multilang_content() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "x-default".to_string(),
+                url: Url::parse("https://example.com").unwrap(),
+            },
+        ];
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "ISEO006"));
+    }
+
+    #[test]
+    fn test_iseo_valid_hreflang_with_xdefault() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "x-default".to_string(),
+                url: Url::parse("https://example.com").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.severity == Severity::Error));
+    }
+
+    #[test]
+    fn test_iseo_locale_detection_from_url() {
+        let locale = InternationalSeoAnalyzer::detect_locale_from_url(
+            "https://example.com/de/products/widget",
+        );
+        assert_eq!(locale, Some("de".to_string()));
+    }
+
+    #[test]
+    fn test_iseo_no_locale_no_hreflang() {
+        let mut page = make_page("https://example.com/products");
+        page.html_lang = None;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "ISEO004"));
+    }
+
+    #[test]
+    fn test_iseo_multilang_detect() {
+        assert!(InternationalSeoAnalyzer::detect_multilang_content(
+            &[crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            }],
+            &None,
+        ));
+        assert!(InternationalSeoAnalyzer::detect_multilang_content(
+            &[],
+            &Some("en-US".to_string()),
+        ));
+        assert!(!InternationalSeoAnalyzer::detect_multilang_content(
+            &[],
+            &Some("en".to_string()),
+        ));
     }
 }

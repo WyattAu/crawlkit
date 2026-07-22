@@ -187,10 +187,7 @@ impl UrlQueue {
 
         // Track domain
         if let Some(domain) = url.domain() {
-            *self
-                .domain_counts
-                .entry(domain.to_string())
-                .or_insert(0) += 1;
+            *self.domain_counts.entry(domain.to_string()).or_insert(0) += 1;
         }
 
         let entry = QueueEntry {
@@ -452,21 +449,9 @@ mod tests {
     fn test_queue_domain_tracking() {
         let queue = UrlQueue::new(ScopeConfig::default());
 
-        queue.push(
-            Url::parse("https://a.com/1").unwrap(),
-            0,
-            Priority::NORMAL,
-        );
-        queue.push(
-            Url::parse("https://a.com/2").unwrap(),
-            0,
-            Priority::NORMAL,
-        );
-        queue.push(
-            Url::parse("https://b.com/1").unwrap(),
-            0,
-            Priority::NORMAL,
-        );
+        queue.push(Url::parse("https://a.com/1").unwrap(), 0, Priority::NORMAL);
+        queue.push(Url::parse("https://a.com/2").unwrap(), 0, Priority::NORMAL);
+        queue.push(Url::parse("https://b.com/1").unwrap(), 0, Priority::NORMAL);
 
         assert_eq!(queue.domain_count("a.com"), 2);
         assert_eq!(queue.domain_count("b.com"), 1);
@@ -506,16 +491,8 @@ mod tests {
     #[test]
     fn test_queue_drain() {
         let queue = UrlQueue::new(ScopeConfig::default());
-        queue.push(
-            Url::parse("https://a.com").unwrap(),
-            0,
-            Priority::HIGH,
-        );
-        queue.push(
-            Url::parse("https://b.com").unwrap(),
-            0,
-            Priority::LOW,
-        );
+        queue.push(Url::parse("https://a.com").unwrap(), 0, Priority::HIGH);
+        queue.push(Url::parse("https://b.com").unwrap(), 0, Priority::LOW);
 
         let entries = queue.drain();
         assert_eq!(entries.len(), 2);

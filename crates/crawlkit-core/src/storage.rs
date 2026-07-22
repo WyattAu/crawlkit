@@ -344,12 +344,7 @@ impl Storage {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "INSERT INTO crawls (id, start_time, target_url, config_json) VALUES (?1, ?2, ?3, ?4)",
-            params![
-                crawl_id,
-                Utc::now().to_rfc3339(),
-                target_url,
-                config_json,
-            ],
+            params![crawl_id, Utc::now().to_rfc3339(), target_url, config_json,],
         )?;
         Ok(crawl_id)
     }
@@ -364,7 +359,12 @@ impl Storage {
         let conn = self.conn.lock().unwrap();
         conn.execute(
             "UPDATE crawls SET end_time = ?1, pages_crawled = ?2, total_issues = ?3 WHERE id = ?4",
-            params![Utc::now().to_rfc3339(), pages_crawled, total_issues, crawl_id],
+            params![
+                Utc::now().to_rfc3339(),
+                pages_crawled,
+                total_issues,
+                crawl_id
+            ],
         )?;
         Ok(())
     }
@@ -479,14 +479,14 @@ impl Storage {
 
                 Ok(PageData {
                     id: row.get(0)?,
-                    url: Url::parse(&url_str).unwrap_or_else(|_| Url::parse("about:blank").unwrap()),
+                    url: Url::parse(&url_str)
+                        .unwrap_or_else(|_| Url::parse("about:blank").unwrap()),
                     final_url: Url::parse(&final_url_str)
                         .unwrap_or_else(|_| Url::parse("about:blank").unwrap()),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
                     description: row.get(5)?,
-                    canonical_url: canonical_str
-                        .and_then(|s| Url::parse(&s).ok()),
+                    canonical_url: canonical_str.and_then(|s| Url::parse(&s).ok()),
                     word_count: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
                     load_time_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
                     body_size: row.get::<_, Option<i64>>(9)?.map(|v| v as usize),
@@ -538,7 +538,8 @@ impl Storage {
         query.push_str(" ORDER BY f.id ASC");
 
         let mut stmt = conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> = param_values.iter().map(|p| p.as_ref()).collect();
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
 
         let issues = stmt
             .query_map(params_refs.as_slice(), |row| {
@@ -566,13 +567,11 @@ impl Storage {
     pub fn get_stats(&self, crawl_id: &str) -> Result<CrawlStats, StorageError> {
         let conn = self.conn.lock().unwrap();
 
-        let total_pages: usize = conn
-            .query_row(
-                "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
-                params![crawl_id],
-                |row| row.get::<_, i64>(0),
-            )?
-            as usize;
+        let total_pages: usize = conn.query_row(
+            "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
+            params![crawl_id],
+            |row| row.get::<_, i64>(0),
+        )? as usize;
 
         let total_issues: usize = conn
             .query_row(
@@ -719,7 +718,9 @@ mod tests {
         storage.insert_issues(&issues).unwrap();
 
         // Get all
-        let retrieved = storage.get_issues(&crawl_id, &IssueFilter::default()).unwrap();
+        let retrieved = storage
+            .get_issues(&crawl_id, &IssueFilter::default())
+            .unwrap();
         assert_eq!(retrieved.len(), 2);
 
         // Filter by severity

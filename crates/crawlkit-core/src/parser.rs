@@ -45,6 +45,20 @@ pub struct ExtractedLink {
     pub is_external: bool,
 }
 
+/// An input element inside a form.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExtractedInput {
+    pub input_type: Option<String>,
+    pub name: Option<String>,
+    pub id: Option<String>,
+    pub has_label: bool,
+    pub aria_label: Option<String>,
+    pub aria_labelledby: Option<String>,
+    pub aria_describedby: Option<String>,
+    pub placeholder: Option<String>,
+    pub required: bool,
+}
+
 /// A form detected on the page.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedForm {
@@ -53,6 +67,9 @@ pub struct ExtractedForm {
     pub input_count: usize,
     pub has_file_input: bool,
     pub has_search_input: bool,
+    pub inputs: Vec<ExtractedInput>,
+    pub has_fieldset: bool,
+    pub has_legend: bool,
 }
 
 /// Script tag information.
@@ -93,6 +110,40 @@ pub struct ParsedPage {
     pub styles: Vec<StyleInfo>,
     pub structured_data: Vec<StructuredData>,
     pub word_count: usize,
+
+    // Accessibility fields
+    /// Landmark roles found on the page (e.g. "banner", "main", "navigation").
+    pub landmarks: Vec<String>,
+    /// Whether the page has a skip-to-content link.
+    pub has_skip_link: bool,
+    /// Whether the page has a `<main>` element or role="main".
+    pub has_main_landmark: bool,
+    /// Whether the page has a `<nav>` element or role="navigation".
+    pub has_nav_landmark: bool,
+    /// Whether any element has tabindex > 0 (positive tabindex).
+    pub has_positive_tabindex: bool,
+    /// Number of elements with tabindex=-1 (removed from tab order).
+    pub tabindex_negative_count: usize,
+    /// Number of ARIA roles used on the page.
+    pub aria_role_count: usize,
+    /// Number of elements with aria-label or aria-labelledby.
+    pub aria_label_count: usize,
+    /// Whether the html element has a lang attribute.
+    pub has_lang_attribute: bool,
+    /// The html lang attribute value.
+    pub html_lang: Option<String>,
+    /// Whether any element uses aria-hidden="true".
+    pub has_aria_hidden: bool,
+    /// Table accessibility summary.
+    pub tables_with_headers: usize,
+    pub tables_total: usize,
+    pub tables_with_captions: usize,
+
+    // Social media fields
+    /// OG image width (from og:image:width meta tag).
+    pub og_image_width: Option<u32>,
+    /// OG image height (from og:image:height meta tag).
+    pub og_image_height: Option<u32>,
 }
 
 /// HTML parser that extracts structured data from raw HTML.
@@ -113,6 +164,9 @@ impl HtmlParser {
         let structured_data = Self::extract_structured_data(&document);
         let word_count = Self::count_words(&document);
 
+        let accessibility = Self::extract_accessibility(&document);
+        let social = Self::extract_social(&document);
+
         Ok(ParsedPage {
             url: url.to_string(),
             meta,
@@ -124,6 +178,22 @@ impl HtmlParser {
             styles,
             structured_data,
             word_count,
+            landmarks: accessibility.0,
+            has_skip_link: accessibility.1,
+            has_main_landmark: accessibility.2,
+            has_nav_landmark: accessibility.3,
+            has_positive_tabindex: accessibility.4,
+            tabindex_negative_count: accessibility.5,
+            aria_role_count: accessibility.6,
+            aria_label_count: accessibility.7,
+            has_lang_attribute: accessibility.8,
+            html_lang: accessibility.9,
+            has_aria_hidden: accessibility.10,
+            tables_with_headers: accessibility.11,
+            tables_total: accessibility.12,
+            tables_with_captions: accessibility.13,
+            og_image_width: social.0,
+            og_image_height: social.1,
         })
     }
 
@@ -152,14 +222,13 @@ impl HtmlParser {
         let robots = Self::get_meta_content(document, "robots");
         let language = Self::get_attr(document, "html", "lang")
             .or_else(|| Self::get_meta_content(document, "language"));
-        let charset = Self::get_attr(document, "meta[charset]", "charset")
-            .or_else(|| {
-                Self::get_meta_content(document, "content-type").and_then(|ct| {
-                    ct.split(';')
-                        .find(|p| p.trim().starts_with("charset="))
-                        .map(|p| p.trim().trim_start_matches("charset=").to_string())
-                })
-            });
+        let charset = Self::get_attr(document, "meta[charset]", "charset").or_else(|| {
+            Self::get_meta_content(document, "content-type").and_then(|ct| {
+                ct.split(';')
+                    .find(|p| p.trim().starts_with("charset="))
+                    .map(|p| p.trim().trim_start_matches("charset=").to_string())
+            })
+        });
         let viewport = Self::get_meta_content(document, "viewport");
 
         let og = OpenGraphTags {
@@ -267,9 +336,7 @@ impl HtmlParser {
                 let is_external = page_url
                     .join(&href)
                     .ok()
-                    .map(|resolved| {
-                        resolved.domain().unwrap_or("") != page_domain
-                    })
+                    .map(|resolved| resolved.domain().unwrap_or("") != page_domain)
                     .unwrap_or(false);
 
                 Some(ExtractedLink {
@@ -297,10 +364,7 @@ impl HtmlParser {
             .map(|el| {
                 let src = el.value().attr("src").unwrap_or("").to_string();
                 let alt = el.value().attr("alt").unwrap_or("").to_string();
-                let width = el
-                    .value()
-                    .attr("width")
-                    .and_then(|w| w.parse::<u32>().ok());
+                let width = el.value().attr("width").and_then(|w| w.parse::<u32>().ok());
                 let height = el
                     .value()
                     .attr("height")
@@ -311,10 +375,7 @@ impl HtmlParser {
                     .attr("loading")
                     .map(|l| l == "lazy")
                     .unwrap_or(false)
-                    || el
-                        .value()
-                        .attr("data-src")
-                        .is_some();
+                    || el.value().attr("data-src").is_some();
 
                 ExtractedImage {
                     src,
@@ -338,7 +399,12 @@ impl HtmlParser {
             Err(_) => return Vec::new(),
         };
 
-        let input_sel = match Selector::parse("input") {
+        let input_sel = match Selector::parse("input, select, textarea") {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+
+        let label_sel = match Selector::parse("label") {
             Ok(s) => s,
             Err(_) => return Vec::new(),
         };
@@ -347,11 +413,7 @@ impl HtmlParser {
             .select(&selector)
             .map(|form| {
                 let action = form.value().attr("action").map(String::from);
-                let method = form
-                    .value()
-                    .attr("method")
-                    .unwrap_or("get")
-                    .to_lowercase();
+                let method = form.value().attr("method").unwrap_or("get").to_lowercase();
 
                 let inputs: Vec<_> = form.select(&input_sel).collect();
                 let input_count = inputs.len();
@@ -363,12 +425,81 @@ impl HtmlParser {
                         || i.value().attr("role") == Some("search")
                 });
 
+                // Collect all label `for` targets within this form
+                let label_for_ids: std::collections::HashSet<String> = form
+                    .select(&label_sel)
+                    .filter_map(|l| l.value().attr("for").map(String::from))
+                    .collect();
+
+                // Collect all input nodes that are descendants of a <label>
+                let inputs_in_labels: std::collections::HashSet<ego_tree::NodeId> = {
+                    let inner_input_sel = Selector::parse("input, select, textarea")
+                        .unwrap_or_else(|_| Selector::parse("input").unwrap());
+                    form.select(&label_sel)
+                        .flat_map(|label| label.select(&inner_input_sel))
+                        .map(|input| input.id())
+                        .collect()
+                };
+
+                let extracted_inputs: Vec<ExtractedInput> = inputs
+                    .iter()
+                    .map(|input| {
+                        let input_type = input.value().attr("type").map(String::from);
+                        let name = input.value().attr("name").map(String::from);
+                        let id = input.value().attr("id").map(String::from);
+                        let aria_label = input.value().attr("aria-label").map(String::from);
+                        let aria_labelledby =
+                            input.value().attr("aria-labelledby").map(String::from);
+                        let aria_describedby =
+                            input.value().attr("aria-describedby").map(String::from);
+                        let placeholder = input.value().attr("placeholder").map(String::from);
+                        let required = input.value().attr("required").is_some()
+                            || input.value().attr("aria-required") == Some("true");
+
+                        let has_explicit_label = id
+                            .as_ref()
+                            .map(|id_val| label_for_ids.contains(id_val))
+                            .unwrap_or(false);
+
+                        let has_implicit_label = inputs_in_labels.contains(&input.id());
+
+                        let has_label = has_explicit_label
+                            || has_implicit_label
+                            || aria_label.is_some()
+                            || aria_labelledby.is_some();
+
+                        ExtractedInput {
+                            input_type,
+                            name,
+                            id,
+                            has_label,
+                            aria_label,
+                            aria_labelledby,
+                            aria_describedby,
+                            placeholder,
+                            required,
+                        }
+                    })
+                    .collect();
+
+                let has_fieldset = Selector::parse("fieldset")
+                    .ok()
+                    .and_then(|s| form.select(&s).next().is_some().then_some(true))
+                    .unwrap_or(false);
+                let has_legend = Selector::parse("legend")
+                    .ok()
+                    .and_then(|s| form.select(&s).next().is_some().then_some(true))
+                    .unwrap_or(false);
+
                 ExtractedForm {
                     action,
                     method,
                     input_count,
                     has_file_input,
                     has_search_input,
+                    inputs: extracted_inputs,
+                    has_fieldset,
+                    has_legend,
                 }
             })
             .collect()
@@ -545,9 +676,245 @@ impl HtmlParser {
 
         collect_text(&tree, root, &skip_ids, &mut text);
 
-        text.split_whitespace()
-            .filter(|w| !w.is_empty())
-            .count()
+        text.split_whitespace().filter(|w| !w.is_empty()).count()
+    }
+
+    // ---------------------------------------------------------------------------
+    // Accessibility data extraction
+    // ---------------------------------------------------------------------------
+
+    /// Returns (landmarks, has_skip_link, has_main, has_nav, has_positive_tabindex,
+    /// tabindex_neg_count, aria_role_count, aria_label_count, has_lang, html_lang,
+    /// has_aria_hidden, tables_with_headers, tables_total, tables_with_captions).
+    fn extract_accessibility(
+        document: &Html,
+    ) -> (
+        Vec<String>,
+        bool,
+        bool,
+        bool,
+        bool,
+        usize,
+        usize,
+        usize,
+        bool,
+        Option<String>,
+        bool,
+        usize,
+        usize,
+        usize,
+    ) {
+        let mut landmarks = Vec::new();
+        let mut has_skip_link = false;
+        let mut has_main = false;
+        let mut has_nav = false;
+        let mut has_positive_tabindex = false;
+        let mut tabindex_negative_count = 0usize;
+        let mut aria_role_count = 0usize;
+        let mut aria_label_count = 0usize;
+        let mut has_aria_hidden = false;
+        let mut tables_with_headers = 0usize;
+        let mut tables_total = 0usize;
+        let mut tables_with_captions = 0usize;
+
+        // Check html lang
+        let has_lang;
+        let html_lang;
+        if let Some(html_el) = document.select(&Selector::parse("html").unwrap()).next() {
+            html_lang = html_el.value().attr("lang").map(String::from);
+            has_lang = html_lang.is_some();
+        } else {
+            has_lang = false;
+            html_lang = None;
+        }
+
+        // Landmark detection via semantic HTML elements
+        if document
+            .select(&Selector::parse("header").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("banner".to_string());
+        }
+        if document
+            .select(&Selector::parse("nav").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("navigation".to_string());
+            has_nav = true;
+        }
+        if document
+            .select(&Selector::parse("main").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("main".to_string());
+            has_main = true;
+        }
+        if document
+            .select(&Selector::parse("aside").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("complementary".to_string());
+        }
+        if document
+            .select(&Selector::parse("footer").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("contentinfo".to_string());
+        }
+        if document
+            .select(&Selector::parse("form").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("form".to_string());
+        }
+        if document
+            .select(&Selector::parse("section[aria-label], section[aria-labelledby]").unwrap())
+            .next()
+            .is_some()
+        {
+            landmarks.push("region".to_string());
+        }
+        if document
+            .select(&Selector::parse("[role=banner]").unwrap())
+            .next()
+            .is_some()
+            && !landmarks.contains(&"banner".to_string())
+        {
+            landmarks.push("banner".to_string());
+        }
+        if document
+            .select(&Selector::parse("[role=navigation]").unwrap())
+            .next()
+            .is_some()
+            && !landmarks.contains(&"navigation".to_string())
+        {
+            landmarks.push("navigation".to_string());
+            has_nav = true;
+        }
+        if document
+            .select(&Selector::parse("[role=main]").unwrap())
+            .next()
+            .is_some()
+            && !landmarks.contains(&"main".to_string())
+        {
+            landmarks.push("main".to_string());
+            has_main = true;
+        }
+        if document
+            .select(&Selector::parse("[role=complementary]").unwrap())
+            .next()
+            .is_some()
+            && !landmarks.contains(&"complementary".to_string())
+        {
+            landmarks.push("complementary".to_string());
+        }
+        if document
+            .select(&Selector::parse("[role=contentinfo]").unwrap())
+            .next()
+            .is_some()
+            && !landmarks.contains(&"contentinfo".to_string())
+        {
+            landmarks.push("contentinfo".to_string());
+        }
+
+        // Skip link: first <a> whose href starts with "#" and contains "skip" in text or class
+        if let Ok(sel) = Selector::parse("a[href^=\"#\"]") {
+            for el in document.select(&sel) {
+                let text: String = el.text().collect::<Vec<_>>().join("").to_lowercase();
+                let class = el.value().attr("class").unwrap_or("").to_lowercase();
+                let id = el.value().attr("href").unwrap_or("").to_lowercase();
+                if text.contains("skip") || class.contains("skip") || id.contains("skip") {
+                    has_skip_link = true;
+                    break;
+                }
+            }
+        }
+
+        // Tabindex and ARIA attribute scanning
+        for node_ref in document.root_element().descendants() {
+            let el = match node_ref.value() {
+                scraper::Node::Element(e) => e,
+                _ => continue,
+            };
+            // tabindex
+            if let Some(ti) = el.attr("tabindex") {
+                if let Ok(val) = ti.parse::<i32>() {
+                    if val > 0 {
+                        has_positive_tabindex = true;
+                    } else if val == -1 {
+                        tabindex_negative_count += 1;
+                    }
+                }
+            }
+
+            // ARIA roles
+            if el.attr("role").is_some() {
+                aria_role_count += 1;
+            }
+
+            // ARIA labels
+            if el.attr("aria-label").is_some() || el.attr("aria-labelledby").is_some() {
+                aria_label_count += 1;
+            }
+
+            // aria-hidden
+            if el.attr("aria-hidden") == Some("true") {
+                has_aria_hidden = true;
+            }
+        }
+
+        // Table accessibility
+        if let Ok(table_sel) = Selector::parse("table") {
+            if let Ok(th_sel) = Selector::parse("th") {
+                if let Ok(caption_sel) = Selector::parse("caption") {
+                    for table in document.select(&table_sel) {
+                        tables_total += 1;
+                        if table.select(&th_sel).next().is_some() {
+                            tables_with_headers += 1;
+                        }
+                        if table.select(&caption_sel).next().is_some() {
+                            tables_with_captions += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        (
+            landmarks,
+            has_skip_link,
+            has_main,
+            has_nav,
+            has_positive_tabindex,
+            tabindex_negative_count,
+            aria_role_count,
+            aria_label_count,
+            has_lang,
+            html_lang,
+            has_aria_hidden,
+            tables_with_headers,
+            tables_total,
+            tables_with_captions,
+        )
+    }
+
+    // ---------------------------------------------------------------------------
+    // Social media data extraction
+    // ---------------------------------------------------------------------------
+
+    /// Returns (og_image_width, og_image_height).
+    fn extract_social(document: &Html) -> (Option<u32>, Option<u32>) {
+        let width =
+            Self::get_meta_content(document, "og:image:width").and_then(|w| w.parse::<u32>().ok());
+        let height =
+            Self::get_meta_content(document, "og:image:height").and_then(|h| h.parse::<u32>().ok());
+        (width, height)
     }
 
     // ---------------------------------------------------------------------------
@@ -622,7 +989,8 @@ mod tests {
 
     #[test]
     fn test_parse_title() {
-        let html = r#"<!DOCTYPE html><html><head><title>My Page</title></head><body></body></html>"#;
+        let html =
+            r#"<!DOCTYPE html><html><head><title>My Page</title></head><body></body></html>"#;
         let page = HtmlParser::parse(html, &test_url()).unwrap();
         assert_eq!(page.meta.title.as_deref(), Some("My Page"));
     }

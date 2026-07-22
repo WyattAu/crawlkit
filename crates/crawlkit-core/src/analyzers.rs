@@ -221,10 +221,7 @@ impl Analyzer for HttpStatusAnalyzer {
             severity: Severity::Info,
             category: IssueCategory::Http,
             code: "HTTP006".to_string(),
-            title: format!(
-                "Status category: {}",
-                Self::status_category(status)
-            ),
+            title: format!("Status category: {}", Self::status_category(status)),
             description: format!(
                 "HTTP {status} — categorized as {}.",
                 Self::status_category(status)
@@ -347,10 +344,7 @@ impl Analyzer for RedirectChainAnalyzer {
                 category: IssueCategory::Http,
                 code: "REDIR004".to_string(),
                 title: "Single redirect detected".to_string(),
-                description: format!(
-                    "URL redirects from {} to {}.",
-                    hops[0].from, hops[0].to
-                ),
+                description: format!("URL redirects from {} to {}.", hops[0].from, hops[0].to),
                 url: url.clone(),
                 recommendation: "Consider updating inbound links to point directly to the \
                                  final URL to eliminate the redirect."
@@ -618,7 +612,10 @@ pub struct SitemapAnalyzer {
 
 impl SitemapAnalyzer {
     pub fn new(known_urls: HashSet<String>, entries: Vec<SitemapEntry>) -> Self {
-        Self { known_urls, entries }
+        Self {
+            known_urls,
+            entries,
+        }
     }
 
     pub fn empty() -> Self {
@@ -688,8 +685,7 @@ impl Analyzer for SitemapAnalyzer {
                 title: "No sitemap data available".to_string(),
                 description: "No sitemap URLs were loaded for validation.".to_string(),
                 url: url.clone(),
-                recommendation: "Provide sitemap data to enable sitemap validation."
-                    .to_string(),
+                recommendation: "Provide sitemap data to enable sitemap validation.".to_string(),
             });
             return findings;
         }
@@ -759,8 +755,7 @@ impl Analyzer for SitemapAnalyzer {
                             "The priority value {priority} is outside the valid range (0.0-1.0)."
                         ),
                         url: url.clone(),
-                        recommendation: "Set priority to a value between 0.0 and 1.0."
-                            .to_string(),
+                        recommendation: "Set priority to a value between 0.0 and 1.0.".to_string(),
                     });
                 }
             }
@@ -977,8 +972,7 @@ impl Analyzer for MetaTagAnalyzer {
                     title: "Missing page title".to_string(),
                     description: "No <title> tag was found on this page.".to_string(),
                     url: url.clone(),
-                    recommendation: "Add a descriptive title tag (30-60 characters)."
-                        .to_string(),
+                    recommendation: "Add a descriptive title tag (30-60 characters).".to_string(),
                 });
             }
             Some(title) => {
@@ -1043,8 +1037,7 @@ impl Analyzer for MetaTagAnalyzer {
                              of 120."
                         ),
                         url: url.clone(),
-                        recommendation: "Expand the description to 120-160 characters."
-                            .to_string(),
+                        recommendation: "Expand the description to 120-160 characters.".to_string(),
                     });
                 } else if len > 160 {
                     findings.push(Finding {
@@ -1175,8 +1168,7 @@ impl Analyzer for HeadingHierarchyAnalyzer {
                 title: "No headings found".to_string(),
                 description: "The page contains no heading elements (H1-H6).".to_string(),
                 url: url.clone(),
-                recommendation: "Add at least one H1 heading to define the page topic."
-                    .to_string(),
+                recommendation: "Add at least one H1 heading to define the page topic.".to_string(),
             });
             return findings;
         }
@@ -1351,8 +1343,7 @@ impl Analyzer for LinkAnalyzer {
                             link.text, target,
                         ),
                         url: url.clone(),
-                        recommendation: "Fix the broken page or remove links from it."
-                            .to_string(),
+                        recommendation: "Fix the broken page or remove links from it.".to_string(),
                     });
                 }
             }
@@ -1385,10 +1376,7 @@ impl Analyzer for LinkAnalyzer {
                     category: IssueCategory::Links,
                     code: "LINK004".to_string(),
                     title: "Empty anchor text".to_string(),
-                    description: format!(
-                        "Link to \"{}\" has no visible anchor text.",
-                        link.href
-                    ),
+                    description: format!("Link to \"{}\" has no visible anchor text.", link.href),
                     url: url.clone(),
                     recommendation: "Add descriptive anchor text to help users and search engines \
                                      understand the link destination."
@@ -1423,8 +1411,9 @@ impl Analyzer for LinkAnalyzer {
                     description: "This page has no inbound links from other pages on the site."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add internal links from other pages to improve discoverability."
-                        .to_string(),
+                    recommendation:
+                        "Add internal links from other pages to improve discoverability."
+                            .to_string(),
                 });
             }
         }
@@ -1545,8 +1534,7 @@ impl Analyzer for ImageAnalyzer {
         }
 
         // Dimension summary
-        let missing_dimensions =
-            ctx.page.images.len() as u32 - total_with_dimensions;
+        let missing_dimensions = ctx.page.images.len() as u32 - total_with_dimensions;
         if missing_dimensions > 0 {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -1776,15 +1764,15 @@ impl Analyzer for StructuredDataValidator {
 
 /// Stop words for keyword density analysis (common English words).
 const STOP_WORDS: &[&str] = &[
-    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
-    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does",
-    "did", "will", "would", "could", "should", "may", "might", "shall", "can", "it", "its",
-    "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me", "him",
-    "her", "us", "them", "my", "your", "his", "our", "their", "what", "which", "who", "whom",
-    "where", "when", "why", "how", "all", "each", "every", "both", "few", "more", "most",
-    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too",
-    "very", "just", "about", "above", "after", "again", "also", "as", "before", "between",
-    "down", "from", "here", "if", "into", "then", "there", "through", "under", "until", "up",
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is",
+    "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does", "did", "will",
+    "would", "could", "should", "may", "might", "shall", "can", "it", "its", "this", "that",
+    "these", "those", "i", "you", "he", "she", "we", "they", "me", "him", "her", "us", "them",
+    "my", "your", "his", "our", "their", "what", "which", "who", "whom", "where", "when", "why",
+    "how", "all", "each", "every", "both", "few", "more", "most", "other", "some", "such", "no",
+    "nor", "not", "only", "own", "same", "so", "than", "too", "very", "just", "about", "above",
+    "after", "again", "also", "as", "before", "between", "down", "from", "here", "if", "into",
+    "then", "there", "through", "under", "until", "up",
 ];
 
 pub struct ContentQualityAnalyzer;
@@ -1842,9 +1830,9 @@ impl ContentQualityAnalyzer {
         if words == 0 || sentences == 0 {
             return 0.0;
         }
-        let score =
-            206.835 - 1.015 * (words as f64 / sentences as f64)
-                - 84.6 * (syllables as f64 / words as f64);
+        let score = 206.835
+            - 1.015 * (words as f64 / sentences as f64)
+            - 84.6 * (syllables as f64 / words as f64);
         score.clamp(0.0, 100.0)
     }
 }
@@ -1867,12 +1855,15 @@ impl Analyzer for ContentQualityAnalyzer {
         // 2.7 — Flesch-Kincaid readability
         let word_count = ctx.page.word_count;
         if word_count > 0 {
-            let text = &ctx.page.headings.iter().map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+            let text = &ctx
+                .page
+                .headings
+                .iter()
+                .map(|h| h.text.as_str())
+                .collect::<Vec<_>>()
+                .join(" ");
             let sentences = Self::count_sentences(text);
-            let syllables: usize = text
-                .split_whitespace()
-                .map(Self::count_syllables)
-                .sum();
+            let syllables: usize = text.split_whitespace().map(Self::count_syllables).sum();
             let score = Self::flesch_kincaid(word_count, sentences.max(1), syllables);
 
             findings.push(Finding {
@@ -1894,8 +1885,7 @@ impl Analyzer for ContentQualityAnalyzer {
                      audiences."
                         .to_string()
                 } else if score < 70.0 {
-                    "Content has moderate readability. Suitable for most audiences."
-                        .to_string()
+                    "Content has moderate readability. Suitable for most audiences.".to_string()
                 } else {
                     "Content is easy to read. Good for general audiences.".to_string()
                 },
@@ -1959,8 +1949,7 @@ impl Analyzer for ContentQualityAnalyzer {
                              hidden content."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Ensure the page has meaningful visible text content."
-                    .to_string(),
+                recommendation: "Ensure the page has meaningful visible text content.".to_string(),
             });
         } else if word_count < 300 {
             findings.push(Finding {
@@ -2162,9 +2151,7 @@ impl SecurityHeaderAnalyzer {
         ];
         value.split(';').any(|part| {
             let trimmed = part.trim();
-            directives
-                .iter()
-                .any(|d| trimmed.starts_with(d))
+            directives.iter().any(|d| trimmed.starts_with(d))
         })
     }
 
@@ -2340,8 +2327,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
                                   clickjacking by controlling frame embedding."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN."
-                        .to_string(),
+                    recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string(),
                 });
             }
             Some(value) => {
@@ -2375,8 +2361,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
                                   prevents MIME-type sniffing."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Set X-Content-Type-Options to nosniff."
-                        .to_string(),
+                    recommendation: "Set X-Content-Type-Options to nosniff.".to_string(),
                 });
             }
             Some(value) => {
@@ -2390,8 +2375,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
                             "X-Content-Type-Options is \"{value}\" but must be nosniff."
                         ),
                         url: url.clone(),
-                        recommendation: "Set X-Content-Type-Options to nosniff."
-                            .to_string(),
+                        recommendation: "Set X-Content-Type-Options to nosniff.".to_string(),
                     });
                 }
             }
@@ -2514,8 +2498,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
                               from cross-origin popups."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Set COOP to same-origin for stricter isolation."
-                    .to_string(),
+                recommendation: "Set COOP to same-origin for stricter isolation.".to_string(),
             });
         }
 
@@ -2550,8 +2533,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
                  headers."
                     .to_string()
             } else if score < 80 {
-                "Security posture is moderate. Address remaining missing headers."
-                    .to_string()
+                "Security posture is moderate. Address remaining missing headers.".to_string()
             } else {
                 "Security posture is strong. Minor improvements possible.".to_string()
             },
@@ -2885,8 +2867,7 @@ impl Analyzer for MobileFriendlinessChecker {
                     description: "The viewport meta tag does not specify width=device-width."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Set width=device-width in the viewport meta tag."
-                        .to_string(),
+                    recommendation: "Set width=device-width in the viewport meta tag.".to_string(),
                 });
             }
             Some(w) if w != "device-width" => {
@@ -3016,6 +2997,572 @@ impl Analyzer for MobileFriendlinessChecker {
 }
 
 // ---------------------------------------------------------------------------
+// 17. Accessibility Analyzer (WCAG 2.1 AA)
+// ---------------------------------------------------------------------------
+
+pub struct AccessibilityAnalyzer;
+
+impl AccessibilityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Generic link text patterns that are not descriptive.
+    const VAGUE_LINK_TEXTS: &[&str] = &[
+        "click here",
+        "here",
+        "read more",
+        "more",
+        "learn more",
+        "click",
+        "link",
+        "this",
+        "go",
+        "continue",
+    ];
+}
+
+impl Default for AccessibilityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for AccessibilityAnalyzer {
+    fn name(&self) -> &str {
+        "accessibility"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // --- WCAG 1.1.1: Image alt text ---
+        let images_without_alt: Vec<&str> = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
+            .map(|img| img.src.as_str())
+            .collect();
+        if !images_without_alt.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "A11Y001".to_string(),
+                title: "Images missing alt text".to_string(),
+                description: format!(
+                    "{} image(s) missing alt attribute or have empty alt text: {}.",
+                    images_without_alt.len(),
+                    images_without_alt.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Add descriptive alt text to all images. Use alt=\"\" for \
+                                 decorative images."
+                    .to_string(),
+            });
+        }
+
+        // --- WCAG 1.3.1: Heading hierarchy ---
+        if ctx.page.headings.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "A11Y002".to_string(),
+                title: "No headings found".to_string(),
+                description: "The page has no heading elements. Headings provide structure \
+                              for screen reader users."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add heading elements (H1-H6) to provide page structure."
+                    .to_string(),
+            });
+        } else {
+            let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+            if h1_count == 0 {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y003".to_string(),
+                    title: "Missing H1 heading".to_string(),
+                    description: "No H1 heading found. Screen readers use H1 to identify \
+                                  the main page topic."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add exactly one H1 heading per page.".to_string(),
+                });
+            } else if h1_count > 1 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y004".to_string(),
+                    title: "Multiple H1 headings".to_string(),
+                    description: format!(
+                        "Page has {h1_count} H1 headings. Use a single H1 for the main topic."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use one H1 for the page title and H2+ for sections."
+                        .to_string(),
+                });
+            }
+
+            // Skipped heading levels
+            let mut prev_level: Option<u8> = None;
+            for heading in &ctx.page.headings {
+                if let Some(prev) = prev_level {
+                    if heading.level > prev + 1 {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Accessibility,
+                            code: "A11Y005".to_string(),
+                            title: "Skipped heading level".to_string(),
+                            description: format!(
+                                "Heading jumps from H{prev} to H{}, skipping intermediate \
+                                 levels.",
+                                heading.level
+                            ),
+                            url: url.clone(),
+                            recommendation: format!(
+                                "Use H{} after H{prev} to maintain document outline.",
+                                prev + 1
+                            ),
+                        });
+                        break; // Report first skip only
+                    }
+                }
+                prev_level = Some(heading.level);
+            }
+        }
+
+        // --- WCAG 1.3.1: Landmark roles ---
+        if !ctx.page.has_main_landmark {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "A11Y006".to_string(),
+                title: "Missing main landmark".to_string(),
+                description: "No <main> element or role=\"main\" found. Screen readers use \
+                              landmarks for page navigation."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Wrap primary content in a <main> element.".to_string(),
+            });
+        }
+
+        if !ctx.page.has_nav_landmark {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "A11Y007".to_string(),
+                title: "No navigation landmark".to_string(),
+                description: "No <nav> element or role=\"navigation\" found.".to_string(),
+                url: url.clone(),
+                recommendation: "Wrap navigation links in a <nav> element.".to_string(),
+            });
+        }
+
+        // --- WCAG 2.4.1: Skip navigation ---
+        if !ctx.page.has_skip_link && ctx.page.has_nav_landmark {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "A11Y008".to_string(),
+                title: "Missing skip navigation link".to_string(),
+                description: "No skip-to-content link found. Keyboard users must tab through \
+                              all navigation links to reach main content."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add a skip link as the first focusable element: \
+                                 <a href=\"#main\" class=\"skip-link\">Skip to content</a>."
+                    .to_string(),
+            });
+        }
+
+        // --- WCAG 2.4.4: Link text quality ---
+        for link in &ctx.page.links {
+            let text_lower = link.text.trim().to_lowercase();
+            if text_lower.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y009".to_string(),
+                    title: "Empty link text".to_string(),
+                    description: format!(
+                        "Link to \"{}\" has no text. Screen readers announce the URL, \
+                         which is not descriptive.",
+                        link.href
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add descriptive text or an aria-label to the link."
+                        .to_string(),
+                });
+            } else if Self::VAGUE_LINK_TEXTS.contains(&text_lower.as_str()) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y010".to_string(),
+                    title: "Non-descriptive link text".to_string(),
+                    description: format!(
+                        "Link text \"{}\" is vague and does not describe the destination.",
+                        link.text
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use descriptive text that explains the link purpose \
+                                     (e.g., \"View pricing details\" instead of \"click here\")."
+                        .to_string(),
+                });
+            }
+        }
+
+        // --- WCAG 1.3.1: Form label association ---
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if !input.has_label {
+                    let desc = match (&input.name, &input.input_type) {
+                        (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
+                        (Some(n), None) => format!("input (name=\"{n}\")"),
+                        (None, Some(t)) => format!("input (type=\"{t}\")"),
+                        (None, None) => "input".to_string(),
+                    };
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Accessibility,
+                        code: "A11Y011".to_string(),
+                        title: "Form input missing label".to_string(),
+                        description: format!(
+                            "{desc} has no associated <label>, aria-label, or aria-labelledby."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Add a <label for=\"id\"> element or an aria-label \
+                                         attribute to the input."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // --- WCAG 2.1.1: Keyboard navigation (tabindex) ---
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "A11Y012".to_string(),
+                title: "Positive tabindex values detected".to_string(),
+                description: "Elements with tabindex > 0 alter the natural tab order, \
+                              making keyboard navigation unpredictable."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Use tabindex=\"0\" to add elements to the natural tab order \
+                                 or tabindex=\"-1\" for programmatic focus only."
+                    .to_string(),
+            });
+        }
+
+        // --- WCAG 4.1.2: ARIA usage ---
+        if ctx.page.aria_role_count == 0 && !ctx.page.landmarks.is_empty() {
+            // No ARIA roles used but landmarks exist via HTML — that's fine
+        } else if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "A11Y013".to_string(),
+                title: "ARIA roles without labels".to_string(),
+                description: format!(
+                    "{} ARIA role(s) found but no aria-label or aria-labelledby attributes. \
+                     Custom roles require accessible names.",
+                    ctx.page.aria_role_count
+                ),
+                url: url.clone(),
+                recommendation: "Add aria-label or aria-labelledby to elements with custom \
+                                 ARIA roles."
+                    .to_string(),
+            });
+        }
+
+        // --- WCAG 1.3.1: Table accessibility ---
+        if ctx.page.tables_total > 0 {
+            let tables_without_headers = ctx.page.tables_total - ctx.page.tables_with_headers;
+            if tables_without_headers > 0 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y014".to_string(),
+                    title: "Table missing header cells".to_string(),
+                    description: format!(
+                        "{} of {} table(s) have no <th> header cells.",
+                        tables_without_headers, ctx.page.tables_total
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use <th> elements for header cells and add scope \
+                                     attributes for complex tables."
+                        .to_string(),
+                });
+            }
+
+            let tables_without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
+            if tables_without_captions > 0 {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y015".to_string(),
+                    title: "Table missing caption".to_string(),
+                    description: format!(
+                        "{} of {} table(s) have no <caption> element.",
+                        tables_without_captions, ctx.page.tables_total
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add a <caption> to describe the table purpose.".to_string(),
+                });
+            }
+        }
+
+        // --- WCAG 1.4.4: Language attribute ---
+        if !ctx.page.has_lang_attribute {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "A11Y016".to_string(),
+                title: "Missing html lang attribute".to_string(),
+                description: "The <html> element has no lang attribute. Screen readers use \
+                              this to select the correct pronunciation engine."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add lang=\"en\" (or the appropriate language code) to the \
+                                 <html> element."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 18. Social Media Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct SocialMediaAnalyzer;
+
+impl SocialMediaAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Minimum recommended OG image width (pixels).
+    const OG_MIN_WIDTH: u32 = 1200;
+    /// Minimum recommended OG image height (pixels).
+    const OG_MIN_HEIGHT: u32 = 630;
+}
+
+impl Default for SocialMediaAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for SocialMediaAnalyzer {
+    fn name(&self) -> &str {
+        "social-media"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // --- OG image dimensions ---
+        if ctx.page.og_image_width.is_none() && ctx.page.og_image_height.is_none() {
+            // No OG image dimensions at all — check if there's an OG image
+            if ctx.page.meta.og.image.is_some() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Social,
+                    code: "SOCIAL001".to_string(),
+                    title: "OG image missing dimensions".to_string(),
+                    description: "og:image is set but og:image:width and og:image:height \
+                                  are missing. Social platforms may crop or scale the image \
+                                  incorrectly."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add <meta property=\"og:image:width\" content=\"1200\"> \
+                                     and <meta property=\"og:image:height\" content=\"630\">."
+                        .to_string(),
+                });
+            }
+        } else {
+            // Check dimensions meet minimum requirements
+            if let Some(width) = ctx.page.og_image_width {
+                if width < Self::OG_MIN_WIDTH {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Social,
+                        code: "SOCIAL002".to_string(),
+                        title: "OG image too narrow".to_string(),
+                        description: format!(
+                            "og:image:width is {width}px, below the recommended minimum of \
+                             {}px.",
+                            Self::OG_MIN_WIDTH
+                        ),
+                        url: url.clone(),
+                        recommendation: format!(
+                            "Use an image at least {}x{} pixels for optimal social previews.",
+                            Self::OG_MIN_WIDTH,
+                            Self::OG_MIN_HEIGHT
+                        ),
+                    });
+                }
+            }
+            if let Some(height) = ctx.page.og_image_height {
+                if height < Self::OG_MIN_HEIGHT {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Social,
+                        code: "SOCIAL003".to_string(),
+                        title: "OG image too short".to_string(),
+                        description: format!(
+                            "og:image:height is {height}px, below the recommended minimum of \
+                             {}px.",
+                            Self::OG_MIN_HEIGHT
+                        ),
+                        url: url.clone(),
+                        recommendation: format!(
+                            "Use an image at least {}x{} pixels for optimal social previews.",
+                            Self::OG_MIN_WIDTH,
+                            Self::OG_MIN_HEIGHT
+                        ),
+                    });
+                }
+            }
+        }
+
+        // --- Twitter Card type ---
+        match &ctx.page.meta.twitter.card {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Social,
+                    code: "SOCIAL004".to_string(),
+                    title: "Missing Twitter Card type".to_string(),
+                    description: "No twitter:card meta tag found. Twitter/X will not render \
+                                  a rich preview without it."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation:
+                        "Add <meta name=\"twitter:card\" content=\"summary_large_image\">."
+                            .to_string(),
+                });
+            }
+            Some(card_type) => {
+                let valid_types = ["summary", "summary_large_image", "app", "player"];
+                if !valid_types.contains(&card_type.as_str()) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Social,
+                        code: "SOCIAL005".to_string(),
+                        title: "Invalid Twitter Card type".to_string(),
+                        description: format!(
+                            "twitter:card value \"{card_type}\" is not a recognized card type."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Use one of: summary, summary_large_image, app, player."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // --- Social preview completeness ---
+        let og_required = [
+            ("og:title", ctx.page.meta.og.title.is_some()),
+            ("og:description", ctx.page.meta.og.description.is_some()),
+            ("og:image", ctx.page.meta.og.image.is_some()),
+            ("og:url", ctx.page.meta.og.url.is_some()),
+            ("og:type", ctx.page.meta.og.r#type.is_some()),
+        ];
+
+        let missing_og: Vec<&str> = og_required
+            .iter()
+            .filter(|(_, present)| !present)
+            .map(|(name, _)| *name)
+            .collect();
+
+        if !missing_og.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Social,
+                code: "SOCIAL006".to_string(),
+                title: "Incomplete Open Graph tags".to_string(),
+                description: format!(
+                    "Missing OG tags: {}. Social previews may be incomplete.",
+                    missing_og.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Add all required OG tags for complete social media previews."
+                    .to_string(),
+            });
+        }
+
+        let twitter_required = [
+            ("twitter:title", ctx.page.meta.twitter.title.is_some()),
+            (
+                "twitter:description",
+                ctx.page.meta.twitter.description.is_some(),
+            ),
+            ("twitter:image", ctx.page.meta.twitter.image.is_some()),
+        ];
+
+        let missing_twitter: Vec<&str> = twitter_required
+            .iter()
+            .filter(|(_, present)| !present)
+            .map(|(name, _)| *name)
+            .collect();
+
+        if !missing_twitter.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Social,
+                code: "SOCIAL007".to_string(),
+                title: "Incomplete Twitter Card tags".to_string(),
+                description: format!(
+                    "Missing Twitter tags: {}. Twitter/X previews may fall back to OG tags.",
+                    missing_twitter.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Add Twitter-specific tags for optimal X/Twitter previews."
+                    .to_string(),
+            });
+        }
+
+        // --- Social preview summary ---
+        let og_score = og_required.iter().filter(|(_, p)| *p).count();
+        let twitter_score = twitter_required.iter().filter(|(_, p)| *p).count();
+        let total = og_required.len() + twitter_required.len();
+        let score = og_score + twitter_score;
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Social,
+            code: "SOCIAL008".to_string(),
+            title: "Social preview completeness score".to_string(),
+            description: format!(
+                "Social metadata score: {score}/{total} (OG: {og_score}/{og_len}, Twitter: \
+                 {twitter_score}/{tw_len}).",
+                og_len = og_required.len(),
+                tw_len = twitter_required.len(),
+            ),
+            url: url.clone(),
+            recommendation: if score < total {
+                "Add missing social meta tags to improve how your page appears when shared."
+                    .to_string()
+            } else {
+                "Social metadata is complete.".to_string()
+            },
+        });
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Analyzer Registry
 // ---------------------------------------------------------------------------
 
@@ -3044,6 +3591,8 @@ impl AnalyzerRegistry {
                 Box::new(SecurityHeaderAnalyzer::new()),
                 Box::new(SslCertificateValidator::empty()),
                 Box::new(MobileFriendlinessChecker::new()),
+                Box::new(AccessibilityAnalyzer::new()),
+                Box::new(SocialMediaAnalyzer::new()),
             ],
         }
     }
@@ -3104,6 +3653,22 @@ mod tests {
             styles: Vec::new(),
             structured_data: Vec::new(),
             word_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
         }
     }
 
@@ -3142,9 +3707,7 @@ mod tests {
         let ctx = make_ctx(&page, Some(500));
         let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "HTTP005"));
-        assert!(findings
-            .iter()
-            .any(|f| f.severity == Severity::Critical));
+        assert!(findings.iter().any(|f| f.severity == Severity::Critical));
     }
 
     #[test]
@@ -3237,13 +3800,11 @@ mod tests {
 
     #[test]
     fn test_redirect_mixed_protocol() {
-        let hops = vec![
-            RedirectHop {
-                from: Url::parse("http://example.com/page").unwrap(),
-                to: Url::parse("https://example.com/page").unwrap(),
-                status_code: 301,
-            },
-        ];
+        let hops = vec![RedirectHop {
+            from: Url::parse("http://example.com/page").unwrap(),
+            to: Url::parse("https://example.com/page").unwrap(),
+            status_code: 301,
+        }];
         let page = make_page("http://example.com/page");
         let ctx = AnalysisContext {
             page: &page,
@@ -3717,8 +4278,16 @@ mod tests {
     fn test_heading_missing_h1() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 2, text: "Section".to_string(), length: 7 },
-            Heading { level: 3, text: "Sub".to_string(), length: 3 },
+            Heading {
+                level: 2,
+                text: "Section".to_string(),
+                length: 7,
+            },
+            Heading {
+                level: 3,
+                text: "Sub".to_string(),
+                length: 3,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
@@ -3729,8 +4298,16 @@ mod tests {
     fn test_heading_multiple_h1() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "First".to_string(), length: 5 },
-            Heading { level: 1, text: "Second".to_string(), length: 6 },
+            Heading {
+                level: 1,
+                text: "First".to_string(),
+                length: 5,
+            },
+            Heading {
+                level: 1,
+                text: "Second".to_string(),
+                length: 6,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
@@ -3741,8 +4318,16 @@ mod tests {
     fn test_heading_skipped_level() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "Title".to_string(), length: 5 },
-            Heading { level: 3, text: "Skipped H2".to_string(), length: 10 },
+            Heading {
+                level: 1,
+                text: "Title".to_string(),
+                length: 5,
+            },
+            Heading {
+                level: 3,
+                text: "Skipped H2".to_string(),
+                length: 10,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
@@ -3753,10 +4338,26 @@ mod tests {
     fn test_heading_valid_hierarchy() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "Main".to_string(), length: 4 },
-            Heading { level: 2, text: "Section".to_string(), length: 7 },
-            Heading { level: 2, text: "Section 2".to_string(), length: 9 },
-            Heading { level: 3, text: "Sub".to_string(), length: 3 },
+            Heading {
+                level: 1,
+                text: "Main".to_string(),
+                length: 4,
+            },
+            Heading {
+                level: 2,
+                text: "Section".to_string(),
+                length: 7,
+            },
+            Heading {
+                level: 2,
+                text: "Section 2".to_string(),
+                length: 9,
+            },
+            Heading {
+                level: 3,
+                text: "Sub".to_string(),
+                length: 3,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
@@ -3767,11 +4368,31 @@ mod tests {
     fn test_heading_deep_hierarchy() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "H1".to_string(), length: 2 },
-            Heading { level: 2, text: "H2".to_string(), length: 2 },
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
-            Heading { level: 4, text: "H4".to_string(), length: 2 },
-            Heading { level: 5, text: "H5".to_string(), length: 2 },
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 4,
+                text: "H4".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 5,
+                text: "H5".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
@@ -3784,7 +4405,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 16);
+        assert_eq!(registry.len(), 18);
         assert!(!registry.is_empty());
     }
 
@@ -3804,7 +4425,9 @@ mod tests {
     fn test_registry_custom() {
         struct DummyAnalyzer;
         impl Analyzer for DummyAnalyzer {
-            fn name(&self) -> &str { "dummy" }
+            fn name(&self) -> &str {
+                "dummy"
+            }
             fn analyze(&self, _ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
                 vec![Finding {
                     severity: Severity::Info,
@@ -3969,9 +4592,22 @@ mod tests {
         page.meta.twitter.title = Some("Twitter Title".to_string());
         page.meta.twitter.image = Some("https://example.com/tw.png".to_string());
         page.headings = vec![
-            Heading { level: 1, text: "Main Topic".to_string(), length: 10 },
-            Heading { level: 2, text: "Section".to_string(), length: 7 },
+            Heading {
+                level: 1,
+                text: "Main Topic".to_string(),
+                length: 10,
+            },
+            Heading {
+                level: 2,
+                text: "Section".to_string(),
+                length: 7,
+            },
         ];
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.has_main_landmark = true;
+        page.has_nav_landmark = true;
+        page.has_skip_link = true;
 
         let ctx = make_ctx(&page, Some(200));
         let findings = registry.analyze(&ctx, &config);
@@ -4223,12 +4859,24 @@ mod tests {
 
     #[test]
     fn test_image_analyzer_detect_format() {
-        assert_eq!(ImageAnalyzer::detect_format("photo.jpg"), Some("jpeg".into()));
-        assert_eq!(ImageAnalyzer::detect_format("photo.jpeg"), Some("jpeg".into()));
+        assert_eq!(
+            ImageAnalyzer::detect_format("photo.jpg"),
+            Some("jpeg".into())
+        );
+        assert_eq!(
+            ImageAnalyzer::detect_format("photo.jpeg"),
+            Some("jpeg".into())
+        );
         assert_eq!(ImageAnalyzer::detect_format("pic.png"), Some("png".into()));
         assert_eq!(ImageAnalyzer::detect_format("anim.gif"), Some("gif".into()));
-        assert_eq!(ImageAnalyzer::detect_format("modern.webp"), Some("webp".into()));
-        assert_eq!(ImageAnalyzer::detect_format("new.avif"), Some("avif".into()));
+        assert_eq!(
+            ImageAnalyzer::detect_format("modern.webp"),
+            Some("webp".into())
+        );
+        assert_eq!(
+            ImageAnalyzer::detect_format("new.avif"),
+            Some("avif".into())
+        );
         assert_eq!(ImageAnalyzer::detect_format("icon.svg"), Some("svg".into()));
         assert_eq!(
             ImageAnalyzer::detect_format("photo.jpg?v=1"),
@@ -4424,9 +5072,21 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.word_count = 500;
         page.headings = vec![
-            Heading { level: 1, text: "Rust Programming Language Tutorial".to_string(), length: 33 },
-            Heading { level: 2, text: "Rust Basics for Beginners".to_string(), length: 24 },
-            Heading { level: 2, text: "Advanced Rust Programming".to_string(), length: 24 },
+            Heading {
+                level: 1,
+                text: "Rust Programming Language Tutorial".to_string(),
+                length: 33,
+            },
+            Heading {
+                level: 2,
+                text: "Rust Basics for Beginners".to_string(),
+                length: 24,
+            },
+            Heading {
+                level: 2,
+                text: "Advanced Rust Programming".to_string(),
+                length: 24,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
@@ -4572,15 +5232,36 @@ mod tests {
     #[test]
     fn test_security_headers_all_present() {
         let headers = vec![
-            ("Content-Security-Policy".to_string(), "default-src 'self'".to_string()),
-            ("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains; preload".to_string()),
+            (
+                "Content-Security-Policy".to_string(),
+                "default-src 'self'".to_string(),
+            ),
+            (
+                "Strict-Transport-Security".to_string(),
+                "max-age=31536000; includeSubDomains; preload".to_string(),
+            ),
             ("X-Frame-Options".to_string(), "DENY".to_string()),
             ("X-Content-Type-Options".to_string(), "nosniff".to_string()),
-            ("Referrer-Policy".to_string(), "strict-origin-when-cross-origin".to_string()),
-            ("Permissions-Policy".to_string(), "camera=(), microphone=(), geolocation=()".to_string()),
-            ("Cross-Origin-Embedder-Policy".to_string(), "require-corp".to_string()),
-            ("Cross-Origin-Opener-Policy".to_string(), "same-origin".to_string()),
-            ("Cross-Origin-Resource-Policy".to_string(), "same-origin".to_string()),
+            (
+                "Referrer-Policy".to_string(),
+                "strict-origin-when-cross-origin".to_string(),
+            ),
+            (
+                "Permissions-Policy".to_string(),
+                "camera=(), microphone=(), geolocation=()".to_string(),
+            ),
+            (
+                "Cross-Origin-Embedder-Policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "Cross-Origin-Opener-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+            (
+                "Cross-Origin-Resource-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
         ];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
@@ -4603,9 +5284,10 @@ mod tests {
 
     #[test]
     fn test_security_headers_invalid_xfo() {
-        let headers = vec![
-            ("X-Frame-Options".to_string(), "ALLOW-FROM https://example.com".to_string()),
-        ];
+        let headers = vec![(
+            "X-Frame-Options".to_string(),
+            "ALLOW-FROM https://example.com".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4620,9 +5302,7 @@ mod tests {
 
     #[test]
     fn test_security_headers_invalid_xcto() {
-        let headers = vec![
-            ("X-Content-Type-Options".to_string(), "sniff".to_string()),
-        ];
+        let headers = vec![("X-Content-Type-Options".to_string(), "sniff".to_string())];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4637,9 +5317,7 @@ mod tests {
 
     #[test]
     fn test_security_headers_xfo_sameorigin() {
-        let headers = vec![
-            ("X-Frame-Options".to_string(), "SAMEORIGIN".to_string()),
-        ];
+        let headers = vec![("X-Frame-Options".to_string(), "SAMEORIGIN".to_string())];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4656,9 +5334,10 @@ mod tests {
 
     #[test]
     fn test_security_headers_hsts_weak_max_age() {
-        let headers = vec![
-            ("Strict-Transport-Security".to_string(), "max-age=300".to_string()),
-        ];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4673,9 +5352,10 @@ mod tests {
 
     #[test]
     fn test_security_headers_hsts_missing_max_age() {
-        let headers = vec![
-            ("Strict-Transport-Security".to_string(), "includeSubDomains".to_string()),
-        ];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "includeSubDomains".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4690,9 +5370,10 @@ mod tests {
 
     #[test]
     fn test_security_headers_invalid_csp() {
-        let headers = vec![
-            ("Content-Security-Policy".to_string(), "invalid-value".to_string()),
-        ];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "invalid-value".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4707,9 +5388,10 @@ mod tests {
 
     #[test]
     fn test_security_headers_valid_csp() {
-        let headers = vec![
-            ("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self'".to_string()),
-        ];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "default-src 'self'; script-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
@@ -4725,8 +5407,14 @@ mod tests {
     #[test]
     fn test_security_headers_case_insensitive_lookup() {
         let headers = vec![
-            ("content-security-policy".to_string(), "default-src 'self'".to_string()),
-            ("strict-transport-security".to_string(), "max-age=63072000".to_string()),
+            (
+                "content-security-policy".to_string(),
+                "default-src 'self'".to_string(),
+            ),
+            (
+                "strict-transport-security".to_string(),
+                "max-age=63072000".to_string(),
+            ),
             ("x-frame-options".to_string(), "DENY".to_string()),
             ("x-content-type-options".to_string(), "nosniff".to_string()),
         ];
@@ -4813,8 +5501,9 @@ mod tests {
         let findings = validator.analyze(&ctx, &default_config());
         // Should NOT be expired but should be flagged as expiring soon (or not, depending on
         // the current date relative to 2025-08-01)
-        let has_expiry_finding =
-            findings.iter().any(|f| f.code == "SSL001" || f.code == "SSL002");
+        let has_expiry_finding = findings
+            .iter()
+            .any(|f| f.code == "SSL001" || f.code == "SSL002");
         // Given today is 2026, this cert IS expired
         assert!(has_expiry_finding);
     }
@@ -5003,9 +5692,8 @@ mod tests {
     #[test]
     fn test_mobile_user_scalable_no() {
         let mut page = make_page("https://example.com");
-        page.meta.viewport = Some(
-            "width=device-width, initial-scale=1, user-scalable=no".to_string(),
-        );
+        page.meta.viewport =
+            Some("width=device-width, initial-scale=1, user-scalable=no".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "MOB004"));
@@ -5014,9 +5702,8 @@ mod tests {
     #[test]
     fn test_mobile_maximum_scale_restricted() {
         let mut page = make_page("https://example.com");
-        page.meta.viewport = Some(
-            "width=device-width, initial-scale=1, maximum-scale=1.0".to_string(),
-        );
+        page.meta.viewport =
+            Some("width=device-width, initial-scale=1, maximum-scale=1.0".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "MOB005"));
@@ -5097,12 +5784,520 @@ mod tests {
     fn test_mobile_both_user_scalable_and_max_scale() {
         let mut page = make_page("https://example.com");
         page.meta.viewport = Some(
-            "width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1.0"
-                .to_string(),
+            "width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1.0".to_string(),
         );
         let ctx = make_ctx(&page, Some(200));
         let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "MOB004"));
         assert!(findings.iter().any(|f| f.code == "MOB005"));
+    }
+
+    // =========================================================================
+    // AccessibilityAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_a11y_images_missing_alt() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/a.png".to_string(),
+                alt: String::new(),
+                width: None,
+                height: None,
+                has_alt: false,
+                is_lazy_loaded: false,
+            },
+            ExtractedImage {
+                src: "/b.jpg".to_string(),
+                alt: "Good alt".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y001"));
+        let f = findings.iter().find(|f| f.code == "A11Y001").unwrap();
+        assert!(f.description.contains("/a.png"));
+    }
+
+    #[test]
+    fn test_a11y_images_all_have_alt() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/a.png".to_string(),
+            alt: "Description".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y001"));
+    }
+
+    #[test]
+    fn test_a11y_no_headings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y002"));
+    }
+
+    #[test]
+    fn test_a11y_missing_h1() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![Heading {
+            level: 2,
+            text: "Section".to_string(),
+            length: 7,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y003"));
+    }
+
+    #[test]
+    fn test_a11y_multiple_h1() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "First".to_string(),
+                length: 5,
+            },
+            Heading {
+                level: 1,
+                text: "Second".to_string(),
+                length: 6,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y004"));
+    }
+
+    #[test]
+    fn test_a11y_skipped_heading_level() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3 skipped H2".to_string(),
+                length: 13,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y005"));
+    }
+
+    #[test]
+    fn test_a11y_valid_heading_hierarchy() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2b".to_string(),
+                length: 3,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y005"));
+    }
+
+    #[test]
+    fn test_a11y_missing_main_landmark() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = false;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y006"));
+    }
+
+    #[test]
+    fn test_a11y_has_main_landmark() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = true;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y006"));
+    }
+
+    #[test]
+    fn test_a11y_empty_link_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y009"));
+    }
+
+    #[test]
+    fn test_a11y_vague_link_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "click here".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y010"));
+    }
+
+    #[test]
+    fn test_a11y_good_link_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/pricing".to_string(),
+            text: "View pricing details".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y009"));
+        assert!(!findings.iter().any(|f| f.code == "A11Y010"));
+    }
+
+    #[test]
+    fn test_a11y_form_input_missing_label() {
+        use crate::parser::ExtractedInput;
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: Some("Enter email".to_string()),
+                required: true,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y011"));
+    }
+
+    #[test]
+    fn test_a11y_form_input_with_label() {
+        use crate::parser::ExtractedInput;
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: Some("email-input".to_string()),
+                has_label: true,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: true,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y011"));
+    }
+
+    #[test]
+    fn test_a11y_positive_tabindex() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y012"));
+    }
+
+    #[test]
+    fn test_a11y_no_positive_tabindex() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y012"));
+    }
+
+    #[test]
+    fn test_a11y_table_missing_headers() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 2;
+        page.tables_with_headers = 1;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y014"));
+        let f = findings.iter().find(|f| f.code == "A11Y014").unwrap();
+        assert!(f.description.contains("1 of 2"));
+    }
+
+    #[test]
+    fn test_a11y_table_with_headers() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 2;
+        page.tables_with_headers = 2;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y014"));
+    }
+
+    #[test]
+    fn test_a11y_missing_lang_attribute() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = false;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "A11Y016"));
+    }
+
+    #[test]
+    fn test_a11y_has_lang_attribute() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "A11Y016"));
+    }
+
+    #[test]
+    fn test_a11y_no_images_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        // Should not have A11Y001 (images missing alt) when there are no images
+        assert!(!findings.iter().any(|f| f.code == "A11Y001"));
+    }
+
+    #[test]
+    fn test_a11y_well_accessible_page() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "Page Title".to_string(),
+                length: 10,
+            },
+            Heading {
+                level: 2,
+                text: "Section".to_string(),
+                length: 7,
+            },
+        ];
+        page.has_main_landmark = true;
+        page.has_nav_landmark = true;
+        page.has_skip_link = true;
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.links = vec![ExtractedLink {
+            href: "/about".to_string(),
+            text: "About us".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        // Well-accessible page should have no errors
+        let errors: Vec<&Finding> = findings
+            .iter()
+            .filter(|f| f.severity == Severity::Error)
+            .collect();
+        assert!(
+            errors.is_empty(),
+            "Unexpected errors: {:?}",
+            errors.iter().map(|f| &f.code).collect::<Vec<_>>()
+        );
+    }
+
+    // =========================================================================
+    // SocialMediaAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_social_og_image_no_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SOCIAL001"));
+    }
+
+    #[test]
+    fn test_social_og_image_adequate_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        page.og_image_width = Some(1200);
+        page.og_image_height = Some(630);
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL001"));
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL002"));
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL003"));
+    }
+
+    #[test]
+    fn test_social_og_image_too_small() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        page.og_image_width = Some(600);
+        page.og_image_height = Some(315);
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SOCIAL002"));
+        assert!(findings.iter().any(|f| f.code == "SOCIAL003"));
+    }
+
+    #[test]
+    fn test_social_og_image_width_only_too_narrow() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        page.og_image_width = Some(800);
+        page.og_image_height = Some(630);
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SOCIAL002"));
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL003"));
+    }
+
+    #[test]
+    fn test_social_missing_twitter_card() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SOCIAL004"));
+    }
+
+    #[test]
+    fn test_social_valid_twitter_card() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary_large_image".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL004"));
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL005"));
+    }
+
+    #[test]
+    fn test_social_invalid_twitter_card() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("invalid_type".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SOCIAL005"));
+    }
+
+    #[test]
+    fn test_social_incomplete_og_tags() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        // Missing og:title, og:description, og:image, og:url, og:type
+        assert!(findings.iter().any(|f| f.code == "SOCIAL006"));
+        let f = findings.iter().find(|f| f.code == "SOCIAL006").unwrap();
+        assert!(f.description.contains("og:title"));
+    }
+
+    #[test]
+    fn test_social_complete_og_tags() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.title = Some("Title".to_string());
+        page.meta.og.description = Some("Description".to_string());
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        page.meta.og.url = Some("https://example.com".to_string());
+        page.meta.og.r#type = Some("website".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL006"));
+    }
+
+    #[test]
+    fn test_social_completeness_score() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.title = Some("Title".to_string());
+        page.meta.og.description = Some("Description".to_string());
+        page.meta.og.image = Some("https://example.com/og.png".to_string());
+        page.meta.og.url = Some("https://example.com".to_string());
+        page.meta.og.r#type = Some("website".to_string());
+        page.meta.twitter.card = Some("summary_large_image".to_string());
+        page.meta.twitter.title = Some("Title".to_string());
+        page.meta.twitter.description = Some("Desc".to_string());
+        page.meta.twitter.image = Some("https://example.com/tw.png".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let score = findings.iter().find(|f| f.code == "SOCIAL008").unwrap();
+        assert!(score.description.contains("8/8"));
+    }
+
+    #[test]
+    fn test_social_no_og_image_no_dimension_warning() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = None;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        // No OG image = no dimension warning needed
+        assert!(!findings.iter().any(|f| f.code == "SOCIAL001"));
+    }
+
+    #[test]
+    fn test_social_all_twitter_cards_valid() {
+        for card_type in &["summary", "summary_large_image", "app", "player"] {
+            let mut page = make_page("https://example.com");
+            page.meta.twitter.card = Some(card_type.to_string());
+            let ctx = make_ctx(&page, Some(200));
+            let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+            assert!(
+                !findings.iter().any(|f| f.code == "SOCIAL005"),
+                "Card type {card_type} should be valid"
+            );
+        }
     }
 }

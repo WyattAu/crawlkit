@@ -17,6 +17,11 @@
 - [Performance Characteristics](#performance-characteristics)
 - [Error Handling Strategy](#error-handling-strategy)
 - [Testing Strategy](#testing-strategy)
+- [Standards Compliance](#standards-compliance)
+  - [FAANG Engineering Standards](#faang-engineering-standards)
+  - [HFT Standards](#hft-standards)
+  - [Defense Standards](#defense-standards)
+  - [ECN Standards](#ecn-standards)
 - [Deployment](#deployment)
 - [Future Considerations](#future-considerations)
 
@@ -1259,6 +1264,356 @@ proptest! {
 
 ---
 
+## Standards Compliance
+
+This section documents how crawlkit meets or plans to meet engineering standards across four domains: FAANG, HFT, Defense, and ECN. Each domain defines acceptance criteria that guide architecture and process decisions.
+
+### FAANG Engineering Standards
+
+Crawlkit targets production-grade engineering rigor expected in large-scale distributed systems.
+
+| Standard | Status | Implementation |
+|----------|--------|----------------|
+| **Design review process** | Planned | ADR-001 established; requires peer review before merging architecture changes |
+| **Feature flags** | Planned | `--feature-flags` config file; runtime toggle for JS rendering, API mode, RUM integration |
+| **Rollback strategy** | Planned | Crawl snapshots are immutable; `compare` command enables before/after diff; SQLite backups before migration |
+| **Observability** | Planned | `tracing` crate with structured logs; `metrics` crate for Prometheus export; OpenTelemetry traces for crawl pipeline |
+| **Code review** | Planned | All PRs require ≥ 1 approval; security-sensitive changes require ≥ 2 |
+| **CI/CD gates** | Active | `cargo fmt --check`, `cargo clippy -D warnings`, `cargo test`, `cargo audit` on every push |
+
+#### Feature Flag Design
+
+```rust
+pub struct FeatureFlags {
+    pub javascript_rendering: bool,     // Phase 7: opt-in Playwright
+    pub api_mode: bool,                 // Phase 7: REST API server
+    pub backlink_analysis: bool,        // Phase 7: external API adapters
+    pub rum_integration: bool,          // Phase 7: GA/CrUX data import
+    pub distributed_crawling: bool,     // Future: multi-machine coordination
+}
+
+impl FeatureFlags {
+    pub fn from_config(path: &Path) -> Result<Self, ConfigError> {
+        // Load from TOML; missing keys default to false
+        // Flags are immutable for the lifetime of a crawl session
+    }
+
+    pub fn is_enabled(&self, flag: FeatureFlag) -> bool {
+        match flag {
+            FeatureFlag::JavascriptRendering => self.javascript_rendering,
+            // ...
+        }
+    }
+}
+```
+
+#### Observability Stack
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Observability Pipeline                     │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Structured Logging (tracing-subscriber)             │  │
+│  │  - JSON format for machine parsing                   │  │
+│  │  - Levels: ERROR, WARN, INFO, DEBUG, TRACE           │  │
+│  │  - Context: crawl_id, url, phase, duration           │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Metrics (metrics + metrics-exporter-prometheus)     │  │
+│  │  - crawl_pages_total (counter)                       │  │
+│  │  - crawl_duration_seconds (histogram)                │  │
+│  │  - crawl_errors_total (counter, by severity)         │  │
+│  │  - http_request_duration_seconds (histogram)         │  │
+│  │  - http_requests_in_flight (gauge)                   │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Distributed Tracing (opentelemetry)                 │  │
+│  │  - Span: crawl_session, fetch, parse, analyze, store │  │
+│  │  - Export: OTLP (Jaeger, Zipkin)                     │  │
+│  │  - Sampling: configurable (default: 10%)             │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Rollback Strategy
+
+| Scenario | Procedure |
+|----------|-----------|
+| Bad crawl data | SQLite snapshots before each crawl; `compare` against previous snapshot |
+| Schema migration failure | `sqlx migrate revert` to previous version; backup DB before migration |
+| Config regression | Git-tracked config files; `git diff` to identify breaking changes |
+| Binary regression | Cross-platform releases tagged; `git bisect` to identify faulty commit |
+
+### HFT Standards
+
+While crawlkit is a batch crawler (not latency-sensitive), HFT-inspired reliability and resource isolation standards improve robustness.
+
+| Standard | Status | Implementation |
+|----------|--------|----------------|
+| **Deterministic behavior** | Planned | Same URL + same config → same output; seed-based PRNG for any randomized components |
+| **Reliability targets** | Planned | 99.9% crawl completion rate (excluding target site errors); circuit breaker prevents cascade failures |
+| **Resource isolation** | Planned | Per-crawl memory budgets; browser context isolation for JS rendering; bounded channel capacities |
+| **Memory safety** | Active | Rust ownership model; `unsafe_code = "deny"` in `clippy.toml`; no GC pauses |
+| **Throughput optimization** | Active | Target ≥ 50 pages/sec; benchmarked in CI |
+
+#### Deterministic Behavior Design
+
+```rust
+pub struct DeterminismConfig {
+    pub seed: Option<u64>,              // Seed for any randomized components
+    pub user_agent_rotation: bool,      // Fixed UA vs rotating (default: false for determinism)
+    pub dns_cache_ttl: Duration,        // Fixed TTL for DNS resolution consistency
+}
+
+// Deterministic hash for URL dedup
+fn deterministic_url_hash(url: &Url) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(url.as_str().as_bytes());
+    hasher.finalize().into()
+}
+```
+
+#### Resource Isolation
+
+```
+Per-Crawl Resource Budget:
+┌─────────────────────────────────────────────────────────────┐
+│  Memory:  configurable (default: 2GB)                       │
+│  ├── HTTP client pool:      200MB                          │
+│  ├── HTML parser arena:     500MB                          │
+│  ├── Analyzer working set:  300MB                          │
+│  ├── SQLite write buffer:   200MB                          │
+│  └── Browser contexts:      800MB (if JS enabled)          │
+│                                                             │
+│  CPU:  configurable (default: 4 cores)                      │
+│  ├── Tokio worker threads:  2                              │
+│  ├── Fetcher tasks:         bounded semaphore (64)         │
+│  └── Browser contexts:      4 max                          │
+│                                                             │
+│  Disk: configurable (default: 1GB)                          │
+│  ├── SQLite WAL:            200MB                          │
+│  ├── Browser cache:         500MB                          │
+│  └── Output files:          300MB                          │
+│                                                             │
+│  Enforcement:                                               │
+│  - Memory: track allocations; abort crawl if exceeded      │
+│  - CPU: Tokio runtime thread count; CPU affinity optional  │
+│  - Disk: check free space before crawl; warn at 80%        │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Determinism | Same input → same output (excluding network timing) |
+| Reliability | 99.9% crawl completion (excluding target site errors) |
+| Resource limits | Crawl aborts gracefully if memory/disk budget exceeded |
+| No panics | `catch_unwind` at task boundaries; never crash in production |
+| Benchmark regression | CI detects > 5% throughput regression on reference hardware |
+
+### Defense Standards
+
+Defense-grade standards ensure crawlkit can be used in security-sensitive environments (compliance auditing, penetration testing support, government deployments).
+
+| Standard | Status | Implementation |
+|----------|--------|----------------|
+| **Audit trail** | Planned | Every crawl logged with config hash, start/end time, page count, issue count; append-only audit log |
+| **Input validation** | Active | URL parsing with `url` crate; depth/page limits enforced; pattern validation; malformed input rejected |
+| **Encryption at rest** | Planned | Optional SQLCipher for SQLite; encrypted export files (AES-256-GCM); config file encryption |
+| **Dependency auditing** | Active | `cargo audit` in CI; `cargo deny` for license and advisory checks |
+| **Secrets management** | Active | No secrets in crawlkit; API keys in config files (not env vars); never logged or exported |
+| **Malicious input handling** | Active | Error-tolerant HTML parser; no script execution unless JS enabled; DOM parser isolation |
+
+#### Audit Trail Design
+
+```rust
+pub struct AuditEntry {
+    pub timestamp: DateTime<Utc>,
+    pub event_type: AuditEvent,
+    pub crawl_id: Option<Uuid>,
+    pub config_hash: String,           // SHA-256 of crawl config
+    pub details: serde_json::Value,
+}
+
+pub enum AuditEvent {
+    CrawlStarted,
+    CrawlCompleted,
+    CrawlAborted,
+    ConfigChanged,
+    ApiKeyCreated,
+    ApiKeyRevoked,
+    ExportGenerated,
+    ErrorOccurred,
+}
+
+pub struct AuditLog {
+    entries: Vec<AuditEntry>,          // Append-only
+    file_path: PathBuf,               // Separate from crawl DB
+}
+
+impl AuditLog {
+    pub fn append(&mut self, entry: AuditEntry) -> Result<(), io::Error> {
+        // Atomic append; fsync after each write
+        // Tamper-evident: chained SHA-256 hashes
+    }
+}
+```
+
+#### Encryption at Rest
+
+```rust
+pub struct EncryptionConfig {
+    pub enabled: bool,                          // Default: false
+    pub algorithm: EncryptionAlgorithm,         // Default: Aes256Gcm
+    pub key_source: KeySource,                  // File, env, or keyring
+}
+
+pub enum EncryptionAlgorithm {
+    Aes256Gcm,
+    Xchacha20Poly1305,
+}
+
+pub enum KeySource {
+    File(PathBuf),                              // Symmetric key file
+    Environment(String),                        // Env var name
+    Keyring(String),                            // OS keyring entry
+}
+
+// SQLCipher integration for SQLite
+// Export encryption for portable reports
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Audit logging | Every state-change event logged with timestamp, config hash, and details |
+| Input validation | All URLs validated; depth ≤ 20; page limit ≥ 1; patterns validated |
+| Encryption | Optional SQLCipher for DB; AES-256-GCM for exports; key never hardcoded |
+| Dependency audit | `cargo audit` clean in CI; `cargo deny` passes license checks |
+| No secrets | Zero hardcoded secrets; API keys only in user config files |
+| Fuzzing | `cargo-fuzz` targets for HTML parser and URL normalizer |
+
+### ECN Standards
+
+ECN (Electronic Communication Network) standards apply to crawlkit's pipeline design for reliability, backpressure, and exactly-once semantics.
+
+| Standard | Status | Implementation |
+|----------|--------|----------------|
+| **Deterministic error handling** | Active | `thiserror`-typed errors; every error variant documented |
+| **Error recovery** | Active | Exponential backoff retry; configurable per error class |
+| **Backpressure** | Planned | Bounded channels (capacity 1000); semaphore-based concurrency; slow consumer stalls producer |
+| **Circuit breaker** | Planned | Per-domain circuit breaker; open after N consecutive failures; half-open after cooldown |
+| **Idempotency** | Planned | URL + status code as idempotency key; skip re-crawl if unchanged within TTL |
+| **Timeout handling** | Active | Per-request timeout (default: 30s); per-crawl timeout (configurable) |
+
+#### Backpressure Design
+
+```
+Channel Capacities (bounded):
+┌─────────────────────────────────────────────────────────────┐
+│                                                             │
+│  fetch_tx ──────► fetch_rx     capacity: 1000              │
+│  (URL frontier)   (fetcher)    backpressure: block producer │
+│                                                             │
+│  parse_tx ──────► parse_rx     capacity: 1000              │
+│  (raw HTML)       (parser)     backpressure: block fetcher │
+│                                                             │
+│  analyze_tx ────► analyze_rx   capacity: 500               │
+│  (ParsedPage)     (analyzer)   backpressure: block parser  │
+│                                                             │
+│  store_tx ──────► store_rx     capacity: 500               │
+│  (Findings)       (storage)    backpressure: block analyzer│
+│                                                             │
+│  Semaphore: max_concurrent_requests (default: 64)          │
+│  - Acquire before fetch                                     │
+│  - Release after store                                      │
+│  - Blocks if all permits taken                              │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Circuit Breaker
+
+```rust
+pub struct CircuitBreaker {
+    state: CircuitState,
+    failure_count: AtomicUsize,
+    success_count: AtomicUsize,
+    last_failure_time: Mutex<Option<Instant>>,
+    failure_threshold: usize,           // Default: 5
+    cooldown_duration: Duration,        // Default: 60s
+    half_open_max: usize,              // Default: 3
+}
+
+pub enum CircuitState {
+    Closed,        // Normal operation; failures counted
+    Open,          // Rejecting requests; waiting for cooldown
+    HalfOpen,      // Testing; allow N requests through
+}
+
+impl CircuitBreaker {
+    pub fn should_allow(&self) -> bool {
+        match self.state {
+            CircuitState::Closed => true,
+            CircuitState::Open => self.cooldown_elapsed(),
+            CircuitState::HalfOpen => self.success_count < self.half_open_max,
+        }
+    }
+
+    pub fn record_success(&self) { /* increment success, reset if half-open */ }
+    pub fn record_failure(&self) { /* increment failure, trip if threshold */ }
+}
+```
+
+#### Idempotency Design
+
+```rust
+pub struct IdempotencyKey {
+    pub url: Url,
+    pub status_code: u16,
+    pub content_hash: Option<String>,   // SHA-256 of body
+    pub crawl_config_hash: String,      // Same config → same key
+}
+
+impl IdempotencyKey {
+    pub fn from_fetch_result(result: &FetchResult, config: &CrawlConfig) -> Self {
+        // Deterministic key generation
+    }
+
+    pub fn matches(&self, other: &Self) -> bool {
+        // True if same URL + status + content + config
+        // Used to skip redundant re-crawls
+    }
+}
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Backpressure | No unbounded channels; producer blocks when consumer full |
+| Circuit breaker | Opens after 5 consecutive domain failures; half-open after 60s |
+| Idempotency | Re-crawl with same config skips if content unchanged within TTL |
+| Timeout | Every I/O operation has a configurable timeout; no infinite waits |
+| Error typing | All errors typed via `thiserror`; no bare `String` errors |
+| Exactly-once | Best-effort via idempotency; documented trade-off vs exactly-once |
+
+### Standards Compliance Summary
+
+| Domain | Current Score | Target Score | Critical Gaps |
+|--------|--------------|--------------|---------------|
+| **FAANG** | 40% | 90% | Code review process, feature flags, rollback strategy, observability |
+| **HFT** | 30% | 85% | Deterministic behavior, reliability targets, resource isolation |
+| **Defense** | 30% | 85% | Audit trail, input validation, encryption at rest |
+| **ECN** | 50% | 90% | Backpressure, circuit breaker, idempotency |
+
+---
+
 ## Deployment
 
 ### Binary Distribution
@@ -1338,6 +1693,403 @@ ENTRYPOINT ["crawlkit"]
 6. **Scheduled monitoring** — Periodic crawls with trend alerts
 7. **Browser extension** — Quick single-page analysis
 8. **VS Code extension** — In-editor site analysis
+
+### Phase 7: JavaScript Rendering
+
+The default HTTP-only crawler misses content rendered by client-side JavaScript. Phase 7 adds opt-in Playwright-based rendering for SPA-heavy sites, with strict resource controls.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    JS Rendering Pipeline                     │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Render Decision Engine                              │  │
+│  │  - Inspect page for SPA indicators:                  │  │
+│  │    · <div id="app"> or <div id="root">               │  │
+│  │    · Framework detection (React, Vue, Angular)       │  │
+│  │    · Client-side routing patterns                    │  │
+│  │  - User-configured patterns (e.g., /app/*, /spa/*)   │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│               ┌──────────┴──────────┐                      │
+│               ▼                     ▼                      │
+│  ┌────────────────────┐  ┌────────────────────────────┐   │
+│  │  HTTP-Only Mode    │  │  Playwright Render Mode     │   │
+│  │  (default)         │  │  (opt-in)                   │   │
+│  │  - Zero overhead   │  │  - Chromium browser pool    │   │
+│  │  - Static HTML     │  │  - JS execution             │   │
+│  │  - Fast            │  │  - Network idle detection   │   │
+│  └────────────────────┘  │  - Resource budget enforced │   │
+│                          └────────────────────────────┘   │
+│                                                             │
+│  Resource Warnings (when --javascript is enabled):          │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  WARNING: JavaScript rendering is enabled.            │  │
+│  │  - Memory: +500MB-2GB per browser context             │  │
+│  │  - Speed: ~5-20 pages/sec (vs 50+ HTTP-only)         │  │
+│  │  - CPU: Significant increase                          │  │
+│  │  - Disk: Chromium binary ~150MB                       │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  Fallback Policy:                                           │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  - Playwright unavailable → fall back to HTTP-only    │  │
+│  │  - Browser crash → restart context, retry URL once    │  │
+│  │  - Timeout → fall back to HTTP-only for that URL      │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Config Additions
+
+```rust
+pub struct JavascriptConfig {
+    pub enabled: bool,                          // Default: false
+    pub max_browser_contexts: usize,            // Default: 4
+    pub page_timeout: Duration,                 // Default: 30s
+    pub wait_for_idle: WaitForIdle,             // Default: NetworkIdle
+    pub render_budget_pages: usize,             // Default: 1000
+    pub render_patterns: Vec<Pattern>,          // URL patterns requiring JS
+    pub fallback_to_http: bool,                 // Default: true
+    pub resource_limits: ResourceLimits,
+}
+
+pub struct ResourceLimits {
+    pub max_memory_bytes: usize,                // Default: 4GB total
+    pub max_cpu_cores: usize,                   // Default: 2
+    pub max_disk_mb: usize,                     // Default: 500 (browser cache)
+}
+
+pub enum WaitForIdle {
+    Load,
+    DOMContentLoaded,
+    NetworkIdle,        // Default: wait for no network activity for 500ms
+    Custom(Duration),
+}
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| HTTP-only mode (default) | Zero overhead, no Chromium dependency |
+| Playwright integration | Opt-in via `--javascript` flag; warns on activation |
+| Memory isolation | Browser contexts have independent memory budgets |
+| Fallback | If Playwright unavailable or crashes, gracefully degrade to HTTP-only |
+| Deterministic output | Same URL + same config → same rendered DOM (within timeout window) |
+| Resource budget | Abort render if cumulative memory exceeds `max_memory_bytes` |
+
+### Phase 7: REST API Mode
+
+Programmatic access for integration into CI/CD pipelines, monitoring dashboards, and custom workflows. The API wraps the existing crawl engine with authentication, rate limiting, and OpenAPI documentation.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    REST API Server                            │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Axum HTTP Server                                    │  │
+│  │  - Bind address: 0.0.0.0:8080 (configurable)        │  │
+│  │  - TLS: Optional (via rustls)                        │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│  ┌───────────────────────┼──────────────────────────────┐  │
+│  │                       ▼                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Authentication Middleware                      │  │  │
+│  │  │  - API key in X-API-Key header                 │  │  │
+│  │  │  - Keys stored in SQLite (hashed)              │  │  │
+│  │  │  - Rate limit per key                          │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  │                       │                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Rate Limiter (per API key)                    │  │  │
+│  │  │  - Token bucket: configurable burst + sustained│  │  │
+│  │  │  - Headers: X-RateLimit-Remaining, Retry-After│  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  │                       │                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  API Endpoints                                │  │  │
+│  │  │  POST /api/v1/crawl          Start a crawl    │  │  │
+│  │  │  GET  /api/v1/crawl/:id      Get crawl status │  │  │
+│  │  │  GET  /api/v1/crawl/:id/results  Get results  │  │  │
+│  │  │  DELETE /api/v1/crawl/:id    Cancel crawl     │  │  │
+│  │  │  GET  /api/v1/health         Health check     │  │  │
+│  │  │  GET  /api/v1/docs           OpenAPI spec     │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  OpenAPI / Swagger Documentation                     │  │
+│  │  - Auto-generated from Axum handlers via utoipa      │  │
+│  │  - Served at /api/v1/docs (Swagger UI)               │  │
+│  │  - Exportable JSON/YAML spec                         │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### API Data Models
+
+```rust
+#[derive(Deserialize, ToSchema)]
+pub struct CreateCrawlRequest {
+    pub url: Url,
+    pub max_depth: Option<usize>,
+    pub max_pages: Option<usize>,
+    pub javascript: Option<bool>,
+    pub include_patterns: Option<Vec<String>>,
+    pub exclude_patterns: Option<Vec<String>>,
+    pub output_formats: Option<Vec<OutputFormat>>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct CrawlResponse {
+    pub id: Uuid,
+    pub status: CrawlStatus,
+    pub url: Url,
+    pub created_at: DateTime<Utc>,
+    pub pages_crawled: Option<usize>,
+    pub estimated_duration: Option<Duration>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct ApiKey {
+    pub key: String,          // Returned once on creation
+    pub name: String,
+    pub rate_limit: RateLimit,
+    pub created_at: DateTime<Utc>,
+    pub expires_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Serialize, ToSchema)]
+pub struct RateLimit {
+    pub requests_per_minute: usize,    // Default: 60
+    pub burst_size: usize,             // Default: 10
+}
+```
+
+#### Security Controls
+
+| Control | Implementation |
+|---------|---------------|
+| Authentication | API key via `X-API-Key` header; keys hashed with argon2id |
+| Rate limiting | Per-key token bucket; 429 response with `Retry-After` header |
+| Input validation | URL validation, depth/page limits, pattern validation |
+| CORS | Configurable origins; disabled by default |
+| TLS | Optional rustls integration for HTTPS |
+| Audit logging | All API requests logged with key fingerprint, timestamp, path |
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| Authentication | API key required for all endpoints except `/health` and `/docs` |
+| Rate limiting | Returns 429 with `Retry-After` when exceeded; per-key isolation |
+| OpenAPI spec | Auto-generated from code; valid Swagger 3.0 JSON at `/api/v1/docs` |
+| CLI parity | API supports all `crawlkit crawl` flags plus async polling |
+| Concurrency limit | Max concurrent crawls per key configurable (default: 3) |
+| Cleanup | Stale crawl results auto-purged after configurable TTL (default: 24h) |
+
+### Phase 7: Backlink Analysis
+
+Backlink data from external APIs enriches crawl results with off-page SEO signals. This phase integrates with third-party APIs and builds an internal link graph.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Backlink Analysis Pipeline                 │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  External API Adapters                                │  │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────────────────┐ │  │
+│  │  │ Ahrefs   │ │ Majestic │ │ Google Search Console│ │  │
+│  │  │ API      │ │ API      │ │ API                  │ │  │
+│  │  └──────────┘ └──────────┘ └──────────────────────┘ │  │
+│  │  - Rate limited per adapter                          │  │
+│  │  - API key stored in config (not in DB)              │  │
+│  │  - Graceful degradation if API unavailable           │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│  ┌───────────────────────┼──────────────────────────────┐  │
+│  │                       ▼                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Internal Link Graph Builder                   │  │  │
+│  │  │  - Directed graph (page → page)                │  │  │
+│  │  │  - Weighted by anchor text relevance           │  │  │
+│  │  │  - Circular dependency detection               │  │  │
+│  │  │  - PageRank computation (damped)               │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  │                       │                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Link Graph Visualization                      │  │  │
+│  │  │  - DOT format export (Graphviz)                │  │  │
+│  │  │  - HTML interactive (D3.js force-directed)     │  │  │
+│  │  │  - CSV adjacency list                          │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Data Models
+
+```rust
+pub struct BacklinkProfile {
+    pub target_url: Url,
+    pub total_backlinks: usize,
+    pub referring_domains: usize,
+    pub domain_authority: Option<f64>,
+    pub top_backlinks: Vec<Backlink>,
+    pub anchor_text_distribution: HashMap<String, usize>,
+}
+
+pub struct Backlink {
+    pub source_url: Url,
+    pub target_url: Url,
+    pub anchor_text: Option<String>,
+    pub rel: Option<String>,
+    pub discovered_at: DateTime<Utc>,
+    pub source_domain_authority: Option<f64>,
+}
+
+pub struct InternalLinkGraph {
+    pub nodes: Vec<LinkNode>,
+    pub edges: Vec<LinkEdge>,
+    pub pagerank: HashMap<Url, f64>,
+}
+
+pub struct LinkNode {
+    pub url: Url,
+    pub inbound_count: usize,
+    pub outbound_count: usize,
+    pub is_orphan: bool,
+}
+
+pub struct LinkEdge {
+    pub source: Url,
+    pub target: Url,
+    pub anchor_text: Option<String>,
+    pub is_nofollow: bool,
+}
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| External API adapters | Ahrefs, Majestic, Google Search Console supported |
+| API key security | Keys in config file (not SQLite); never logged or exported |
+| Internal link graph | Constructed from crawl data; includes all discovered links |
+| PageRank | Damping factor 0.85; computed for all pages with > 0 inbound links |
+| Orphan detection | Pages with 0 inbound internal links flagged |
+| Visualization export | DOT, HTML (D3.js force-directed), CSV adjacency list |
+| Graceful degradation | If external API unavailable, use only internal link data |
+
+### Phase 7: RUM Data Integration
+
+Real User Monitoring (RUM) data overlays lab-based crawl metrics with actual field data from Google Analytics and Chrome User Experience Report (CrUX). This enables data-driven prioritization of performance fixes based on real user impact.
+
+#### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    RUM Data Pipeline                          │
+│                                                             │
+│  ┌──────────────────────────────────────────────────────┐  │
+│  │  Data Sources                                        │  │
+│  │  ┌──────────────────┐  ┌──────────────────────────┐  │  │
+│  │  │ Google Analytics │  │ Chrome UX Report (CrUX)  │  │  │
+│  │  │ Reporting API v4 │  │ BigQuery / PageSpeed API │  │  │
+│  │  └──────────────────┘  └──────────────────────────┘  │  │
+│  │  ┌──────────────────┐                                │  │
+│  │  │ Custom RUM Beacon│  (optional self-hosted)        │  │
+│  │  └──────────────────┘                                │  │
+│  └──────────────────────────────────────────────────────┘  │
+│                          │                                  │
+│  ┌───────────────────────┼──────────────────────────────┐  │
+│  │                       ▼                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Data Normalizer                               │  │  │
+│  │  │  - Map GA page paths → crawl URLs              │  │  │
+│  │  │  - Aggregate by URL (exact + pattern match)    │  │  │
+│  │  │  - Time-windowed aggregation (28-day default)  │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  │                       │                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Core Web Vitals Field Data Overlay            │  │  │
+│  │  │  - LCP (p75), INP (p75), CLS (p75)           │  │  │
+│  │  │  - FCP (p75), TTFB (p75)                      │  │  │
+│  │  │  - Device category (mobile/desktop/tablet)     │  │  │
+│  │  │  - Country/region breakdown                    │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  │                       │                              │  │
+│  │  ┌────────────────────────────────────────────────┐  │  │
+│  │  │  Merged Report                                 │  │  │
+│  │  │  - Lab data (crawl) + Field data (RUM)         │  │  │
+│  │  │  - Delta highlighting (lab ≠ field)            │  │  │
+│  │  │  - Priority scoring by real-user impact        │  │  │
+│  │  └────────────────────────────────────────────────┘  │  │
+│  └──────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Data Models
+
+```rust
+pub struct RumData {
+    pub url: Url,
+    pub source: RumSource,
+    pub time_window: TimeWindow,
+    pub page_views: u64,
+    pub core_web_vitals: CoreWebVitals,
+    pub device_distribution: DeviceDistribution,
+    pub country_data: Option<HashMap<String, CoreWebVitals>>,
+}
+
+pub enum RumSource {
+    GoogleAnalytics,
+    Crux,
+    CustomBeacon,
+}
+
+pub struct CoreWebVitals {
+    pub lcp_p75: Option<Duration>,
+    pub inp_p75: Option<Duration>,
+    pub cls_p75: Option<f64>,
+    pub fcp_p75: Option<Duration>,
+    pub ttfb_p75: Option<Duration>,
+}
+
+pub struct DeviceDistribution {
+    pub mobile: f64,       // percentage
+    pub desktop: f64,
+    pub tablet: f64,
+}
+
+pub struct MergedPageMetrics {
+    pub url: Url,
+    pub lab: Option<LabMetrics>,       // From crawl
+    pub field: Option<RumData>,        // From RUM
+    pub deltas: Vec<MetricDelta>,      // Lab - Field differences
+    pub priority_score: f64,           // Weighted by real-user impact
+}
+```
+
+#### Acceptance Criteria
+
+| Criterion | Target |
+|-----------|--------|
+| GA integration | Import via Reporting API v4; map page paths to crawl URLs |
+| CrUX integration | Fetch via PageSpeed Insights API or BigQuery; 28-day window |
+| Data normalization | Exact URL match + pattern-based aggregation for query params |
+| Field data overlay | LCP, INP, CLS, FCP, TTFB displayed alongside lab metrics |
+| Delta highlighting | Visual indicator where lab and field data diverge significantly |
+| Privacy | No PII in field data; country-level only, no user-level |
+| Offline fallback | If RUM APIs unavailable, report lab-only with warning |
 
 ### Scaling Considerations
 

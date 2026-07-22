@@ -250,6 +250,115 @@ All phases
 
 ---
 
+## Phase 7: Advanced Integrations (Week 15–18)
+
+**Goal:** JavaScript rendering, external data integrations, programmatic API access, and standards compliance hardening.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 7.1 | Opt-in Playwright JS rendering | 0.4, 3.5 | `--javascript` flag enables Chromium rendering; resource warnings on activation; falls back to HTTP-only if unavailable; memory isolation per browser context |
+| 7.2 | JS render decision engine | 7.1 | Auto-detects SPA indicators (div#app, framework signatures); user-configurable URL patterns for JS rendering |
+| 7.3 | REST API server (Axum) | 0.4, 0.9 | `crawlkit serve` starts HTTP server; endpoints: POST /crawl, GET /crawl/:id, GET /crawl/:id/results, DELETE /crawl/:id, GET /health, GET /docs |
+| 7.4 | API key authentication | 7.3 | Keys stored hashed in SQLite; X-API-Key header; argon2id hashing; key lifecycle (create, revoke, list) |
+| 7.5 | Per-key rate limiting | 7.4 | Token bucket per API key; 429 with Retry-After; configurable burst + sustained limits |
+| 7.6 | OpenAPI documentation | 7.3 | Auto-generated via utoipa; Swagger UI at /api/v1/docs; valid Swagger 3.0 JSON |
+| 7.7 | Ahrefs backlink adapter | 7.3 | Fetches backlink data via Ahrefs API; rate limited; graceful degradation if unavailable |
+| 7.8 | Majestic backlink adapter | 7.7 | Same interface as 7.7; Majestic API integration |
+| 7.9 | Google Search Console adapter | 7.7 | Fetches own-site link data; OAuth2 authentication; respects API quotas |
+| 7.10 | Internal link graph builder | 0.7, 2.1 | Directed graph from crawl data; PageRank computation (damping 0.85); orphan detection |
+| 7.11 | Link graph visualization | 7.10 | DOT export (Graphviz); HTML interactive (D3.js force-directed); CSV adjacency list |
+| 7.12 | Google Analytics RUM import | 7.3 | Reporting API v4 integration; maps page paths to crawl URLs; 28-day aggregation window |
+| 7.13 | CrUX field data integration | 7.12 | PageSpeed Insights API or BigQuery; LCP, INP, CLS, FCP, TTFB p75 values |
+| 7.14 | Merged lab + field report | 7.12, 7.13 | Displays lab and field data side-by-side; highlights significant deltas; priority scoring by real-user impact |
+| 7.15 | Feature flag system | 7.1, 7.3, 7.7, 7.12 | TOML config for runtime feature toggles; immutable per-crawl session |
+| 7.16 | Observability stack | 7.3 | tracing-subscriber (structured JSON logs); metrics + prometheus exporter; OpenTelemetry trace export |
+| 7.17 | Audit trail | 7.3 | Append-only audit log; every state-change event logged with timestamp, config hash, details |
+| 7.18 | Circuit breaker (per-domain) | 0.4 | Opens after 5 consecutive failures; half-open after 60s cooldown; configurable thresholds |
+| 7.19 | Backpressure (bounded channels) | 0.4 | All pipeline channels bounded; producer blocks when consumer full; semaphore for concurrency |
+| 7.20 | Encryption at rest (optional) | 0.9 | SQLCipher for SQLite; AES-256-GCM for export files; key from file/env/keyring |
+| 7.21 | Determinism guarantees | 0.4 | Same URL + same config → same output; seed-based PRNG; deterministic URL hashing |
+| 7.22 | Resource isolation | 7.1 | Per-crawl memory/disk/CPU budgets; graceful abort if exceeded |
+
+### Dependency Graph
+
+```
+0.4, 0.9
+├─ 7.3
+│   ├─ 7.4
+│   │   └─ 7.5
+│   ├─ 7.6
+│   ├─ 7.7
+│   │   ├─ 7.8
+│   │   └─ 7.9
+│   ├─ 7.12
+│   │   └─ 7.13
+│   │       └─ 7.14
+│   ├─ 7.15 (depends on 7.1, 7.3, 7.7, 7.12)
+│   ├─ 7.16
+│   └─ 7.17
+│
+0.4
+├─ 7.1
+│   ├─ 7.2
+│   └─ 7.22
+├─ 7.18
+└─ 7.19
+│
+0.7, 2.1
+└─ 7.10
+    └─ 7.11
+│
+0.9
+└─ 7.20
+│
+0.4
+└─ 7.21
+```
+
+### Standards Compliance Tracks
+
+Phase 7 includes cross-cutting standards compliance work. These tasks are tracked here but may be implemented incrementally across other Phase 7 tasks.
+
+#### FAANG Track
+
+| Task | Acceptance Criteria |
+|------|---------------------|
+| Code review process | All PRs require ≥ 1 approval; security changes require ≥ 2 |
+| Feature flags (7.15) | Runtime toggles for JS rendering, API mode, backlink analysis, RUM integration |
+| Rollback strategy | Crawl snapshots immutable; compare command for before/after diff; SQLite backups before migration |
+| Observability (7.16) | Structured JSON logs, Prometheus metrics, OpenTelemetry traces |
+
+#### HFT Track
+
+| Task | Acceptance Criteria |
+|------|---------------------|
+| Determinism (7.21) | Same input → same output; seed-based PRNG; no randomized behavior without explicit seed |
+| Reliability targets | 99.9% crawl completion rate; circuit breaker prevents cascade failures |
+| Resource isolation (7.22) | Per-crawl memory/CPU/disk budgets; browser context isolation |
+| Benchmark regression | CI detects > 5% throughput regression on reference hardware |
+
+#### Defense Track
+
+| Task | Acceptance Criteria |
+|------|---------------------|
+| Audit trail (7.17) | Append-only log; every state-change event recorded; tamper-evident chaining |
+| Input validation | All URLs validated; depth ≤ 20; page limit ≥ 1; patterns validated |
+| Encryption at rest (7.20) | SQLCipher optional; AES-256-GCM exports; key never hardcoded |
+| Dependency auditing | `cargo audit` + `cargo deny` in CI |
+
+#### ECN Track
+
+| Task | Acceptance Criteria |
+|------|---------------------|
+| Backpressure (7.19) | Bounded channels; producer blocks when consumer full; semaphore concurrency |
+| Circuit breaker (7.18) | Opens after 5 failures; half-open after 60s; per-domain isolation |
+| Idempotency | URL + status + content hash as key; skip re-crawl if unchanged within TTL |
+| Exactly-once | Best-effort via idempotency; documented trade-off |
+
+---
+
 ## Milestones
 
 | Milestone | Target Date | Deliverable | Exit Criteria |
@@ -260,7 +369,8 @@ All phases
 | **v0.4.0** | Week 8 | Security + performance analysis | Security headers, SSL validation, Core Web Vitals, mobile check all produce reports |
 | **v0.5.0** | Week 10 | Advanced features + plugins | WCAG analysis, social audit, crawl diff, plugin loading all verified |
 | **v0.6.0** | Week 12 | Export + reporting | CSV, JSON, HTML, MD exports; dashboard; SQLite query interface |
-| **v1.0.0** | Week 14 | Full release | Cross-platform binaries, complete docs, ≥ 90% coverage, beta feedback resolved |
+| **v0.7.0** | Week 18 | Advanced integrations + standards compliance | JS rendering, REST API, backlinks, RUM, observability, audit trail, circuit breaker, encryption |
+| **v1.0.0** | Week 20 | Full release | Cross-platform binaries, complete docs, ≥ 90% coverage, beta feedback resolved, standards compliance ≥ 85% |
 
 ---
 
@@ -286,6 +396,13 @@ All phases
 | SQLite contention under high concurrency | Medium — slow writes, deadlocks | Low | Use WAL mode; batch writes; `r2d2` connection pool |
 | Cross-compilation issues (Windows, macOS ARM) | Low — CI failures | Medium | Use `cross` for Linux targets; matrix build for macOS/Windows |
 | Plugin system scope creep | High — delays v1.0 | Medium | Defer WASM plugins to v1.1; native `.so`/`.dylib` only for v1.0 |
+| Playwright dependency bloat | Medium — binary size, memory | Medium | Opt-in only; document resource warnings; fallback to HTTP-only |
+| External API rate limits (Ahrefs, Majestic) | Medium — incomplete data | Low | Graceful degradation; cache responses; configurable rate limits |
+| API authentication security | High — unauthorized access | Low | Argon2id hashing; API key rotation; audit logging |
+| Encryption key management | High — data exposure | Low | Support file/env/keyring; document key rotation procedure |
+| Backpressure complexity | Medium — pipeline stalls | Medium | Bounded channels with documented capacity; monitoring via metrics |
+| Circuit breaker false positives | Medium — skipped valid URLs | Low | Configurable thresholds; half-open testing; per-domain isolation |
+| RUM API changes (Google) | Medium — broken integration | Medium | Abstract adapter interface; version pinning; fallback to lab-only data |
 
 ---
 

@@ -1235,6 +1235,863 @@ impl Analyzer for HeadingHierarchyAnalyzer {
 }
 
 // ---------------------------------------------------------------------------
+// 9. Link Analyzer
+// ---------------------------------------------------------------------------
+
+/// Per-page link analysis summary.
+#[derive(Debug, Clone, Default)]
+pub struct LinkInfo {
+    pub total: usize,
+    pub internal: usize,
+    pub external: usize,
+    pub nofollow: usize,
+    pub anchor_text_empty: usize,
+}
+
+pub struct LinkAnalyzer {
+    /// All URLs observed across the crawl, mapped to the pages that link to them.
+    /// Used for orphan page detection. Callers can inject this after a full crawl.
+    inbound_links: HashMap<String, usize>,
+}
+
+impl LinkAnalyzer {
+    pub fn new() -> Self {
+        Self {
+            inbound_links: HashMap::new(),
+        }
+    }
+
+    /// Create a LinkAnalyzer with pre-computed inbound link counts for orphan
+    /// detection. The map should contain target URL -> number of inbound links.
+    pub fn with_inbound_links(inbound_links: HashMap<String, usize>) -> Self {
+        Self { inbound_links }
+    }
+}
+
+impl Default for LinkAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for LinkAnalyzer {
+    fn name(&self) -> &str {
+        "link-analyzer"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_count = ctx.page.links.iter().filter(|l| !l.is_external).count();
+        let external_count = ctx.page.links.iter().filter(|l| l.is_external).count();
+        let nofollow_count = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.rel.contains(&"nofollow".to_string()))
+            .count();
+
+        // 2.1 — Internal vs external link counts
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Links,
+            code: "LINK001".to_string(),
+            title: "Link counts".to_string(),
+            description: format!(
+                "Internal: {}, External: {}, Nofollow: {}",
+                internal_count, external_count, nofollow_count
+            ),
+            url: url.clone(),
+            recommendation: String::new(),
+        });
+
+        // 2.2 — Flag broken links (4xx/5xx) when status code is available
+        for link in &ctx.page.links {
+            let resolved = Url::parse(url)
+                .ok()
+                .and_then(|base| base.join(&link.href).ok());
+            let target = resolved.as_ref().map(|u| u.as_str()).unwrap_or(&link.href);
+            if let Some(status) = ctx.status_code {
+                if (400..=599).contains(&status) {
+                    // The page itself is broken — all outbound links are suspect
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Links,
+                        code: "LINK002".to_string(),
+                        title: "Link on broken page".to_string(),
+                        description: format!(
+                            "Link \"{}\" points to \"{}\" but the current page itself returned \
+                             HTTP {status}.",
+                            link.text, target,
+                        ),
+                        url: url.clone(),
+                        recommendation: "Fix the broken page or remove links from it."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // 2.2 — Nofollow detection
+        if nofollow_count > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "LINK003".to_string(),
+                title: "Nofollow links present".to_string(),
+                description: format!(
+                    "{} link(s) have rel=\"nofollow\". This tells search engines not to pass \
+                     PageRank.",
+                    nofollow_count
+                ),
+                url: url.clone(),
+                recommendation: "Ensure nofollow is used intentionally (e.g., paid links, \
+                                 untrusted user content)."
+                    .to_string(),
+            });
+        }
+
+        // 2.3 — Anchor text quality
+        for link in &ctx.page.links {
+            if link.text.trim().is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Links,
+                    code: "LINK004".to_string(),
+                    title: "Empty anchor text".to_string(),
+                    description: format!(
+                        "Link to \"{}\" has no visible anchor text.",
+                        link.href
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add descriptive anchor text to help users and search engines \
+                                     understand the link destination."
+                        .to_string(),
+                });
+            } else if link.text.len() < 3 {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Links,
+                    code: "LINK005".to_string(),
+                    title: "Very short anchor text".to_string(),
+                    description: format!(
+                        "Link \"{}\" has very short anchor text ({} chars).",
+                        link.text,
+                        link.text.len()
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use more descriptive anchor text for better usability."
+                        .to_string(),
+                });
+            }
+        }
+
+        // 2.3 — Orphan page detection (0 inbound links)
+        if let Some(&count) = self.inbound_links.get(url) {
+            if count == 0 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Links,
+                    code: "LINK006".to_string(),
+                    title: "Orphan page".to_string(),
+                    description: "This page has no inbound links from other pages on the site."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add internal links from other pages to improve discoverability."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 10. Image Analyzer
+// ---------------------------------------------------------------------------
+
+/// Detailed image information for analysis.
+#[derive(Debug, Clone)]
+pub struct ImageInfo {
+    pub src: String,
+    pub alt: String,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+    pub format: Option<String>,
+    pub file_size: Option<u64>,
+    pub has_alt: bool,
+    pub is_lazy_loaded: bool,
+}
+
+pub struct ImageAnalyzer;
+
+impl ImageAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    #[allow(dead_code)]
+    pub(crate) fn detect_format(src: &str) -> Option<String> {
+        let path = src.split('?').next()?;
+        let ext = path.rsplit('.').next()?;
+        match ext.to_lowercase().as_str() {
+            "jpg" | "jpeg" => Some("jpeg".to_string()),
+            "png" => Some("png".to_string()),
+            "gif" => Some("gif".to_string()),
+            "webp" => Some("webp".to_string()),
+            "avif" => Some("avif".to_string()),
+            "svg" => Some("svg".to_string()),
+            "bmp" => Some("bmp".to_string()),
+            "ico" => Some("ico".to_string()),
+            "tiff" | "tif" => Some("tiff".to_string()),
+            _ => None,
+        }
+    }
+}
+
+impl Default for ImageAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ImageAnalyzer {
+    fn name(&self) -> &str {
+        "image-analyzer"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.images.is_empty() {
+            return findings;
+        }
+
+        let mut total_lazy = 0u32;
+        let mut total_with_dimensions = 0u32;
+
+        for img in &ctx.page.images {
+            // 2.4 — Missing alt text
+            if !img.has_alt {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "IMG001".to_string(),
+                    title: "Image missing alt text".to_string(),
+                    description: format!("Image \"{}\" has no alt attribute.", img.src),
+                    url: url.clone(),
+                    recommendation: "Add descriptive alt text to improve accessibility and SEO."
+                        .to_string(),
+                });
+            }
+
+            // Oversized images (> 500 KB) — flagged as info since file_size is not
+            // available from HTML parsing. This check is a placeholder for when
+            // file_size is available from HTTP response headers.
+
+            if img.is_lazy_loaded {
+                total_lazy += 1;
+            }
+
+            if img.width.is_some() && img.height.is_some() {
+                total_with_dimensions += 1;
+            }
+        }
+
+        // Lazy loading summary
+        if total_lazy > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "IMG003".to_string(),
+                title: "Lazy-loaded images".to_string(),
+                description: format!(
+                    "{} of {} images use lazy loading.",
+                    total_lazy,
+                    ctx.page.images.len()
+                ),
+                url: url.clone(),
+                recommendation: "Verify lazy loading is only applied to below-the-fold images."
+                    .to_string(),
+            });
+        }
+
+        // Dimension summary
+        let missing_dimensions =
+            ctx.page.images.len() as u32 - total_with_dimensions;
+        if missing_dimensions > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "IMG004".to_string(),
+                title: "Images missing dimensions".to_string(),
+                description: format!(
+                    "{} of {} images are missing width/height attributes.",
+                    missing_dimensions,
+                    ctx.page.images.len()
+                ),
+                url: url.clone(),
+                recommendation: "Specify width and height to prevent layout shifts (CLS)."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Structured Data Validator
+// ---------------------------------------------------------------------------
+
+/// Required properties per Schema.org type (subset).
+const REQUIRED_PROPERTIES: &[(&str, &[&str])] = &[
+    ("Article", &["headline", "author"]),
+    ("NewsArticle", &["headline", "author"]),
+    ("BlogPosting", &["headline", "author"]),
+    ("Product", &["name"]),
+    ("Organization", &["name"]),
+    ("LocalBusiness", &["name", "address"]),
+    ("WebPage", &["name"]),
+    ("BreadcrumbList", &["itemListElement"]),
+    ("FAQPage", &["mainEntity"]),
+    ("HowTo", &["name"]),
+    ("Event", &["name", "startDate"]),
+    ("Recipe", &["name"]),
+    ("VideoObject", &["name", "embedUrl"]),
+    ("SoftwareApplication", &["name"]),
+    ("Book", &["name"]),
+    ("MusicAlbum", &["name"]),
+    ("Movie", &["name"]),
+];
+
+/// Recognized Schema.org types for validation.
+const RECOGNIZED_TYPES: &[&str] = &[
+    "Article",
+    "NewsArticle",
+    "BlogPosting",
+    "Product",
+    "Organization",
+    "LocalBusiness",
+    "WebSite",
+    "WebPage",
+    "BreadcrumbList",
+    "FAQPage",
+    "HowTo",
+    "Event",
+    "Recipe",
+    "VideoObject",
+    "SoftwareApplication",
+    "Book",
+    "MusicAlbum",
+    "Movie",
+    "Person",
+    "Place",
+    "ItemList",
+    "AggregateRating",
+    "Review",
+    "Offer",
+    "Brand",
+];
+
+pub struct StructuredDataValidator;
+
+impl StructuredDataValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn required_properties(schema_type: &str) -> &'static [&'static str] {
+        REQUIRED_PROPERTIES
+            .iter()
+            .find(|(t, _)| *t == schema_type)
+            .map(|(_, props)| *props)
+            .unwrap_or(&[])
+    }
+}
+
+impl Default for StructuredDataValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for StructuredDataValidator {
+    fn name(&self) -> &str {
+        "structured-data"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.structured_data.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Schema,
+                code: "SD001".to_string(),
+                title: "No structured data found".to_string(),
+                description: "No JSON-LD structured data was found on this page.".to_string(),
+                url: url.clone(),
+                recommendation: "Add relevant Schema.org JSON-LD markup to enhance search \
+                                 results."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        for sd in &ctx.page.structured_data {
+            // 2.5 — Validate @context
+            match &sd.context {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "SD002".to_string(),
+                        title: "Missing @context".to_string(),
+                        description: "JSON-LD block is missing the @context property.".to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"@context\": \"https://schema.org\" to all JSON-LD \
+                                         blocks."
+                            .to_string(),
+                    });
+                }
+                Some(ctx_val) => {
+                    if ctx_val != "https://schema.org" && ctx_val != "schema.org" {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Schema,
+                            code: "SD003".to_string(),
+                            title: "Non-standard @context".to_string(),
+                            description: format!(
+                                "JSON-LD @context is \"{ctx_val}\" instead of \
+                                 \"https://schema.org\"."
+                            ),
+                            url: url.clone(),
+                            recommendation: "Use \"https://schema.org\" as the @context."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+
+            // Validate @type
+            match &sd.r#type {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "SD004".to_string(),
+                        title: "Missing @type".to_string(),
+                        description: "JSON-LD block is missing the @type property.".to_string(),
+                        url: url.clone(),
+                        recommendation: "Add an appropriate @type to describe the content."
+                            .to_string(),
+                    });
+                }
+                Some(type_val) => {
+                    if !RECOGNIZED_TYPES.contains(&type_val.as_str()) {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Schema,
+                            code: "SD005".to_string(),
+                            title: "Unknown @type".to_string(),
+                            description: format!(
+                                "JSON-LD @type \"{type_val}\" is not a recognized Schema.org \
+                                 type."
+                            ),
+                            url: url.clone(),
+                            recommendation: "Verify this is a valid Schema.org type or use a \
+                                             recognized type."
+                                .to_string(),
+                        });
+                    }
+
+                    // 2.6 — Check required properties
+                    let required = Self::required_properties(type_val);
+                    if !required.is_empty() {
+                        let mut missing = Vec::new();
+                        for prop in required {
+                            if sd.data.get(*prop).is_none() {
+                                missing.push(*prop);
+                            }
+                        }
+                        if !missing.is_empty() {
+                            findings.push(Finding {
+                                severity: Severity::Error,
+                                category: IssueCategory::Schema,
+                                code: "SD006".to_string(),
+                                title: "Missing required properties".to_string(),
+                                description: format!(
+                                    "Schema type \"{type_val}\" is missing required properties: \
+                                     {}.",
+                                    missing.join(", ")
+                                ),
+                                url: url.clone(),
+                                recommendation: format!(
+                                    "Add the missing properties to the \"{type_val}\" schema."
+                                ),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 12. Content Quality Analyzer
+// ---------------------------------------------------------------------------
+
+/// Stop words for keyword density analysis (common English words).
+const STOP_WORDS: &[&str] = &[
+    "a", "an", "the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by",
+    "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "do", "does",
+    "did", "will", "would", "could", "should", "may", "might", "shall", "can", "it", "its",
+    "this", "that", "these", "those", "i", "you", "he", "she", "we", "they", "me", "him",
+    "her", "us", "them", "my", "your", "his", "our", "their", "what", "which", "who", "whom",
+    "where", "when", "why", "how", "all", "each", "every", "both", "few", "more", "most",
+    "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too",
+    "very", "just", "about", "above", "after", "again", "also", "as", "before", "between",
+    "down", "from", "here", "if", "into", "then", "there", "through", "under", "until", "up",
+];
+
+pub struct ContentQualityAnalyzer;
+
+impl ContentQualityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Count syllables in a word (approximate heuristic).
+    fn count_syllables(word: &str) -> usize {
+        let word = word.to_lowercase();
+        let chars: Vec<char> = word.chars().collect();
+        if chars.is_empty() {
+            return 0;
+        }
+        if chars.len() <= 2 {
+            return 1;
+        }
+
+        let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+        let mut count = 0;
+        let mut prev_vowel = false;
+
+        for &c in &chars {
+            let is_vowel = vowels.contains(&c);
+            if is_vowel && !prev_vowel {
+                count += 1;
+            }
+            prev_vowel = is_vowel;
+        }
+
+        // Adjust for silent 'e'
+        if chars.last() == Some(&'e') && count > 1 {
+            count -= 1;
+        }
+
+        count.max(1)
+    }
+
+    /// Count sentences in text (by punctuation).
+    fn count_sentences(text: &str) -> usize {
+        if text.trim().is_empty() {
+            return 0;
+        }
+        let count = text
+            .chars()
+            .filter(|&c| c == '.' || c == '!' || c == '?')
+            .count();
+        count.max(1)
+    }
+
+    /// Flesch-Kincaid readability score (0-100, higher = easier).
+    fn flesch_kincaid(words: usize, sentences: usize, syllables: usize) -> f64 {
+        if words == 0 || sentences == 0 {
+            return 0.0;
+        }
+        let score =
+            206.835 - 1.015 * (words as f64 / sentences as f64)
+                - 84.6 * (syllables as f64 / words as f64);
+        score.clamp(0.0, 100.0)
+    }
+}
+
+impl Default for ContentQualityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ContentQualityAnalyzer {
+    fn name(&self) -> &str {
+        "content-quality"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // 2.7 — Flesch-Kincaid readability
+        let word_count = ctx.page.word_count;
+        if word_count > 0 {
+            let text = &ctx.page.headings.iter().map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+            let sentences = Self::count_sentences(text);
+            let syllables: usize = text
+                .split_whitespace()
+                .map(Self::count_syllables)
+                .sum();
+            let score = Self::flesch_kincaid(word_count, sentences.max(1), syllables);
+
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "CQ001".to_string(),
+                title: "Flesch-Kincaid readability score".to_string(),
+                description: format!(
+                    "Readability score: {score:.1}/100 (words: {word_count}, sentences: \
+                     {sentences}, syllables: {syllables})."
+                ),
+                url: url.clone(),
+                recommendation: if score < 30.0 {
+                    "Content is very difficult to read. Consider simplifying language and \
+                     shortening sentences."
+                        .to_string()
+                } else if score < 50.0 {
+                    "Content is fairly difficult to read. Aim for a score of 60+ for general \
+                     audiences."
+                        .to_string()
+                } else if score < 70.0 {
+                    "Content has moderate readability. Suitable for most audiences."
+                        .to_string()
+                } else {
+                    "Content is easy to read. Good for general audiences.".to_string()
+                },
+            });
+        }
+
+        // Keyword density (top 10 terms from headings as proxy)
+        let headings_text: String = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        if !headings_text.trim().is_empty() {
+            let mut freq: HashMap<String, usize> = HashMap::new();
+            for word in headings_text.split_whitespace() {
+                let lower = word
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>();
+                if lower.len() > 2 && !STOP_WORDS.contains(&lower.as_str()) {
+                    *freq.entry(lower).or_default() += 1;
+                }
+            }
+
+            let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
+            terms.sort_by(|a, b| b.1.cmp(&a.1));
+            terms.truncate(10);
+
+            if !terms.is_empty() {
+                let display: String = terms
+                    .iter()
+                    .map(|(word, count)| format!("\"{}\" ({})", word, count))
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Content,
+                    code: "CQ002".to_string(),
+                    title: "Top keywords".to_string(),
+                    description: format!("Top 10 keyword occurrences in headings: {display}."),
+                    url: url.clone(),
+                    recommendation: "Ensure target keywords appear in headings and body content \
+                                     naturally."
+                        .to_string(),
+                });
+            }
+        }
+
+        // Content-to-markup ratio (word count as proxy for content volume)
+        if word_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CQ003".to_string(),
+                title: "No content detected".to_string(),
+                description: "The page has zero word count, which may indicate missing or \
+                             hidden content."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Ensure the page has meaningful visible text content."
+                    .to_string(),
+            });
+        } else if word_count < 300 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CQ004".to_string(),
+                title: "Thin content".to_string(),
+                description: format!(
+                    "Page has only {word_count} words. Pages with fewer than 300 words may be \
+                     considered thin content."
+                ),
+                url: url.clone(),
+                recommendation: "Expand the content to at least 300 words for better search \
+                                 visibility."
+                    .to_string(),
+            });
+        } else if word_count > 3000 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "CQ005".to_string(),
+                title: "Long-form content".to_string(),
+                description: format!(
+                    "Page has {word_count} words. Consider whether all content is necessary or \
+                     if it could be split into multiple pages."
+                ),
+                url: url.clone(),
+                recommendation: "Long-form content is good for SEO but ensure it remains \
+                                 scannable with proper headings."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 13. Word Count Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct WordCountAnalyzer;
+
+impl WordCountAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Extract visible text from headings (proxy for page text).
+    fn visible_text(ctx: &AnalysisContext) -> String {
+        ctx.page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+impl Default for WordCountAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for WordCountAnalyzer {
+    fn name(&self) -> &str {
+        "word-count"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let text = Self::visible_text(ctx);
+        let word_count = ctx.page.word_count;
+        let char_count = text.chars().count();
+
+        // Count sentences
+        let sentence_count = if text.trim().is_empty() {
+            0
+        } else {
+            text.chars()
+                .filter(|&c| c == '.' || c == '!' || c == '?')
+                .count()
+                .max(1)
+        };
+
+        let avg_words_per_sentence = if sentence_count > 0 {
+            word_count as f64 / sentence_count as f64
+        } else {
+            0.0
+        };
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Content,
+            code: "WC001".to_string(),
+            title: "Word count statistics".to_string(),
+            description: format!(
+                "Words: {word_count}, Characters: {char_count}, Sentences: {sentence_count}, \
+                 Avg words/sentence: {avg_words_per_sentence:.1}."
+            ),
+            url: url.clone(),
+            recommendation: String::new(),
+        });
+
+        if word_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "WC002".to_string(),
+                title: "Zero word count".to_string(),
+                description: "The page has no detectable words. This may indicate a rendering \
+                             issue or an empty page."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Verify the page content is visible and not hidden behind \
+                                 JavaScript or CSS."
+                    .to_string(),
+            });
+        } else if word_count < 100 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "WC003".to_string(),
+                title: "Very low word count".to_string(),
+                description: format!(
+                    "Page has only {word_count} words. This is very thin content."
+                ),
+                url: url.clone(),
+                recommendation: "Add more substantive content to the page.".to_string(),
+            });
+        }
+
+        if avg_words_per_sentence > 25.0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "WC004".to_string(),
+                title: "Long average sentence length".to_string(),
+                description: format!(
+                    "Average sentence length is {avg_words_per_sentence:.1} words. Sentences \
+                     longer than 25 words may be difficult to read."
+                ),
+                url: url.clone(),
+                recommendation: "Break long sentences into shorter ones for better readability."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Analyzer Registry
 // ---------------------------------------------------------------------------
 
@@ -1255,6 +2112,11 @@ impl AnalyzerRegistry {
                 Box::new(RobotsTxtAnalyzer::empty()),
                 Box::new(MetaTagAnalyzer::new()),
                 Box::new(HeadingHierarchyAnalyzer::new()),
+                Box::new(LinkAnalyzer::new()),
+                Box::new(ImageAnalyzer::new()),
+                Box::new(StructuredDataValidator::new()),
+                Box::new(ContentQualityAnalyzer::new()),
+                Box::new(WordCountAnalyzer::new()),
             ],
         }
     }
@@ -1296,7 +2158,7 @@ impl AnalyzerRegistry {
 mod tests {
     use super::*;
     use crate::meta::MetaTags;
-    use crate::parser::Heading;
+    use crate::parser::{ExtractedImage, ExtractedLink, Heading, StructuredData};
     use crate::storage::{IssueCategory, Severity};
 
     fn default_config() -> CrawlConfig {
@@ -1995,7 +2857,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 8);
+        assert_eq!(registry.len(), 13);
         assert!(!registry.is_empty());
     }
 
@@ -2197,5 +3059,568 @@ mod tests {
             "Well-optimized page should have no errors: {:?}",
             errors.iter().map(|f| &f.code).collect::<Vec<_>>()
         );
+    }
+
+    // =========================================================================
+    // LinkAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_link_analyzer_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK001"));
+        let link001 = findings.iter().find(|f| f.code == "LINK001").unwrap();
+        assert!(link001.description.contains("Internal: 0"));
+        assert!(link001.description.contains("External: 0"));
+    }
+
+    #[test]
+    fn test_link_analyzer_internal_external_counts() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/about".to_string(),
+                text: "About".to_string(),
+                rel: vec![],
+                is_external: false,
+            },
+            ExtractedLink {
+                href: "/contact".to_string(),
+                text: "Contact".to_string(),
+                rel: vec![],
+                is_external: false,
+            },
+            ExtractedLink {
+                href: "https://external.com".to_string(),
+                text: "External".to_string(),
+                rel: vec![],
+                is_external: true,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let link001 = findings.iter().find(|f| f.code == "LINK001").unwrap();
+        assert!(link001.description.contains("Internal: 2"));
+        assert!(link001.description.contains("External: 1"));
+    }
+
+    #[test]
+    fn test_link_analyzer_nofollow_detection() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://external.com".to_string(),
+            text: "Nofollow link".to_string(),
+            rel: vec!["nofollow".to_string()],
+            is_external: true,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK003"));
+    }
+
+    #[test]
+    fn test_link_analyzer_empty_anchor_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK004"));
+    }
+
+    #[test]
+    fn test_link_analyzer_short_anchor_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK005"));
+    }
+
+    #[test]
+    fn test_link_analyzer_broken_page_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/broken".to_string(),
+            text: "Broken link".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(404));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK002"));
+    }
+
+    #[test]
+    fn test_link_analyzer_orphan_page() {
+        let mut inbound = HashMap::new();
+        inbound.insert("https://example.com/orphan".to_string(), 0);
+        let analyzer = LinkAnalyzer::with_inbound_links(inbound);
+        let page = make_page("https://example.com/orphan");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = analyzer.analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "LINK006"));
+    }
+
+    #[test]
+    fn test_link_analyzer_not_orphan() {
+        let mut inbound = HashMap::new();
+        inbound.insert("https://example.com/page".to_string(), 3);
+        let analyzer = LinkAnalyzer::with_inbound_links(inbound);
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = analyzer.analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "LINK006"));
+    }
+
+    #[test]
+    fn test_link_analyzer_no_nofollow_when_absent() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Normal link".to_string(),
+            rel: vec![],
+            is_external: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "LINK003"));
+    }
+
+    // =========================================================================
+    // ImageAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_image_analyzer_no_images() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_image_analyzer_missing_alt_text() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/img.png".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: false,
+            is_lazy_loaded: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "IMG001"));
+    }
+
+    #[test]
+    fn test_image_analyzer_with_alt_text() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/img.png".to_string(),
+            alt: "A photo".to_string(),
+            width: Some(100),
+            height: Some(200),
+            has_alt: true,
+            is_lazy_loaded: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "IMG001"));
+    }
+
+    #[test]
+    fn test_image_analyzer_lazy_loading() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/a.png".to_string(),
+                alt: "A".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: true,
+            },
+            ExtractedImage {
+                src: "/b.png".to_string(),
+                alt: "B".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: true,
+            },
+            ExtractedImage {
+                src: "/c.png".to_string(),
+                alt: "C".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "IMG003"));
+        let img003 = findings.iter().find(|f| f.code == "IMG003").unwrap();
+        assert!(img003.description.contains("2 of 3"));
+    }
+
+    #[test]
+    fn test_image_analyzer_missing_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/no-dims.png".to_string(),
+            alt: "No dims".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "IMG004"));
+    }
+
+    #[test]
+    fn test_image_analyzer_detect_format() {
+        assert_eq!(ImageAnalyzer::detect_format("photo.jpg"), Some("jpeg".into()));
+        assert_eq!(ImageAnalyzer::detect_format("photo.jpeg"), Some("jpeg".into()));
+        assert_eq!(ImageAnalyzer::detect_format("pic.png"), Some("png".into()));
+        assert_eq!(ImageAnalyzer::detect_format("anim.gif"), Some("gif".into()));
+        assert_eq!(ImageAnalyzer::detect_format("modern.webp"), Some("webp".into()));
+        assert_eq!(ImageAnalyzer::detect_format("new.avif"), Some("avif".into()));
+        assert_eq!(ImageAnalyzer::detect_format("icon.svg"), Some("svg".into()));
+        assert_eq!(
+            ImageAnalyzer::detect_format("photo.jpg?v=1"),
+            Some("jpeg".into())
+        );
+        assert_eq!(ImageAnalyzer::detect_format("no-ext"), None);
+    }
+
+    // =========================================================================
+    // StructuredDataValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_structured_data_no_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD001"));
+    }
+
+    #[test]
+    fn test_structured_data_missing_context() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: None,
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "Test"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD002"));
+    }
+
+    #[test]
+    fn test_structured_data_wrong_context() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://example.com/schema".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD003"));
+    }
+
+    #[test]
+    fn test_structured_data_missing_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: None,
+            data: serde_json::json!({"@context": "https://schema.org"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD004"));
+    }
+
+    #[test]
+    fn test_structured_data_unknown_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("CustomWidget".to_string()),
+            data: serde_json::json!({"@context": "https://schema.org", "@type": "CustomWidget"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD005"));
+    }
+
+    #[test]
+    fn test_structured_data_missing_required_properties() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "SD006"));
+        let sd006 = findings.iter().find(|f| f.code == "SD006").unwrap();
+        assert!(sd006.description.contains("headline"));
+        assert!(sd006.description.contains("author"));
+    }
+
+    #[test]
+    fn test_structured_data_valid_article() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test Article",
+                "author": "John Doe"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "SD006"));
+    }
+
+    #[test]
+    fn test_structured_data_valid_product() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        assert!(!findings.iter().any(|f| f.code == "SD006"));
+    }
+
+    #[test]
+    fn test_structured_data_schema_org_context() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("schema.org".to_string()),
+            r#type: Some("WebSite".to_string()),
+            data: serde_json::json!({
+                "@context": "schema.org",
+                "@type": "WebSite",
+                "name": "My Site"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        // "schema.org" without https is accepted as valid
+        assert!(!findings.iter().any(|f| f.code == "SD003"));
+    }
+
+    // =========================================================================
+    // ContentQualityAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_content_quality_empty_page() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        // Should flag zero content
+        assert!(findings.iter().any(|f| f.code == "CQ003"));
+    }
+
+    #[test]
+    fn test_content_quality_thin_content() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 150;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "CQ004"));
+    }
+
+    #[test]
+    fn test_content_quality_long_form() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 5000;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "CQ005"));
+    }
+
+    #[test]
+    fn test_content_quality_readability_score() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 500;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "This is a simple heading for testing readability scores in content analysis"
+                .to_string(),
+            length: 66,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "CQ001"));
+    }
+
+    #[test]
+    fn test_content_quality_keyword_density() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 500;
+        page.headings = vec![
+            Heading { level: 1, text: "Rust Programming Language Tutorial".to_string(), length: 33 },
+            Heading { level: 2, text: "Rust Basics for Beginners".to_string(), length: 24 },
+            Heading { level: 2, text: "Advanced Rust Programming".to_string(), length: 24 },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "CQ002"));
+        let cq002 = findings.iter().find(|f| f.code == "CQ002").unwrap();
+        assert!(cq002.description.contains("rust"));
+    }
+
+    #[test]
+    fn test_content_quality_syllable_counting() {
+        assert_eq!(ContentQualityAnalyzer::count_syllables("cat"), 1);
+        assert_eq!(ContentQualityAnalyzer::count_syllables("hello"), 2);
+        assert_eq!(ContentQualityAnalyzer::count_syllables("beautiful"), 3);
+        assert_eq!(ContentQualityAnalyzer::count_syllables("a"), 1);
+        assert_eq!(ContentQualityAnalyzer::count_syllables(""), 0);
+    }
+
+    #[test]
+    fn test_content_quality_sentence_counting() {
+        assert_eq!(ContentQualityAnalyzer::count_sentences("Hello world."), 1);
+        assert_eq!(
+            ContentQualityAnalyzer::count_sentences("First sentence. Second sentence! Third?"),
+            3
+        );
+        assert_eq!(ContentQualityAnalyzer::count_sentences(""), 0);
+        assert_eq!(ContentQualityAnalyzer::count_sentences("   "), 0);
+    }
+
+    #[test]
+    fn test_content_quality_flesch_kincaid() {
+        // Simple text should score higher
+        let score = ContentQualityAnalyzer::flesch_kincaid(100, 5, 150);
+        assert!(score > 50.0);
+
+        // Complex text should score lower
+        let score = ContentQualityAnalyzer::flesch_kincaid(100, 20, 300);
+        assert!(score < 50.0);
+
+        // Zero words should return 0
+        assert_eq!(ContentQualityAnalyzer::flesch_kincaid(0, 0, 0), 0.0);
+    }
+
+    // =========================================================================
+    // WordCountAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_word_count_analyzer_empty() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "WC001"));
+        assert!(findings.iter().any(|f| f.code == "WC002"));
+    }
+
+    #[test]
+    fn test_word_count_analyzer_with_content() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 150;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "A page with some words".to_string(),
+            length: 22,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let wc001 = findings.iter().find(|f| f.code == "WC001").unwrap();
+        assert!(wc001.description.contains("Words: 150"));
+    }
+
+    #[test]
+    fn test_word_count_analyzer_very_low() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 50;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Short".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "WC003"));
+    }
+
+    #[test]
+    fn test_word_count_analyzer_long_sentences() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 100;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "This is a very long sentence that contains many words and should trigger \
+                   the long sentence warning because it has more than twenty five words on average"
+                .to_string(),
+            length: 150,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        assert!(findings.iter().any(|f| f.code == "WC004"));
+    }
+
+    #[test]
+    fn test_word_count_analyzer_normal_content() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 500;
+        page.headings = vec![
+            Heading {
+                level: 1,
+                text: "Main Title".to_string(),
+                length: 10,
+            },
+            Heading {
+                level: 2,
+                text: "Section One".to_string(),
+                length: 11,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        // Should have WC001 but not WC002 or WC003
+        assert!(findings.iter().any(|f| f.code == "WC001"));
+        assert!(!findings.iter().any(|f| f.code == "WC002"));
+        assert!(!findings.iter().any(|f| f.code == "WC003"));
     }
 }

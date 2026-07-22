@@ -5,10 +5,12 @@ use thiserror::Error;
 use url::Url;
 
 pub mod analyzers;
+pub mod backlinks;
 pub mod compare;
 pub mod export;
 pub mod storage;
 
+pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
 pub use storage::{CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError};
 
 pub use analyzers::{

@@ -16,3 +16,9 @@ thiserror.workspace = true
 url.workspace = true
 chrono.workspace = true
 tracing.workspace = true
+dashmap.workspace = true
+parking_lot.workspace = true
+rusqlite = { version = "0.31", features = ["bundled"] }
+uuid = { version = "1", features = ["v4"] }
+scraper.workspace = true
+ego-tree.workspace = true

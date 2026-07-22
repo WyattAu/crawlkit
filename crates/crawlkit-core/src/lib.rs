@@ -4,10 +4,17 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
+pub mod analyzers;
 pub mod storage;
 
 pub use storage::{
     Issue, IssueCategory, IssueFilter, Severity, StorageError, CrawlStats,
+};
+
+pub use analyzers::{
+    AnalysisContext, Analyzer, AnalyzerRegistry, Finding, HttpStatusAnalyzer,
+    RedirectChainAnalyzer, CanonicalUrlValidator, HreflangValidator, SitemapAnalyzer,
+    SitemapEntry, RobotsTxtAnalyzer, RobotsRule, MetaTagAnalyzer, HeadingHierarchyAnalyzer,
 };
 
 pub mod meta;

@@ -5,6 +5,8 @@ use thiserror::Error;
 use url::Url;
 
 pub mod analyzers;
+pub mod compare;
+pub mod export;
 pub mod storage;
 
 pub use storage::{CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError};

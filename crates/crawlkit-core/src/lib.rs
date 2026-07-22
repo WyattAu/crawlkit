@@ -4,6 +4,25 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
+pub mod storage;
+
+pub use storage::{
+    Issue, IssueCategory, IssueFilter, Severity, StorageError, CrawlStats,
+};
+
+pub mod meta;
+pub mod parser;
+
+pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
+pub use parser::{
+    ExtractedForm, ExtractedImage, ExtractedLink, Heading, HtmlParser, ParseError, ParsedPage,
+    ScriptInfo, StructuredData, StyleInfo,
+};
+
+pub mod http;
+pub mod queue;
+pub mod ratelimit;
+
 mod duration_ms {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::time::Duration;
@@ -46,6 +65,14 @@ pub enum CrawlError {
     /// The URL is outside the allowed domain scope.
     #[error("out of scope: {0}")]
     OutOfScope(String),
+
+    /// A storage/database error occurred.
+    #[error("storage error: {0}")]
+    Storage(String),
+
+    /// All retry attempts were exhausted.
+    #[error("max retries exceeded after {0} attempts")]
+    MaxRetriesExceeded(usize),
 }
 
 /// Configuration for a crawl session.

@@ -90,11 +90,9 @@ impl DnsCache {
 
     /// Resolves a domain from a URL.
     pub async fn resolve_url(&self, url: &Url) -> Result<Vec<SocketAddr>, DnsError> {
-        let domain = url
-            .host_str()
-            .ok_or_else(|| DnsError::NoRecords {
-                domain: url.to_string(),
-            })?;
+        let domain = url.host_str().ok_or_else(|| DnsError::NoRecords {
+            domain: url.to_string(),
+        })?;
         self.resolve(domain).await
     }
 
@@ -129,8 +127,10 @@ impl DnsCache {
             })
             .unwrap_or(0);
 
-        self.memory_usage
-            .fetch_add(new_size.saturating_sub(old_size), std::sync::atomic::Ordering::Relaxed);
+        self.memory_usage.fetch_add(
+            new_size.saturating_sub(old_size),
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         self.cache.insert(domain.to_string(), entry);
     }

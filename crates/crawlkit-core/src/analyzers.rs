@@ -2699,8 +2699,7 @@ impl Analyzer for SslCertificateValidator {
                     matched = true;
                 }
                 // Check wildcard match
-                if subject.starts_with("*.") {
-                    let wildcard_domain = &subject[2..];
+                if let Some(wildcard_domain) = subject.strip_prefix("*.") {
                     if let Some(stripped_host) = host.strip_prefix('*') {
                         if stripped_host == wildcard_domain {
                             matched = true;
@@ -2722,8 +2721,7 @@ impl Analyzer for SslCertificateValidator {
                     break;
                 }
                 // Wildcard SAN
-                if san.starts_with("*.") {
-                    let wildcard_domain = &san[2..];
+                if let Some(wildcard_domain) = san.strip_prefix("*.") {
                     let parts: Vec<&str> = host.split('.').collect();
                     if parts.len() > 1 {
                         let root = parts[1..].join(".");
@@ -3567,19 +3565,61 @@ impl Analyzer for SocialMediaAnalyzer {
 // ---------------------------------------------------------------------------
 
 const PERSON_INDICATORS: &[&str] = &[
-    "mr.", "mrs.", "ms.", "dr.", "prof.", "sir", "lord", "president", "ceo", "cto",
-    "founder", "author", "by", "written by", "edited by", "interview with",
+    "mr.",
+    "mrs.",
+    "ms.",
+    "dr.",
+    "prof.",
+    "sir",
+    "lord",
+    "president",
+    "ceo",
+    "cto",
+    "founder",
+    "author",
+    "by",
+    "written by",
+    "edited by",
+    "interview with",
 ];
 
 const ORG_INDICATORS: &[&str] = &[
-    "inc.", "llc", "ltd.", "corp.", "corporation", "company", "organization",
-    "university", "institute", "foundation", "association", "group", "partners",
+    "inc.",
+    "llc",
+    "ltd.",
+    "corp.",
+    "corporation",
+    "company",
+    "organization",
+    "university",
+    "institute",
+    "foundation",
+    "association",
+    "group",
+    "partners",
 ];
 
 const LOCATION_INDICATORS: &[&str] = &[
-    "city", "state", "country", "province", "district", "region", "street",
-    "avenue", "boulevard", "road", "lane", "square", "park", "mountain",
-    "river", "lake", "island", "bay", "coast", "valley",
+    "city",
+    "state",
+    "country",
+    "province",
+    "district",
+    "region",
+    "street",
+    "avenue",
+    "boulevard",
+    "road",
+    "lane",
+    "square",
+    "park",
+    "mountain",
+    "river",
+    "lake",
+    "island",
+    "bay",
+    "coast",
+    "valley",
 ];
 
 pub struct EntityAnalyzer;
@@ -3597,15 +3637,14 @@ impl EntityAnalyzer {
                 let words: Vec<&str> = text.split_whitespace().collect();
                 let indicator_word = indicator.trim_end_matches('.');
                 for (i, word) in words.iter().enumerate() {
-                    let clean: String = word
-                        .chars()
-                        .filter(|c| c.is_alphanumeric())
-                        .collect();
+                    let clean: String = word.chars().filter(|c| c.is_alphanumeric()).collect();
                     if clean.to_lowercase() == indicator_word && i + 1 < words.len() {
                         let mut name_parts = Vec::new();
                         for w in words.iter().skip(i + 1) {
-                            let w_clean: String =
-                                w.chars().filter(|c| c.is_alphanumeric() || *c == '-').collect();
+                            let w_clean: String = w
+                                .chars()
+                                .filter(|c| c.is_alphanumeric() || *c == '-')
+                                .collect();
                             let w_lower = w_clean.to_lowercase();
                             if w_clean
                                 .chars()
@@ -3641,7 +3680,7 @@ impl EntityAnalyzer {
         let lower = text.to_lowercase();
         for indicator in ORG_INDICATORS {
             if lower.contains(indicator) {
-                for sentence in text.split(|c| c == '.' || c == '!' || c == '?') {
+                for sentence in text.split(['.', '!', '?']) {
                     let words: Vec<&str> = sentence.split_whitespace().collect();
                     for (i, word) in words.iter().enumerate() {
                         if word.to_lowercase().contains(indicator) {
@@ -3669,7 +3708,7 @@ impl EntityAnalyzer {
         let lower = text.to_lowercase();
         for indicator in LOCATION_INDICATORS {
             if lower.contains(indicator) {
-                for sentence in text.split(|c| c == '.' || c == '!' || c == '?') {
+                for sentence in text.split(['.', '!', '?']) {
                     let words: Vec<&str> = sentence.split_whitespace().collect();
                     for (i, word) in words.iter().enumerate() {
                         if word.to_lowercase().contains(indicator) {
@@ -3716,16 +3755,56 @@ impl EntityAnalyzer {
 
     fn analyze_sentiment(text: &str) -> (f64, &'static str) {
         let positive_words = [
-            "good", "great", "excellent", "amazing", "wonderful", "best", "love",
-            "happy", "fantastic", "superb", "outstanding", "perfect", "beautiful",
-            "brilliant", "awesome", "nice", "pleasant", "delightful", "impressive",
-            "remarkable", "magnificent", "splendid", "fabulous", "terrific",
+            "good",
+            "great",
+            "excellent",
+            "amazing",
+            "wonderful",
+            "best",
+            "love",
+            "happy",
+            "fantastic",
+            "superb",
+            "outstanding",
+            "perfect",
+            "beautiful",
+            "brilliant",
+            "awesome",
+            "nice",
+            "pleasant",
+            "delightful",
+            "impressive",
+            "remarkable",
+            "magnificent",
+            "splendid",
+            "fabulous",
+            "terrific",
         ];
         let negative_words = [
-            "bad", "terrible", "horrible", "awful", "worst", "hate", "sad",
-            "ugly", "poor", "disappointing", "boring", "annoying", "frustrating",
-            "difficult", "broken", "failed", "error", "wrong", "problem", "issue",
-            "bug", "fail", "crash", "dead",
+            "bad",
+            "terrible",
+            "horrible",
+            "awful",
+            "worst",
+            "hate",
+            "sad",
+            "ugly",
+            "poor",
+            "disappointing",
+            "boring",
+            "annoying",
+            "frustrating",
+            "difficult",
+            "broken",
+            "failed",
+            "error",
+            "wrong",
+            "problem",
+            "issue",
+            "bug",
+            "fail",
+            "crash",
+            "dead",
         ];
         let words: Vec<String> = text
             .split_whitespace()
@@ -3865,9 +3944,7 @@ impl Analyzer for EntityAnalyzer {
             category: IssueCategory::Content,
             code: "ENTITY005".to_string(),
             title: "Content sentiment analysis".to_string(),
-            description: format!(
-                "Sentiment score: {sentiment_score} ({sentiment_label})."
-            ),
+            description: format!("Sentiment score: {sentiment_score} ({sentiment_label})."),
             url: url.clone(),
             recommendation: if sentiment_label == "negative" {
                 "Content has a negative sentiment tone. Consider revising for a more \
@@ -3958,9 +4035,7 @@ impl EnhancedReadabilityAnalyzer {
         if words == 0 || sentences == 0 {
             return 0.0;
         }
-        0.39 * (words as f64 / sentences as f64)
-            + 11.8 * (syllables as f64 / words as f64)
-            - 15.59
+        0.39 * (words as f64 / sentences as f64) + 11.8 * (syllables as f64 / words as f64) - 15.59
     }
 
     fn coleman_liau_index(letters: usize, words: usize, sentences: usize) -> f64 {
@@ -3972,17 +4047,11 @@ impl EnhancedReadabilityAnalyzer {
         0.0588 * l - 0.296 * s - 15.8
     }
 
-    fn automated_readability_index(
-        characters: usize,
-        words: usize,
-        sentences: usize,
-    ) -> f64 {
+    fn automated_readability_index(characters: usize, words: usize, sentences: usize) -> f64 {
         if words == 0 || sentences == 0 {
             return 0.0;
         }
-        4.71 * (characters as f64 / words as f64)
-            + 0.5 * (words as f64 / sentences as f64)
-            - 21.43
+        4.71 * (characters as f64 / words as f64) + 0.5 * (words as f64 / sentences as f64) - 21.43
     }
 
     fn gunning_fog_index(words: usize, sentences: usize, complex_words: usize) -> f64 {
@@ -4111,8 +4180,7 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
             description: format!("Index: {cl_index:.1}"),
             url: url.clone(),
             recommendation: if cl_index > 12.0 {
-                "High Coleman-Liau index. Consider reducing sentence complexity."
-                    .to_string()
+                "High Coleman-Liau index. Consider reducing sentence complexity.".to_string()
             } else {
                 "Readability is within acceptable range.".to_string()
             },
@@ -4126,8 +4194,7 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
             description: format!("ARI: {ari:.1}"),
             url: url.clone(),
             recommendation: if ari > 12.0 {
-                "High ARI score. Content may be difficult for general audiences."
-                    .to_string()
+                "High ARI score. Content may be difficult for general audiences.".to_string()
             } else {
                 "Readability is within acceptable range.".to_string()
             },
@@ -4156,14 +4223,10 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
             category: IssueCategory::Content,
             code: "READ005".to_string(),
             title: "Flesch Reading Ease score".to_string(),
-            description: format!(
-                "Score: {fre:.1}/100 ({})",
-                Self::reading_ease_label(fre)
-            ),
+            description: format!("Score: {fre:.1}/100 ({})", Self::reading_ease_label(fre)),
             url: url.clone(),
             recommendation: if fre < 30.0 {
-                "Very difficult to read. Aim for a score of 60+ for general audiences."
-                    .to_string()
+                "Very difficult to read. Aim for a score of 60+ for general audiences.".to_string()
             } else if fre < 50.0 {
                 "Fairly difficult. Consider simplifying language.".to_string()
             } else if fre < 70.0 {
@@ -4228,7 +4291,10 @@ impl KeywordAnalyzer {
             .collect()
     }
 
-    fn compute_tfidf(tf: &HashMap<String, f64>, corpus_tf: &HashMap<String, f64>) -> HashMap<String, f64> {
+    fn compute_tfidf(
+        tf: &HashMap<String, f64>,
+        corpus_tf: &HashMap<String, f64>,
+    ) -> HashMap<String, f64> {
         let total_docs = corpus_tf.len().max(1) as f64;
         tf.iter()
             .map(|(term, tf_val)| {
@@ -4252,9 +4318,7 @@ impl KeywordAnalyzer {
             *freq.entry(token.clone()).or_default() += 1;
         }
         freq.into_iter()
-            .map(|(term, count)| {
-                (term, count as f64 / total_words as f64 * 100.0)
-            })
+            .map(|(term, count)| (term, count as f64 / total_words as f64 * 100.0))
             .collect()
     }
 
@@ -4275,8 +4339,7 @@ impl KeywordAnalyzer {
             for j in (i + 1)..end {
                 let mut pair = [tokens[i].clone(), tokens[j].clone()];
                 pair.sort();
-                *pairs.entry((pair[0].clone(), pair[1].clone()))
-                    .or_default() += 1;
+                *pairs.entry((pair[0].clone(), pair[1].clone())).or_default() += 1;
             }
         }
         let mut result: Vec<((String, String), usize)> = pairs.into_iter().collect();
@@ -4389,10 +4452,7 @@ impl Analyzer for KeywordAnalyzer {
                 category: IssueCategory::Content,
                 code: "KW003".to_string(),
                 title: "Prominent keywords detected".to_string(),
-                description: format!(
-                    "Keywords with density >= 1.5%: {}.",
-                    display.join(", ")
-                ),
+                description: format!("Keywords with density >= 1.5%: {}.", display.join(", ")),
                 url: url.clone(),
                 recommendation: if prominent.iter().any(|(_, d)| *d > 3.0) {
                     "Some keywords exceed 3% density. This may be flagged as keyword \
@@ -4558,13 +4618,17 @@ impl Analyzer for EcommerceSignalsAnalyzer {
                 }
             }
 
-            if sd.r#type.as_deref() == Some("Offer") || sd.r#type.as_deref() == Some("AggregateOffer") {
+            if sd.r#type.as_deref() == Some("Offer")
+                || sd.r#type.as_deref() == Some("AggregateOffer")
+            {
                 if let Some(price) = Self::extract_price(&sd.data) {
                     prices_found.push(price);
                 }
             }
 
-            if sd.r#type.as_deref() == Some("Review") || sd.r#type.as_deref() == Some("AggregateRating") {
+            if sd.r#type.as_deref() == Some("Review")
+                || sd.r#type.as_deref() == Some("AggregateRating")
+            {
                 reviews_found.extend(Self::detect_reviews(sd));
             }
         }
@@ -4606,10 +4670,7 @@ impl Analyzer for EcommerceSignalsAnalyzer {
                 category: IssueCategory::Schema,
                 code: "ECOM003".to_string(),
                 title: "Availability information detected".to_string(),
-                description: format!(
-                    "Availability: {}.",
-                    availability_found.join(", ")
-                ),
+                description: format!("Availability: {}.", availability_found.join(", ")),
                 url: url.clone(),
                 recommendation: "Availability status should match the actual product state."
                     .to_string(),
@@ -4820,26 +4881,27 @@ impl Analyzer for InternationalSeoAnalyzer {
         }
 
         let locale_in_url = Self::detect_locale_from_url(url);
-        if locale_in_url.is_none() && ctx.page.meta.hreflang.is_empty() {
-            if ctx.page.html_lang.is_some() {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Seo,
-                    code: "ISEO004".to_string(),
-                    title: "Single-language page without hreflang".to_string(),
-                    description: "Page has a lang attribute but no hreflang tags. If this \
+        if locale_in_url.is_none()
+            && ctx.page.meta.hreflang.is_empty()
+            && ctx.page.html_lang.is_some()
+        {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "ISEO004".to_string(),
+                title: "Single-language page without hreflang".to_string(),
+                description: "Page has a lang attribute but no hreflang tags. If this \
                                   site serves multiple languages, add hreflang annotations."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "For multilingual sites, add hreflang tags to all language \
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "For multilingual sites, add hreflang tags to all language \
                                      variants of each page."
-                        .to_string(),
-                });
-            }
+                    .to_string(),
+            });
         }
 
         if let Some(canonical) = &ctx.page.meta.canonical {
-            if let Some(&ref hop_from) = self.known_hrefs.get(url) {
+            if let Some(hop_from) = self.known_hrefs.get(url) {
                 for hop_url in hop_from {
                     if let Some(target_canonical) = self.known_hrefs.get(hop_url.as_str()) {
                         if !target_canonical.is_empty() {
@@ -4868,8 +4930,7 @@ impl Analyzer for InternationalSeoAnalyzer {
             }
         }
 
-        let is_multilang =
-            Self::detect_multilang_content(hreflang_tags, &ctx.page.html_lang);
+        let is_multilang = Self::detect_multilang_content(hreflang_tags, &ctx.page.html_lang);
         if is_multilang {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -7690,7 +7751,9 @@ mod tests {
             },
         ];
         let topics = EntityAnalyzer::detect_topics(&headings, 500);
-        assert!(topics.iter().any(|t| t.contains("rust") || t.contains("programming")));
+        assert!(topics
+            .iter()
+            .any(|t| t.contains("rust") || t.contains("programming")));
     }
 
     #[test]
@@ -7713,9 +7776,8 @@ mod tests {
 
     #[test]
     fn test_entity_sentiment_neutral() {
-        let (score, label) = EntityAnalyzer::analyze_sentiment(
-            "The page contains information about the topic.",
-        );
+        let (score, label) =
+            EntityAnalyzer::analyze_sentiment("The page contains information about the topic.");
         assert_eq!(label, "neutral");
         assert!(score >= -0.05 && score <= 0.05);
     }
@@ -7813,25 +7875,55 @@ mod tests {
 
     #[test]
     fn test_readability_grade_label() {
-        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(0.5), "kindergarten");
-        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(4.0), "elementary school");
-        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(7.0), "middle school");
-        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(10.0), "high school");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::grade_label(0.5),
+            "kindergarten"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::grade_label(4.0),
+            "elementary school"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::grade_label(7.0),
+            "middle school"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::grade_label(10.0),
+            "high school"
+        );
         assert_eq!(EnhancedReadabilityAnalyzer::grade_label(14.0), "college");
-        assert_eq!(EnhancedReadabilityAnalyzer::grade_label(18.0), "postgraduate");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::grade_label(18.0),
+            "postgraduate"
+        );
     }
 
     #[test]
     fn test_readability_ease_label() {
-        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(95.0), "very easy");
-        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(85.0), "easy");
-        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(75.0), "fairly easy");
-        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(65.0), "standard");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(95.0),
+            "very easy"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(85.0),
+            "easy"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(75.0),
+            "fairly easy"
+        );
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(65.0),
+            "standard"
+        );
         assert_eq!(
             EnhancedReadabilityAnalyzer::reading_ease_label(55.0),
             "fairly difficult"
         );
-        assert_eq!(EnhancedReadabilityAnalyzer::reading_ease_label(35.0), "difficult");
+        assert_eq!(
+            EnhancedReadabilityAnalyzer::reading_ease_label(35.0),
+            "difficult"
+        );
         assert_eq!(
             EnhancedReadabilityAnalyzer::reading_ease_label(20.0),
             "very difficult"

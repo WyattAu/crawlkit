@@ -266,9 +266,9 @@ async fn run_crawl(
 ) -> Result<()> {
     use crawlkit_core::analyzers::AnalyzerRegistry;
     use crawlkit_core::http::HttpClient;
-    use crawlkit_core::HtmlParser;
     use crawlkit_core::queue::{Priority, UrlQueue};
     use crawlkit_core::ratelimit::RateLimiter;
+    use crawlkit_core::HtmlParser;
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
@@ -336,8 +336,7 @@ async fn run_crawl(
     let analyzer_registry = AnalyzerRegistry::new(&crawlkit_core::CrawlConfig::default());
 
     // Seed the queue
-    let seed_url = url::Url::parse(url)
-        .with_context(|| format!("Invalid URL: {}", url))?;
+    let seed_url = url::Url::parse(url).with_context(|| format!("Invalid URL: {}", url))?;
     {
         let mut q = queue.lock().await;
         q.push(seed_url.clone(), 0, Priority::HIGH);
@@ -369,17 +368,16 @@ async fn run_crawl(
         visited.insert(entry.url.to_string());
 
         // Rate limit
-        let _ = rate_limiter.acquire(entry.url.host_str().unwrap_or("")).await;
+        let _ = rate_limiter
+            .acquire(entry.url.host_str().unwrap_or(""))
+            .await;
 
         // Update progress with queue size
         let queue_len = {
             let q = queue.lock().await;
             q.len()
         };
-        pb.set_message(format!(
-            "[q={queue_len}] Crawling: {}",
-            entry.url
-        ));
+        pb.set_message(format!("[q={queue_len}] Crawling: {}", entry.url));
 
         // Fetch
         let start = std::time::Instant::now();
@@ -435,7 +433,11 @@ async fn run_crawl(
             load_time_ms: Some(fetch_time.as_millis() as u64),
             body_size: Some(result.body.len()),
             fetched_at: chrono::Utc::now(),
-            links: parsed.links.iter().filter_map(|l| url::Url::parse(&l.href).ok()).collect(),
+            links: parsed
+                .links
+                .iter()
+                .filter_map(|l| url::Url::parse(&l.href).ok())
+                .collect(),
         };
 
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {

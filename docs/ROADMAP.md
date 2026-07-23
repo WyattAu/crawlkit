@@ -476,4 +476,123 @@ All Phase 8 code must comply with `.adrs/coding-standards.md`.
 
 ---
 
+## Phase 9: v1.0 Release Preparation (Week 23-24)
+
+**Goal:** Production readiness, documentation, and v1.0 release.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 9.1 | Cross-platform binary builds | All phases | Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64) |
+| 9.2 | Binary size optimization | 9.1 | All binaries < 10MB |
+| 9.3 | Documentation overhaul | 9.1 | README, API docs, architecture docs complete |
+| 9.4 | Examples enhancement | 9.1 | >= 5 runnable examples |
+| 9.5 | Performance benchmarks | 9.1 | Criterion benchmarks pass all targets |
+| 9.6 | Security audit | 9.1 | No critical vulnerabilities |
+| 9.7 | Beta testing | 9.1 | >= 3 external testers |
+| 9.8 | Changelog finalization | 9.1 | Complete v1.0.0 changelog |
+| 9.9 | crates.io publish | 9.1 | Published to crates.io |
+| 9.10 | GitHub Release | 9.1 | Release with binaries and checksums |
+
+---
+
+## Phase 10: v1.1 - Playwright Integration (Week 25-28)
+
+**Goal:** JavaScript rendering and dynamic analysis.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 10.1 | Playwright binary detection | 9.1 | Detects Playwright installation |
+| 10.2 | Browser context isolation | 10.1 | Memory isolation per crawl |
+| 10.3 | JS render decision engine | 10.1 | Auto-detects SPA frameworks |
+| 10.4 | Console error capture | 10.1 | Captures WASM/JS errors |
+| 10.5 | Network request tracking | 10.1 | Records all requests during render |
+| 10.6 | Resource isolation | 10.1 | Per-crawl memory/CPU budgets |
+| 10.7 | WASM runtime analyzer | 10.1 | Dynamic WASM error detection |
+| 10.8 | WASM performance analyzer | 10.1 | Measures WASM impact on Web Vitals |
+
+---
+
+## Phase 11: v1.2 - External Integrations (Week 29-32)
+
+**Goal:** Backlink APIs, RUM data, and external data sources.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 11.1 | Ahrefs API integration | 9.1 | Fetch backlink data |
+| 11.2 | Majestic API integration | 9.1 | Fetch backlink data |
+| 11.3 | Google Search Console integration | 9.1 | Fetch own-site link data |
+| 11.4 | Link graph visualization | 9.1 | DOT export, HTML interactive |
+| 11.5 | Google Analytics RUM import | 9.1 | Fetch page performance data |
+| 11.6 | CrUX field data integration | 9.1 | Fetch Core Web Vitals |
+| 11.7 | Merged lab + field report | 11.5, 11.6 | Side-by-side comparison |
+
+---
+
+## Phase 12: v1.3 - Plugin System (Week 33-36)
+
+**Goal:** Extensible analyzer ecosystem.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 12.1 | Native plugin loading | 9.1 | Load .so/.dylib plugins |
+| 12.2 | WASM plugin loading | 9.1 | Load .wasm plugins |
+| 12.3 | Plugin API documentation | 12.1 | Complete plugin development guide |
+| 12.4 | Example plugins | 12.1 | >= 3 example plugins |
+| 12.5 | Plugin marketplace | 12.1 | Community plugin registry |
+
+---
+
+## Phase 13: v1.4 - Advanced Features (Week 37-40)
+
+**Goal:** Monitoring dashboard, scheduled crawls, and advanced analytics.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 13.1 | Monitoring dashboard | 9.1 | Web UI for crawl monitoring |
+| 13.2 | Scheduled crawls | 9.1 | Cron-style scheduling |
+| 13.3 | Alert system | 9.1 | Email/webhook alerts |
+| 13.4 | Historical trends | 9.1 | Track metrics over time |
+| 13.5 | Custom report builder | 9.1 | User-defined report templates |
+
+---
+
+## Phase 14: v2.0 - Enterprise Features (Week 41-48)
+
+**Goal:** Enterprise-grade features and compliance.
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 14.1 | Multi-tenant support | 9.1 | Isolated crawl environments |
+| 14.2 | RBAC | 9.1 | Role-based access control |
+| 14.3 | Audit compliance | 9.1 | SOC2, GDPR compliance |
+| 14.4 | Enterprise SSO | 9.1 | SAML/OIDC integration |
+| 14.5 | SLA monitoring | 9.1 | Uptime and performance SLAs |
+
+---
+
+## Success Metrics
+
+| Metric | v1.0 Target | v2.0 Target |
+|--------|-------------|-------------|
+| Pages/sec | >= 50 | >= 100 |
+| Memory (10k pages) | < 500MB | < 300MB |
+| Test coverage | >= 90% | >= 95% |
+| Documentation | Complete | Enterprise-grade |
+| Binary size | < 10MB | < 15MB |
+| Startup time | < 100ms | < 50ms |
+
+---
+
 *Last updated: 2026-07-23*

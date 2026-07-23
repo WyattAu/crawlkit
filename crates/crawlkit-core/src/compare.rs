@@ -44,11 +44,20 @@ pub enum ChangeKind {
     /// HTTP status code changed.
     StatusChanged { from: u16, to: u16 },
     /// Page title changed.
-    TitleChanged { from: Option<String>, to: Option<String> },
+    TitleChanged {
+        from: Option<String>,
+        to: Option<String>,
+    },
     /// Word count changed significantly (>10% or >100 words).
-    ContentChanged { from: Option<usize>, to: Option<usize> },
+    ContentChanged {
+        from: Option<usize>,
+        to: Option<usize>,
+    },
     /// Body size changed significantly (>10%).
-    SizeChanged { from: Option<usize>, to: Option<usize> },
+    SizeChanged {
+        from: Option<usize>,
+        to: Option<usize>,
+    },
 }
 
 /// A single diff entry.
@@ -388,7 +397,14 @@ mod tests {
     use chrono::Utc;
     use url::Url;
 
-    fn make_page(id: &str, url: &str, status: u16, title: &str, words: usize, size: usize) -> PageData {
+    fn make_page(
+        id: &str,
+        url: &str,
+        status: u16,
+        title: &str,
+        words: usize,
+        size: usize,
+    ) -> PageData {
         PageData {
             id: id.into(),
             url: Url::parse(url).unwrap(),
@@ -411,7 +427,14 @@ mod tests {
         let pages = vec![
             make_page("p1", "https://example.com/", 200, "Home", 1000, 4096),
             make_page("p2", "https://example.com/about", 200, "About", 500, 2048),
-            make_page("p3", "https://example.com/contact", 200, "Contact", 300, 1024),
+            make_page(
+                "p3",
+                "https://example.com/contact",
+                200,
+                "Contact",
+                300,
+                1024,
+            ),
         ];
         storage.insert_pages(&crawl_id, &pages).unwrap();
         storage.finish_crawl(&crawl_id, 3, 0).unwrap();
@@ -421,10 +444,17 @@ mod tests {
         let storage = Storage::new(path).unwrap();
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         let pages = vec![
-            make_page("p1", "https://example.com/", 200, "Home", 1000, 4096),       // unchanged
-            make_page("p2", "https://example.com/about", 301, "About v2", 600, 2500), // status + title + content changed
+            make_page("p1", "https://example.com/", 200, "Home", 1000, 4096), // unchanged
+            make_page(
+                "p2",
+                "https://example.com/about",
+                301,
+                "About v2",
+                600,
+                2500,
+            ), // status + title + content changed
             // p3 removed
-            make_page("p4", "https://example.com/blog", 200, "Blog", 800, 3072),    // new page
+            make_page("p4", "https://example.com/blog", 200, "Blog", 800, 3072), // new page
         ];
         storage.insert_pages(&crawl_id, &pages).unwrap();
         storage.finish_crawl(&crawl_id, 3, 0).unwrap();
@@ -475,9 +505,14 @@ mod tests {
         // Create identical databases
         let storage_a = Storage::new(&path_a).unwrap();
         let crawl_id = storage_a.start_crawl("https://example.com", None).unwrap();
-        let pages = vec![
-            make_page("p1", "https://example.com/", 200, "Home", 1000, 4096),
-        ];
+        let pages = vec![make_page(
+            "p1",
+            "https://example.com/",
+            200,
+            "Home",
+            1000,
+            4096,
+        )];
         storage_a.insert_pages(&crawl_id, &pages).unwrap();
         storage_a.finish_crawl(&crawl_id, 1, 0).unwrap();
 
@@ -576,7 +611,7 @@ mod tests {
     fn test_significant_content_change() {
         assert!(!significant_content_change(&Some(1000), &Some(1050))); // +5% < 100
         assert!(significant_content_change(&Some(1000), &Some(1200))); // +20%
-        assert!(significant_content_change(&Some(100), &Some(50)));    // -50%
+        assert!(significant_content_change(&Some(100), &Some(50))); // -50%
         assert!(significant_content_change(&None, &Some(100)));
         assert!(significant_content_change(&Some(100), &None));
         assert!(!significant_content_change(&None, &None));

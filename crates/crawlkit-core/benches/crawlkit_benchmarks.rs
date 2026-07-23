@@ -3,14 +3,14 @@ use std::time::Duration;
 use url::Url;
 
 use crawlkit_core::analyzers::{
-    AnalysisContext, AnalyzerRegistry, HeadingHierarchyAnalyzer, HttpStatusAnalyzer,
-    LinkAnalyzer, MetaTagAnalyzer,
+    AnalysisContext, AnalyzerRegistry, HeadingHierarchyAnalyzer, HttpStatusAnalyzer, LinkAnalyzer,
+    MetaTagAnalyzer,
 };
+use crawlkit_core::meta::MetaTags;
 use crawlkit_core::parser::{HtmlParser, ParsedPage};
 use crawlkit_core::queue::{Priority, ScopeConfig, UrlQueue};
 use crawlkit_core::storage::Storage;
 use crawlkit_core::{Analyzer, CrawlConfig};
-use crawlkit_core::meta::MetaTags;
 
 fn make_parsed_page(url: &str, word_count: usize) -> ParsedPage {
     ParsedPage {

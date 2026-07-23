@@ -151,8 +151,7 @@ impl Analyzer for AiContentStructureAnalyzer {
                     prioritize fresh, dated content."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Add publication date in <time> tag or JSON-LD schema."
-                    .to_string(),
+                recommendation: "Add publication date in <time> tag or JSON-LD schema.".to_string(),
             });
         }
 
@@ -173,8 +172,7 @@ impl Analyzer for AiContentStructureAnalyzer {
                     cite authoritative, attributed sources."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Add author name in JSON-LD schema or visible byline."
-                    .to_string(),
+                recommendation: "Add author name in JSON-LD schema or visible byline.".to_string(),
             });
         }
 
@@ -257,8 +255,7 @@ impl Analyzer for AiCitationEligibilityAnalyzer {
                     legitimacy to AI engines."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Add og:title, og:description, and og:image meta tags."
-                    .to_string(),
+                recommendation: "Add og:title, og:description, and og:image meta tags.".to_string(),
             });
         }
 
@@ -304,13 +301,7 @@ impl Analyzer for AiAnswerBoxAnalyzer {
                 .unwrap_or(false)
         });
 
-        if !has_faq
-            && ctx
-                .page
-                .headings
-                .iter()
-                .any(|h| h.text.contains('?'))
-        {
+        if !has_faq && ctx.page.headings.iter().any(|h| h.text.contains('?')) {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Seo,

@@ -201,7 +201,8 @@ fn main() -> Result<()> {
     println!("Parsed page: {}", parsed.url);
     println!("  Title: {:?}", parsed.meta.title);
     println!("  Word count: {}", parsed.word_count);
-    println!("  Links: {} total, {} external\n",
+    println!(
+        "  Links: {} total, {} external\n",
         parsed.links.len(),
         parsed.links.iter().filter(|l| l.is_external).count(),
     );
@@ -229,9 +230,7 @@ fn main() -> Result<()> {
             for finding in &findings {
                 println!(
                     "[{:?}] {} — {}",
-                    finding.severity,
-                    finding.code,
-                    finding.title
+                    finding.severity, finding.code, finding.title
                 );
                 println!("  {}", finding.description);
                 println!("  Fix: {}\n", finding.recommendation);

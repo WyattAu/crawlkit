@@ -57,12 +57,7 @@ impl AuditTrail {
     }
 
     /// Record an audit event.
-    pub fn record(
-        &self,
-        event_type: AuditEventType,
-        actor: &str,
-        details: &str,
-    ) -> AuditEvent {
+    pub fn record(&self, event_type: AuditEventType, actor: &str, details: &str) -> AuditEvent {
         let mut events = self.events.lock();
         let previous_hash = events
             .last()

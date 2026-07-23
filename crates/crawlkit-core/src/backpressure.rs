@@ -9,6 +9,7 @@ use tokio::sync::{mpsc, Semaphore};
 /// preventing memory explosion and maintaining system stability.
 pub struct BackpressureController {
     semaphore: Arc<Semaphore>,
+    #[allow(dead_code)]
     bounded_tx: Option<mpsc::Sender<()>>,
     active_tasks: Arc<AtomicUsize>,
     shutdown: Arc<AtomicBool>,

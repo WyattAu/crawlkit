@@ -13,9 +13,7 @@ use crawlkit_core::compare::{diff_to_json, diff_to_markdown};
 use crawlkit_core::export::{
     export_csv, export_html, export_json, export_markdown, CsvColumnSelector,
 };
-use crawlkit_core::storage::{
-    Issue, IssueCategory, PageData, Severity, Storage,
-};
+use crawlkit_core::storage::{Issue, IssueCategory, PageData, Severity, Storage};
 use std::path::Path;
 use url::Url;
 

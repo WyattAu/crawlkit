@@ -297,7 +297,7 @@ async fn start_crawl(
 
     state
         .storage
-        .start_crawl(&start_url.to_string(), Some(&config_json))
+        .start_crawl(start_url.as_ref(), Some(&config_json))
         .map_err(|e| ApiError::Internal(format!("Failed to start crawl: {e}")))?;
 
     let result = CrawlResult {
@@ -384,8 +384,8 @@ async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
 async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) {
     use crawlkit_core::analyzers::AnalyzerRegistry;
     use crawlkit_core::http::HttpClient;
-    use crawlkit_core::HtmlParser;
     use crawlkit_core::queue::{Priority, UrlQueue};
+    use crawlkit_core::HtmlParser;
 
     let max_pages = config.max_pages;
     let http_client = match HttpClient::from_crawl_config(&config) {
@@ -400,12 +400,14 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         }
     };
 
-    let queue = Arc::new(tokio::sync::Mutex::new(UrlQueue::from_crawl_config(&config)));
+    let queue = Arc::new(tokio::sync::Mutex::new(UrlQueue::from_crawl_config(
+        &config,
+    )));
     let analyzer_registry = AnalyzerRegistry::new(&config);
 
     // Seed the queue
     {
-        let mut q = queue.lock().await;
+        let q = queue.lock().await;
         q.push(config.start_url.clone(), 0, Priority::HIGH);
     }
 
@@ -415,7 +417,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
 
     while pages_crawled < max_pages {
         let entry = {
-            let mut q = queue.lock().await;
+            let q = queue.lock().await;
             q.pop()
         };
 
@@ -514,7 +516,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             } else {
                 Priority::LOW
             };
-            let mut q = queue.lock().await;
+            let q = queue.lock().await;
             q.push(link_url, entry.depth + 1, priority);
         }
     }
@@ -530,9 +532,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         result.completed_at = Some(Utc::now());
     }
 
-    tracing::info!(
-        "Crawl {crawl_id} completed: {pages_crawled} pages, {total_issues} issues"
-    );
+    tracing::info!("Crawl {crawl_id} completed: {pages_crawled} pages, {total_issues} issues");
 }
 
 // ---------------------------------------------------------------------------
@@ -548,8 +548,8 @@ async fn main() -> anyhow::Result<()> {
         )
         .init();
 
-    let db_path = std::env::var("CRAWLKIT_DB_PATH")
-        .unwrap_or_else(|_| "crawlkit-api.db".to_string());
+    let db_path =
+        std::env::var("CRAWLKIT_DB_PATH").unwrap_or_else(|_| "crawlkit-api.db".to_string());
 
     let storage = Storage::new(std::path::Path::new(&db_path))
         .map_err(|e| anyhow::anyhow!("Failed to open storage: {e}"))?;
@@ -578,10 +578,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/api/v1/crawls", post(start_crawl).get(list_crawls))
         .route("/api/v1/crawls/{crawl_id}", get(get_crawl_status))
-        .route(
-            "/api/v1/crawls/{crawl_id}/stats",
-            get(get_crawl_stats),
-        )
+        .route("/api/v1/crawls/{crawl_id}/stats", get(get_crawl_stats))
         .route("/api/v1/keys", post(create_api_key).get(list_api_keys))
         .layer(middleware::from_fn_with_state(
             state.clone(),

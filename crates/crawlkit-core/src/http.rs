@@ -502,10 +502,7 @@ impl HttpClient {
     ///
     /// Returns the response metadata (status, headers) and a streaming body.
     /// The caller can read chunks from the stream.
-    pub async fn fetch_reader(
-        &self,
-        url: &Url,
-    ) -> Result<FetchStreamReader, CrawlError> {
+    pub async fn fetch_reader(&self, url: &Url) -> Result<FetchStreamReader, CrawlError> {
         let start = Instant::now();
         let user_agent = self.config.user_agent.next();
 
@@ -532,19 +529,17 @@ impl HttpClient {
         let final_url = response.url().clone();
         let max_body_size = self.config.max_body_size;
 
-        let stream = response
-            .bytes_stream()
-            .take_while(move |result| {
-                let should_continue = match result {
-                    Ok(_bytes) => {
-                        // Simple heuristic: stop if we've likely exceeded max body size
-                        // This is approximate since we don't track total here
-                        true
-                    }
-                    Err(_) => false,
-                };
-                async move { should_continue }
-            });
+        let stream = response.bytes_stream().take_while(move |result| {
+            let should_continue = match result {
+                Ok(_bytes) => {
+                    // Simple heuristic: stop if we've likely exceeded max body size
+                    // This is approximate since we don't track total here
+                    true
+                }
+                Err(_) => false,
+            };
+            async move { should_continue }
+        });
 
         Ok(FetchStreamReader {
             final_url,

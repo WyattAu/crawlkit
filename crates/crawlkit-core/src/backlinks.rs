@@ -415,10 +415,16 @@ mod tests {
 
         // Scores should sum to ~1.0
         let total = score_a + score_b + score_c;
-        assert!((total - 1.0).abs() < 0.01, "scores should sum to ~1.0, got {total}");
+        assert!(
+            (total - 1.0).abs() < 0.01,
+            "scores should sum to ~1.0, got {total}"
+        );
 
         // C should have the highest score in this chain
-        assert!(score_c > score_a, "C ({score_c}) should rank higher than A ({score_a})");
+        assert!(
+            score_c > score_a,
+            "C ({score_c}) should rank higher than A ({score_a})"
+        );
     }
 
     #[test]
@@ -526,10 +532,14 @@ mod tests {
         let mut analyzer = BacklinkAnalyzer::new();
         analyzer.add_link("https://example.com/", "https://example.com/about");
         // /orphan has no inbound links
-        analyzer.all_urls.insert("https://example.com/orphan".to_string());
+        analyzer
+            .all_urls
+            .insert("https://example.com/orphan".to_string());
 
         let summary = analyzer.summarize();
-        assert!(summary.orphan_pages.contains(&"https://example.com/orphan".to_string()));
+        assert!(summary
+            .orphan_pages
+            .contains(&"https://example.com/orphan".to_string()));
     }
 
     #[test]
@@ -554,7 +564,10 @@ mod tests {
 
         let scores = analyzer.compute_pagerank(0.85, 20);
         let score = scores.get("https://solo.com").unwrap();
-        assert!((*score - 1.0).abs() < 0.01, "single node should have score ~1.0");
+        assert!(
+            (*score - 1.0).abs() < 0.01,
+            "single node should have score ~1.0"
+        );
     }
 
     #[test]

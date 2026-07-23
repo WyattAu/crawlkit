@@ -661,7 +661,7 @@ impl HtmlParser {
                     }
                 }
                 scraper::Node::Text(t) => {
-                    text.push_str(&t);
+                    text.push_str(t);
                     text.push(' ');
                 }
                 _ => {}
@@ -674,7 +674,7 @@ impl HtmlParser {
             }
         }
 
-        collect_text(&tree, root, &skip_ids, &mut text);
+        collect_text(tree, root, &skip_ids, &mut text);
 
         text.split_whitespace().filter(|w| !w.is_empty()).count()
     }
@@ -937,7 +937,7 @@ impl HtmlParser {
     fn get_meta_content(document: &Html, name_or_property: &str) -> Option<String> {
         // Try name= first
         let by_name = format!("meta[name=\"{name_or_property}\"]");
-        if let Some(sel) = Selector::parse(&by_name).ok() {
+        if let Ok(sel) = Selector::parse(&by_name) {
             if let Some(val) = document
                 .select(&sel)
                 .next()
@@ -952,7 +952,7 @@ impl HtmlParser {
 
         // Try property= (OG tags)
         let by_prop = format!("meta[property=\"{name_or_property}\"]");
-        if let Some(sel) = Selector::parse(&by_prop).ok() {
+        if let Ok(sel) = Selector::parse(&by_prop) {
             if let Some(val) = document
                 .select(&sel)
                 .next()

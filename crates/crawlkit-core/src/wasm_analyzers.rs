@@ -73,10 +73,7 @@ impl Analyzer for WasmPatternAnalyzer {
         }
 
         // WASM002: Synchronous WASM compilation
-        let sync_patterns = [
-            "WebAssembly.instantiate(",
-            "WebAssembly.compile(",
-        ];
+        let sync_patterns = ["WebAssembly.instantiate(", "WebAssembly.compile("];
         let async_patterns = [
             "WebAssembly.instantiateStreaming(",
             "WebAssembly.compileStreaming(",
@@ -198,7 +195,13 @@ mod tests {
 
         let findings = analyzer.analyze(&ctx, &default_config());
         // Should detect WASM-related patterns
-        assert!(!findings.is_empty() || page.scripts.iter().any(|s| s.src.as_deref().map_or(false, |src| src.contains(".wasm"))));
+        assert!(
+            !findings.is_empty()
+                || page
+                    .scripts
+                    .iter()
+                    .any(|s| s.src.as_deref().map_or(false, |src| src.contains(".wasm")))
+        );
     }
 
     #[test]

@@ -53,7 +53,7 @@ impl Severity {
     }
 
     /// Parse from the database string representation.
-    pub fn from_str(s: &str) -> Option<Self> {
+    pub fn parse_severity(s: &str) -> Option<Self> {
         match s {
             "critical" => Some(Severity::Critical),
             "error" => Some(Severity::Error),
@@ -113,7 +113,7 @@ impl IssueCategory {
     }
 
     /// Parse from the database string representation.
-    pub fn from_str(s: &str) -> Self {
+    pub fn parse_category(s: &str) -> Self {
         match s {
             "http" => IssueCategory::Http,
             "seo" => IssueCategory::Seo,
@@ -310,9 +310,9 @@ impl Storage {
 
         let storage = Self {
             conn: Mutex::new(conn),
-            page_cache: Mutex::new(
-                LruCache::new(NonZeroUsize::new(cache_size).unwrap_or(NonZeroUsize::new(1000).unwrap())),
-            ),
+            page_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(cache_size).unwrap_or(NonZeroUsize::new(1000).unwrap()),
+            )),
             memory_usage: AtomicUsize::new(0),
             mmap_enabled: true,
         };
@@ -336,7 +336,7 @@ impl Storage {
         CacheStats {
             capacity: cache.cap().get(),
             size: cache.len(),
-            hits: 0,  // Would need to track these separately
+            hits: 0, // Would need to track these separately
             misses: 0,
         }
     }
@@ -573,10 +573,8 @@ impl Storage {
         {
             let mut cache = self.page_cache.lock().unwrap();
             if let Some(cached) = cache.get(&cache_key) {
-                self.memory_usage.fetch_add(
-                    std::mem::size_of::<PageData>(),
-                    Ordering::Relaxed,
-                );
+                self.memory_usage
+                    .fetch_add(std::mem::size_of::<PageData>(), Ordering::Relaxed);
                 return Ok(vec![cached.clone()]);
             }
         }
@@ -672,8 +670,8 @@ impl Storage {
                 Ok(Issue {
                     id: row.get(0)?,
                     page_id: row.get(1)?,
-                    category: IssueCategory::from_str(&category_str),
-                    severity: Severity::from_str(&severity_str).unwrap_or(Severity::Info),
+                    category: IssueCategory::parse_category(&category_str),
+                    severity: Severity::parse_severity(&severity_str).unwrap_or(Severity::Info),
                     code: row.get(4)?,
                     title: row.get(5)?,
                     description: row.get(6)?,
@@ -916,9 +914,9 @@ mod tests {
             Severity::Info,
         ] {
             let s = sev.as_str();
-            assert_eq!(Severity::from_str(s), Some(sev));
+            assert_eq!(Severity::parse_severity(s), Some(sev));
         }
-        assert_eq!(Severity::from_str("invalid"), None);
+        assert_eq!(Severity::parse_severity("invalid"), None);
     }
 
     #[test]
@@ -937,11 +935,11 @@ mod tests {
             IssueCategory::Social,
         ] {
             let s = cat.as_str();
-            assert_eq!(IssueCategory::from_str(&s), cat);
+            assert_eq!(IssueCategory::parse_category(&s), cat);
         }
         let custom = IssueCategory::Custom("myplugin".to_string());
         let s = custom.as_str();
-        assert_eq!(IssueCategory::from_str(&s), custom);
+        assert_eq!(IssueCategory::parse_category(&s), custom);
     }
 
     #[test]

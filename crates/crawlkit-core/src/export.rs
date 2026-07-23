@@ -129,7 +129,11 @@ impl CsvColumnSelector {
 /// Export crawl data to CSV.
 ///
 /// One row per page. Nested data (issues, links) is JSON-encoded.
-pub fn export_csv(conn: &Connection, crawl_id: &str, selector: &CsvColumnSelector) -> Result<Vec<u8>, ExportError> {
+pub fn export_csv(
+    conn: &Connection,
+    crawl_id: &str,
+    selector: &CsvColumnSelector,
+) -> Result<Vec<u8>, ExportError> {
     let mut wtr = csv::Writer::from_writer(Vec::new());
     wtr.write_record(selector.headers())?;
 
@@ -424,8 +428,14 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
             url = page.url,
             status = page.status_code,
             title = page.title.as_deref().unwrap_or("—"),
-            wc = page.word_count.map(|v| v.to_string()).unwrap_or_else(|| "—".into()),
-            lt = page.load_time_ms.map(|v| format!("{v}ms")).unwrap_or_else(|| "—".into()),
+            wc = page
+                .word_count
+                .map(|v| v.to_string())
+                .unwrap_or_else(|| "—".into()),
+            lt = page
+                .load_time_ms
+                .map(|v| format!("{v}ms"))
+                .unwrap_or_else(|| "—".into()),
             ic = issue_count,
         ));
     }
@@ -568,9 +578,9 @@ function filterTable() {{
             let mut cats: Vec<_> = stats.issues_by_category.iter().collect();
             cats.sort_by(|a, b| b.1.cmp(a.1));
             cats.iter()
-                .map(|(cat, count)| format!(
-                    "<tr><td>{cat}</td><td class=\"num\">{count}</td></tr>"
-                ))
+                .map(|(cat, count)| {
+                    format!("<tr><td>{cat}</td><td class=\"num\">{count}</td></tr>")
+                })
                 .collect::<String>()
         },
         issue_rows = issue_rows,
@@ -706,12 +716,11 @@ fn read_links_for_page(conn: &Connection, page_id: &str) -> Result<Vec<String>, 
 }
 
 fn read_stats(conn: &Connection, crawl_id: &str) -> Result<CrawlStats, ExportError> {
-    let total_pages: usize = conn
-        .query_row(
-            "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
-            [crawl_id],
-            |row| row.get::<_, i64>(0),
-        )? as usize;
+    let total_pages: usize = conn.query_row(
+        "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
+        [crawl_id],
+        |row| row.get::<_, i64>(0),
+    )? as usize;
 
     let total_issues: usize = conn
         .query_row(
@@ -1041,7 +1050,10 @@ mod tests {
         let v: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
         let pages = v["pages"].as_array().unwrap();
-        let home = pages.iter().find(|p| p["url"] == "https://example.com/").unwrap();
+        let home = pages
+            .iter()
+            .find(|p| p["url"] == "https://example.com/")
+            .unwrap();
         assert_eq!(home["issues"].as_array().unwrap().len(), 2);
         assert_eq!(home["links"].as_array().unwrap().len(), 1);
     }

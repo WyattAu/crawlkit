@@ -33,7 +33,10 @@ impl GoogleAnalyticsAdapter {
     /// Create new GA adapter.
     #[must_use]
     pub fn new(property_id: Option<String>, api_key: Option<String>) -> Self {
-        Self { property_id, api_key }
+        Self {
+            property_id,
+            api_key,
+        }
     }
 
     /// Create from environment variables.
@@ -55,10 +58,7 @@ impl GoogleAnalyticsAdapter {
     ///
     /// # Errors
     /// Returns error if API call fails.
-    pub async fn fetch_rum_data(
-        &self,
-        _paths: &[String],
-    ) -> Result<Vec<RumDataPoint>, RumError> {
+    pub async fn fetch_rum_data(&self, _paths: &[String]) -> Result<Vec<RumDataPoint>, RumError> {
         if !self.is_available() {
             return Err(RumError::NotConfigured);
         }

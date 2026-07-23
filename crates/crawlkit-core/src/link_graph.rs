@@ -65,7 +65,8 @@ impl LinkGraph {
                         if let Some(outbound) = self.adjacency.get(linker) {
                             let out_degree = outbound.len() as f64;
                             if out_degree > 0.0 {
-                                rank += damping * scores.get(linker).unwrap_or(&(1.0 / n)) / out_degree;
+                                rank +=
+                                    damping * scores.get(linker).unwrap_or(&(1.0 / n)) / out_degree;
                             }
                         }
                     }

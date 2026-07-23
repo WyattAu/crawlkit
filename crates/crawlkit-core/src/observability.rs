@@ -44,13 +44,23 @@ impl Metrics {
     }
 
     /// Record a successful page crawl.
-    pub fn record_page_success(&self, bytes: u64, fetch_us: u64, analysis_us: u64, storage_us: u64, findings: u64) {
+    pub fn record_page_success(
+        &self,
+        bytes: u64,
+        fetch_us: u64,
+        analysis_us: u64,
+        storage_us: u64,
+        findings: u64,
+    ) {
         self.pages_crawled.fetch_add(1, Ordering::Relaxed);
         self.bytes_fetched.fetch_add(bytes, Ordering::Relaxed);
         self.fetch_time_us.fetch_add(fetch_us, Ordering::Relaxed);
-        self.analysis_time_us.fetch_add(analysis_us, Ordering::Relaxed);
-        self.storage_time_us.fetch_add(storage_us, Ordering::Relaxed);
-        self.findings_generated.fetch_add(findings, Ordering::Relaxed);
+        self.analysis_time_us
+            .fetch_add(analysis_us, Ordering::Relaxed);
+        self.storage_time_us
+            .fetch_add(storage_us, Ordering::Relaxed);
+        self.findings_generated
+            .fetch_add(findings, Ordering::Relaxed);
     }
 
     /// Record a failed page crawl.

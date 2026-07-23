@@ -1,86 +1,104 @@
 # Contributing to crawlkit
 
-Thank you for your interest in contributing to crawlkit! This document provides guidelines and information for contributors.
+## Prerequisites
 
-## Getting Started
-
-### Prerequisites
-
-- Rust 1.70+ (latest stable recommended)
+- Rust 1.75+ (latest stable)
 - Git
-- cargo-edit (optional, for dependency management)
+- Pre-commit hook installed (see below)
 
-### Building
+## Development Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/WyattAu/crawlkit.git
 cd crawlkit
-
-# Build the project
+cp .git/hooks/pre-commit .git/hooks/pre-commit  # Install pre-commit hook
 cargo build
-
-# Run tests
 cargo test
-
-# Build release binary
-cargo build --release
 ```
 
-### Development Setup
+## Code Standards
 
-1. Fork the repository on GitHub
-2. Clone your fork locally
-3. Create a feature branch: `git checkout -b feature/my-feature`
-4. Make your changes
-5. Run tests: `cargo test`
-6. Run clippy: `cargo clippy -- -D warnings`
-7. Format code: `cargo fmt`
-8. Commit your changes
-9. Push to your fork
-10. Create a Pull Request
+### Mandatory Checks (Pre-commit)
 
-## Code Style
+Every commit must pass:
+1. `cargo fmt --check`
+2. `cargo clippy --all-targets -- -D warnings`
+3. `cargo test --lib`
+4. `cargo audit` (if installed)
 
-- Follow Rust standard style (enforced by `rustfmt`)
-- Use `clippy` lints (enforced by CI)
-- Write doc comments for all public items
-- Write tests for new functionality
+### Coding Requirements
 
-## Testing
+| Requirement | Threshold | Enforcement |
+|-------------|-----------|-------------|
+| Function length | <= 30 lines | Manual review |
+| Cyclomatic complexity | <= 10 | `cargo clippy` |
+| Cognitive complexity | <= 15 | `cargo clippy` |
+| Test coverage (critical) | >= 95% | `cargo tarpaulin` |
+| Test coverage (overall) | >= 90% | `cargo tarpaulin` |
+| Documentation | 100% public items | `cargo doc` |
 
-- All new code must have unit tests
-- Tests should cover normal, edge, and error cases
-- Run `cargo test` before submitting PR
-- Target: >90% test coverage
+### Naming Conventions
+
+| Element | Convention | Example |
+|---------|------------|---------|
+| Types | PascalCase | `HttpClient` |
+| Functions | snake_case | `fetch_page()` |
+| Constants | SCREAMING_SNAKE | `MAX_RETRIES` |
+| Modules | snake_case | `http_client.rs` |
+
+### Error Handling
+
+- Use `thiserror` for library errors
+- Use `?` operator for propagation
+- No `unwrap()` in production code
+- No `expect()` without descriptive message
+
+### Testing
+
+- AAA pattern (Arrange-Act-Assert)
+- Test naming: `test_<function>_<scenario>_<expected>`
+- All new code requires unit tests
+- Edge cases and error paths must be covered
 
 ## Commit Messages
 
 Use [Conventional Commits](https://www.conventionalcommits.org/):
 
-- `feat: add new feature`
-- `fix: bug fix`
-- `docs: documentation changes`
-- `refactor: code refactoring`
-- `test: add tests`
-- `chore: maintenance tasks`
+```
+feat: add AI crawler accessibility analyzer
+fix: resolve deadlock in audit trail
+docs: update API reference
+refactor: extract circuit breaker module
+test: add token bucket edge cases
+chore: update dependencies
+```
 
 ## Pull Request Process
 
-1. Update documentation if needed
-2. Add tests for new functionality
+1. Create feature branch from `main`
+2. Implement changes with tests
 3. Ensure all CI checks pass
-4. Request review from maintainer
-5. Address review feedback
-6. Merge when approved
+4. Request review (1 approval minimum)
+5. Address feedback
+6. Squash merge
 
-## Reporting Issues
+## Architecture Decision Records
 
-- Use GitHub Issues for bug reports
-- Include minimal reproduction steps
-- Include Rust version and OS information
-- Check existing issues before creating new ones
+Major changes require an ADR in `.adrs/`:
+
+```markdown
+# ADR-XXX: Title
+
+| Field | Value |
+|-------|-------|
+| Status | Proposed/Accepted/Rejected |
+| Date | YYYY-MM-DD |
+
+## Context
+## Decision
+## Consequences
+```
 
 ## License
 
-By contributing, you agree that your contributions will be licensed under the Apache License 2.0.
+Apache License 2.0. By contributing, you agree to these terms.

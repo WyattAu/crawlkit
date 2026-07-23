@@ -86,7 +86,7 @@ impl Default for DeterminismController {
 
 /// Deterministic URL ordering for consistent output.
 pub fn deterministic_sort<T>(items: &mut [T], key_fn: impl Fn(&T) -> u64) {
-    items.sort_by(|a, b| key_fn(a).cmp(&key_fn(b)));
+    items.sort_by_key(|a| key_fn(a));
 }
 
 // ---------------------------------------------------------------------------

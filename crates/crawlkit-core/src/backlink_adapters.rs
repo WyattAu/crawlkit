@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use serde::{Deserialize, Serialize};
 
 /// External backlink data source adapter trait.
@@ -75,6 +73,7 @@ pub enum AdapterError {
 /// Ahrefs backlink adapter.
 pub struct AhrefsAdapter {
     api_key: Option<String>,
+    #[allow(dead_code)]
     base_url: String,
 }
 

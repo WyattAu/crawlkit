@@ -167,8 +167,7 @@ pub fn robots_txt_disallows_bot(robots_txt: &str, bot_name: &str) -> bool {
                             return true;
                         }
                     }
-                    let matches = value == "*"
-                        || value.to_lowercase() == bot_name.to_lowercase();
+                    let matches = value == "*" || value.to_lowercase() == bot_name.to_lowercase();
                     matching_block = Some(matches);
                     disallow_all = false;
                 }

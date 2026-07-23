@@ -48,7 +48,10 @@ async fn main() -> Result<()> {
         disallowed_patterns: vec!["/admin/*".to_string(), "/api/*".to_string()],
     };
 
-    println!("Crawling {} (max {max_pages} pages, {concurrency} concurrent)", target_url);
+    println!(
+        "Crawling {} (max {max_pages} pages, {concurrency} concurrent)",
+        target_url
+    );
 
     // 2. Initialize storage
     let output_dir = Path::new("crawl-output");
@@ -90,10 +93,7 @@ async fn main() -> Result<()> {
     let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
 
     // 5. Rate limiter
-    let rate_limiter = RateLimiter::new(
-        concurrency as f64,
-        1.0 / (delay_ms as f64 / 1000.0),
-    );
+    let rate_limiter = RateLimiter::new(concurrency as f64, 1.0 / (delay_ms as f64 / 1000.0));
 
     // 6. Analyzer registry — runs all 18 built-in analyzers
     let analyzer_registry = AnalyzerRegistry::new(&config);

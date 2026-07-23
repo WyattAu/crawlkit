@@ -45,20 +45,24 @@ pub use analyzers::{
     SslCertificateValidator, StructuredDataValidator, WordCountAnalyzer,
 };
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
+pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
 pub use backpressure::{BackpressureController, BackpressureError, BoundedPipeline};
-pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, CircuitState};
+pub use circuit_breaker::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, CircuitState,
+};
 pub use determinism::DeterminismController;
-pub use encryption::{EncryptionConfig, EncryptionManager, EncryptionError};
-pub use feature_flags::{FeatureFlags, SharedFeatureFlags, FLAG_JS_RENDERING, FLAG_AI_ANALYZERS, FLAG_WASM_ANALYZERS};
+pub use dns::{DnsCache, DnsError, DnsPrefetcher};
+pub use encryption::{EncryptionConfig, EncryptionError, EncryptionManager};
+pub use feature_flags::{
+    FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
+};
+pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
 pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
-pub use wasm_analyzers::WasmPatternAnalyzer;
-pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
-pub use dns::{DnsCache, DnsError, DnsPrefetcher};
-pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
 pub use storage::{
     CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
+pub use wasm_analyzers::WasmPatternAnalyzer;
 
 pub mod meta;
 pub mod parser;

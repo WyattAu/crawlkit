@@ -1,0 +1,61 @@
+---
+title: Export Formats
+description: Output formats for crawl data
+---
+
+## JSON
+
+Schema-versioned structured output:
+
+```json
+{
+  "crawl_id": "uuid",
+  "target_url": "https://example.com",
+  "pages_crawled": 50,
+  "total_issues": 12,
+  "status": "completed"
+}
+```
+
+## CSV
+
+Configurable columns with nested data flattening:
+
+```csv
+url,status_code,title,description,word_count,load_time_ms
+https://example.com,200,Example,Example page,1234,150
+```
+
+## HTML
+
+Interactive single-file report with:
+- Severity-colored issue tables
+- Page-by-page breakdown
+- Chart.js visualizations
+- Dark mode support
+
+## Markdown
+
+Human-readable summary:
+
+```markdown
+# Crawl Report
+
+- **Crawl ID:** abc-123
+- **Total Pages:** 50
+- **Total Issues:** 12
+- **Avg Response Time:** 145.23ms
+```
+
+## SQLite
+
+Normalized schema for ad-hoc queries:
+
+```sql
+SELECT p.url, COUNT(f.id) as issue_count
+FROM pages p
+JOIN findings f ON f.page_id = p.id
+WHERE p.crawl_id = 'abc-123'
+GROUP BY p.url
+ORDER BY issue_count DESC;
+```

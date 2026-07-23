@@ -74,15 +74,32 @@ impl Metrics {
     }
 
     /// Decrement active connections.
+    /// Uses `fetch_update` to prevent underflow below zero.
     pub fn dec_connections(&self) {
-        self.active_connections.fetch_sub(1, Ordering::Relaxed);
+        // `fetch_update` returns `Err` only if the closure returns `None` on every
+        // attempt, which in our case means the count was already zero. This is
+        // the desired behavior — we simply ignore the "already at zero" case.
+        let _ =
+            self.active_connections
+                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |current| {
+                    if current > 0 {
+                        Some(current - 1)
+                    } else {
+                        // Already at zero; do not underflow
+                        None
+                    }
+                });
     }
 
     /// Get pages per second.
     #[must_use]
     pub fn pages_per_second(&self, elapsed: Duration) -> f64 {
         let pages = self.pages_crawled.load(Ordering::Relaxed) as f64;
-        pages / elapsed.as_secs_f64()
+        let secs = elapsed.as_secs_f64();
+        if secs <= 0.0 {
+            return 0.0;
+        }
+        pages / secs
     }
 
     /// Get average fetch time in milliseconds.
@@ -111,7 +128,11 @@ impl Metrics {
     #[must_use]
     pub fn throughput_bps(&self, elapsed: Duration) -> f64 {
         let bytes = self.bytes_fetched.load(Ordering::Relaxed) as f64;
-        bytes / elapsed.as_secs_f64()
+        let secs = elapsed.as_secs_f64();
+        if secs <= 0.0 {
+            return 0.0;
+        }
+        bytes / secs
     }
 
     /// Get snapshot of all metrics.

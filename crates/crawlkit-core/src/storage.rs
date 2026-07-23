@@ -472,9 +472,13 @@ impl Storage {
     }
 
     /// Insert a single page into the database under the given crawl.
+    /// Uses a single SQLite transaction for the page row + all link rows
+    /// to avoid per-statement fsync overhead.
     pub fn insert_page(&self, crawl_id: &str, page: &PageData) -> Result<(), StorageError> {
         let conn = self.conn.lock().unwrap();
-        conn.execute(
+        let tx = conn.unchecked_transaction()?;
+
+        tx.execute(
             "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
             params![
@@ -493,8 +497,8 @@ impl Storage {
             ],
         )?;
 
-        // Insert links
-        let mut stmt = conn.prepare(
+        // Insert links within the same transaction
+        let mut stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
         )?;
         for link in &page.links {
@@ -508,15 +512,61 @@ impl Storage {
                 is_external,
             ])?;
         }
+        drop(stmt);
 
+        tx.commit()?;
         Ok(())
     }
 
     /// Insert a batch of pages for performance.
+    /// Wraps all inserts in a single SQLite transaction for O(n) vs O(n*fsync).
     pub fn insert_pages(&self, crawl_id: &str, pages: &[PageData]) -> Result<(), StorageError> {
-        for page in pages {
-            self.insert_page(crawl_id, page)?;
+        if pages.is_empty() {
+            return Ok(());
         }
+        let conn = self.conn.lock().unwrap();
+        let tx = conn.unchecked_transaction()?;
+
+        let mut page_stmt = tx.prepare(
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+        )?;
+        let mut link_stmt = tx.prepare(
+            "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
+        )?;
+
+        for page in pages {
+            page_stmt.execute(params![
+                page.id,
+                crawl_id,
+                page.url.as_str(),
+                page.final_url.as_str(),
+                page.status_code,
+                page.title,
+                page.description,
+                page.canonical_url.as_ref().map(|u| u.as_str()),
+                page.word_count.map(|v| v as i64),
+                page.load_time_ms.map(|v| v as i64),
+                page.body_size.map(|v| v as i64),
+                page.fetched_at.to_rfc3339(),
+            ])?;
+
+            for link in &page.links {
+                let link_id = uuid::Uuid::new_v4().to_string();
+                let is_external = link.domain() != page.url.domain();
+                link_stmt.execute(params![
+                    link_id,
+                    page.id,
+                    page.url.as_str(),
+                    link.as_str(),
+                    is_external,
+                ])?;
+            }
+        }
+
+        drop(link_stmt);
+        drop(page_stmt);
+        tx.commit()?;
         Ok(())
     }
 
@@ -566,19 +616,9 @@ impl Storage {
 
     /// Retrieve pages with a limit.
     ///
-    /// Results are cached in the LRU page cache for faster repeated access.
+    /// Results are not cached because the cache type (`LruCache<String, PageData>`)
+    /// cannot store `Vec<PageData>`. The query is fast with proper indexing.
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
-        // Check cache first
-        let cache_key = format!("{}:{}", crawl_id, limit);
-        {
-            let mut cache = self.page_cache.lock().unwrap();
-            if let Some(cached) = cache.get(&cache_key) {
-                self.memory_usage
-                    .fetch_add(std::mem::size_of::<PageData>(), Ordering::Relaxed);
-                return Ok(vec![cached.clone()]);
-            }
-        }
-
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
             "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at
@@ -594,10 +634,12 @@ impl Storage {
 
                 Ok(PageData {
                     id: row.get(0)?,
-                    url: Url::parse(&url_str)
-                        .unwrap_or_else(|_| Url::parse("about:blank").unwrap()),
-                    final_url: Url::parse(&final_url_str)
-                        .unwrap_or_else(|_| Url::parse("about:blank").unwrap()),
+                    url: Url::parse(&url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid").expect("about:invalid is a valid URL")
+                    }),
+                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid").expect("about:invalid is a valid URL")
+                    }),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
                     description: row.get(5)?,
@@ -612,12 +654,6 @@ impl Storage {
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
-
-        // Cache the result
-        if let Some(first_page) = pages.first() {
-            let mut cache = self.page_cache.lock().unwrap();
-            cache.put(cache_key, first_page.clone());
-        }
 
         Ok(pages)
     }

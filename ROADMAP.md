@@ -6,12 +6,30 @@ Status: Living document. Updated after each audit cycle.
 
 ## Current State (v0.4.0)
 
-- 422 tests passing, zero clippy warnings
+- 425 tests passing, zero clippy warnings, zero rustfmt diffs
 - 28 analyzers (23 core + 4 AI + 1 WASM)
 - CLI + REST API + HTML/JSON/CSV/Markdown export
-- CI/CD: format, clippy -D warnings, tests, security audit, release builds
-- Pre-commit hook enforcing all CI checks locally
-- Astro Starlight documentation site scaffolded
+- CI/CD: format, clippy -D warnings, tests, security audit, release builds, MSRV check
+- Pre-commit hook: fmt, clippy, build, tests, security audit, secret scan, unsafe code check
+- Astro Starlight documentation site: 13 pages, 823 words indexed
+
+### Audit Fixes Applied (2026-07-23)
+
+| Category | Fix | File | Severity |
+|----------|-----|------|----------|
+| Correctness | Cache returned 1 page instead of N | storage.rs | Critical |
+| Correctness | `insert_page` missing SQLite transaction | storage.rs | Critical |
+| Correctness | `insert_pages` loop without batching | storage.rs | Critical |
+| Security | SHA-256 audit hash (was DefaultHasher) | audit.rs | High |
+| Security | Playwright JS injection via URL interpolation | playwright.rs | High |
+| Thread Safety | `dec_connections` underflow to u64::MAX | observability.rs | High |
+| Thread Safety | `UserAgentRotator` Relaxed ordering | http.rs | Medium |
+| Correctness | HSTS validation byte-slicing by wrong index | analyzers.rs | High |
+| Correctness | Operator precedence in `is_weak_algorithm` | analyzers.rs | Medium |
+| Correctness | `backlinks` NaN panic in sort | backlinks.rs | Medium |
+| Dead Code | `plugin.rs` home dir not expanded | plugin.rs | Medium |
+| Dead Code | Parser `expect` in library code | parser.rs | Medium |
+| Dead Code | Redundant if/else in http.rs | http.rs | Low |
 
 ---
 
@@ -108,13 +126,13 @@ Status: Living document. Updated after each audit cycle.
 
 ## Phase 5: Documentation and Ecosystem (v0.9.0)
 
-| Item | Priority | Effort | Notes |
-|------|----------|--------|-------|
-| Complete Starlight doc site | P0 | 16h | All pages, API reference, tutorials |
-| Rustdoc coverage > 80% | P1 | 8h | `cargo doc` warnings cleanup |
-| crates.io publication | P0 | 4h | Version, description, keywords |
-| Example library expansion | P1 | 8h | CI integration, custom storage, plugins |
-| Benchmark regression CI | P1 | 4h | Criterion in CI, regression alerts |
+| Item | Priority | Effort | Status | Notes |
+|------|----------|--------|--------|-------|
+| Complete Starlight doc site | P0 | 16h | DONE | 13 pages, all sidebar items, builds clean |
+| Rustdoc coverage > 80% | P1 | 8h | TODO | `cargo doc` warnings cleanup |
+| crates.io publication | P0 | 4h | TODO | Version, description, keywords |
+| Example library expansion | P1 | 8h | TODO | CI integration, custom storage, plugins |
+| Benchmark regression CI | P1 | 4h | TODO | Criterion in CI, regression alerts |
 
 ---
 
@@ -145,3 +163,10 @@ Status: Living document. Updated after each audit cycle.
 | `DnsCache` memory tracking inaccuracy | Low | dns.rs | Include Vec size in new_size calc |
 | `BoundedPipeline::is_full` semantics | Low | backpressure.rs | Use try_send or proper capacity check |
 | Error type erasure in CrawlError | Low | storage/export/compare | Add distinct CrawlError variants |
+| `rate_limit` domain_buckets unbounded | Low | ratelimit.rs | Add LRU eviction for long-running crawls |
+| `plugin.rs` load_plugin no dynamic loading | Low | plugin.rs | Requires libloading integration |
+| N+1 query pattern in export.rs | Low | export.rs | Batch reads for CSV/JSON/HTML export |
+| `circuit_breaker` TOCTOU race | Low | circuit_breaker.rs | State getter has side effects |
+| Analyzer code duplication (14 patterns) | Low | analyzers.rs | Extract shared utilities (syllables, sentences, flesch) |
+| `dns.rs` memory accounting race | Low | dns.rs | DashMap read-then-write window |
+| `lru` crate unsound IterMut | Low | Cargo.lock | Track RUSTSEC-2026-0002, await fix |

@@ -1,0 +1,45 @@
+---
+title: Installation
+description: Install crawlkit from source, cargo, or pre-built binaries
+---
+
+## From Source
+
+```bash
+git clone https://github.com/WyattAu/crawlkit.git
+cd crawlkit
+cargo build --release
+```
+
+Binary output: `target/release/crawlkit`
+
+## Via cargo install
+
+```bash
+cargo install crawlkit
+```
+
+## Pre-built Binaries
+
+Download from [GitHub Releases](https://github.com/WyattAu/crawlkit/releases).
+
+| Platform | Architecture | Format |
+|----------|-------------|--------|
+| Linux | x86_64 | tar.gz |
+| Linux | aarch64 | tar.gz |
+| macOS | x86_64 | tar.gz |
+| macOS | aarch64 | tar.gz |
+| Windows | x86_64 | zip |
+
+## Verify Installation
+
+```bash
+crawlkit --version
+```
+
+## System Requirements
+
+- **OS:** Linux, macOS, Windows
+- **RAM:** 64 MB minimum, 512 MB recommended for large crawls
+- **Disk:** 100 MB for binary + crawl data storage
+- **Network:** Outbound HTTP/HTTPS access to target domains

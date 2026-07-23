@@ -295,7 +295,11 @@ impl BacklinkAnalyzer {
             })
             .collect();
 
-        pages.sort_by(|a, b| b.pagerank.partial_cmp(&a.pagerank).unwrap());
+        pages.sort_by(|a, b| {
+            b.pagerank
+                .partial_cmp(&a.pagerank)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
         let orphan_pages: Vec<String> = self
             .all_urls

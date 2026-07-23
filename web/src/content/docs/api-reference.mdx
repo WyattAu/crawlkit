@@ -1,0 +1,105 @@
+---
+title: API Reference
+description: REST API endpoints for programmatic access
+---
+
+## Base URL
+
+```
+http://localhost:4000
+```
+
+## Authentication
+
+All endpoints require an `X-API-Key` header:
+
+```
+X-API-Key: ck_dev_default_key_for_testing
+```
+
+## Endpoints
+
+### Health Check
+
+```
+GET /health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "version": "0.4.0"
+}
+```
+
+### Start Crawl
+
+```
+POST /api/v1/crawls
+```
+
+Request:
+```json
+{
+  "start_url": "https://example.com",
+  "max_pages": 50,
+  "request_delay_ms": 500,
+  "concurrency": 4
+}
+```
+
+Response (202 Accepted):
+```json
+{
+  "crawl_id": "uuid",
+  "status": "running",
+  "message": "Crawl started successfully"
+}
+```
+
+### Get Crawl Status
+
+```
+GET /api/v1/crawls/{crawl_id}
+```
+
+### Get Crawl Statistics
+
+```
+GET /api/v1/crawls/{crawl_id}/stats
+```
+
+### List Crawls
+
+```
+GET /api/v1/crawls
+```
+
+### Create API Key
+
+```
+POST /api/v1/keys
+```
+
+Request:
+```json
+{
+  "name": "my-app",
+  "requests_per_minute": 60
+}
+```
+
+### List API Keys
+
+```
+GET /api/v1/keys
+```
+
+## Rate Limiting
+
+Each API key has a configurable requests-per-minute limit. Exceeding the limit returns:
+
+```
+HTTP 429 Too Many Requests
+```

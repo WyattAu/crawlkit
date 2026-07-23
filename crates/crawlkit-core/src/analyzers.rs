@@ -370,6 +370,10 @@ impl CanonicalUrlValidator {
     /// Normalize a URL for comparison (strip trailing slash, lowercase scheme/host).
     fn normalize_url(url: &Url) -> String {
         let mut s = url.to_string();
+        // Strip fragment (anchor) — search engines ignore fragments for canonical comparison
+        if let Some(pos) = s.find('#') {
+            s.truncate(pos);
+        }
         // Remove trailing slash from path-only URLs
         if s.ends_with('/') && url.path() != "/" {
             s.pop();
@@ -1370,7 +1374,14 @@ impl Analyzer for LinkAnalyzer {
 
         // 2.3 — Anchor text quality
         for link in &ctx.page.links {
-            if link.text.trim().is_empty() {
+            // Check for accessible name: text content, aria-label, or img alt
+            let has_accessible_name = !link.text.trim().is_empty()
+                || link
+                    .aria_label
+                    .as_ref()
+                    .is_some_and(|l| !l.trim().is_empty())
+                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+            if !has_accessible_name {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Links,
@@ -1382,7 +1393,7 @@ impl Analyzer for LinkAnalyzer {
                                      understand the link destination."
                         .to_string(),
                 });
-            } else if link.text.len() < 3 {
+            } else if link.text.trim().len() < 3 && !link.text.trim().is_empty() {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Links,
@@ -2006,20 +2017,31 @@ impl Analyzer for ContentQualityAnalyzer {
                 recommendation: "Ensure the page has meaningful visible text content.".to_string(),
             });
         } else if word_count < 300 {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Content,
-                code: "CQ004".to_string(),
-                title: "Thin content".to_string(),
-                description: format!(
-                    "Page has only {word_count} words. Pages with fewer than 300 words may be \
-                     considered thin content."
-                ),
-                url: url.clone(),
-                recommendation: "Expand the content to at least 300 words for better search \
-                                 visibility."
-                    .to_string(),
-            });
+            // Skip thin content warning for utility pages — search engines don't penalize these
+            let is_utility_page = url.contains("/account")
+                || url.contains("/compare")
+                || url.contains("/wishlist")
+                || url.contains("/cart")
+                || url.contains("/checkout")
+                || url.contains("/login")
+                || url.contains("/register")
+                || url.contains("/forgot");
+            if !is_utility_page {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "CQ004".to_string(),
+                    title: "Thin content".to_string(),
+                    description: format!(
+                        "Page has only {word_count} words. Pages with fewer than 300 words may be \
+                         considered thin content."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Expand the content to at least 300 words for better search \
+                                     visibility."
+                        .to_string(),
+                });
+            }
         } else if word_count > 3000 {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -2126,17 +2148,28 @@ impl Analyzer for WordCountAnalyzer {
                     .to_string(),
             });
         } else if word_count < 100 {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Content,
-                code: "WC003".to_string(),
-                title: "Very low word count".to_string(),
-                description: format!(
-                    "Page has only {word_count} words. This is very thin content."
-                ),
-                url: url.clone(),
-                recommendation: "Add more substantive content to the page.".to_string(),
-            });
+            // Skip very low word count warning for utility pages
+            let is_utility_page = url.contains("/account")
+                || url.contains("/compare")
+                || url.contains("/wishlist")
+                || url.contains("/cart")
+                || url.contains("/checkout")
+                || url.contains("/login")
+                || url.contains("/register")
+                || url.contains("/forgot");
+            if !is_utility_page {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "WC003".to_string(),
+                    title: "Very low word count".to_string(),
+                    description: format!(
+                        "Page has only {word_count} words. This is very thin content."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add more substantive content to the page.".to_string(),
+                });
+            }
         }
 
         if avg_words_per_sentence > 25.0 {
@@ -2218,7 +2251,11 @@ impl SecurityHeaderAnalyzer {
         if !lower.contains("max-age=") {
             issues.push("missing max-age directive".to_string());
         } else if let Some(ma_pos) = lower.find("max-age=") {
-            let after = &value[ma_pos + 8..];
+            // SECURITY FIX: Use `lower` for slicing, not `value`.
+            // `ma_pos` is the byte position in `lower`; slicing the
+            // original `value` at that index is incorrect when the
+            // original contains multi-byte or case-changing characters.
+            let after = &lower[ma_pos + 8..];
             let num_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
             match num_str.parse::<u64>() {
                 Ok(age) if age < 31536000 => {
@@ -2624,14 +2661,17 @@ impl SslCertificateValidator {
     }
 
     /// Check if an algorithm is considered weak.
+    ///
+    /// Returns true for MD5, SHA-1, or RSA without SHA-256+.
+    /// Explicit parentheses to clarify operator precedence:
+    /// `(md5 || sha1) || (rsa && !sha256 && !sha384 && !sha512)`
     fn is_weak_algorithm(algo: &str) -> bool {
         let lower = algo.to_lowercase();
-        lower.contains("md5")
-            || lower.contains("sha1")
-            || lower.contains("with rsa encryption")
+        (lower.contains("md5") || lower.contains("sha1"))
+            || (lower.contains("with rsa encryption")
                 && !lower.contains("sha256")
                 && !lower.contains("sha384")
-                && !lower.contains("sha512")
+                && !lower.contains("sha512"))
     }
 }
 
@@ -3233,7 +3273,14 @@ impl Analyzer for AccessibilityAnalyzer {
         // --- WCAG 2.4.4: Link text quality ---
         for link in &ctx.page.links {
             let text_lower = link.text.trim().to_lowercase();
-            if text_lower.is_empty() {
+            // Check for accessible name: text content, aria-label, or img alt
+            let has_accessible_name = !text_lower.is_empty()
+                || link
+                    .aria_label
+                    .as_ref()
+                    .is_some_and(|l| !l.trim().is_empty())
+                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+            if !has_accessible_name {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Accessibility,
@@ -4867,6 +4914,11 @@ impl Analyzer for InternationalSeoAnalyzer {
 
         if !hreflang_tags.is_empty() {
             for tag in hreflang_tags {
+                // Skip locale mismatch check for x-default — it's a special fallback
+                // that doesn't correspond to a specific locale segment in the URL.
+                if tag.lang.to_lowercase() == "x-default" {
+                    continue;
+                }
                 if let Some(locale) = Self::detect_locale_from_url(tag.url.as_str()) {
                     let locale_lower = locale.to_lowercase();
                     let tag_lang_lower = tag.lang.to_lowercase();
@@ -6103,18 +6155,24 @@ mod tests {
                 text: "About".to_string(),
                 rel: vec![],
                 is_external: false,
+                aria_label: None,
+                img_alt: None,
             },
             ExtractedLink {
                 href: "/contact".to_string(),
                 text: "Contact".to_string(),
                 rel: vec![],
                 is_external: false,
+                aria_label: None,
+                img_alt: None,
             },
             ExtractedLink {
                 href: "https://external.com".to_string(),
                 text: "External".to_string(),
                 rel: vec![],
                 is_external: true,
+                aria_label: None,
+                img_alt: None,
             },
         ];
         let ctx = make_ctx(&page, Some(200));
@@ -6132,6 +6190,8 @@ mod tests {
             text: "Nofollow link".to_string(),
             rel: vec!["nofollow".to_string()],
             is_external: true,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
@@ -6146,6 +6206,8 @@ mod tests {
             text: String::new(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
@@ -6160,6 +6222,8 @@ mod tests {
             text: "Go".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
@@ -6174,6 +6238,8 @@ mod tests {
             text: "Broken link".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(404));
         let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
@@ -6207,9 +6273,11 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.links = vec![ExtractedLink {
             href: "/page".to_string(),
-            text: "Normal link".to_string(),
+            text: "Go".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
@@ -7412,6 +7480,8 @@ mod tests {
             text: String::new(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
@@ -7426,6 +7496,8 @@ mod tests {
             text: "click here".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
@@ -7440,6 +7512,8 @@ mod tests {
             text: "View pricing details".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
@@ -7594,10 +7668,12 @@ mod tests {
         page.has_lang_attribute = true;
         page.html_lang = Some("en".to_string());
         page.links = vec![ExtractedLink {
-            href: "/about".to_string(),
-            text: "About us".to_string(),
+            href: "/page".to_string(),
+            text: "click here".to_string(),
             rel: vec![],
             is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());

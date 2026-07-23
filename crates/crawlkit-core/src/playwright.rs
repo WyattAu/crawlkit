@@ -400,15 +400,20 @@ impl PlaywrightRenderer {
     }
 
     /// Render page via Playwright CLI subprocess.
+    ///
+    /// The URL is passed as a separate argument to the script via
+    /// `process.argv[2]` to prevent JavaScript injection.
     async fn render_via_cli(&self, url: &str) -> Result<RenderedPage, PlaywrightError> {
         let _binary = self.detector.binary_path().ok_or_else(|| {
             PlaywrightError::NotAvailable("Playwright binary not found".to_string())
         })?;
 
-        // Create a temporary script for Playwright execution
+        // SECURITY: URL is NOT interpolated into the JS string.
+        // It is passed via process.argv to prevent code injection.
         let script = format!(
             r#"
 const {{ chromium }} = require('playwright');
+const targetUrl = process.argv[2];
 
 (async () => {{
     const browser = await chromium.launch({{
@@ -453,7 +458,7 @@ const {{ chromium }} = require('playwright');
     }});
     
     try {{
-        await page.goto('{}', {{ waitUntil: 'networkidle', timeout: {} }});
+        await page.goto(targetUrl, {{ waitUntil: 'networkidle', timeout: {} }});
     }} catch (e) {{
         console.error('Navigation error:', e.message);
     }}
@@ -492,7 +497,6 @@ const {{ chromium }} = require('playwright');
 "#,
             self.config.headless,
             serde_json::to_string(&self.config.args).unwrap_or_else(|_| "[]".to_string()),
-            url,
             self.config.timeout.as_millis()
         );
 
@@ -502,10 +506,12 @@ const {{ chromium }} = require('playwright');
         std::fs::write(&script_path, &script)
             .map_err(|e| PlaywrightError::BrowserLaunchFailed(e.to_string()))?;
 
-        // Execute Playwright script. Allow NODE_PATH override via environment variable.
+        // Execute Playwright script. Pass URL as argument to prevent injection.
+        // Allow NODE_PATH override via environment variable.
         let node_path = std::env::var("NODE_PATH").unwrap_or_default();
         let mut cmd = tokio::process::Command::new("node");
         cmd.arg(&script_path);
+        cmd.arg(url); // URL passed as argv[2], accessed via process.argv[2] in JS
         if !node_path.is_empty() {
             cmd.env("NODE_PATH", &node_path);
         }

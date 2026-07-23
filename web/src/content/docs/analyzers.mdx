@@ -1,0 +1,44 @@
+---
+title: Analyzers
+description: Complete reference for all 28 SEO analyzers
+---
+
+## Analyzer Categories
+
+| Category | Analyzers | Count |
+|----------|-----------|-------|
+| HTTP | Status codes, redirects | 2 |
+| SEO | Meta tags, canonical, hreflang, sitemap, robots.txt | 5 |
+| Content | Readability, keywords, word count, ecommerce, international | 5 |
+| Links | Internal/external, broken links, orphan pages | 1 |
+| Images | Alt text, dimensions, lazy loading | 1 |
+| Schema | JSON-LD, Microdata validation | 1 |
+| Security | CSP, HSTS, X-Frame-Options, SSL | 2 |
+| Performance | TTFB, FCP, page size | 1 |
+| Mobile | Viewport, touch targets, font sizes | 1 |
+| Accessibility | WCAG 2.1 AA (16 checks) | 1 |
+| Social | Open Graph, Twitter Cards | 1 |
+| Entity | Named entity extraction | 1 |
+| AI | Crawler accessibility, content structure, citation eligibility, answer box | 4 |
+| WASM | Pattern detection | 1 |
+
+## Analyzer Interface
+
+Each analyzer implements the `Analyzer` trait:
+
+```rust
+pub trait Analyzer: Send + Sync {
+    fn name(&self) -> &str;
+    fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding>;
+}
+```
+
+## Finding Severity
+
+- **Error:** Critical issues that block indexing or accessibility
+- **Warning:** Issues that reduce SEO effectiveness
+- **Info:** Observations and recommendations
+
+## Custom Analyzers
+
+See [Custom Analyzers](/crawlkit/tutorials/custom-analyzers/) for extending the registry.

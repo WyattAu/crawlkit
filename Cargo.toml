@@ -51,6 +51,7 @@ scraper = "0.22"
 ego-tree = "0.10"
 csv = "1"
 lru = "0.12"
+sha2 = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [profile.release]

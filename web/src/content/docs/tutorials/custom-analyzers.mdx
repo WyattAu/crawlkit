@@ -1,0 +1,53 @@
+---
+title: Custom Analyzers
+description: Extend crawlkit with custom SEO analyzers
+---
+
+## Implementing a Custom Analyzer
+
+Create a struct implementing the `Analyzer` trait:
+
+```rust
+use crawlkit_core::analyzers::{Analyzer, AnalysisContext, Finding, Severity};
+use crawlkit_core::CrawlConfig;
+
+pub struct MyCustomAnalyzer;
+
+impl Analyzer for MyCustomAnalyzer {
+    fn name(&self) -> &str {
+        "my-custom"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        // Your analysis logic here
+        if ctx.page.title.is_none() {
+            findings.push(Finding {
+                category: "custom".into(),
+                severity: Severity::Warning,
+                code: "CUSTOM001".into(),
+                title: "Missing title".into(),
+                description: "Page has no title tag".into(),
+                element: None,
+                recommendation: "Add a <title> tag".into(),
+            });
+        }
+
+        findings
+    }
+}
+```
+
+## Registering the Analyzer
+
+```rust
+use crawlkit_core::analyzers::AnalyzerRegistry;
+
+let mut registry = AnalyzerRegistry::new(&config);
+registry.register(Box::new(MyCustomAnalyzer));
+```
+
+## Plugin System
+
+For dynamic loading without recompilation, see the `PluginLoader` in `crawlkit_core::plugin`.

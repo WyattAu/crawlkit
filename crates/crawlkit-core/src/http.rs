@@ -82,8 +82,11 @@ impl UserAgentRotator {
     }
 
     /// Returns the next user-agent string in rotation.
+    ///
+    /// Uses `AcqRel` ordering to ensure fair rotation under contention.
+    /// `Relaxed` would allow multiple threads to read the same index.
     pub fn next(&self) -> &str {
-        let idx = self.index.fetch_add(1, Ordering::Relaxed);
+        let idx = self.index.fetch_add(1, Ordering::AcqRel);
         &self.agents[idx % self.agents.len()]
     }
 
@@ -265,9 +268,6 @@ impl HttpClient {
                     });
                 }
                 Err(CrawlError::RequestFailed(e)) => {
-                    if e.is_timeout() || e.is_connect() {
-                        return Err(CrawlError::RequestFailed(e));
-                    }
                     return Err(CrawlError::RequestFailed(e));
                 }
                 Err(e) => return Err(e),

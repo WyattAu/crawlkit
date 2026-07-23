@@ -1,0 +1,65 @@
+---
+title: CLI Reference
+description: Complete command-line interface reference
+---
+
+## Global Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--config` | | Path to configuration file |
+| `--verbose` | `-v` | Enable debug output |
+| `--quiet` | `-q` | Suppress all output except errors |
+
+## Commands
+
+### crawl
+
+Crawl a website and analyze pages for SEO signals.
+
+```bash
+crawlkit crawl <URL> [OPTIONS]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--max-pages` | Maximum pages to crawl | 100 |
+| `--delay` | Delay between requests (ms) | 500 |
+| `--concurrency` | Concurrent fetchers | 4 |
+| `--output` / `-o` | Output directory | `.` |
+| `--format` | Output format: json, csv, html, md, all | all |
+| `--depth` | Maximum crawl depth | unlimited |
+| `--user-agent` | Custom user agent | crawlkit/VERSION |
+| `--timeout` | Request timeout (seconds) | 30 |
+| `--include` | URL include patterns (glob) | none |
+| `--exclude` | URL exclude patterns (glob) | none |
+| `--javascript` | Enable JavaScript rendering | false |
+| `--allow-external` | Follow external links | false |
+
+### compare
+
+Compare two crawl results.
+
+```bash
+crawlkit compare <CRAWL1> <CRAWL2> [OPTIONS]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--output` / `-o` | Output file | stdout |
+| `--format` | Output format: json, html, md | json |
+
+### report
+
+Generate a report from an existing crawl.
+
+```bash
+crawlkit report --crawl <PATH> [OPTIONS]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--crawl` / `-c` | Crawl database path | required |
+| `--output` / `-o` | Output file | stdout |
+| `--format` | Report format: html, md, json | html |
+| `--theme` | Report theme: light, dark | light |

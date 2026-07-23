@@ -133,14 +133,24 @@ impl Analyzer for AiContentStructureAnalyzer {
         }
 
         // AI-CS008: Missing date metadata
-        // Check if meta tags or structured data contain date information
+        // Only flag on content pages — utility pages don't need dates
+        let is_content_page = !url.contains("/account")
+            && !url.contains("/compare")
+            && !url.contains("/wishlist")
+            && !url.contains("/cart")
+            && !url.contains("/checkout")
+            && !url.contains("/login")
+            && !url.contains("/register")
+            && !url.contains("/forgot")
+            && !url.ends_with("/");
+
         let has_date_info = ctx
             .page
             .structured_data
             .iter()
             .any(|sd| sd.data.get("datePublished").is_some());
 
-        if !has_date_info && ctx.page.word_count > 300 {
+        if !has_date_info && ctx.page.word_count > 300 && is_content_page {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Content,
@@ -155,13 +165,14 @@ impl Analyzer for AiContentStructureAnalyzer {
         }
 
         // AI-CS009: Missing author attribution
+        // Only flag on content pages — utility pages don't need authors
         let has_author_info = ctx
             .page
             .structured_data
             .iter()
             .any(|sd| sd.data.get("author").is_some());
 
-        if !has_author_info && ctx.page.word_count > 500 {
+        if !has_author_info && ctx.page.word_count > 500 && is_content_page {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Content,

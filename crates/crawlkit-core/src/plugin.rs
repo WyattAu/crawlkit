@@ -62,14 +62,19 @@ pub struct PluginLoader {
 
 impl PluginLoader {
     /// Create a new plugin loader.
+    ///
+    /// Default search paths:
+    /// - `./plugins` (current directory)
+    /// - `$HOME/.crawlkit/plugins` (user home directory, if available)
     #[must_use]
     pub fn new() -> Self {
+        let mut search_paths = vec![PathBuf::from("./plugins")];
+        if let Some(home) = dirs::home_dir() {
+            search_paths.push(home.join(".crawlkit/plugins"));
+        }
         Self {
             plugins: Arc::new(RwLock::new(Vec::new())),
-            search_paths: vec![
-                PathBuf::from("./plugins"),
-                PathBuf::from("~/.crawlkit/plugins"),
-            ],
+            search_paths,
         }
     }
 
@@ -80,8 +85,15 @@ impl PluginLoader {
 
     /// Load a plugin from a file path.
     ///
+    /// Validates the plugin manifest and API version compatibility.
+    ///
+    /// # Note
+    /// Dynamic library loading requires the `libloading` crate.
+    /// Currently returns metadata only; actual plugin registration
+    /// must be done programmatically via [`register_plugin`].
+    ///
     /// # Errors
-    /// Returns error if loading fails.
+    /// Returns error if manifest is missing, invalid, or incompatible.
     pub fn load_plugin(&self, path: &Path) -> Result<PluginMetadata, PluginError> {
         // Check if file exists
         if !path.exists() {
@@ -98,10 +110,10 @@ impl PluginLoader {
         }
 
         let manifest_content = std::fs::read_to_string(&manifest_path)
-            .map_err(|e| PluginError::LoadFailed(format!("Failed to read manifest: {}", e)))?;
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to read manifest: {e}")))?;
 
         let metadata: PluginMetadata = serde_json::from_str(&manifest_content)
-            .map_err(|e| PluginError::LoadFailed(format!("Invalid manifest format: {}", e)))?;
+            .map_err(|e| PluginError::LoadFailed(format!("Invalid manifest format: {e}")))?;
 
         // Validate API version
         if metadata.api_version != "1.0" {
@@ -111,8 +123,9 @@ impl PluginLoader {
             )));
         }
 
-        // Note: Actual dynamic library loading would require libloading crate
-        // For now, plugins must be registered programmatically
+        // TODO: Integrate `libloading` for dynamic library loading.
+        // The loaded PluginAnalyzer would be inserted into self.plugins.
+
         Ok(metadata)
     }
 

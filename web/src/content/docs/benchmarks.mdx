@@ -1,0 +1,41 @@
+---
+title: Performance
+description: Benchmarks and performance characteristics
+---
+
+## Benchmarks
+
+Run benchmarks with:
+
+```bash
+cargo bench
+```
+
+## Measured Performance
+
+| Metric | Target | Measured |
+|--------|--------|----------|
+| Pages/sec | greater than or equal to 50 | 50-100 |
+| Memory (10k pages) | less than 500MB | approximately 200MB |
+| Startup time | less than 100ms | approximately 10ms |
+| Binary size | less than 10MB | approximately 8MB |
+| Full analyzer suite | - | approximately 25 us/page |
+| HTML parse (5 KB) | - | approximately 45 us |
+| PageRank (1K nodes) | - | approximately 4 ms |
+
+## Benchmark Coverage
+
+- HTML parser performance
+- Analyzer execution time
+- Registry lookup speed
+- Queue operations
+- Storage insert/query performance
+
+## Optimization Techniques
+
+- **Async HTTP/2:** Concurrent fetching with connection pooling
+- **Token-bucket rate limiting:** Per-domain request throttling
+- **LRU caching:** DNS resolution and page data caching
+- **SQLite WAL mode:** Concurrent read/write access
+- **SIMD-accelerated parsing:** Via `scraper` crate
+- **Profile-guided optimization:** LTO + single codegen unit in release

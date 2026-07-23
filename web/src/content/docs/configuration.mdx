@@ -1,0 +1,52 @@
+---
+title: Configuration
+description: Configure crawlkit via CLI flags or TOML files
+---
+
+## Configuration File
+
+Create `crawlkit.toml` in the working directory:
+
+```toml
+[crawl]
+seed_urls = ["https://example.com"]
+max_pages = 200
+max_depth = 10
+max_redirect_hops = 20
+max_concurrent_requests = 64
+request_timeout_secs = 30
+crawl_delay_default_ms = 1000
+user_agent = "crawlkit/0.4.0"
+respect_robots_txt = true
+
+[crawl.scope]
+allowed_domains = ["example.com"]
+blocked_patterns = ["/wp-admin/*", "/api/*"]
+
+[analyzers]
+enabled = ["meta", "links", "security", "accessibility", "content", "ai", "wasm"]
+
+[output]
+formats = ["json", "sqlite", "html"]
+output_dir = "./crawl-results"
+```
+
+## CLI Flags
+
+All configuration file options can be overridden via CLI flags:
+
+```bash
+crawlkit crawl https://example.com \
+  --max-pages 500 \
+  --delay 200 \
+  --concurrency 8 \
+  --output crawl-data
+```
+
+## Environment Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `CRAWLKIT_DB_PATH` | SQLite database path (API mode) | `crawlkit-api.db` |
+| `RUST_LOG` | Log level filter | `crawlkit=info` |
+| `NODE_PATH` | Node.js module path (Playwright) | system default |

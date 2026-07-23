@@ -129,14 +129,20 @@ impl Default for AuditTrail {
 }
 
 /// Compute SHA-256 hash for tamper evidence.
+///
+/// Uses SHA-256 (FIPS 180-4) for cryptographic tamper evidence.
+/// The hash chains `details` with `previous_hash` to create an append-only
+/// tamper-evident log.
 fn compute_hash(details: &str, previous_hash: &str) -> String {
-    use std::collections::hash_map::DefaultHasher;
-    use std::hash::{Hash, Hasher};
+    use sha2::{Digest, Sha256};
 
-    let mut hasher = DefaultHasher::new();
-    details.hash(&mut hasher);
-    previous_hash.hash(&mut hasher);
-    format!("{:016x}", hasher.finish())
+    let mut hasher = Sha256::new();
+    hasher.update(details.as_bytes());
+    hasher.update(b"\0"); // separator to prevent length-extension ambiguity
+    hasher.update(previous_hash.as_bytes());
+    let result = hasher.finalize();
+    // Format each byte as lowercase hex
+    result.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // ---------------------------------------------------------------------------

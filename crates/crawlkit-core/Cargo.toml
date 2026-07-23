@@ -38,6 +38,7 @@ scraper.workspace = true
 ego-tree.workspace = true
 csv.workspace = true
 lru.workspace = true
+sha2.workspace = true
 futures = "0.3"
 toml = "0.8"
 async-trait = "0.1"

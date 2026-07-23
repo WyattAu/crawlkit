@@ -1,0 +1,53 @@
+---
+title: CI Integration
+description: Integrate crawlkit into your CI/CD pipeline
+---
+
+## GitHub Actions
+
+```yaml
+name: SEO Audit
+on:
+  push:
+    branches: [main]
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install crawlkit
+        run: cargo install crawlkit
+      - name: Run crawl
+        run: crawlkit crawl https://your-site.com --max-pages 100 --output seo-data
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        with:
+          name: seo-report
+          path: seo-data/
+```
+
+## GitLab CI
+
+```yaml
+seo-audit:
+  stage: test
+  image: rust:latest
+  script:
+    - cargo install crawlkit
+    - crawlkit crawl https://your-site.com --max-pages 100
+  artifacts:
+    paths:
+      - crawlkit.db
+```
+
+## Fail on Critical Issues
+
+```bash
+# Check for errors in the crawl results
+crawlkit crawl https://your-site.com --format json --output results/
+if jq -e '.total_issues > 0' results/crawl-results.json; then
+  echo "SEO issues found"
+  exit 1
+fi
+```

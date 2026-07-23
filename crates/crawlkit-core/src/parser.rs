@@ -43,6 +43,10 @@ pub struct ExtractedLink {
     pub text: String,
     pub rel: Vec<String>,
     pub is_external: bool,
+    /// ARIA label for the link (accessibility).
+    pub aria_label: Option<String>,
+    /// Alt text from images inside the link (accessibility).
+    pub img_alt: Option<String>,
 }
 
 /// An input element inside a form.
@@ -339,11 +343,21 @@ impl HtmlParser {
 
                 let is_external = resolved_url.domain().unwrap_or("") != page_domain;
 
+                // Accessibility: extract aria-label and img alt for link text analysis
+                let aria_label = el.value().attr("aria-label").map(String::from);
+                let img_alt = el
+                    .select(&Selector::parse("img").ok()?)
+                    .next()
+                    .and_then(|img| img.value().attr("alt"))
+                    .map(String::from);
+
                 Some(ExtractedLink {
                     href,
                     text,
                     rel,
                     is_external,
+                    aria_label,
+                    img_alt,
                 })
             })
             .collect()
@@ -652,7 +666,9 @@ impl HtmlParser {
             skip: &std::collections::HashSet<ego_tree::NodeId>,
             text: &mut String,
         ) {
-            let node = tree.get(node_id).expect("node must exist");
+            let Some(node) = tree.get(node_id) else {
+                return; // Node not found; skip safely
+            };
             match node.value() {
                 scraper::Node::Element(el) => {
                     let tag = el.name();

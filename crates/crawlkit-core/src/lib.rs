@@ -4,6 +4,7 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
+pub mod advanced_features;
 pub mod ai_analyzers;
 pub mod ai_bots;
 pub mod analyzers;

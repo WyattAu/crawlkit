@@ -121,9 +121,10 @@ async fn main() -> Result<()> {
         };
 
         // Rate-limit per domain
-        if let Err(_) = rate_limiter
+        if rate_limiter
             .acquire(entry.url.host_str().unwrap_or(""))
             .await
+            .is_err()
         {
             continue;
         }

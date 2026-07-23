@@ -128,22 +128,27 @@ impl RateLimiter {
 
         // Wait for global bucket token
         loop {
-            let mut global = self.global_bucket.lock();
-            global.refill();
+            // Acquire lock in a block to ensure it is dropped before any await point.
+            // `parking_lot::Mutex` guards are `!Send`; holding them across an `.await`
+            // would poison the future and violate tokio's Send requirement.
+            let sleep_time = {
+                let mut global = self.global_bucket.lock();
+                global.refill();
 
-            if global.try_consume(1) {
-                break;
-            }
+                if global.try_consume(1) {
+                    break;
+                }
 
-            if Instant::now() >= deadline {
-                return Err(RateLimitError::Timeout);
-            }
+                if Instant::now() >= deadline {
+                    return Err(RateLimitError::Timeout);
+                }
 
-            let wait = global.time_until_next_token();
-            drop(global); // release lock before sleeping
+                let wait = global.time_until_next_token();
+                let remaining = deadline.saturating_duration_since(Instant::now());
+                wait.min(remaining)
+                // Guard dropped here, before the await.
+            };
 
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            let sleep_time = wait.min(remaining);
             tokio::time::sleep(sleep_time).await;
         }
 
@@ -331,7 +336,7 @@ mod tests {
         let tokens = limiter.domain_tokens("example.com");
         // Bucket is created lazily with burst = ceil(5.0 * 2.0) = 10
         assert!(
-            tokens >= 9.0 && tokens <= 11.0,
+            (9.0..=11.0).contains(&tokens),
             "expected ~10.0, got {tokens}"
         );
     }

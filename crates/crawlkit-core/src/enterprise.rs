@@ -134,8 +134,10 @@ impl Permission {
         }
     }
 
-    /// Parse permission from string.
-    pub fn from_str(s: &str) -> Option<Self> {
+    /// Parse a permission from its string representation.
+    ///
+    /// Returns `None` if the string does not correspond to a known permission.
+    pub fn parse(s: &str) -> Option<Self> {
         match s {
             "crawl:create" => Some(Permission::CrawlCreate),
             "crawl:read" => Some(Permission::CrawlRead),

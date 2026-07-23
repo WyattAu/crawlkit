@@ -411,7 +411,7 @@ mod tests {
                 || page
                     .scripts
                     .iter()
-                    .any(|s| s.src.as_deref().map_or(false, |src| src.contains(".wasm")))
+                    .any(|s| s.src.as_deref().is_some_and(|src| src.contains(".wasm")))
         );
     }
 

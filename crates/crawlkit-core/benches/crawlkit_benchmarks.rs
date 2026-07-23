@@ -8,7 +8,6 @@ use crawlkit_core::feature_flags::FeatureFlags;
 use crawlkit_core::link_graph::LinkGraph;
 use crawlkit_core::meta::MetaTags;
 use crawlkit_core::parser::{Heading, HtmlParser, ParsedPage, ScriptInfo};
-use crawlkit_core::playwright::PlaywrightRenderer;
 use crawlkit_core::CrawlConfig;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::time::Duration;
@@ -129,7 +128,7 @@ fn bench_link_graph_pagerank(c: &mut Criterion) {
     let mut graph = LinkGraph::new();
 
     // Create a graph with 100 nodes
-    for i in 0..100 {
+    for i in 0_usize..100 {
         let source = format!("https://example.com/page{}", i);
         let target = format!("https://example.com/page{}", (i + 1) % 100);
         graph.add_link(&source, &target);

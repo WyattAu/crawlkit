@@ -362,8 +362,10 @@ mod tests {
 
     #[test]
     fn test_queue_depth_limit() {
-        let mut scope = ScopeConfig::default();
-        scope.max_depth = Some(2);
+        let scope = ScopeConfig {
+            max_depth: Some(2),
+            ..Default::default()
+        };
         let queue = UrlQueue::new(scope);
 
         assert!(queue.push(
@@ -392,8 +394,10 @@ mod tests {
 
     #[test]
     fn test_queue_domain_scope() {
-        let mut scope = ScopeConfig::default();
-        scope.allowed_domains = vec!["example.com".to_string()];
+        let scope = ScopeConfig {
+            allowed_domains: vec!["example.com".to_string()],
+            ..Default::default()
+        };
         let queue = UrlQueue::new(scope);
 
         let url1 = Url::parse("https://example.com/page").unwrap();
@@ -407,8 +411,10 @@ mod tests {
 
     #[test]
     fn test_queue_blocked_domain() {
-        let mut scope = ScopeConfig::default();
-        scope.blocked_domains = vec!["spam.com".to_string()];
+        let scope = ScopeConfig {
+            blocked_domains: vec!["spam.com".to_string()],
+            ..Default::default()
+        };
         let queue = UrlQueue::new(scope);
 
         let url1 = Url::parse("https://example.com/page").unwrap();
@@ -422,8 +428,10 @@ mod tests {
 
     #[test]
     fn test_queue_wildcard_domain_pattern() {
-        let mut scope = ScopeConfig::default();
-        scope.allowed_domains = vec!["*.example.com".to_string()];
+        let scope = ScopeConfig {
+            allowed_domains: vec!["*.example.com".to_string()],
+            ..Default::default()
+        };
         let queue = UrlQueue::new(scope);
 
         assert!(queue.push(
@@ -523,9 +531,11 @@ mod tests {
 
     #[test]
     fn test_scope_config_from_crawl_config() {
-        let mut crawl_config = CrawlConfig::default();
-        crawl_config.allowed_patterns = vec!["/blog".to_string()];
-        crawl_config.disallowed_patterns = vec!["/admin".to_string()];
+        let crawl_config = CrawlConfig {
+            allowed_patterns: vec!["/blog".to_string()],
+            disallowed_patterns: vec!["/admin".to_string()],
+            ..Default::default()
+        };
 
         let scope = ScopeConfig::from(&crawl_config);
         assert_eq!(scope.allowed_paths, vec!["/blog"]);
@@ -534,8 +544,10 @@ mod tests {
 
     #[test]
     fn test_queue_path_scope() {
-        let mut scope = ScopeConfig::default();
-        scope.blocked_paths = vec!["/admin".to_string()];
+        let scope = ScopeConfig {
+            blocked_paths: vec!["/admin".to_string()],
+            ..Default::default()
+        };
         let queue = UrlQueue::new(scope);
 
         assert!(queue.push(

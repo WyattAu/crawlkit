@@ -2,8 +2,6 @@
 //!
 //! Tests actual browser rendering with Playwright
 
-use std::time::Duration;
-
 use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightRenderer};
 
 #[tokio::test]

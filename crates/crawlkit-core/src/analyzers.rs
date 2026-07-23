@@ -1649,12 +1649,17 @@ const RECOGNIZED_TYPES: &[&str] = &[
     // Medical
     "Drug",
     "MedicalWebPage",
+    "MedicalSubstance",
+    "MedicalAudience",
     "MedicalCondition",
     "MedicalProcedure",
     // Creative works
     "CreativeWork",
     "Course",
     "LearningResource",
+    // Research & Data
+    "ResearchProject",
+    "CollectionPage",
 ];
 
 pub struct StructuredDataValidator;
@@ -7826,7 +7831,7 @@ mod tests {
         let (score, label) =
             EntityAnalyzer::analyze_sentiment("The page contains information about the topic.");
         assert_eq!(label, "neutral");
-        assert!(score >= -0.05 && score <= 0.05);
+        assert!((-0.05..=0.05).contains(&score));
     }
 
     #[test]

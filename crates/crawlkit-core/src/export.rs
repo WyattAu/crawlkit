@@ -469,7 +469,7 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
                 0.0
             };
             format!(
-                r#"<div class="bar" style="width:{pct:.1}%;background:{color}" title="{sev}: {count}"></div>"#,
+                r#"<div class="bar" role="meter" aria-valuenow="{pct:.0}" aria-valuemin="0" aria-valuemax="100" aria-label="{sev}: {count}" style="width:{pct:.1}%;background:{color}"></div>"#,
             )
         })
         .collect();
@@ -509,6 +509,7 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
   .search input {{ width: 100%; padding: .5rem .75rem; border: 1px solid var(--border); border-radius: .375rem; background: var(--card); color: var(--fg); font-size: .875rem; }}
   a {{ color: #2563eb; text-decoration: none; }}
   a:hover {{ text-decoration: underline; }}
+  .sr-only {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem; }}
     .cards {{ grid-template-columns: repeat(2, 1fr); }}
@@ -529,25 +530,25 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
 </div>
 
 <h2>Issue Distribution</h2>
-<div class="bar-chart">{severity_bars}</div>
+<div class="bar-chart" role="img" aria-label="Issue distribution by severity">{severity_bars}</div>
 
 <h2>Issues by Category</h2>
 <table>
-<thead><tr><th>Category</th><th style="text-align:right">Count</th></tr></thead>
+<thead><tr><th scope="col">Category</th><th scope="col" style="text-align:right">Count</th></tr></thead>
 <tbody>{category_rows}</tbody>
 </table>
 
 <h2>Top Issues</h2>
 <table>
-<thead><tr><th>Severity</th><th>Code</th><th>Title</th><th style="text-align:right">Pages</th></tr></thead>
+<thead><tr><th scope="col">Severity</th><th scope="col">Code</th><th scope="col">Title</th><th scope="col" style="text-align:right">Pages</th></tr></thead>
 <tbody>{issue_rows}</tbody>
 </table>
 
 <h2>All Pages</h2>
-<div class="search"><input type="text" id="search" placeholder="Filter pages…" oninput="filterTable()"></div>
+<div class="search"><label for="search" class="sr-only">Filter pages</label><input type="text" id="search" placeholder="Filter pages..." oninput="filterTable()"></div>
 <div style="overflow-x:auto">
 <table id="pages-table">
-<thead><tr><th>URL</th><th>Status</th><th>Title</th><th style="text-align:right">Words</th><th style="text-align:right">Load</th><th style="text-align:right">Issues</th></tr></thead>
+<thead><tr><th scope="col">URL</th><th scope="col">Status</th><th scope="col">Title</th><th scope="col" style="text-align:right">Words</th><th scope="col" style="text-align:right">Load</th><th scope="col" style="text-align:right">Issues</th></tr></thead>
 <tbody>{rows}</tbody>
 </table>
 </div>

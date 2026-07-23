@@ -13,7 +13,6 @@ use crawlkit_core::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, Circu
 use crawlkit_core::feature_flags::{FeatureFlags, FLAG_AI_ANALYZERS};
 use crawlkit_core::link_graph::LinkGraph;
 use crawlkit_core::meta::MetaTags;
-use crawlkit_core::observability::Metrics;
 use crawlkit_core::parser::{Heading, ParsedPage, ScriptInfo};
 use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightRenderer};
 use crawlkit_core::ratelimit::RateLimiter;
@@ -181,7 +180,7 @@ fn test_link_graph_integration() {
     graph.compute_pagerank(0.85, 20);
 
     // All pages should have scores
-    assert!(graph.pagerank.len() > 0);
+    assert!(!graph.pagerank.is_empty());
 
     // Homepage should have highest PageRank (most inbound links)
     let homepage_pr = graph.pagerank.get("https://example.com/").unwrap();

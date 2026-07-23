@@ -38,6 +38,7 @@ struct OutputConfig {
     /// Default output directory.
     dir: Option<String>,
     /// Default output format.
+    #[allow(dead_code)]
     format: Option<String>,
 }
 
@@ -106,6 +107,8 @@ enum Commands {
 
         /// Respect robots.txt directives
         #[arg(long)]
+        /// Whether to respect robots.txt directives.
+        #[allow(dead_code)] // Reserved for future robots.txt integration
         respect_robots: Option<bool>,
 
         /// URL include patterns (glob-style)
@@ -209,28 +212,31 @@ async fn main() -> Result<()> {
             javascript,
             allow_external,
         } => {
-            run_crawl(
-                &url,
-                max_pages.or_else(|| config.crawl.as_ref().and_then(|c| c.max_pages)),
-                delay.or_else(|| config.crawl.as_ref().and_then(|c| c.delay_ms)),
-                concurrency.or_else(|| config.crawl.as_ref().and_then(|c| c.concurrency)),
-                output.or_else(|| {
+            let params = CrawlParams {
+                url,
+                max_pages: max_pages.or_else(|| config.crawl.as_ref().and_then(|c| c.max_pages)),
+                delay: delay.or_else(|| config.crawl.as_ref().and_then(|c| c.delay_ms)),
+                concurrency: concurrency
+                    .or_else(|| config.crawl.as_ref().and_then(|c| c.concurrency)),
+                output: output.or_else(|| {
                     config
                         .output
                         .as_ref()
                         .and_then(|o| o.dir.as_deref().map(PathBuf::from))
                 }),
-                &format,
+                format,
                 depth,
-                user_agent.or_else(|| config.crawl.as_ref().and_then(|c| c.user_agent.clone())),
-                timeout.or_else(|| config.crawl.as_ref().and_then(|c| c.timeout_secs)),
-                respect_robots.or_else(|| config.crawl.as_ref().and_then(|c| c.respect_robots_txt)),
+                user_agent: user_agent
+                    .or_else(|| config.crawl.as_ref().and_then(|c| c.user_agent.clone())),
+                timeout: timeout.or_else(|| config.crawl.as_ref().and_then(|c| c.timeout_secs)),
+                respect_robots: respect_robots
+                    .or_else(|| config.crawl.as_ref().and_then(|c| c.respect_robots_txt)),
                 include,
                 exclude,
                 javascript,
                 allow_external,
-            )
-            .await
+            };
+            run_crawl(&params).await
         }
         Commands::Compare {
             crawl1,
@@ -247,23 +253,27 @@ async fn main() -> Result<()> {
     }
 }
 
-/// Execute a crawl with the given parameters.
-async fn run_crawl(
-    url: &str,
+/// Parameters for a crawl operation, bundling all CLI/config values.
+#[allow(dead_code)] // `respect_robots` reserved for future robots.txt integration
+struct CrawlParams {
+    url: String,
     max_pages: Option<usize>,
     delay: Option<u64>,
     concurrency: Option<usize>,
     output: Option<PathBuf>,
-    format: &str,
+    format: String,
     depth: Option<usize>,
     user_agent: Option<String>,
     timeout: Option<u64>,
-    _respect_robots: Option<bool>,
+    respect_robots: Option<bool>,
     include: Vec<String>,
     exclude: Vec<String>,
     javascript: bool,
     allow_external: bool,
-) -> Result<()> {
+}
+
+/// Execute a crawl with the given parameters.
+async fn run_crawl(params: &CrawlParams) -> Result<()> {
     use crawlkit_core::analyzers::AnalyzerRegistry;
     use crawlkit_core::http::HttpClient;
     use crawlkit_core::queue::{Priority, UrlQueue};
@@ -272,20 +282,20 @@ async fn run_crawl(
     use std::sync::Arc;
     use tokio::sync::Mutex;
 
-    let max_pages = max_pages.unwrap_or(100);
-    let delay = delay.unwrap_or(500);
-    let concurrency = concurrency.unwrap_or(4);
-    let timeout_secs = timeout.unwrap_or(30);
+    let max_pages = params.max_pages.unwrap_or(100);
+    let delay = params.delay.unwrap_or(500);
+    let concurrency = params.concurrency.unwrap_or(4);
+    let timeout_secs = params.timeout.unwrap_or(30);
 
     tracing::info!(
         "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={}, allow_external={})",
-        url,
+        params.url,
         max_pages,
         delay,
         concurrency,
-        depth,
-        javascript,
-        allow_external,
+        params.depth,
+        params.javascript,
+        params.allow_external,
     );
 
     let pb = ProgressBar::new(max_pages as u64);
@@ -298,7 +308,7 @@ async fn run_crawl(
     pb.set_message("Initializing...");
 
     // Initialize storage
-    let output_dir = output.unwrap_or_else(|| PathBuf::from("."));
+    let output_dir = params.output.clone().unwrap_or_else(|| PathBuf::from("."));
     std::fs::create_dir_all(&output_dir).with_context(|| {
         format!(
             "Failed to create output directory: {}",
@@ -309,7 +319,7 @@ async fn run_crawl(
     let storage = Storage::new(&db_path)
         .with_context(|| format!("Failed to open storage at {}", db_path.display()))?;
 
-    let crawl_id = storage.start_crawl(url, None)?;
+    let crawl_id = storage.start_crawl(&params.url, None)?;
     tracing::info!("Crawl ID: {}", crawl_id);
 
     // Initialize components
@@ -317,9 +327,10 @@ async fn run_crawl(
         timeout: std::time::Duration::from_secs(timeout_secs),
         max_redirects: 20,
         retry_policy: crawlkit_core::http::RetryPolicy::default(),
-        user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![
-            user_agent.unwrap_or_else(|| "crawlkit/0.1.0".to_string()),
-        ])),
+        user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![params
+            .user_agent
+            .clone()
+            .unwrap_or_else(|| "crawlkit/0.1.0".to_string())])),
         max_body_size: 10 * 1024 * 1024,
         pool_max_idle_per_host: 32,
         pool_max_idle: 64,
@@ -328,7 +339,7 @@ async fn run_crawl(
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let scope = crawlkit_core::queue::ScopeConfig {
-        max_depth: depth,
+        max_depth: params.depth,
         ..Default::default()
     };
     let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
@@ -336,7 +347,8 @@ async fn run_crawl(
     let analyzer_registry = AnalyzerRegistry::new(&crawlkit_core::CrawlConfig::default());
 
     // Seed the queue
-    let seed_url = url::Url::parse(url).with_context(|| format!("Invalid URL: {}", url))?;
+    let seed_url =
+        url::Url::parse(&params.url).with_context(|| format!("Invalid URL: {}", params.url))?;
     {
         let q = queue.lock().await;
         q.push(seed_url.clone(), 0, Priority::HIGH);
@@ -477,7 +489,7 @@ async fn run_crawl(
             let is_internal = link_url.host_str() == Some(&seed_domain);
 
             // Enforce domain filtering
-            if !is_internal && !allow_external {
+            if !is_internal && !params.allow_external {
                 skipped_external += 1;
                 tracing::debug!(
                     "Skipping external link: {} (host={})",
@@ -487,10 +499,10 @@ async fn run_crawl(
                 continue;
             }
 
-            if !include.is_empty() && !include.iter().any(|p| link.href.contains(p)) {
+            if !params.include.is_empty() && !params.include.iter().any(|p| link.href.contains(p)) {
                 continue;
             }
-            if exclude.iter().any(|p| link.href.contains(p)) {
+            if params.exclude.iter().any(|p| link.href.contains(p)) {
                 continue;
             }
 
@@ -513,12 +525,12 @@ async fn run_crawl(
     storage.finish_crawl(&crawl_id, pages_crawled, 0)?;
 
     // Write output
-    if format == "json" || format == "all" {
+    if params.format == "json" || params.format == "all" {
         let json_path = output_dir.join("crawl-results.json");
         let stats = storage.get_stats(&crawl_id)?;
         let sample = serde_json::json!({
             "crawl_id": crawl_id,
-            "target_url": url,
+            "target_url": params.url,
             "max_pages": max_pages,
             "pages_crawled": pages_crawled,
             "pages_stored": pages_stored,

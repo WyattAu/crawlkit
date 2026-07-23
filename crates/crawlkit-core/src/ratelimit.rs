@@ -195,24 +195,15 @@ impl RateLimiter {
 }
 
 /// Errors that can occur during rate limiting.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum RateLimitError {
     /// The wait timed out.
+    #[error("rate limit acquire timed out")]
     Timeout,
     /// The rate limiter has been closed.
+    #[error("rate limiter closed")]
     Closed,
 }
-
-impl std::fmt::Display for RateLimitError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Timeout => write!(f, "rate limit acquire timed out"),
-            Self::Closed => write!(f, "rate limiter closed"),
-        }
-    }
-}
-
-impl std::error::Error for RateLimitError {}
 
 /// Token bucket implementation for rate limiting.
 #[derive(Debug)]

@@ -502,10 +502,14 @@ const {{ chromium }} = require('playwright');
         std::fs::write(&script_path, &script)
             .map_err(|e| PlaywrightError::BrowserLaunchFailed(e.to_string()))?;
 
-        // Execute Playwright script with NODE_PATH set for global modules
-        let output = tokio::process::Command::new("node")
-            .arg(&script_path)
-            .env("NODE_PATH", "/home/wyatt/.npm-global/lib/node_modules")
+        // Execute Playwright script. Allow NODE_PATH override via environment variable.
+        let node_path = std::env::var("NODE_PATH").unwrap_or_default();
+        let mut cmd = tokio::process::Command::new("node");
+        cmd.arg(&script_path);
+        if !node_path.is_empty() {
+            cmd.env("NODE_PATH", &node_path);
+        }
+        let output = cmd
             .output()
             .await
             .map_err(|e| PlaywrightError::BrowserLaunchFailed(e.to_string()))?;

@@ -254,47 +254,6 @@ pub struct RedirectHop {
     pub status_code: u16,
 }
 
-/// Represents a complete redirect chain from original to final URL.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RedirectChain {
-    /// The original request URL.
-    pub original_url: Url,
-
-    /// The final destination URL.
-    pub final_url: Url,
-
-    /// The sequence of redirects.
-    pub hops: Vec<RedirectHop>,
-
-    /// Whether a redirect loop was detected.
-    pub has_loop: bool,
-}
-
-/// A page extracted from the crawl.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PageData {
-    /// The URL of the page.
-    pub url: Url,
-
-    /// The HTTP status code.
-    pub status_code: u16,
-
-    /// The page title.
-    pub title: Option<String>,
-
-    /// The meta description.
-    pub description: Option<String>,
-
-    /// The canonical URL.
-    pub canonical_url: Option<Url>,
-
-    /// Links discovered on this page.
-    pub links: Vec<Url>,
-
-    /// When this page was fetched.
-    pub fetched_at: DateTime<Utc>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -335,27 +294,23 @@ mod tests {
     }
 
     #[test]
-    fn test_redirect_chain() {
-        let chain = RedirectChain {
-            original_url: Url::parse("https://example.com/old").unwrap(),
-            final_url: Url::parse("https://example.com/new").unwrap(),
-            hops: vec![
-                RedirectHop {
-                    from: Url::parse("https://example.com/old").unwrap(),
-                    to: Url::parse("https://example.com/mid").unwrap(),
-                    status_code: 301,
-                },
-                RedirectHop {
-                    from: Url::parse("https://example.com/mid").unwrap(),
-                    to: Url::parse("https://example.com/new").unwrap(),
-                    status_code: 302,
-                },
-            ],
-            has_loop: false,
-        };
+    fn test_redirect_hops() {
+        let hops = [
+            RedirectHop {
+                from: Url::parse("https://example.com/old").unwrap(),
+                to: Url::parse("https://example.com/mid").unwrap(),
+                status_code: 301,
+            },
+            RedirectHop {
+                from: Url::parse("https://example.com/mid").unwrap(),
+                to: Url::parse("https://example.com/new").unwrap(),
+                status_code: 302,
+            },
+        ];
 
-        assert_eq!(chain.hops.len(), 2);
-        assert!(!chain.has_loop);
+        assert_eq!(hops.len(), 2);
+        assert_eq!(hops[0].status_code, 301);
+        assert_eq!(hops[1].status_code, 302);
     }
 
     #[test]

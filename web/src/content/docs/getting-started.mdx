@@ -1,0 +1,60 @@
+---
+title: Getting Started
+description: Quick start guide for crawlkit
+---
+
+## Prerequisites
+
+- Rust 1.75+ (latest stable recommended)
+- Git
+
+## Build from Source
+
+```bash
+git clone https://github.com/WyattAu/crawlkit.git
+cd crawlkit
+cargo build --release
+```
+
+Binary output: `target/release/crawlkit`
+
+## First Crawl
+
+```bash
+# Basic crawl
+crawlkit crawl https://example.com --max-pages 50
+
+# Custom settings
+crawlkit crawl https://example.com \
+  --max-pages 500 \
+  --delay 200 \
+  --concurrency 8 \
+  --output crawl-data
+
+# Generate HTML report
+crawlkit report crawl-data/ --format html --output report.html
+```
+
+## REST API Mode
+
+```bash
+crawlkit-api --port 8080
+```
+
+Default API key: `ck_dev_default_key_for_testing` (development only).
+
+## Programmatic Usage
+
+```rust
+use crawlkit_core::{CrawlConfig, HttpClient, HtmlParser};
+use crawlkit_core::analyzers::AnalyzerRegistry;
+
+let config = CrawlConfig::default();
+let client = HttpClient::from_crawl_config(&config)?;
+let registry = AnalyzerRegistry::new(&config);
+
+// Fetch and analyze
+let result = client.fetch(&url).await?;
+let parsed = HtmlParser::parse(&result.body, &url)?;
+let findings = registry.analyze(&ctx, &config);
+```

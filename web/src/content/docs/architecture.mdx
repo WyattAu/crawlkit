@@ -1,0 +1,42 @@
+---
+title: Architecture
+description: System design and data flow
+---
+
+## Crate Structure
+
+```
+crawlkit-core/    Core library: types, analyzers, storage, export, HTTP client
+crawlkit/         CLI binary: clap-based argument parsing, progress display
+crawlkit-api/     REST API: axum-based server with API key auth and rate limiting
+```
+
+## Data Flow
+
+```
+URL Queue -> DNS Prefetch -> Fetcher -> Parser -> Analyzers -> Storage -> Export
+    ^                              |
+    +---- Link Discovery ---------+
+```
+
+## Key Components
+
+### Rate Limiter
+Token-bucket per domain with global bucket. Concurrency semaphore. Async-safe (no MutexGuard across await).
+
+### Circuit Breaker
+Three-state machine: Closed -> Open -> HalfOpen. Configurable failure/success thresholds and cooldown.
+
+### Backpressure
+Bounded pipeline with configurable capacity. Prevents memory exhaustion under high concurrency.
+
+### Analyzer Registry
+28 analyzers dispatched in parallel. Each implements the `Analyzer` trait with `analyze(ctx, config) -> Vec<Finding>`.
+
+## Thread Safety
+
+- `RateLimiter`: `DashMap` for domain buckets, `parking_lot::Mutex` for global (dropped before await)
+- `UrlQueue`: `DashSet` for dedup, `parking_lot::Mutex` for heap
+- `Storage`: `rusqlite::Connection` (single-writer, WAL mode)
+- `Metrics`: `AtomicU64` counters
+- `AuditTrail`: `parking_lot::RwLock<Vec<AuditEvent>>`

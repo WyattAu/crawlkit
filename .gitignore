@@ -45,3 +45,8 @@ CAPABILITY_MATRIX.md
 INSTRUCTION_VERSIONS.md
 STANDARD_CONFLICTS.md
 TRACEABILITY_MATRIX.md
+
+# Web documentation site
+web/node_modules/
+web/dist/
+web/.astro/

@@ -1,0 +1,34 @@
+---
+title: crawlkit
+description: High-performance Rust web crawler and SEO analysis toolkit
+template: splash
+hero:
+  tagline: Async HTTP/2 crawling engine with 28 analyzers. Zero clippy warnings. Formal verification scaffolding.
+  actions:
+    - text: Get Started
+      link: /crawlkit/getting-started/
+      icon: right-arrow
+    - text: View on GitHub
+      link: https://github.com/WyattAu/crawlkit
+      icon: external
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## Core Capabilities
+
+<CardGrid stagger>
+  <Card title="Crawl Engine" icon="rocket">
+    Async HTTP/2 with configurable concurrency. 50+ pages/sec. Redirect chain tracking, robots.txt compliance, token-bucket rate limiting.
+  </Card>
+  <Card title="28 Analyzers" icon="puzzle">
+    SEO meta tags, structured data validation, content quality scoring, security headers, accessibility, AI search optimization, WASM detection.
+  </Card>
+  <Card title="Storage and Export" icon="database">
+    SQLite with WAL mode. Export to JSON, CSV, Markdown, HTML (interactive single-file reports with dark mode).
+  </Card>
+  <Card title="Enterprise" icon="shield">
+    RBAC, multi-tenant support, SSO integration, SLA monitoring, audit trail, encryption at rest, circuit breaker fault tolerance.
+  </Card>
+</CardGrid>

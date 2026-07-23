@@ -1569,6 +1569,7 @@ const REQUIRED_PROPERTIES: &[(&str, &[&str])] = &[
     ("Product", &["name"]),
     ("Organization", &["name"]),
     ("LocalBusiness", &["name", "address"]),
+    ("Store", &["name", "address"]),
     ("WebPage", &["name"]),
     ("BreadcrumbList", &["itemListElement"]),
     ("FAQPage", &["mainEntity"]),
@@ -1606,6 +1607,7 @@ const RECOGNIZED_TYPES: &[&str] = &[
     // Organization & people
     "Organization",
     "LocalBusiness",
+    "Store",
     "Person",
     "Place",
     // Web

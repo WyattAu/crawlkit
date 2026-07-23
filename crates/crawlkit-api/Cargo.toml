@@ -33,4 +33,10 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 chrono.workspace = true
 url.workspace = true
+tracing-opentelemetry = "0.33"
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["trace"] }
+opentelemetry-stdout = { version = "0.32", features = ["trace"] }
 dashmap.workspace = true
+sha2.workspace = true
+prometheus-client = "0.22"

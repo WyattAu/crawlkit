@@ -69,6 +69,21 @@ pub struct DiffEntry {
     pub change: ChangeKind,
 }
 
+/// A Core Web Vitals regression or improvement between crawls.
+#[derive(Debug, Clone, Serialize)]
+pub struct CwvChange {
+    /// The page URL.
+    pub url: String,
+    /// Which metric changed (e.g. "LCP", "CLS", "INP", "FCP", "TTFB").
+    pub metric_name: String,
+    /// Previous value (p75).
+    pub old_value: Option<f64>,
+    /// New value (p75).
+    pub new_value: Option<f64>,
+    /// True if the metric worsened by >10%.
+    pub regression: bool,
+}
+
 /// Result of comparing two crawl databases.
 #[derive(Debug, Clone, Serialize)]
 pub struct CrawlDiff {
@@ -88,6 +103,8 @@ pub struct CrawlDiff {
     pub content_changes: Vec<DiffEntry>,
     /// Pages with size changes.
     pub size_changes: Vec<DiffEntry>,
+    /// Core Web Vitals regressions/improvements.
+    pub cwv_changes: Vec<CwvChange>,
 }
 
 impl CrawlDiff {
@@ -99,6 +116,7 @@ impl CrawlDiff {
             + self.title_changes.len()
             + self.content_changes.len()
             + self.size_changes.len()
+            + self.cwv_changes.len()
     }
 
     /// True if no changes were detected.
@@ -209,6 +227,27 @@ pub fn compare_crawl_ids(
         }
     }
 
+    // Compare CrUX metrics for URLs present in both crawls
+    let baseline_crux = load_crux(baseline_conn, baseline_crawl_id)?;
+    let target_crux = load_crux(target_conn, target_crawl_id)?;
+
+    let baseline_crux_map: std::collections::HashMap<&str, &CompareCrux> =
+        baseline_crux.iter().map(|c| (c.url.as_str(), c)).collect();
+    let target_crux_map: std::collections::HashMap<&str, &CompareCrux> =
+        target_crux.iter().map(|c| (c.url.as_str(), c)).collect();
+
+    let mut cwv_changes = Vec::new();
+
+    for (url, &b) in &baseline_crux_map {
+        if let Some(&t) = target_crux_map.get(url) {
+            check_cwv_regression(url, "LCP", b.lcp_p75, t.lcp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "CLS", b.cls_p75, t.cls_p75, &mut cwv_changes);
+            check_cwv_regression(url, "INP", b.inp_p75, t.inp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "FCP", b.fcp_p75, t.fcp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "TTFB", b.ttfb_p75, t.ttfb_p75, &mut cwv_changes);
+        }
+    }
+
     Ok(CrawlDiff {
         baseline_pages: baseline_pages.len(),
         target_pages: target_pages.len(),
@@ -218,7 +257,33 @@ pub fn compare_crawl_ids(
         title_changes,
         content_changes,
         size_changes,
+        cwv_changes,
     })
+}
+
+fn check_cwv_regression(
+    url: &str,
+    metric_name: &str,
+    old: Option<f64>,
+    new: Option<f64>,
+    out: &mut Vec<CwvChange>,
+) {
+    if let (Some(o), Some(n)) = (old, new) {
+        let pct = if o.abs() > f64::EPSILON {
+            (n - o) / o.abs()
+        } else {
+            return;
+        };
+        if pct > 0.10 {
+            out.push(CwvChange {
+                url: url.to_string(),
+                metric_name: metric_name.to_string(),
+                old_value: Some(o),
+                new_value: Some(n),
+                regression: true,
+            });
+        }
+    }
 }
 
 /// Write a diff to JSON.
@@ -326,6 +391,32 @@ pub fn diff_to_markdown(diff: &CrawlDiff) -> String {
         md.push('\n');
     }
 
+    if !diff.cwv_changes.is_empty() {
+        md.push_str(&format!(
+            "## Core Web Vitals Changes ({})\n\n",
+            diff.cwv_changes.len()
+        ));
+        md.push_str(
+            "| URL | Metric | Old (p75) | New (p75) | Regression |\n|---|---|---|---|---|\n",
+        );
+        for c in &diff.cwv_changes {
+            let old_str = c
+                .old_value
+                .map(|v| format!("{v:.2}"))
+                .unwrap_or_else(|| "—".into());
+            let new_str = c
+                .new_value
+                .map(|v| format!("{v:.2}"))
+                .unwrap_or_else(|| "—".into());
+            let regression = if c.regression { "YES" } else { "no" };
+            md.push_str(&format!(
+                "| {} | {} | {} | {} | {} |\n",
+                c.url, c.metric_name, old_str, new_str, regression,
+            ));
+        }
+        md.push('\n');
+    }
+
     if diff.is_empty() {
         md.push_str("No changes detected.\n");
     }
@@ -362,6 +453,38 @@ fn load_pages(conn: &Connection, crawl_id: &str) -> Result<Vec<ComparePage>, Com
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(pages)
+}
+
+#[derive(Debug, Clone)]
+struct CompareCrux {
+    url: String,
+    lcp_p75: Option<f64>,
+    inp_p75: Option<f64>,
+    cls_p75: Option<f64>,
+    fcp_p75: Option<f64>,
+    ttfb_p75: Option<f64>,
+}
+
+fn load_crux(conn: &Connection, crawl_id: &str) -> Result<Vec<CompareCrux>, CompareError> {
+    let mut stmt = conn.prepare(
+        "SELECT cm.url, cm.lcp_p75, cm.inp_p75, cm.cls_p75, cm.fcp_p75, cm.ttfb_p75
+         FROM crux_metrics cm
+         JOIN pages p ON cm.page_id = p.id
+         WHERE p.crawl_id = ?1",
+    )?;
+    let rows = stmt
+        .query_map([crawl_id], |row| {
+            Ok(CompareCrux {
+                url: row.get(0)?,
+                lcp_p75: row.get(1)?,
+                inp_p75: row.get(2)?,
+                cls_p75: row.get(3)?,
+                fcp_p75: row.get(4)?,
+                ttfb_p75: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
 }
 
 /// A content change is significant if word count differs by >10% or >100 words.
@@ -540,6 +663,7 @@ mod tests {
             title_changes: vec![],
             content_changes: vec![],
             size_changes: vec![],
+            cwv_changes: vec![],
         };
 
         let json = diff_to_json(&diff, true).unwrap();
@@ -577,6 +701,7 @@ mod tests {
             title_changes: vec![],
             content_changes: vec![],
             size_changes: vec![],
+            cwv_changes: vec![],
         };
 
         let md = diff_to_markdown(&diff);
@@ -601,6 +726,7 @@ mod tests {
             title_changes: vec![],
             content_changes: vec![],
             size_changes: vec![],
+            cwv_changes: vec![],
         };
 
         let md = diff_to_markdown(&diff);

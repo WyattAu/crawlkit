@@ -162,7 +162,7 @@ fn parse_urlset(
                 }
             }
             Ok(Event::Text(e)) => {
-                let text = e.unescape().unwrap_or_default().to_string();
+                let text = String::from_utf8_lossy(e.as_ref()).to_string();
                 if in_url {
                     match current_tag.as_str() {
                         "loc" => current_url = Some(text),
@@ -215,7 +215,7 @@ fn parse_sitemapindex(
             }
             Ok(Event::Text(e)) => {
                 if current_tag == "loc" {
-                    child_urls.push(e.unescape().unwrap_or_default().to_string());
+                    child_urls.push(String::from_utf8_lossy(e.as_ref()).to_string());
                 }
             }
             Ok(Event::End(_)) => {

@@ -190,6 +190,28 @@ enum Commands {
         #[arg(long)]
         source: Option<String>,
     },
+
+    /// Deep single-page analysis: fetch + all analyzers + optional CrUX/GSC
+    Inspect {
+        /// URL to inspect
+        url: String,
+
+        /// Output file for the analysis
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Output format: json or md
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Enable JavaScript rendering (requires Playwright)
+        #[arg(long)]
+        javascript: bool,
+
+        /// Custom user agent string
+        #[arg(long)]
+        user_agent: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -205,12 +227,34 @@ async fn main() -> Result<()> {
         "info"
     };
 
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| EnvFilter::new(format!("crawlkit={log_level}"))),
-        )
-        .init();
+    use opentelemetry::trace::TracerProvider as _;
+    use opentelemetry_sdk::trace::SdkTracerProvider;
+    use tracing_opentelemetry::OpenTelemetryLayer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::Layer;
+
+    let use_otel = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
+
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
+        EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| EnvFilter::new(format!("crawlkit={log_level}"))),
+    );
+
+    if use_otel {
+        use opentelemetry::trace::TracerProvider;
+        let provider = SdkTracerProvider::builder()
+            .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+            .build();
+        let tracer = provider.tracer("crawlkit");
+        let otel_layer = OpenTelemetryLayer::new(tracer);
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .with(otel_layer)
+            .init();
+    } else {
+        tracing_subscriber::registry().with(fmt_layer).init();
+    }
 
     // Load config file if specified
     let config = if let Some(config_path) = &cli.config {
@@ -285,6 +329,22 @@ async fn main() -> Result<()> {
             format,
             source,
         } => run_backlinks(&crawl, output.as_deref(), &format, source.as_deref()).await,
+        Commands::Inspect {
+            url,
+            output,
+            format,
+            javascript,
+            user_agent,
+        } => {
+            run_inspect(
+                &url,
+                output.as_deref(),
+                &format,
+                javascript,
+                user_agent.as_deref(),
+            )
+            .await
+        }
     }
 }
 
@@ -1142,6 +1202,235 @@ async fn run_backlinks(
     if let Some(out) = output {
         std::fs::write(out, &output_str)?;
         tracing::info!("Wrote backlink analysis to {}", out.display());
+    } else {
+        println!("{output_str}");
+    }
+
+    Ok(())
+}
+
+/// Deep single-page analysis: fetch, parse, run all analyzers, optional CrUX/GSC.
+async fn run_inspect(
+    url_str: &str,
+    output: Option<&Path>,
+    format: &str,
+    _javascript: bool,
+    user_agent: Option<&str>,
+) -> Result<()> {
+    use crawlkit_core::analyzers::AnalyzerRegistry;
+    use crawlkit_core::http::HttpClient;
+    use crawlkit_core::HtmlParser;
+
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+
+    let url = url::Url::parse(url_str).with_context(|| format!("Invalid URL: {url_str}"))?;
+
+    // Initialize components
+    let default_ua = format!("crawlkit/{}", env!("CARGO_PKG_VERSION"));
+    let ua = user_agent.unwrap_or(&default_ua);
+    let http_config = crawlkit_core::http::HttpClientConfig {
+        timeout: std::time::Duration::from_secs(30),
+        max_redirects: 20,
+        retry_policy: crawlkit_core::http::RetryPolicy::default(),
+        user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![
+            ua.to_string()
+        ])),
+        max_body_size: 10 * 1024 * 1024,
+        pool_max_idle_per_host: 32,
+        pool_max_idle: 64,
+        http2_prior_knowledge: false,
+        tcp_keepalive: Some(std::time::Duration::from_secs(30)),
+    };
+    let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
+    let config = crawlkit_core::CrawlConfig::default();
+    let registry = AnalyzerRegistry::new(&config);
+
+    // Fetch
+    pb.set_message(format!("Fetching {url_str}..."));
+    let start = std::time::Instant::now();
+    let result = client.fetch(&url).await.context("Failed to fetch URL")?;
+    let fetch_time = start.elapsed();
+
+    // Parse
+    pb.set_message("Parsing HTML...");
+    let parsed = HtmlParser::parse(&result.body, &url).context("Failed to parse HTML")?;
+
+    // Run all analyzers
+    pb.set_message("Running 28 analyzers...");
+    let headers_vec: Vec<(String, String)> = result.headers.clone();
+    let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
+    let ctx = crawlkit_core::analyzers::AnalysisContext {
+        page: &parsed,
+        status_code: Some(result.status_code),
+        headers: &headers_vec,
+        response_time: Some(fetch_time),
+        redirect_chain: &empty_chain,
+        robots_txt: None,
+    };
+    let findings = registry.analyze(&ctx, &config);
+
+    // Fetch CrUX data from PageSpeed Insights if API key is available
+    let crux_data = {
+        let adapter = crawlkit_core::CruxAdapter::from_env();
+        if adapter.is_available() {
+            pb.set_message("Fetching CrUX data from PageSpeed Insights...");
+            adapter.fetch_crux_data(url_str).await.ok().flatten()
+        } else {
+            None
+        }
+    };
+
+    // Build report
+    let issues_by_severity: std::collections::HashMap<String, usize> = {
+        let mut map = std::collections::HashMap::new();
+        for f in &findings {
+            *map.entry(f.severity.as_str().to_string()).or_insert(0) += 1;
+        }
+        map
+    };
+    let issues_by_category: std::collections::HashMap<String, usize> = {
+        let mut map = std::collections::HashMap::new();
+        for f in &findings {
+            *map.entry(f.category.as_str().to_string()).or_insert(0) += 1;
+        }
+        map
+    };
+
+    let output_str = match format {
+        "json" => {
+            let issues: Vec<serde_json::Value> = findings
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "severity": f.severity.as_str(),
+                        "category": f.category.as_str(),
+                        "code": f.code,
+                        "title": f.title,
+                        "description": f.description,
+                        "recommendation": f.recommendation,
+                    })
+                })
+                .collect();
+
+            serde_json::to_string_pretty(&serde_json::json!({
+                "url": url_str,
+                "status_code": result.status_code,
+                "final_url": result.final_url.to_string(),
+                "fetch_time_ms": fetch_time.as_millis(),
+                "body_size": result.body.len(),
+                "title": parsed.meta.title,
+                "description": parsed.meta.description,
+                "canonical": parsed.meta.canonical,
+                "word_count": parsed.word_count,
+                "links": parsed.links.len(),
+                "images": parsed.images.len(),
+                "headings": parsed.headings.len(),
+                "findings_count": findings.len(),
+                "issues_by_severity": issues_by_severity,
+                "issues_by_category": issues_by_category,
+                "findings": issues,
+                "crux": crux_data.as_ref().map(|d| serde_json::json!({
+                    "lcp_p75_ms": d.lcp_p75,
+                    "inp_p75_ms": d.inp_p75,
+                    "cls_p75": d.cls_p75,
+                    "fcp_p75_ms": d.fcp_p75,
+                    "ttfb_p75_ms": d.ttfb_p75,
+                })),
+            }))?
+        }
+        "md" => {
+            let mut md = format!(
+                "# Page Inspection: {url_str}\n\n\
+                - **Status:** {}\n\
+                - **Final URL:** {}\n\
+                - **Fetch Time:** {:.0}ms\n\
+                - **Body Size:** {} bytes\n\
+                - **Title:** {}\n\
+                - **Description:** {}\n\
+                - **Canonical:** {}\n\
+                - **Word Count:** {}\n\
+                - **Links:** {} internal/external\n\
+                - **Images:** {}\n\
+                - **Headings:** {}\n",
+                result.status_code,
+                result.final_url,
+                fetch_time.as_millis(),
+                result.body.len(),
+                parsed.meta.title.as_deref().unwrap_or("(none)"),
+                parsed.meta.description.as_deref().unwrap_or("(none)"),
+                parsed
+                    .meta
+                    .canonical
+                    .as_ref()
+                    .map(|u| u.as_str())
+                    .unwrap_or("(none)"),
+                parsed.word_count,
+                parsed.links.len(),
+                parsed.images.len(),
+                parsed.headings.len(),
+            );
+
+            md.push_str(&format!("\n## Findings ({} total)\n\n", findings.len()));
+
+            if !findings.is_empty() {
+                md.push_str("| Severity | Code | Title |\n");
+                md.push_str("|----------|------|-------|\n");
+                for f in &findings {
+                    md.push_str(&format!(
+                        "| {} | {} | {} |\n",
+                        f.severity.as_str(),
+                        f.code,
+                        f.title
+                    ));
+                }
+            } else {
+                md.push_str("No issues found.\n");
+            }
+
+            if let Some(ref d) = crux_data {
+                md.push_str("\n## Core Web Vitals (CrUX p75)\n\n");
+                md.push_str("| Metric | Value |\n|---|---|\n");
+                if let Some(v) = d.lcp_p75 {
+                    md.push_str(&format!("| LCP | {v:.0}ms |\n"));
+                }
+                if let Some(v) = d.cls_p75 {
+                    md.push_str(&format!("| CLS | {v:.3} |\n"));
+                }
+                if let Some(v) = d.inp_p75 {
+                    md.push_str(&format!("| INP | {v:.0}ms |\n"));
+                }
+                if let Some(v) = d.fcp_p75 {
+                    md.push_str(&format!("| FCP | {v:.0}ms |\n"));
+                }
+                if let Some(v) = d.ttfb_p75 {
+                    md.push_str(&format!("| TTFB | {v:.0}ms |\n"));
+                }
+            }
+
+            md
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported format: {format}. Use json or md."
+            ))
+        }
+    };
+
+    pb.finish_with_message(format!(
+        "Inspection complete: {} findings ({} errors, {} warnings)",
+        findings.len(),
+        issues_by_severity.get("Error").unwrap_or(&0),
+        issues_by_severity.get("Warning").unwrap_or(&0),
+    ));
+
+    if let Some(out) = output {
+        std::fs::write(out, &output_str)?;
+        tracing::info!("Wrote inspection to {}", out.display());
     } else {
         println!("{output_str}");
     }

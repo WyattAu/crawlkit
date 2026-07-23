@@ -425,6 +425,19 @@ impl Storage {
                 data_json     TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS crux_metrics (
+                id            TEXT PRIMARY KEY,
+                page_id       TEXT NOT NULL REFERENCES pages(id),
+                url           TEXT NOT NULL,
+                lcp_p75       REAL,
+                inp_p75       REAL,
+                cls_p75       REAL,
+                fcp_p75       REAL,
+                ttfb_p75      REAL,
+                fetched_at    DATETIME NOT NULL,
+                UNIQUE(page_id)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_pages_crawl ON pages(crawl_id);
             CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_url);
             CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_url);
@@ -885,6 +898,104 @@ impl Storage {
 
         Ok(urls)
     }
+
+    /// Store CrUX metrics for a page.
+    pub fn insert_crux_metrics(
+        &self,
+        page_id: &str,
+        url: &str,
+        lcp_p75: Option<f64>,
+        inp_p75: Option<f64>,
+        cls_p75: Option<f64>,
+        fcp_p75: Option<f64>,
+        ttfb_p75: Option<f64>,
+    ) -> Result<(), StorageError> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT OR REPLACE INTO crux_metrics (id, page_id, url, lcp_p75, inp_p75, cls_p75, fcp_p75, ttfb_p75, fetched_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            params![
+                uuid::Uuid::new_v4().to_string(),
+                page_id,
+                url,
+                lcp_p75,
+                inp_p75,
+                cls_p75,
+                fcp_p75,
+                ttfb_p75,
+                chrono::Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Get CrUX metrics for a page.
+    pub fn get_crux_metrics(&self, page_id: &str) -> Result<Option<CruxMetrics>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT url, lcp_p75, inp_p75, cls_p75, fcp_p75, ttfb_p75 FROM crux_metrics WHERE page_id = ?1",
+            params![page_id],
+            |row| {
+                Ok(CruxMetrics {
+                    url: row.get(0)?,
+                    lcp_p75: row.get(1)?,
+                    inp_p75: row.get(2)?,
+                    cls_p75: row.get(3)?,
+                    fcp_p75: row.get(4)?,
+                    ttfb_p75: row.get(5)?,
+                })
+            },
+        );
+
+        match result {
+            Ok(m) => Ok(Some(m)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
+
+    /// Get CrUX metrics for all pages in a crawl.
+    pub fn get_crux_metrics_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<CruxMetrics>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT cm.url, cm.lcp_p75, cm.inp_p75, cm.cls_p75, cm.fcp_p75, cm.ttfb_p75
+             FROM crux_metrics cm
+             JOIN pages p ON cm.page_id = p.id
+             WHERE p.crawl_id = ?1",
+        )?;
+
+        let rows = stmt.query_map(params![crawl_id], |row| {
+            Ok(CruxMetrics {
+                url: row.get(0)?,
+                lcp_p75: row.get(1)?,
+                inp_p75: row.get(2)?,
+                cls_p75: row.get(3)?,
+                fcp_p75: row.get(4)?,
+                ttfb_p75: row.get(5)?,
+            })
+        })?;
+
+        let mut metrics = Vec::new();
+        for row in rows {
+            metrics.push(row?);
+        }
+
+        Ok(metrics)
+    }
+}
+
+/// CrUX metrics for a single page.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CruxMetrics {
+    pub url: String,
+    pub lcp_p75: Option<f64>,
+    pub inp_p75: Option<f64>,
+    pub cls_p75: Option<f64>,
+    pub fcp_p75: Option<f64>,
+    pub ttfb_p75: Option<f64>,
 }
 
 #[cfg(test)]

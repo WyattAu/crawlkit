@@ -395,6 +395,7 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
     let stats = read_stats(conn, crawl_id)?;
     let top_issues = read_top_issues(conn, crawl_id, 20)?;
     let pages = read_pages(conn, crawl_id)?;
+    let crux_metrics = read_crux_metrics(conn, crawl_id)?;
 
     let severity_color = |s: &str| -> &'static str {
         match s {
@@ -510,6 +511,10 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
   a {{ color: #2563eb; text-decoration: none; }}
   a:hover {{ text-decoration: underline; }}
   .sr-only {{ position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }}
+  .cwv-good {{ color: #16a34a; font-weight: 600; }}
+  .cwv-avg {{ color: #ca8a04; font-weight: 600; }}
+  .cwv-poor {{ color: #dc2626; font-weight: 600; }}
+  .cwv-na {{ color: var(--muted); font-style: italic; }}
   @media (max-width: 640px) {{
     body {{ padding: 1rem; }}
     .cards {{ grid-template-columns: repeat(2, 1fr); }}
@@ -529,6 +534,8 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
   <div class="card"><div class="value">{total_size}</div><div class="label">Total Size</div></div>
 </div>
 
+{cwv_summary_cards}
+
 <h2>Issue Distribution</h2>
 <div class="bar-chart" role="img" aria-label="Issue distribution by severity">{severity_bars}</div>
 
@@ -543,6 +550,8 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
 <thead><tr><th scope="col">Severity</th><th scope="col">Code</th><th scope="col">Title</th><th scope="col" style="text-align:right">Pages</th></tr></thead>
 <tbody>{issue_rows}</tbody>
 </table>
+
+{cwv_detail_section}
 
 <h2>All Pages</h2>
 <div class="search"><label for="search" class="sr-only">Filter pages</label><input type="text" id="search" placeholder="Filter pages..." oninput="filterTable()"></div>
@@ -574,6 +583,7 @@ function filterTable() {{
             .total_body_size
             .map(|v| format!("{:.1} KB", v as f64 / 1024.0))
             .unwrap_or_else(|| "—".into()),
+        cwv_summary_cards = build_cwv_summary_cards(&crux_metrics),
         severity_bars = severity_bars,
         category_rows = {
             let mut cats: Vec<_> = stats.issues_by_category.iter().collect();
@@ -585,6 +595,7 @@ function filterTable() {{
                 .collect::<String>()
         },
         issue_rows = issue_rows,
+        cwv_detail_section = build_cwv_detail_section(&crux_metrics),
         rows = rows,
     );
 
@@ -785,6 +796,38 @@ fn read_stats(conn: &Connection, crawl_id: &str) -> Result<CrawlStats, ExportErr
     })
 }
 
+#[derive(Debug, Clone)]
+struct CruxRow {
+    url: String,
+    lcp_p75: Option<f64>,
+    inp_p75: Option<f64>,
+    cls_p75: Option<f64>,
+    fcp_p75: Option<f64>,
+    ttfb_p75: Option<f64>,
+}
+
+fn read_crux_metrics(conn: &Connection, crawl_id: &str) -> Result<Vec<CruxRow>, ExportError> {
+    let mut stmt = conn.prepare(
+        "SELECT cm.url, cm.lcp_p75, cm.inp_p75, cm.cls_p75, cm.fcp_p75, cm.ttfb_p75
+         FROM crux_metrics cm
+         JOIN pages p ON cm.page_id = p.id
+         WHERE p.crawl_id = ?1",
+    )?;
+    let rows = stmt
+        .query_map([crawl_id], |row| {
+            Ok(CruxRow {
+                url: row.get(0)?,
+                lcp_p75: row.get(1)?,
+                inp_p75: row.get(2)?,
+                cls_p75: row.get(3)?,
+                fcp_p75: row.get(4)?,
+                ttfb_p75: row.get(5)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(rows)
+}
+
 fn read_top_issues(
     conn: &Connection,
     crawl_id: &str,
@@ -812,6 +855,177 @@ fn read_top_issues(
         })?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
+}
+
+fn cwv_lcp_class(val: f64) -> &'static str {
+    if val < 2500.0 {
+        "cwv-good"
+    } else if val < 4000.0 {
+        "cwv-avg"
+    } else {
+        "cwv-poor"
+    }
+}
+
+fn cwv_cls_class(val: f64) -> &'static str {
+    if val < 0.1 {
+        "cwv-good"
+    } else if val < 0.25 {
+        "cwv-avg"
+    } else {
+        "cwv-poor"
+    }
+}
+
+fn cwv_inp_class(val: f64) -> &'static str {
+    if val < 200.0 {
+        "cwv-good"
+    } else if val < 500.0 {
+        "cwv-avg"
+    } else {
+        "cwv-poor"
+    }
+}
+
+fn cwv_generic_class(_val: f64) -> &'static str {
+    "cwv-good"
+}
+
+fn build_cwv_summary_cards(metrics: &[CruxRow]) -> String {
+    if metrics.is_empty() {
+        return String::new();
+    }
+
+    let fmt = |val: Option<f64>, unit: &str| -> (String, &'static str) {
+        match val {
+            Some(v) => {
+                let cls = if unit == "ms" {
+                    if v < 2500.0 {
+                        "cwv-good"
+                    } else if v < 4000.0 {
+                        "cwv-avg"
+                    } else {
+                        "cwv-poor"
+                    }
+                } else if unit.is_empty() {
+                    // CLS is unitless
+                    if v < 0.1 {
+                        "cwv-good"
+                    } else if v < 0.25 {
+                        "cwv-avg"
+                    } else {
+                        "cwv-poor"
+                    }
+                } else {
+                    // ms for INP/FCP/TTFB
+                    if v < 200.0 {
+                        "cwv-good"
+                    } else if v < 500.0 {
+                        "cwv-avg"
+                    } else {
+                        "cwv-poor"
+                    }
+                };
+                let display = if unit.is_empty() {
+                    format!("{v:.3}")
+                } else if unit == "ms" {
+                    format!("{:.0}ms", v)
+                } else {
+                    format!("{v:.0}{unit}")
+                };
+                (display, cls)
+            }
+            None => ("N/A".into(), "cwv-na"),
+        }
+    };
+
+    // Average across all pages
+    let avg_lcp = average(metrics.iter().filter_map(|m| m.lcp_p75));
+    let avg_cls = average(metrics.iter().filter_map(|m| m.cls_p75));
+    let avg_inp = average(metrics.iter().filter_map(|m| m.inp_p75));
+
+    let (lcp_display, lcp_cls) = fmt(avg_lcp, "ms");
+    let (cls_display, cls_cls_val) = fmt(avg_cls, "");
+    let (inp_display, inp_cls) = fmt(avg_inp, "ms");
+
+    format!(
+        r#"<div class="cards">
+  <div class="card"><div class="value {lcp_cls}">{lcp_display}</div><div class="label">Avg LCP (p75)</div></div>
+  <div class="card"><div class="value {cls_cls_val}">{cls_display}</div><div class="label">Avg CLS (p75)</div></div>
+  <div class="card"><div class="value {inp_cls}">{inp_display}</div><div class="label">Avg INP (p75)</div></div>
+  <div class="card"><div class="value">{}</div><div class="label">Pages with CrUX</div></div>
+</div>"#,
+        metrics.len(),
+    )
+}
+
+fn build_cwv_detail_section(metrics: &[CruxRow]) -> String {
+    if metrics.is_empty() {
+        return String::new();
+    }
+
+    let mut rows = String::new();
+    for m in metrics {
+        let lcp_cls = m.lcp_p75.map(cwv_lcp_class).unwrap_or("cwv-na");
+        let cls_cls = m.cls_p75.map(cwv_cls_class).unwrap_or("cwv-na");
+        let inp_cls = m.inp_p75.map(cwv_inp_class).unwrap_or("cwv-na");
+        let fcp_cls = m.fcp_p75.map(cwv_generic_class).unwrap_or("cwv-na");
+        let ttfb_cls = m.ttfb_p75.map(cwv_generic_class).unwrap_or("cwv-na");
+
+        rows.push_str(&format!(
+            r#"<tr>
+  <td><a href="{url}" target="_blank">{url}</a></td>
+  <td class="num {lcp_cls}">{lcp}</td>
+  <td class="num {cls_cls}">{cls}</td>
+  <td class="num {inp_cls}">{inp}</td>
+  <td class="num {fcp_cls}">{fcp}</td>
+  <td class="num {ttfb_cls}">{ttfb}</td>
+</tr>"#,
+            url = m.url,
+            lcp = m
+                .lcp_p75
+                .map(|v| format!("{:.0}ms", v))
+                .unwrap_or_else(|| "—".into()),
+            cls = m
+                .cls_p75
+                .map(|v| format!("{v:.3}"))
+                .unwrap_or_else(|| "—".into()),
+            inp = m
+                .inp_p75
+                .map(|v| format!("{:.0}ms", v))
+                .unwrap_or_else(|| "—".into()),
+            fcp = m
+                .fcp_p75
+                .map(|v| format!("{:.0}ms", v))
+                .unwrap_or_else(|| "—".into()),
+            ttfb = m
+                .ttfb_p75
+                .map(|v| format!("{:.0}ms", v))
+                .unwrap_or_else(|| "—".into()),
+        ));
+    }
+
+    format!(
+        r#"<h2>Core Web Vitals</h2>
+<table>
+<thead><tr><th scope="col">URL</th><th scope="col" style="text-align:right">LCP (p75)</th><th scope="col" style="text-align:right">CLS (p75)</th><th scope="col" style="text-align:right">INP (p75)</th><th scope="col" style="text-align:right">FCP (p75)</th><th scope="col" style="text-align:right">TTFB (p75)</th></tr></thead>
+<tbody>{rows}</tbody>
+</table>"#
+    )
+}
+
+fn average<'a>(iter: impl Iterator<Item = f64> + 'a) -> Option<f64> {
+    let mut sum = 0.0;
+    let mut count = 0usize;
+    for v in iter {
+        sum += v;
+        count += 1;
+    }
+    if count > 0 {
+        Some(sum / count as f64)
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

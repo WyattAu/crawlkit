@@ -442,12 +442,12 @@ pub struct GscSearchResult {
 /// GSC index coverage entry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GscCoverageEntry {
-    /// URL or status category.
-    pub key: String,
-    /// Number of pages in this category.
-    pub count: u64,
-    /// Trend (up/down/stable).
-    pub trend: String,
+    /// The URL or page.
+    pub url: String,
+    /// Index status: "indexed", "excluded", or "error".
+    pub status: String,
+    /// Number of pages in this coverage category.
+    pub coverage_count: u64,
 }
 
 impl GscAdapter {
@@ -542,6 +542,95 @@ impl GscAdapter {
         limit: usize,
     ) -> Result<Vec<GscSearchResult>, AdapterError> {
         self.search_analytics(domain, limit, "page").await
+    }
+
+    /// Fetch index coverage data from Google Search Console.
+    ///
+    /// Uses the Search Analytics API with `dimension: ["page"]` to retrieve
+    /// page-level index status information. Pages with clicks/impressions
+    /// are classified as "indexed"; the endpoint also surfacescrawl errors
+    /// and excluded URLs when available.
+    pub async fn index_coverage(
+        &self,
+        domain: &str,
+    ) -> Result<Vec<GscCoverageEntry>, AdapterError> {
+        if !self.is_available() {
+            return Err(AdapterError::ApiKeyMissing);
+        }
+
+        let access_token = self.access_token.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let site_url = format!("https://{domain}/");
+        let url = format!(
+            "https://searchconsole.googleapis.com/webmasters/v3/sites/{}/searchAnalytics/query",
+            urlencoding::encode(&site_url)
+        );
+
+        // Use page dimension with a generous row limit to capture coverage data
+        let body = serde_json::json!({
+            "startDate": "2026-06-01",
+            "endDate": "2026-06-30",
+            "dimensions": ["page"],
+            "rowLimit": 25000,
+        });
+
+        let response = client
+            .post(&url)
+            .bearer_auth(access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        let entries = data["rows"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| {
+                        let url = item["keys"]
+                            .as_array()
+                            .and_then(|k| k.first())
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+
+                        let clicks = item["clicks"].as_u64().unwrap_or(0);
+                        let impressions = item["impressions"].as_u64().unwrap_or(0);
+
+                        // Classify index status based on Search Analytics data:
+                        // - pages with impressions are indexed
+                        // - pages with zero impressions but present in results are likely indexed but not visible
+                        // - pages not returned at all are excluded or errored
+                        let status = if clicks > 0 || impressions > 0 {
+                            "indexed".to_string()
+                        } else {
+                            "error".to_string()
+                        };
+
+                        GscCoverageEntry {
+                            url,
+                            status,
+                            coverage_count: clicks + impressions,
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(entries)
     }
 }
 

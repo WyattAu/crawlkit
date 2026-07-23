@@ -103,19 +103,24 @@ impl BacklinkAnalyzer {
     /// Adds an internal link from `source` to `target`.
     ///
     /// Both URLs should be normalized (e.g. trailing slash stripped).
+    /// Fragments are automatically stripped.
     pub fn add_link(&mut self, source: &str, target: &str) {
-        self.all_urls.insert(source.to_string());
-        self.all_urls.insert(target.to_string());
+        // Strip fragments from URLs for consistent comparison
+        let source_normalized = source.split('#').next().unwrap_or(source);
+        let target_normalized = target.split('#').next().unwrap_or(target);
+
+        self.all_urls.insert(source_normalized.to_string());
+        self.all_urls.insert(target_normalized.to_string());
 
         self.outgoing
-            .entry(source.to_string())
+            .entry(source_normalized.to_string())
             .or_default()
-            .insert(target.to_string());
+            .insert(target_normalized.to_string());
 
         self.incoming
-            .entry(target.to_string())
+            .entry(target_normalized.to_string())
             .or_default()
-            .insert(source.to_string());
+            .insert(source_normalized.to_string());
     }
 
     /// Adds a backlink record (used for external backlink tracking).

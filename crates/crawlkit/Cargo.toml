@@ -34,3 +34,7 @@ chrono.workspace = true
 url.workspace = true
 uuid.workspace = true
 sha2.workspace = true
+tracing-opentelemetry = "0.33"
+opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.32", features = ["trace"] }
+opentelemetry-stdout = { version = "0.32", features = ["trace"] }

@@ -16,11 +16,19 @@ use axum::routing::{get, post};
 use axum::Router;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use prometheus_client::encoding::text::encode;
+use prometheus_client::metrics::counter::Counter;
+use prometheus_client::metrics::family::Family;
+use prometheus_client::metrics::gauge::Gauge;
+use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
+use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
 use crawlkit_core::storage::Storage;
+use crawlkit_core::AuditTrail;
 use crawlkit_core::CrawlConfig;
 
 // ---------------------------------------------------------------------------
@@ -72,6 +80,84 @@ impl RateLimitBucket {
 }
 
 // ---------------------------------------------------------------------------
+// Prometheus metrics
+// ---------------------------------------------------------------------------
+
+#[derive(Clone)]
+struct Metrics {
+    registry: Arc<tokio::sync::RwLock<Registry>>,
+    crawls_total: Counter,
+    pages_crawled_total: Counter,
+    issues_total: Counter,
+    requests_total: Family<EndpointLabel, Counter>,
+    request_duration_seconds: Histogram,
+    active_crawls: Gauge,
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
+struct EndpointLabel {
+    endpoint: String,
+}
+
+impl Metrics {
+    fn new() -> Self {
+        let mut registry = Registry::default();
+
+        let crawls_total = Counter::default();
+        registry.register(
+            "crawlkit_crawls_total",
+            "Total number of crawls started",
+            crawls_total.clone(),
+        );
+
+        let pages_crawled_total = Counter::default();
+        registry.register(
+            "crawlkit_pages_crawled_total",
+            "Total pages crawled across all crawls",
+            pages_crawled_total.clone(),
+        );
+
+        let issues_total = Counter::default();
+        registry.register(
+            "crawlkit_issues_total",
+            "Total issues found across all crawls",
+            issues_total.clone(),
+        );
+
+        let requests_total = Family::<EndpointLabel, Counter>::default();
+        registry.register(
+            "crawlkit_requests_total",
+            "Total API requests by endpoint",
+            requests_total.clone(),
+        );
+
+        let request_duration_seconds = Histogram::new(exponential_buckets(0.005, 2.0, 10));
+        registry.register(
+            "crawlkit_request_duration_seconds",
+            "API request duration in seconds",
+            request_duration_seconds.clone(),
+        );
+
+        let active_crawls = Gauge::default();
+        registry.register(
+            "crawlkit_active_crawls",
+            "Number of currently active crawls",
+            active_crawls.clone(),
+        );
+
+        Self {
+            registry: Arc::new(tokio::sync::RwLock::new(registry)),
+            crawls_total,
+            pages_crawled_total,
+            issues_total,
+            requests_total,
+            request_duration_seconds,
+            active_crawls,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Application state
 // ---------------------------------------------------------------------------
 
@@ -81,6 +167,8 @@ struct AppState {
     api_keys: Arc<DashMap<String, ApiKey>>,
     rate_limits: Arc<DashMap<String, RateLimitBucket>>,
     crawl_results: Arc<DashMap<String, CrawlResult>>,
+    audit_trail: Arc<AuditTrail>,
+    metrics: Arc<Metrics>,
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +284,94 @@ impl IntoResponse for ApiError {
 }
 
 // ---------------------------------------------------------------------------
+// Input validation
+// ---------------------------------------------------------------------------
+
+fn validate_url(url: &str) -> Result<(), ApiError> {
+    if url.len() > 2048 {
+        return Err(ApiError::BadRequest(
+            "URL exceeds 2048 characters".to_string(),
+        ));
+    }
+    let parsed =
+        url::Url::parse(url).map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return Err(ApiError::BadRequest(
+            "URL must use http or https scheme".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_max_pages(n: usize) -> Result<(), ApiError> {
+    if !(1..=10000).contains(&n) {
+        return Err(ApiError::BadRequest(
+            "max_pages must be between 1 and 10000".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_concurrency(n: usize) -> Result<(), ApiError> {
+    if !(1..=128).contains(&n) {
+        return Err(ApiError::BadRequest(
+            "concurrency must be between 1 and 128".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_delay(ms: u64) -> Result<(), ApiError> {
+    if ms > 60000 {
+        return Err(ApiError::BadRequest(
+            "request_delay_ms must be at most 60000".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Metrics endpoint
+// ---------------------------------------------------------------------------
+
+async fn metrics_endpoint(State(state): State<AppState>) -> Response {
+    let registry = state.metrics.registry.read().await;
+    let mut buffer = String::new();
+    encode(&mut buffer, &registry).expect("Failed to encode metrics");
+    (
+        StatusCode::OK,
+        [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+        buffer,
+    )
+        .into_response()
+}
+
+// ---------------------------------------------------------------------------
+// Middleware: request metrics tracking
+// ---------------------------------------------------------------------------
+
+async fn request_metrics_middleware(
+    State(state): State<AppState>,
+    axum::extract::OriginalUri(uri): axum::extract::OriginalUri,
+    request: axum::extract::Request,
+    next: Next,
+) -> Response {
+    let start = std::time::Instant::now();
+    let response = next.run(request).await;
+    let duration = start.elapsed().as_secs_f64();
+
+    let endpoint = uri.path().to_string();
+    state
+        .metrics
+        .requests_total
+        .get_or_create(&EndpointLabel { endpoint })
+        .inc();
+    state.metrics.request_duration_seconds.observe(duration);
+
+    response
+}
+
+// ---------------------------------------------------------------------------
 // Middleware: API key authentication + rate limiting
 // ---------------------------------------------------------------------------
 
@@ -229,7 +405,16 @@ async fn auth_middleware(
         return Err(ApiError::RateLimited);
     }
 
-    Ok(next.run(request).await)
+    let remaining = bucket.tokens.floor() as u64;
+    let reset_seconds = ((bucket.max_tokens - bucket.tokens) / bucket.refill_rate).ceil() as u64;
+    drop(bucket);
+
+    let mut response = next.run(request).await;
+    let resp_headers = response.headers_mut();
+    resp_headers.insert("X-RateLimit-Limit", rpm.into());
+    resp_headers.insert("X-RateLimit-Remaining", remaining.into());
+    resp_headers.insert("X-RateLimit-Reset", reset_seconds.into());
+    Ok(response)
 }
 
 // ---------------------------------------------------------------------------
@@ -288,6 +473,11 @@ async fn start_crawl(
     State(state): State<AppState>,
     Json(req): Json<CreateCrawlRequest>,
 ) -> Result<(StatusCode, Json<CrawlResponse>), ApiError> {
+    validate_url(&req.start_url)?;
+    validate_max_pages(req.max_pages)?;
+    validate_concurrency(req.concurrency)?;
+    validate_delay(req.request_delay_ms)?;
+
     let start_url = url::Url::parse(&req.start_url)
         .map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
 
@@ -317,6 +507,9 @@ async fn start_crawl(
     };
 
     state.crawl_results.insert(crawl_id.clone(), result);
+
+    state.metrics.crawls_total.inc();
+    state.metrics.active_crawls.inc();
 
     // Spawn crawl task in background
     let state_clone = state.clone();
@@ -381,6 +574,10 @@ async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
         .collect();
 
     Json(results)
+}
+
+async fn get_audit_events(State(state): State<AppState>) -> Json<Vec<crawlkit_core::AuditEvent>> {
+    Json(state.audit_trail.events())
 }
 
 #[derive(Serialize)]
@@ -490,8 +687,18 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
     let mut pages_crawled = 0usize;
     let mut total_issues = 0usize;
     let mut visited = std::collections::HashSet::new();
+    let mut content_hashes = std::collections::HashSet::new();
+    let crawl_start = std::time::Instant::now();
 
     while pages_crawled < max_pages {
+        // Check time budget
+        if let Some(max_time) = config.max_time {
+            if crawl_start.elapsed() >= max_time {
+                tracing::info!("Crawl time limit reached: {max_time:?}");
+                break;
+            }
+        }
+
         let entry = {
             let q = queue.lock().await;
             q.pop()
@@ -536,7 +743,22 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             }
         };
         let fetch_time = start.elapsed();
+
+        // Content-hash deduplication
+        {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(result.body.as_bytes());
+            let result = hasher.finalize();
+            let hash: String = result.iter().map(|b| format!("{b:02x}")).collect();
+            if !content_hashes.insert(hash) {
+                tracing::debug!("Skipping duplicate content: {}", entry.url);
+                continue;
+            }
+        }
+
         pages_crawled += 1;
+        state.metrics.pages_crawled_total.inc();
 
         let parsed = match HtmlParser::parse(&result.body, &entry.url) {
             Ok(p) => p,
@@ -563,6 +785,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         };
         let findings = analyzer_registry.analyze(&ctx, &config);
         total_issues += findings.len();
+        state.metrics.issues_total.inc_by(findings.len() as u64);
 
         let page_data = crawlkit_core::storage::PageData {
             id: Uuid::new_v4().to_string(),
@@ -631,6 +854,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         result.completed_at = Some(Utc::now());
     }
 
+    state.metrics.active_crawls.dec();
     tracing::info!("Crawl {crawl_id} completed: {pages_crawled} pages, {total_issues} issues");
 }
 
@@ -640,12 +864,33 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crawlkit_api=info")),
-        )
-        .init();
+    use opentelemetry::trace::TracerProvider as _;
+    use tracing_opentelemetry::OpenTelemetryLayer;
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::Layer;
+
+    let use_otel = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
+
+    let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crawlkit_api=info")),
+    );
+
+    if use_otel {
+        use opentelemetry::trace::TracerProvider;
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+            .build();
+        let tracer = provider.tracer("crawlkit-api");
+        let otel_layer = OpenTelemetryLayer::new(tracer);
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .with(otel_layer)
+            .init();
+    } else {
+        tracing_subscriber::registry().with(fmt_layer).init();
+    }
 
     let db_path =
         std::env::var("CRAWLKIT_DB_PATH").unwrap_or_else(|_| "crawlkit-api.db".to_string());
@@ -672,10 +917,18 @@ async fn main() -> anyhow::Result<()> {
         api_keys,
         rate_limits: Arc::new(DashMap::new()),
         crawl_results: Arc::new(DashMap::new()),
+        audit_trail: Arc::new(AuditTrail::new()),
+        metrics: Arc::new(Metrics::new()),
     };
+
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_methods(Any)
+        .allow_headers(Any);
 
     let app = Router::new()
         .route("/health", get(health))
+        .route("/metrics", get(metrics_endpoint))
         .route("/api/v1/crawls", post(start_crawl).get(list_crawls))
         .route("/api/v1/crawls/{crawl_id}", get(get_crawl_status))
         .route("/api/v1/crawls/{crawl_id}/stats", get(get_crawl_stats))
@@ -684,6 +937,12 @@ async fn main() -> anyhow::Result<()> {
             get(get_crawl_backlinks),
         )
         .route("/api/v1/keys", post(create_api_key).get(list_api_keys))
+        .route("/api/v1/audit", get(get_audit_events))
+        .layer(cors)
+        .layer(middleware::from_fn_with_state(
+            state.clone(),
+            request_metrics_middleware,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth_middleware,

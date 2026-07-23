@@ -115,12 +115,40 @@ impl EncryptionManager {
                     })
             }
             KeySource::Keyring(service) => {
-                // Placeholder for system keyring integration
-                // In production, use keyring crate
-                Err(EncryptionError::KeyNotFound(format!(
-                    "Keyring integration not yet implemented for service: {}",
-                    service
-                )))
+                // Try environment variable first as fallback
+                let env_key = format!(
+                    "CRAWLKIT_KEYRING_{}",
+                    service.to_uppercase().replace('-', "_")
+                );
+                if let Ok(key) = std::env::var(&env_key) {
+                    return Ok(key.into_bytes());
+                }
+
+                // Try file-based keyring
+                let keyring_path = dirs::home_dir()
+                    .map(|h| {
+                        h.join(".crawlkit")
+                            .join("keyrings")
+                            .join(format!("{}.key", service))
+                    })
+                    .ok_or_else(|| {
+                        EncryptionError::KeyNotFound("Cannot determine home directory".to_string())
+                    })?;
+
+                if keyring_path.exists() {
+                    std::fs::read(&keyring_path).map_err(|e| {
+                        EncryptionError::KeyNotFound(format!(
+                            "Failed to read keyring file {}: {}",
+                            keyring_path.display(),
+                            e
+                        ))
+                    })
+                } else {
+                    Err(EncryptionError::KeyNotFound(format!(
+                        "Keyring '{}' not found. Set {} environment variable or create keyring file at {}",
+                        service, env_key, keyring_path.display()
+                    )))
+                }
             }
         }
     }

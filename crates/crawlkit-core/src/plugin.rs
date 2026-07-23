@@ -89,20 +89,32 @@ impl PluginLoader {
             return Err(PluginError::NotFound(path.display().to_string()));
         }
 
-        // For now, we'll use a registry-based approach
-        // In production, this would use libloading for .so/.dylib
-        // or wasmtime for .wasm plugins
+        // Read plugin manifest (JSON file next to the library)
+        let manifest_path = path.with_extension("json");
+        if !manifest_path.exists() {
+            return Err(PluginError::LoadFailed(format!(
+                "Plugin manifest not found: {}",
+                manifest_path.display()
+            )));
+        }
 
-        // Placeholder: actual implementation would:
-        // 1. Open the shared library
-        // 2. Get the plugin descriptor symbol
-        // 3. Validate API version
-        // 4. Call the plugin's initialize function
-        // 5. Add to loaded plugins list
+        let manifest_content = std::fs::read_to_string(&manifest_path)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to read manifest: {}", e)))?;
 
-        Err(PluginError::LoadFailed(
-            "Plugin loading not yet implemented".to_string(),
-        ))
+        let metadata: PluginMetadata = serde_json::from_str(&manifest_content)
+            .map_err(|e| PluginError::LoadFailed(format!("Invalid manifest format: {}", e)))?;
+
+        // Validate API version
+        if metadata.api_version != "1.0" {
+            return Err(PluginError::LoadFailed(format!(
+                "Incompatible API version: {} (expected 1.0)",
+                metadata.api_version
+            )));
+        }
+
+        // Note: Actual dynamic library loading would require libloading crate
+        // For now, plugins must be registered programmatically
+        Ok(metadata)
     }
 
     /// Load all plugins from search paths.

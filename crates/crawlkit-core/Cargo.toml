@@ -41,6 +41,7 @@ async-trait = "0.1"
 urlencoding = "2.1"
 aes-gcm = "0.10"
 getrandom = "0.2"
+dirs = "5.0"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1565,6 +1565,7 @@ const REQUIRED_PROPERTIES: &[(&str, &[&str])] = &[
     ("Article", &["headline", "author"]),
     ("NewsArticle", &["headline", "author"]),
     ("BlogPosting", &["headline", "author"]),
+    ("ScholarlyArticle", &["headline", "author"]),
     ("Product", &["name"]),
     ("Organization", &["name"]),
     ("LocalBusiness", &["name", "address"]),
@@ -1572,6 +1573,7 @@ const REQUIRED_PROPERTIES: &[(&str, &[&str])] = &[
     ("BreadcrumbList", &["itemListElement"]),
     ("FAQPage", &["mainEntity"]),
     ("HowTo", &["name"]),
+    ("HowToStep", &["text"]),
     ("Event", &["name", "startDate"]),
     ("Recipe", &["name"]),
     ("VideoObject", &["name", "embedUrl"]),
@@ -1579,35 +1581,80 @@ const REQUIRED_PROPERTIES: &[(&str, &[&str])] = &[
     ("Book", &["name"]),
     ("MusicAlbum", &["name"]),
     ("Movie", &["name"]),
+    ("Quiz", &["name"]),
+    ("Question", &["text"]),
+    ("Answer", &["text"]),
+    ("Drug", &["name"]),
+    ("DefinedTerm", &["name"]),
+    ("DefinedTermSet", &["name"]),
+    ("Dataset", &["name"]),
 ];
 
 /// Recognized Schema.org types for validation.
 const RECOGNIZED_TYPES: &[&str] = &[
+    // Core content types
     "Article",
     "NewsArticle",
     "BlogPosting",
+    "ScholarlyArticle",
+    // Product & commerce
     "Product",
+    "Offer",
+    "Brand",
+    "AggregateRating",
+    "Review",
+    // Organization & people
     "Organization",
     "LocalBusiness",
+    "Person",
+    "Place",
+    // Web
     "WebSite",
     "WebPage",
+    "WebPageElement",
+    // Navigation
     "BreadcrumbList",
+    "ItemList",
+    "ListItem",
+    // Interactive content
     "FAQPage",
     "HowTo",
+    "HowToStep",
+    "HowToDirection",
+    "HowToSupply",
+    "HowToTool",
+    "Quiz",
+    "Question",
+    "Answer",
+    // Media
     "Event",
     "Recipe",
     "VideoObject",
+    "ImageObject",
+    "AudioObject",
+    // Software
     "SoftwareApplication",
+    "SoftwareSourceCode",
+    // Books & media
     "Book",
     "MusicAlbum",
+    "MusicRecording",
     "Movie",
-    "Person",
-    "Place",
-    "ItemList",
-    "AggregateRating",
-    "Review",
-    "Offer",
-    "Brand",
+    "TVSeries",
+    // Knowledge & data
+    "Dataset",
+    "DataDownload",
+    "DefinedTerm",
+    "DefinedTermSet",
+    // Medical
+    "Drug",
+    "MedicalWebPage",
+    "MedicalCondition",
+    "MedicalProcedure",
+    // Creative works
+    "CreativeWork",
+    "Course",
+    "LearningResource",
 ];
 
 pub struct StructuredDataValidator;

@@ -5,21 +5,45 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-07-23
 
 ### Added
-- Full crawl loop with HTML parsing, link extraction, and analyzer pipeline
-- 18 analyzers: HTTP, SEO, Content, Links, Images, Schema, Security, Performance, Mobile, Accessibility, Social
-- SQLite storage with WAL mode and batch inserts
-- Export formats: CSV, JSON, Markdown, HTML (interactive), SQLite
-- Crawl comparison engine (diff between snapshots)
-- REST API mode (crawlkit-api crate)
+- 28 total analyzers (23 core + 4 AI + 1 WASM)
+- AI search optimization analyzers:
+  - AI crawler accessibility analyzer (robots.txt AI bot detection)
+  - AI content structure analyzer (AI-friendly content patterns)
+  - AI citation eligibility analyzer (source authority signals)
+  - AI answer box analyzer (FAQ/HowTo/Q&A schema readiness)
+  - AI bot registry (GPTBot, Google-Extended, PerplexityBot, ClaudeBot, etc.)
+- WASM pattern analyzer (static detection of WASM issues)
+- Concurrent DNS cache with background prefetching and TTL eviction
+- Criterion benchmarks for parser, analyzers, registry, queue, storage
+- 3 runnable examples: basic-crawl, custom-analyzer, export-report
+- 3 tutorials: getting-started, custom-analyzers, ci-integration
+- Cross-platform release workflow (Linux x86/aarch64, macOS x86/aarch64, Windows x86)
+- REST API mode with API key authentication and rate limiting
 - Backlink analysis with PageRank scoring
-- CLI with crawl, compare, report subcommands
-- Progress bars and real-time stats
+- Crawl comparison engine (diff between snapshots)
+- Export formats: CSV, JSON, Markdown, HTML (interactive), SQLite
+- Feature flag system for JS rendering, AI analyzers, WASM analyzers
+- Circuit breaker pattern for fault tolerance
+- Backpressure controller and bounded pipeline
+- Resource usage tracking and monitoring
+- Audit trail system
+- Determinism controller for reproducible crawls
+- Encryption manager for sensitive data
+- Playwright integration (placeholder for JS rendering)
+- JS rendering decision logic
+- Real User Monitoring (RUM) integration
+
+### Changed
+- HTTP/2 compatibility improved (http2_prior_knowledge disabled for broader compatibility)
+- SQLite storage now uses WAL mode with batch inserts
+- CLI expanded with crawl, compare, report subcommands
 
 ### Fixed
 - HTTP/2 compatibility issue (removed http2_prior_knowledge)
+- Scope filtering and progress reporting issues
 
 ## [0.1.0] - 2026-07-22
 

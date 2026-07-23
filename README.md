@@ -3,7 +3,7 @@
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-401-passing-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Tests](https://img.shields.io/badge/tests-404-passing-green.svg)](https://github.com/WyattAu/crawlkit)
 [![Analyzers](https://img.shields.io/badge/analyzers-28-blue.svg)](https://github.com/WyattAu/crawlkit)
 
 A high-performance Rust-based site crawler and SEO analysis toolkit that surpasses commercial tools like Ahrefs in depth, speed, and extensibility.

@@ -324,7 +324,7 @@ impl HtmlParser {
         document
             .select(&selector)
             .filter_map(|el| {
-                let href = el.value().attr("href")?.to_string();
+                let raw_href = el.value().attr("href")?.to_string();
                 let text: String = el.text().collect::<Vec<_>>().join("").trim().to_string();
 
                 let rel: Vec<String> = el
@@ -333,11 +333,11 @@ impl HtmlParser {
                     .map(|r| r.split_whitespace().map(String::from).collect())
                     .unwrap_or_default();
 
-                let is_external = page_url
-                    .join(&href)
-                    .ok()
-                    .map(|resolved| resolved.domain().unwrap_or("") != page_domain)
-                    .unwrap_or(false);
+                // Resolve relative URLs against the page URL
+                let resolved_url = page_url.join(&raw_href).ok()?;
+                let href = resolved_url.to_string();
+
+                let is_external = resolved_url.domain().unwrap_or("") != page_domain;
 
                 Some(ExtractedLink {
                     href,
@@ -1085,7 +1085,7 @@ mod tests {
         let page = HtmlParser::parse(html, &test_url()).unwrap();
         assert_eq!(page.links.len(), 3);
 
-        assert_eq!(page.links[0].href, "/internal");
+        assert_eq!(page.links[0].href, "https://example.com/internal");
         assert_eq!(page.links[0].text, "Internal");
         assert!(!page.links[0].is_external);
 

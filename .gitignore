@@ -33,3 +33,15 @@ Thumbs.db
 
 # Logs
 *.log
+
+# R&D process artifacts (not part of crawlkit source)
+.specs/
+.reports/
+.knowledge_graph/
+.patterns/
+.adrs/
+VERSION.md
+CAPABILITY_MATRIX.md
+INSTRUCTION_VERSIONS.md
+STANDARD_CONFLICTS.md
+TRACEABILITY_MATRIX.md

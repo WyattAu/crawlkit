@@ -406,4 +406,74 @@ Phase 7 includes cross-cutting standards compliance work. These tasks are tracke
 
 ---
 
-*Last updated: 2026-07-22*
+## Phase 8: AI & WASM Analysis (Week 19-22)
+
+**Goal:** AI-specific SEO signals and WebAssembly error detection.
+
+**ADR:** `ADR-001-wasm-error-detection-and-ai-result-optimization.md`
+
+### Tasks
+
+| # | Task | Depends On | Acceptance Criteria |
+|---|------|------------|---------------------|
+| 8.1 | AI crawler accessibility analyzer | — | Detects AI bot blocks in robots.txt (GPTBot, Google-Extended, PerplexityBot, ClaudeBot, etc.); outputs per-bot findings |
+| 8.2 | AI content structure analyzer | — | Detects AI-friendly content patterns: lists, tables, Q&A format, subheadings, date/author metadata |
+| 8.3 | AI citation eligibility analyzer | — | Detects source authority signals: canonical, structured data, OG tags, author attribution |
+| 8.4 | AI answer box analyzer | — | Detects FAQ/HowTo/Q&A schema readiness, speakable property, upfront answers |
+| 8.5 | AI bot registry (TOML) | 8.1 | Configurable list of AI bots with severity, owner, purpose; extensible via config file |
+| 8.6 | WASM pattern analyzer (static) | — | Detects WASM patterns in HTML/JS: missing modulepreload, synchronous compilation, missing error handlers |
+| 8.7 | WASM test vectors | 8.6 | ≥ 20 test vectors covering WASM patterns, false positives, edge cases |
+| 8.8 | AI test vectors | 8.1 | ≥ 20 test vectors covering AI signals, edge cases, mixed signals |
+| 8.9 | AI-specific export columns | 8.1 | CSV/JSON export includes AI scores: accessibility, content structure, citation, answer box |
+| 8.10 | AI section in HTML report | 8.1 | Interactive dashboard showing AI optimization scores and findings |
+| 8.11 | WASM runtime analyzer (dynamic) | 7.1 | Detects WASM console errors via Playwright; requires Phase 7.1 completion |
+| 8.12 | WASM performance analyzer | 7.1 | Measures WASM impact on Core Web Vitals; requires Phase 7.1 |
+
+### Dependency Graph
+
+```
+8.1
+├─ 8.5
+├─ 8.9
+│   └─ 8.10
+└─ 8.8
+
+8.2 (independent)
+8.3 (independent)
+8.4 (independent)
+
+8.6
+└─ 8.7
+
+7.1
+├─ 8.11
+└─ 8.12
+```
+
+### Risk Register (Phase 8)
+
+| Risk | Impact | Likelihood | Mitigation |
+|------|--------|------------|------------|
+| AI search algorithms change, invalidating signals | Medium | High | Abstract signal definitions; configurable rules via TOML |
+| New AI bots appear, not in registry | Low | Medium | Extensible TOML config; community contributions |
+| WASM static analysis false positives | Low | Medium | Conservative thresholds; configurable sensitivity |
+| Playwright integration delayed | High | Medium | Ship static analyzers first (8.1-8.10); dynamic gated on 7.1 |
+
+### Quality Gates (Phase 8)
+
+All Phase 8 code must comply with `.adrs/coding-standards.md`.
+
+| Gate | Requirement | Threshold | Blocking |
+|------|-------------|-----------|----------|
+| FAANG complexity | Cyclomatic ≤ 10, Cognitive ≤ 15 | `cargo clippy` | Yes |
+| HFT zero-allocation | 0 allocs in hot path | `dhat` profiling | Yes |
+| Defence audit trail | Every state-change logged | Audit log query | Yes |
+| Test coverage | ≥ 90% branch | `cargo tarpaulin` | Yes |
+| Test vectors | ≥ 20 per analyzer | Manual count | Yes |
+| Latency budget | < 50ms per-page analysis | Criterion benchmark | Yes |
+| Documentation | 100% public items | `cargo doc` | Yes |
+| Code review | ≥ 1 approval per PR | GitHub PR | Yes |
+
+---
+
+*Last updated: 2026-07-23*

@@ -4926,6 +4926,13 @@ impl AnalyzerRegistry {
                 Box::new(KeywordAnalyzer::new()),
                 Box::new(EcommerceSignalsAnalyzer::new()),
                 Box::new(InternationalSeoAnalyzer::new()),
+                // Phase 8: AI Search Optimization Analyzers
+                Box::new(crate::ai_analyzers::AiCrawlerAccessibilityAnalyzer::new()),
+                Box::new(crate::ai_analyzers::AiContentStructureAnalyzer::new()),
+                Box::new(crate::ai_analyzers::AiCitationEligibilityAnalyzer::new()),
+                Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()),
+                // Phase 8: WASM Error Detection Analyzers
+                Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()),
             ],
         }
     }
@@ -5738,7 +5745,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 23);
+        assert_eq!(registry.len(), 28);
         assert!(!registry.is_empty());
     }
 

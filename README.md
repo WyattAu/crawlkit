@@ -3,6 +3,8 @@
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
+[![Tests](https://img.shields.io/badge/tests-383-passing-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Analyzers](https://img.shields.io/badge/analyzers-28-blue.svg)](https://github.com/WyattAu/crawlkit)
 
 A high-performance Rust-based site crawler and SEO analysis toolkit that surpasses commercial tools like Ahrefs in depth, speed, and extensibility.
 
@@ -13,13 +15,31 @@ A high-performance Rust-based site crawler and SEO analysis toolkit that surpass
 - **Full redirect chain tracking** — follows ALL redirects (up to 20 hops), detects loops and mixed protocols
 - **Polite crawling** — respects robots.txt, rate limiting, crawl-delay directives
 - **Priority queue** — URLs scored by importance, deduplicated via concurrent hash set
+- **Concurrent DNS cache** — background prefetching with TTL eviction for faster resolution
 
-### SEO Analysis (18 analyzers)
+### SEO Analysis (23 core analyzers)
 - **Meta tags** — title, description, canonical, OG, Twitter Cards, hreflang
 - **Link analysis** — internal/external counts, broken links, orphan pages, PageRank scoring
 - **Structured data** — JSON-LD and Microdata validation against Schema.org
 - **Content quality** — Flesch-Kincaid readability, keyword density, word count
 - **Heading hierarchy** — H1-H6 structure, skipped levels detection
+- **Canonical URL validation** — canonical tag correctness and consistency
+- **Hreflang validation** — international SEO hreflang tag verification
+- **Sitemap analysis** — XML sitemap parsing and validation
+- **Robots.txt analysis** — robots.txt parsing and compliance checking
+- **Image analysis** — alt text, dimensions, lazy loading detection
+- **Ecommerce signals** — product schema, pricing, availability detection
+- **International SEO** — language targeting, regional content analysis
+
+### AI Search Optimization (4 analyzers)
+- **AI crawler accessibility** — detects AI bot blocking in robots.txt
+- **AI content structure** — evaluates AI-friendly content patterns
+- **AI citation eligibility** — identifies source authority signals
+- **AI answer box readiness** — checks FAQ/HowTo/Q&A schema readiness
+- **AI bot registry** — tracks GPTBot, Google-Extended, PerplexityBot, ClaudeBot, and 6 more
+
+### WASM Analysis (1 analyzer)
+- **WASM pattern detection** — identifies missing modulepreload, legacy instantiation, missing crossorigin
 
 ### Security & Performance
 - **Security headers** — CSP, HSTS, X-Frame-Options, COEP/COOP/CORP scoring (0-100)
@@ -42,6 +62,14 @@ A high-performance Rust-based site crawler and SEO analysis toolkit that surpass
 - **Backlink analysis** — PageRank scoring, internal link graphs
 - **REST API** — programmatic access with API key authentication
 - **Plugin system** — extend with custom analyzers
+- **Feature flags** — toggle JS rendering, AI analyzers, WASM analyzers
+- **Circuit breaker** — fault tolerance for external dependencies
+- **Backpressure** — bounded pipeline for memory-efficient crawling
+- **Resource monitoring** — track memory, CPU, and network usage
+- **Audit trail** — complete logging of all crawl operations
+- **Determinism** — reproducible crawl results with seed control
+- **Encryption** — sensitive data protection
+- **Real User Monitoring** — RUM integration for performance data
 
 ## Installation
 
@@ -55,7 +83,7 @@ cargo build --release
 
 Binary: `target/release/crawlkit`
 
-### Via cargo install (once published)
+### Via cargo install
 
 ```bash
 cargo install crawlkit
@@ -86,7 +114,7 @@ crawlkit report crawl1/ --format html --output report.html
 ## CLI Reference
 
 ```
-crawlkit 0.1.0
+crawlkit 0.4.0
 Wyatt Au
 A high-performance Rust-based site crawler for SEO analysis
 
@@ -132,7 +160,7 @@ max_redirect_hops = 20
 max_concurrent_requests = 64
 request_timeout_secs = 30
 crawl_delay_default_ms = 1000
-user_agent = "crawlkit/0.1.0"
+user_agent = "crawlkit/0.4.0"
 respect_robots_txt = true
 
 [crawl.scope]
@@ -140,7 +168,7 @@ allowed_domains = ["example.com"]
 blocked_patterns = ["/wp-admin/*", "/api/*"]
 
 [analyzers]
-enabled = ["meta", "links", "security", "accessibility", "content"]
+enabled = ["meta", "links", "security", "accessibility", "content", "ai", "wasm"]
 
 [output]
 formats = ["json", "sqlite", "html"]
@@ -202,35 +230,56 @@ crawlkit/
 ### Analyzer Pipeline
 
 ```
-URL Queue → Fetcher → Parser → Analyzers → Storage → Export
-    ↑                    ↓
-    └──── Link Discovery ─┘
+URL Queue → DNS Prefetch → Fetcher → Parser → Analyzers → Storage → Export
+    ↑                              ↓
+    └──── Link Discovery ──────────┘
 ```
 
-### 18 Analyzers
+### 28 Analyzers
 
-| Category | Analyzers |
-|----------|-----------|
-| HTTP | Status codes, redirects, response times |
-| SEO | Meta tags, canonical, hreflang, sitemap, robots.txt |
-| Content | Readability, keywords, word count |
-| Links | Internal/external, broken links, orphan pages |
-| Images | Alt text, dimensions, lazy loading |
-| Schema | JSON-LD, Microdata validation |
-| Security | CSP, HSTS, X-Frame-Options, COEP/COOP/CORP |
-| Performance | TTFB, FCP, page size |
-| Mobile | Viewport, touch targets, font sizes |
-| Accessibility | WCAG 2.1 AA (16 checks) |
-| Social | Open Graph, Twitter Cards |
+| Category | Analyzers | Count |
+|----------|-----------|-------|
+| HTTP | Status codes, redirects, response times | 2 |
+| SEO | Meta tags, canonical, hreflang, sitemap, robots.txt | 5 |
+| Content | Readability, keywords, word count, ecommerce, international | 5 |
+| Links | Internal/external, broken links, orphan pages | 1 |
+| Images | Alt text, dimensions, lazy loading | 1 |
+| Schema | JSON-LD, Microdata validation | 1 |
+| Security | CSP, HSTS, X-Frame-Options, COEP/COOP/CORP, SSL | 2 |
+| Performance | TTFB, FCP, page size | 1 |
+| Mobile | Viewport, touch targets, font sizes | 1 |
+| Accessibility | WCAG 2.1 AA (16 checks) | 1 |
+| Social | Open Graph, Twitter Cards | 1 |
+| Entity | Named entity extraction | 1 |
+| AI | Crawler accessibility, content structure, citation eligibility, answer box | 4 |
+| WASM | Pattern detection | 1 |
 
 ## Performance
 
 | Metric | Target | Measured |
 |--------|--------|----------|
-| Pages/sec | ≥50 | 50-100 |
+| Pages/sec | >=50 | 50-100 |
 | Memory (10k pages) | <500MB | ~200MB |
 | Startup time | <100ms | ~10ms |
 | Binary size | <10MB | ~8MB |
+| Full analyzer suite | — | ~25 us/page |
+| HTML parse (5 KB) | — | ~45 us |
+| PageRank (1K nodes) | — | ~4 ms |
+
+## Benchmarks
+
+Run benchmarks with:
+
+```bash
+cargo bench
+```
+
+Benchmarks cover:
+- HTML parser performance
+- Analyzer execution time
+- Registry lookup speed
+- Queue operations
+- Storage insert/query performance
 
 ## Documentation
 
@@ -238,6 +287,10 @@ URL Queue → Fetcher → Parser → Analyzers → Storage → Export
 - [Roadmap](docs/ROADMAP.md) — Development roadmap
 - [Competitive Analysis](docs/COMPETITIVE_ANALYSIS.md) — 25 competitors compared
 - [ADR-001](docs/ADR-001-crawler-architecture.md) — Architecture decision record
+- [Benchmarks](docs/benchmarks.md) — Performance benchmarks
+- [Getting Started](docs/tutorials/getting-started.md) — Step-by-step user guide
+- [Custom Analyzers](docs/tutorials/custom-analyzers.md) — Writing custom analyzers
+- [CI Integration](docs/tutorials/ci-integration.md) — CI/CD integration guide
 
 ## Contributing
 

@@ -6,6 +6,11 @@ authors.workspace = true
 license.workspace = true
 description.workspace = true
 repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+homepage.workspace = true
+documentation.workspace = true
 
 [[bin]]
 name = "crawlkit-api"

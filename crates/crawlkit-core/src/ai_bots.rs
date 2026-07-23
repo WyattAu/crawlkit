@@ -171,13 +171,11 @@ pub fn robots_txt_disallows_bot(robots_txt: &str, bot_name: &str) -> bool {
                     matching_block = Some(matches);
                     disallow_all = false;
                 }
-                "disallow" => {
-                    if matching_block.unwrap_or(false) {
-                        if value == "/" {
-                            disallow_all = true;
-                        } else if value.is_empty() {
-                            disallow_all = false;
-                        }
+                "disallow" if matching_block.unwrap_or(false) => {
+                    if value == "/" {
+                        disallow_all = true;
+                    } else if value.is_empty() {
+                        disallow_all = false;
                     }
                 }
                 _ => {}

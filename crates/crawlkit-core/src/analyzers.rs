@@ -1967,7 +1967,7 @@ impl Analyzer for ContentQualityAnalyzer {
             }
 
             let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
-            terms.sort_by(|a, b| b.1.cmp(&a.1));
+            terms.sort_by_key(|b| std::cmp::Reverse(b.1));
             terms.truncate(10);
 
             if !terms.is_empty() {
@@ -3801,7 +3801,7 @@ impl EntityAnalyzer {
             }
         }
         let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
-        terms.sort_by(|a, b| b.1.cmp(&a.1));
+        terms.sort_by_key(|b| std::cmp::Reverse(b.1));
         terms.into_iter().take(5).map(|(w, _)| w).collect()
     }
 
@@ -4395,7 +4395,7 @@ impl KeywordAnalyzer {
             }
         }
         let mut result: Vec<((String, String), usize)> = pairs.into_iter().collect();
-        result.sort_by(|a, b| b.1.cmp(&a.1));
+        result.sort_by_key(|b| std::cmp::Reverse(b.1));
         result
     }
 }

@@ -90,7 +90,7 @@ impl PluginLoader {
     /// # Note
     /// Dynamic library loading requires the `libloading` crate.
     /// Currently returns metadata only; actual plugin registration
-    /// must be done programmatically via [`register_plugin`].
+    /// must be done programmatically by adding plugins via the loader.
     ///
     /// # Errors
     /// Returns error if manifest is missing, invalid, or incompatible.

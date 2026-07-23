@@ -38,6 +38,8 @@ async fn main() -> Result<()> {
     let config = CrawlConfig {
         start_url: Url::parse(target_url)?,
         max_pages,
+        max_time: None,
+        max_depth: None,
         request_delay: Duration::from_millis(delay_ms),
         concurrency,
         request_timeout: Duration::from_secs(30),
@@ -162,6 +164,7 @@ async fn main() -> Result<()> {
             headers: &headers_vec,
             response_time: Some(fetch_time),
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = analyzer_registry.analyze(&ctx, &config);
         issues_found += findings.len();

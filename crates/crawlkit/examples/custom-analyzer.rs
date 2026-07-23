@@ -214,6 +214,7 @@ fn main() -> Result<()> {
         headers: &[],
         response_time: Some(Duration::from_millis(850)),
         redirect_chain: &[],
+        robots_txt: None,
     };
 
     let analyzers: Vec<Box<dyn Analyzer>> = vec![

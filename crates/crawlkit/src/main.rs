@@ -1,3 +1,9 @@
+//! Command-line interface for crawlkit — a high-performance site crawler for SEO analysis.
+//!
+//! Provides subcommands to **crawl** a website, **compare** two crawl results,
+//! and **generate reports** from stored crawl data. Configuration can be supplied
+//! via CLI flags or a TOML config file.
+
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
@@ -97,6 +103,10 @@ enum Commands {
         #[arg(long)]
         depth: Option<usize>,
 
+        /// Maximum crawl duration in seconds (0 = no limit)
+        #[arg(long)]
+        max_time: Option<u64>,
+
         /// Custom user agent string
         #[arg(long)]
         user_agent: Option<String>,
@@ -105,10 +115,8 @@ enum Commands {
         #[arg(long)]
         timeout: Option<u64>,
 
-        /// Respect robots.txt directives
+        /// Respect robots.txt directives (default: true)
         #[arg(long)]
-        /// Whether to respect robots.txt directives.
-        #[allow(dead_code)] // Reserved for future robots.txt integration
         respect_robots: Option<bool>,
 
         /// URL include patterns (glob-style)
@@ -199,6 +207,7 @@ async fn main() -> Result<()> {
         Commands::Crawl {
             url,
             max_pages,
+            max_time,
             delay,
             concurrency,
             output,
@@ -215,6 +224,7 @@ async fn main() -> Result<()> {
             let params = CrawlParams {
                 url,
                 max_pages: max_pages.or_else(|| config.crawl.as_ref().and_then(|c| c.max_pages)),
+                max_time_secs: max_time,
                 delay: delay.or_else(|| config.crawl.as_ref().and_then(|c| c.delay_ms)),
                 concurrency: concurrency
                     .or_else(|| config.crawl.as_ref().and_then(|c| c.concurrency)),
@@ -254,10 +264,10 @@ async fn main() -> Result<()> {
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.
-#[allow(dead_code)] // `respect_robots` reserved for future robots.txt integration
 struct CrawlParams {
     url: String,
     max_pages: Option<usize>,
+    max_time_secs: Option<u64>,
     delay: Option<u64>,
     concurrency: Option<usize>,
     output: Option<PathBuf>,
@@ -280,6 +290,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     use crawlkit_core::ratelimit::RateLimiter;
     use crawlkit_core::HtmlParser;
     use std::sync::Arc;
+    use std::time::Duration;
     use tokio::sync::Mutex;
 
     let max_pages = params.max_pages.unwrap_or(100);
@@ -338,13 +349,25 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         tcp_keepalive: Some(std::time::Duration::from_secs(30)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
+    let client = Arc::new(client);
     let scope = crawlkit_core::queue::ScopeConfig {
         max_depth: params.depth,
         ..Default::default()
     };
     let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
     let rate_limiter = RateLimiter::new(concurrency as f64, 1.0 / (delay as f64 / 1000.0));
-    let analyzer_registry = AnalyzerRegistry::new(&crawlkit_core::CrawlConfig::default());
+    let crawl_config = crawlkit_core::CrawlConfig {
+        respect_robots_txt: params.respect_robots.unwrap_or(true),
+        max_time: params.max_time_secs.map(Duration::from_secs),
+        max_depth: params.depth,
+        ..Default::default()
+    };
+    let analyzer_registry = AnalyzerRegistry::new(&crawl_config);
+    let robots_cache = Arc::new(crawlkit_core::RobotsTxtCache::new(
+        client.clone(),
+        &crawl_config,
+    ));
+    let sitemap_cache = Arc::new(crawlkit_core::SitemapCache::new(client.clone()));
 
     // Seed the queue
     let seed_url =
@@ -354,15 +377,49 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         q.push(seed_url.clone(), 0, Priority::HIGH);
     }
 
+    // Discover and queue sitemap URLs for the seed domain
+    let mut known_sitemap_urls: std::collections::HashSet<String> =
+        std::collections::HashSet::new();
+    {
+        let sitemap_urls = robots_cache
+            .sitemaps(seed_url.scheme(), seed_url.host_str().unwrap_or(""))
+            .await;
+        if !sitemap_urls.is_empty() {
+            tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
+            let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
+            tracing::info!("Parsed {} URLs from sitemaps", entries.len());
+            let q = queue.lock().await;
+            for entry in &entries {
+                if known_sitemap_urls.insert(entry.url.clone()) {
+                    if let Ok(url) = url::Url::parse(&entry.url) {
+                        q.push(url, 0, Priority::HIGHEST);
+                    }
+                }
+            }
+        }
+    }
+
     let mut pages_crawled = 0;
     let mut pages_stored = 0;
     let mut issues_found: usize = 0;
     let mut skipped_external: usize = 0;
+    let mut skipped_robots: usize = 0;
+    let mut skipped_duplicate: usize = 0;
     let mut visited = std::collections::HashSet::new();
+    let mut content_hashes: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let crawl_start = std::time::Instant::now();
     let seed_domain = seed_url.host_str().unwrap_or("").to_string();
 
     // Crawl loop
     while pages_crawled < max_pages {
+        // Check time budget
+        if let Some(max_time) = crawl_config.max_time {
+            if crawl_start.elapsed() >= max_time {
+                tracing::info!("Crawl time limit reached: {max_time:?}");
+                break;
+            }
+        }
+
         let entry = {
             let q = queue.lock().await;
             q.pop()
@@ -378,6 +435,43 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             continue;
         }
         visited.insert(entry.url.to_string());
+
+        // Robots.txt check
+        let robots_raw;
+        if crawl_config.respect_robots_txt {
+            let domain = entry.url.host_str().unwrap_or("");
+            let scheme = entry.url.scheme();
+            if robots_cache
+                .is_disallowed(scheme, domain, entry.url.path())
+                .await
+            {
+                tracing::debug!("Blocked by robots.txt: {}", entry.url);
+                skipped_robots += 1;
+                continue;
+            }
+            // Apply crawl-delay from robots.txt
+            if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
+                rate_limiter.set_crawl_delay(domain, Duration::from_secs_f64(delay_secs));
+            }
+            robots_raw = robots_cache.raw_content(scheme, domain).await;
+
+            // Discover sitemaps for this domain (first visit only)
+            if !domain.is_empty() && !known_sitemap_urls.contains(&format!("{scheme}://{domain}")) {
+                known_sitemap_urls.insert(format!("{scheme}://{domain}"));
+                let sitemap_urls = robots_cache.sitemaps(scheme, domain).await;
+                if !sitemap_urls.is_empty() {
+                    let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
+                    let q = queue.lock().await;
+                    for sm_entry in &entries {
+                        if let Ok(url) = url::Url::parse(&sm_entry.url) {
+                            q.push(url, 0, Priority::HIGHEST);
+                        }
+                    }
+                }
+            }
+        } else {
+            robots_raw = String::new();
+        }
 
         // Rate limit
         let _ = rate_limiter
@@ -402,6 +496,20 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         };
         let fetch_time = start.elapsed();
 
+        // Content-hash deduplication: skip pages with identical body content
+        {
+            use sha2::{Digest, Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(result.body.as_bytes());
+            let result = hasher.finalize();
+            let hash: String = result.iter().map(|b| format!("{b:02x}")).collect();
+            if !content_hashes.insert(hash) {
+                tracing::debug!("Skipping duplicate content: {}", entry.url);
+                skipped_duplicate += 1;
+                continue;
+            }
+        }
+
         pages_crawled += 1;
         pb.set_position(pages_crawled as u64);
         pb.set_message(format!(
@@ -423,14 +531,20 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         // Run analyzers
         let headers_vec: Vec<(String, String)> = result.headers.clone();
         let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
+        let robots_ref = if robots_raw.is_empty() {
+            None
+        } else {
+            Some(robots_raw.as_str())
+        };
         let ctx = crawlkit_core::analyzers::AnalysisContext {
             page: &parsed,
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetch_time),
             redirect_chain: &empty_chain,
+            robots_txt: robots_ref,
         };
-        let findings = analyzer_registry.analyze(&ctx, &crawlkit_core::CrawlConfig::default());
+        let findings = analyzer_registry.analyze(&ctx, &crawl_config);
 
         // Store page
         let page_data = crawlkit_core::storage::PageData {
@@ -512,14 +626,21 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                 Priority::LOW
             };
 
+            // Enforce depth budget
+            if let Some(max_depth) = crawl_config.max_depth {
+                if entry.depth + 1 > max_depth {
+                    continue;
+                }
+            }
+
             let q = queue.lock().await;
             q.push(link_url, entry.depth + 1, priority);
         }
     }
 
     pb.finish_with_message(format!(
-        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external links skipped",
-        pages_crawled, pages_stored, issues_found, skipped_external
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt, {} duplicate content",
+        pages_crawled, pages_stored, issues_found, skipped_external, skipped_robots, skipped_duplicate
     ));
 
     storage.finish_crawl(&crawl_id, pages_crawled, 0)?;
@@ -542,11 +663,12 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     }
 
     tracing::info!(
-        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external links skipped. Database: {}",
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt. Database: {}",
         pages_crawled,
         pages_stored,
         issues_found,
         skipped_external,
+        skipped_robots,
         db_path.display()
     );
     Ok(())
@@ -578,25 +700,48 @@ async fn run_compare(
         crawl2_path.to_path_buf()
     };
 
-    let _storage1 = Storage::new(&storage1_path)
-        .with_context(|| format!("Failed to open first crawl: {}", storage1_path.display()))?;
-    let _storage2 = Storage::new(&storage2_path)
-        .with_context(|| format!("Failed to open second crawl: {}", storage2_path.display()))?;
+    // Validate both databases exist
+    if !storage1_path.exists() {
+        return Err(anyhow::anyhow!(
+            "First crawl database not found: {}",
+            storage1_path.display()
+        ));
+    }
+    if !storage2_path.exists() {
+        return Err(anyhow::anyhow!(
+            "Second crawl database not found: {}",
+            storage2_path.display()
+        ));
+    }
 
-    pb.finish_with_message("Comparison not yet implemented");
+    let diff = crawlkit_core::compare::compare_crawls(&storage1_path, &storage2_path)
+        .context("Failed to compare crawls")?;
 
-    let result = serde_json::json!({
-        "status": "not_implemented",
-        "crawl1": storage1_path.display().to_string(),
-        "crawl2": storage2_path.display().to_string(),
-        "format": format,
-    });
+    let output_str = match format {
+        "json" => crawlkit_core::compare::diff_to_json(&diff, true)
+            .context("Failed to serialize comparison")?,
+        "md" => crawlkit_core::compare::diff_to_markdown(&diff),
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported format: {format}. Use json or md."
+            ));
+        }
+    };
+
+    pb.finish_with_message(format!(
+        "Comparison: {} added, {} removed, {} status changes, {} title changes, {} content changes",
+        diff.added.len(),
+        diff.removed.len(),
+        diff.status_changes.len(),
+        diff.title_changes.len(),
+        diff.content_changes.len(),
+    ));
 
     if let Some(out) = output {
-        std::fs::write(out, serde_json::to_string_pretty(&result)?)?;
+        std::fs::write(out, &output_str)?;
         tracing::info!("Wrote comparison to {}", out.display());
     } else {
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        println!("{output_str}");
     }
 
     Ok(())

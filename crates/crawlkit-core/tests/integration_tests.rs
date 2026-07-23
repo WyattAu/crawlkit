@@ -113,6 +113,7 @@ fn test_analyzer_registry_full_pipeline() {
         headers: &[],
         response_time: Some(Duration::from_millis(150)),
         redirect_chain: &[],
+        robots_txt: None,
     };
 
     let findings = registry.analyze(&ctx, &config);
@@ -349,6 +350,7 @@ fn test_wasm_pattern_analyzer_integration() {
         headers: &[],
         response_time: Some(Duration::from_millis(100)),
         redirect_chain: &[],
+        robots_txt: None,
     };
 
     let findings = analyzer.analyze(&ctx, &config);
@@ -368,6 +370,7 @@ fn test_ai_analyzer_integration() {
         headers: &[],
         response_time: Some(Duration::from_millis(100)),
         redirect_chain: &[],
+        robots_txt: None,
     };
 
     let findings = analyzer.analyze(&ctx, &config);
@@ -428,6 +431,7 @@ fn test_full_crawl_pipeline() {
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
+            robots_txt: None,
         };
 
         let findings = registry.analyze(&ctx, &config);

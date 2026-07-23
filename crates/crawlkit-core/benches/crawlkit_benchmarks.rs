@@ -77,6 +77,7 @@ fn bench_analyzer_registry(c: &mut Criterion) {
                 headers: &[],
                 response_time: Some(Duration::from_millis(100)),
                 redirect_chain: &[],
+                robots_txt: None,
             };
             registry.analyze(&ctx, &config)
         })

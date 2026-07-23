@@ -1,3 +1,9 @@
+//! REST API server for crawlkit — exposes crawl, compare, and report operations over HTTP.
+//!
+//! Built on Axum with API-key authentication and per-key rate limiting.
+//! Start a crawl via `POST /api/v1/crawls` and poll status at
+//! `GET /api/v1/crawls/{crawl_id}`.
+
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -400,6 +406,12 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         }
     };
 
+    let http_client = Arc::new(http_client);
+    let robots_cache = Arc::new(crawlkit_core::RobotsTxtCache::new(
+        http_client.clone(),
+        &config,
+    ));
+
     let queue = Arc::new(tokio::sync::Mutex::new(UrlQueue::from_crawl_config(
         &config,
     )));
@@ -431,6 +443,23 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         }
         visited.insert(entry.url.to_string());
 
+        // Robots.txt check
+        let robots_raw;
+        if config.respect_robots_txt {
+            let domain = entry.url.host_str().unwrap_or("");
+            let scheme = entry.url.scheme();
+            if robots_cache
+                .is_disallowed(scheme, domain, entry.url.path())
+                .await
+            {
+                tracing::debug!("Blocked by robots.txt: {}", entry.url);
+                continue;
+            }
+            robots_raw = robots_cache.raw_content(scheme, domain).await;
+        } else {
+            robots_raw = String::new();
+        }
+
         // Respect delay between requests
         tokio::time::sleep(config.request_delay).await;
 
@@ -455,12 +484,18 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
 
         let headers_vec: Vec<(String, String)> = result.headers.clone();
         let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
+        let robots_ref = if robots_raw.is_empty() {
+            None
+        } else {
+            Some(robots_raw.as_str())
+        };
         let ctx = crawlkit_core::analyzers::AnalysisContext {
             page: &parsed,
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetch_time),
             redirect_chain: &empty_chain,
+            robots_txt: robots_ref,
         };
         let findings = analyzer_registry.analyze(&ctx, &config);
         total_issues += findings.len();
@@ -554,8 +589,9 @@ async fn main() -> anyhow::Result<()> {
     let storage = Storage::new(std::path::Path::new(&db_path))
         .map_err(|e| anyhow::anyhow!("Failed to open storage: {e}"))?;
 
-    // Seed a default API key for development
-    let default_key = "ck_dev_default_key_for_testing".to_string();
+    // Generate a random API key for this session (not hardcoded)
+    let default_key = format!("ck_{}", uuid::Uuid::new_v4().to_string().replace('-', ""));
+    eprintln!("Generated API key: {default_key}");
     let api_keys = Arc::new(DashMap::new());
     api_keys.insert(
         default_key.clone(),

@@ -1,36 +1,74 @@
+//! Core library for crawlkit — an SEO site crawler and analyzer.
+//!
+//! This crate provides the foundational types, HTTP fetching, HTML parsing,
+//! SEO analyzers, crawl queue, storage, and observability primitives used by
+//! the crawlkit CLI and API server.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
+/// Advanced crawl features such as JavaScript rendering and WASM analysis.
 pub mod advanced_features;
+/// AI-powered page content analyzers (answer boxes, citations, accessibility).
 pub mod ai_analyzers;
+/// Registry of known AI bot user-agents and crawler identification.
 pub mod ai_bots;
+/// SEO analysis engine with pluggable analyzers (title, meta, links, etc.).
 pub mod analyzers;
+/// Audit trail logging for crawl operations and configuration changes.
 pub mod audit;
+/// Adapters for third-party backlink data sources (Ahrefs, GSC, Majestic).
 pub mod backlink_adapters;
+/// Backlink analysis, scoring, and reporting.
 pub mod backlinks;
+/// Backpressure controller to bound in-flight work and prevent memory blowouts.
 pub mod backpressure;
+/// Circuit breaker for failing HTTP endpoints to avoid cascading failures.
 pub mod circuit_breaker;
+/// Diff-based comparison of two crawl results.
 pub mod compare;
+/// Deterministic replay controller for reproducible crawl runs.
 pub mod determinism;
+/// DNS resolution cache and prefetching.
 pub mod dns;
+/// TLS and encryption configuration for HTTPS requests.
 pub mod encryption;
+/// Enterprise feature gating and licensing utilities.
 pub mod enterprise;
+/// Export of crawl data to JSON, CSV, HTML, and Markdown formats.
 pub mod export;
+/// Feature flag system for toggling capabilities at runtime.
 pub mod feature_flags;
+/// HTTP client with retry, redirect following, and rate limiting.
 pub mod http;
+/// Decision engine for determining whether a page requires JavaScript rendering.
 pub mod js_render_decision;
+/// Directed graph of inter-page links for site structure analysis.
 pub mod link_graph;
+/// Metrics collection and observability hooks.
 pub mod observability;
+/// Playwright-based headless browser integration for JS-rendered pages.
 pub mod playwright;
+/// Plugin system for extending the crawler with custom analyzers.
 pub mod plugin;
+/// Priority URL queue with depth and scope filtering.
 pub mod queue;
+/// Per-domain rate limiting to respect politeness constraints.
 pub mod ratelimit;
+/// Runtime resource monitoring and limit enforcement.
 pub mod resource_monitor;
+/// robots.txt parsing, caching, and compliance checking.
+pub mod robots;
+/// Real User Metrics (CrUX, GA) integration for performance data.
 pub mod rum;
+/// Sitemap.xml parsing and URL discovery.
+pub mod sitemap;
+/// SQLite-backed persistent storage for crawl results and issues.
 pub mod storage;
+/// WASM-based analyzers for advanced code and performance analysis.
 pub mod wasm_analyzers;
 
 pub use ai_analyzers::{
@@ -73,16 +111,20 @@ pub use playwright::{
     WasmError as PlaywrightWasmError,
 };
 pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
+pub use robots::RobotsTxtCache;
 pub use rum::{
     CruxAdapter, CruxData, FieldMetrics, GoogleAnalyticsAdapter, LabMetrics, MergedMetrics,
     MetricDeltas, RumDataPoint, RumError,
 };
+pub use sitemap::SitemapCache;
 pub use storage::{
     CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
 pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
 
+/// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 pub mod meta;
+/// HTML parser that extracts links, headings, images, forms, and structured data.
 pub mod parser;
 
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
@@ -108,6 +150,26 @@ mod duration_ms {
     {
         let ms = u64::deserialize(deserializer)?;
         Ok(Duration::from_millis(ms))
+    }
+}
+
+mod opt_duration_ms {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::time::Duration;
+
+    pub fn serialize<S>(duration: &Option<Duration>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        duration.map(|d| d.as_millis()).serialize(serializer)
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<Duration>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let ms = Option::<u64>::deserialize(deserializer)?;
+        Ok(ms.map(Duration::from_millis))
     }
 }
 
@@ -152,6 +214,13 @@ pub struct CrawlConfig {
     /// Maximum number of pages to crawl.
     pub max_pages: usize,
 
+    /// Maximum crawl duration. `None` means no time limit.
+    #[serde(default, with = "opt_duration_ms")]
+    pub max_time: Option<Duration>,
+
+    /// Maximum crawl depth from the starting URL. `None` means no depth limit.
+    pub max_depth: Option<usize>,
+
     /// Delay between requests to the same domain.
     #[serde(with = "duration_ms")]
     pub request_delay: Duration,
@@ -184,6 +253,8 @@ impl Default for CrawlConfig {
         Self {
             start_url: Url::parse("https://example.com").expect("valid default URL"),
             max_pages: 100,
+            max_time: None,
+            max_depth: None,
             request_delay: Duration::from_millis(500),
             concurrency: 4,
             request_timeout: Duration::from_secs(30),

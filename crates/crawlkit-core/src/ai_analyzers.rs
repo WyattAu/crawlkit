@@ -392,10 +392,10 @@ fn map_ai_severity(severity: AiSeverity) -> Severity {
     }
 }
 
-fn extract_robots_txt<'a>(_ctx: &AnalysisContext<'a>) -> Option<&'a str> {
-    // In a full implementation, robots.txt would be pre-fetched and stored
-    // in the AnalysisContext. For now, return None to trigger the "no robots.txt" finding.
-    None
+fn extract_robots_txt<'a>(ctx: &AnalysisContext<'a>) -> Option<&'a str> {
+    // Read pre-fetched robots.txt from AnalysisContext.
+    // The crawl loop fetches robots.txt once per domain and stores it here.
+    ctx.robots_txt
 }
 
 // AiBot::ordinal() is defined in ai_bots.rs
@@ -456,6 +456,7 @@ mod tests {
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
+            robots_txt: None,
         };
 
         let findings = analyzer.analyze(&ctx, &default_config());
@@ -474,6 +475,7 @@ mod tests {
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
+            robots_txt: None,
         };
 
         let findings = analyzer.analyze(&ctx, &default_config());
@@ -497,6 +499,7 @@ mod tests {
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
+            robots_txt: None,
         };
 
         let findings = analyzer.analyze(&ctx, &default_config());

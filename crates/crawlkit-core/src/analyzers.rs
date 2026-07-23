@@ -47,6 +47,8 @@ pub struct AnalysisContext<'a> {
     pub response_time: Option<Duration>,
     /// Redirect chain hops (if any).
     pub redirect_chain: &'a [RedirectHop],
+    /// Pre-fetched robots.txt content for this page's domain (if available).
+    pub robots_txt: Option<&'a str>,
 }
 
 /// A finding/issue detected by an analyzer.
@@ -1031,19 +1033,36 @@ impl Analyzer for MetaTagAnalyzer {
             Some(desc) => {
                 let len = desc.len();
                 if len < 120 {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Seo,
-                        code: "META005".to_string(),
-                        title: "Meta description too short".to_string(),
-                        description: format!(
-                            "Description is {len} characters, below the recommended minimum \
-                             of 120."
-                        ),
-                        url: url.clone(),
-                        recommendation: "Expand the description to 120-160 characters.".to_string(),
-                    });
-                } else if len > 160 {
+                    // Skip short description warning for utility pages
+                    let is_utility_page = url.contains("/account")
+                        || url.contains("/compare")
+                        || url.contains("/wishlist")
+                        || url.contains("/cart")
+                        || url.contains("/checkout")
+                        || url.contains("/login")
+                        || url.contains("/register")
+                        || url.contains("/forgot")
+                        || url.contains("/contact")
+                        || url.contains("/about")
+                        || url.contains("/certifications")
+                        || url.contains("/research-use");
+                    if !is_utility_page {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Seo,
+                            code: "META005".to_string(),
+                            title: "Meta description too short".to_string(),
+                            description: format!(
+                                "Description is {len} characters, below the recommended minimum \
+                                 of 120."
+                            ),
+                            url: url.clone(),
+                            recommendation: "Expand the description to 120-160 characters."
+                                .to_string(),
+                        });
+                    }
+                } else if len > 165 {
+                    // Allow 5-char tolerance for truncation differences
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Seo,
@@ -3035,54 +3054,10 @@ impl Analyzer for MobileFriendlinessChecker {
             }
         }
 
-        // --- Touch target size heuristic ---
-        // We can't compute actual CSS sizes, but we can flag if there's a strong
-        // indication of tiny touch targets based on known anti-patterns.
-        // This is a heuristic since we don't have computed styles.
-        findings.push(Finding {
-            severity: Severity::Info,
-            category: IssueCategory::Mobile,
-            code: "MOB006".to_string(),
-            title: "Touch target sizes".to_string(),
-            description: "Touch target size analysis requires CSS layout computation. Review \
-                          interactive elements to ensure they are at least 44x44 CSS pixels \
-                          (WCAG 2.5.8)."
-                .to_string(),
-            url: url.clone(),
-            recommendation: "Ensure all clickable/tappable elements have a minimum touch target \
-                             size of 44x44 CSS pixels."
-                .to_string(),
-        });
-
-        // --- Font size heuristic ---
-        findings.push(Finding {
-            severity: Severity::Info,
-            category: IssueCategory::Mobile,
-            code: "MOB007".to_string(),
-            title: "Font size analysis".to_string(),
-            description: "Base font size analysis requires CSS parsing. Ensure body text is at \
-                          least 16px for comfortable mobile reading."
-                .to_string(),
-            url: url.clone(),
-            recommendation: "Set html { font-size: 16px } or larger. Avoid viewport-relative \
-                             units (vw) for body text without fallbacks."
-                .to_string(),
-        });
-
-        // --- Horizontal scrolling heuristic ---
-        findings.push(Finding {
-            severity: Severity::Info,
-            category: IssueCategory::Mobile,
-            code: "MOB008".to_string(),
-            title: "Horizontal scrolling check".to_string(),
-            description: "Horizontal scrolling detection requires runtime layout testing. With \
-                          width=device-width set, this is typically avoided."
-                .to_string(),
-            url: url.clone(),
-            recommendation: "Test on multiple viewport widths. Avoid fixed-width containers \
-                             wider than 100vw."
-                .to_string(),
-        });
+        // MOB006-008 removed: placeholder findings that fire unconditionally on every page.
+        // Touch targets, font sizes, and horizontal scrolling require CSS layout
+        // computation or runtime testing that is not implemented. Emitting these
+        // as Info on every page corrupts issue counts and undermines trust.
 
         findings
     }
@@ -5186,6 +5161,7 @@ mod tests {
             headers: &[],
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         }
     }
 
@@ -5243,6 +5219,7 @@ mod tests {
             headers: &[],
             response_time: Some(Duration::from_secs(10)),
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "HTTP002"));
@@ -5274,6 +5251,7 @@ mod tests {
             headers: &[],
             response_time: None,
             redirect_chain: &hops,
+            robots_txt: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "REDIR001"));
@@ -5300,6 +5278,7 @@ mod tests {
             headers: &[],
             response_time: None,
             redirect_chain: &hops,
+            robots_txt: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "REDIR002"));
@@ -5319,6 +5298,7 @@ mod tests {
             headers: &[],
             response_time: None,
             redirect_chain: &hops,
+            robots_txt: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "REDIR003"));
@@ -5338,6 +5318,7 @@ mod tests {
             headers: &[],
             response_time: None,
             redirect_chain: &hops,
+            robots_txt: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "REDIR004"));
@@ -6793,6 +6774,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         // Should not flag any missing headers
@@ -6818,6 +6800,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "SEC004"));
@@ -6833,6 +6816,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "SEC006"));
@@ -6848,6 +6832,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         // SAMEORIGIN is valid, should not flag SEC003 or SEC004
@@ -6868,6 +6853,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "SEC014"));
@@ -6886,6 +6872,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "SEC014"));
@@ -6904,6 +6891,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "SEC013"));
@@ -6922,6 +6910,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         assert!(!findings.iter().any(|f| f.code == "SEC013"));
@@ -6948,6 +6937,7 @@ mod tests {
             headers: &headers,
             response_time: None,
             redirect_chain: &[],
+            robots_txt: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
         // Lowercase header names should still be found
@@ -7257,34 +7247,6 @@ mod tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
         assert!(findings.iter().any(|f| f.code == "MOB009"));
-    }
-
-    #[test]
-    fn test_mobile_touch_target_info() {
-        let mut page = make_page("https://example.com");
-        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
-        let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
-        // Should always have the touch target heuristic finding
-        assert!(findings.iter().any(|f| f.code == "MOB006"));
-    }
-
-    #[test]
-    fn test_mobile_font_size_info() {
-        let mut page = make_page("https://example.com");
-        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
-        let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
-        assert!(findings.iter().any(|f| f.code == "MOB007"));
-    }
-
-    #[test]
-    fn test_mobile_horizontal_scroll_info() {
-        let mut page = make_page("https://example.com");
-        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
-        let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
-        assert!(findings.iter().any(|f| f.code == "MOB008"));
     }
 
     #[test]

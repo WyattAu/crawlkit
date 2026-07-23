@@ -46,7 +46,7 @@ urlencoding = "2.1"
 aes-gcm = "0.10"
 getrandom = "0.2"
 dirs = "5.0"
-quick-xml = "0.37"
+quick-xml = "0.41"
 
 [dev-dependencies]
 tempfile = "3"

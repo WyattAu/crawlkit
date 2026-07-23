@@ -424,6 +424,127 @@ impl BacklinkAdapter for GscAdapter {
     }
 }
 
+/// GSC search analytics result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GscSearchResult {
+    /// Query or page URL.
+    pub key: String,
+    /// Number of clicks.
+    pub clicks: u64,
+    /// Number of impressions.
+    pub impressions: u64,
+    /// Click-through rate (0.0-1.0).
+    pub ctr: f64,
+    /// Average position in search results.
+    pub position: f64,
+}
+
+/// GSC index coverage entry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GscCoverageEntry {
+    /// URL or status category.
+    pub key: String,
+    /// Number of pages in this category.
+    pub count: u64,
+    /// Trend (up/down/stable).
+    pub trend: String,
+}
+
+impl GscAdapter {
+    /// Fetch search analytics from Google Search Console.
+    ///
+    /// Returns top queries or pages with clicks, impressions, CTR, and position.
+    pub async fn search_analytics(
+        &self,
+        domain: &str,
+        row_limit: usize,
+        dimension: &str, // "query" or "page"
+    ) -> Result<Vec<GscSearchResult>, AdapterError> {
+        if !self.is_available() {
+            return Err(AdapterError::ApiKeyMissing);
+        }
+
+        let access_token = self.access_token.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let site_url = format!("https://{domain}/");
+        let url = format!(
+            "https://searchconsole.googleapis.com/webmasters/v3/sites/{}/searchAnalytics/query",
+            urlencoding::encode(&site_url)
+        );
+
+        let body = serde_json::json!({
+            "startDate": "2026-06-01",
+            "endDate": "2026-06-30",
+            "dimensions": [dimension],
+            "rowLimit": row_limit,
+        });
+
+        let response = client
+            .post(&url)
+            .bearer_auth(access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        let results = data["rows"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| {
+                        let key = item["keys"]
+                            .as_array()
+                            .and_then(|k| k.first())
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        GscSearchResult {
+                            key,
+                            clicks: item["clicks"].as_u64().unwrap_or(0),
+                            impressions: item["impressions"].as_u64().unwrap_or(0),
+                            ctr: item["ctr"].as_f64().unwrap_or(0.0),
+                            position: item["position"].as_f64().unwrap_or(0.0),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(results)
+    }
+
+    /// Fetch top queries from Google Search Console.
+    pub async fn top_queries(
+        &self,
+        domain: &str,
+        limit: usize,
+    ) -> Result<Vec<GscSearchResult>, AdapterError> {
+        self.search_analytics(domain, limit, "query").await
+    }
+
+    /// Fetch top pages from Google Search Console.
+    pub async fn top_pages(
+        &self,
+        domain: &str,
+        limit: usize,
+    ) -> Result<Vec<GscSearchResult>, AdapterError> {
+        self.search_analytics(domain, limit, "page").await
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Adapter Registry
 // ---------------------------------------------------------------------------

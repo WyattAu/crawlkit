@@ -383,6 +383,70 @@ async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
     Json(results)
 }
 
+#[derive(Serialize)]
+struct BacklinksResponse {
+    crawl_id: String,
+    total_internal_links: usize,
+    total_external_links: usize,
+    total_referring_domains: usize,
+    orphan_pages: Vec<String>,
+    top_pages_by_pagerank: Vec<serde_json::Value>,
+}
+
+async fn get_crawl_backlinks(
+    State(state): State<AppState>,
+    axum::extract::Path(crawl_id): axum::extract::Path<String>,
+) -> Result<Json<BacklinksResponse>, ApiError> {
+    let link_pairs = state
+        .storage
+        .get_links_for_crawl(&crawl_id)
+        .map_err(|e| ApiError::Internal(format!("Failed to get links: {e}")))?;
+
+    let external_links = state
+        .storage
+        .get_external_links(&crawl_id)
+        .map_err(|e| ApiError::Internal(format!("Failed to get external links: {e}")))?;
+
+    let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+    analyzer.load_from_crawl_data(&link_pairs);
+    for (source, target) in &external_links {
+        analyzer.add_backlink(crawlkit_core::Backlink {
+            source_url: source.clone(),
+            target_url: target.clone(),
+            anchor_text: String::new(),
+            is_followed: true,
+            is_internal: false,
+        });
+    }
+
+    let _pagerank = analyzer.compute_pagerank(0.85, 20);
+    let summary = analyzer.summarize();
+
+    let top_pages: Vec<serde_json::Value> = summary
+        .pages
+        .iter()
+        .take(20)
+        .map(|p| {
+            serde_json::json!({
+                "url": p.url,
+                "pagerank": p.pagerank,
+                "inbound_links": p.inbound_links,
+                "outbound_links": p.outbound_links,
+                "referring_domains": p.referring_domains,
+            })
+        })
+        .collect();
+
+    Ok(Json(BacklinksResponse {
+        crawl_id,
+        total_internal_links: summary.total_internal_links,
+        total_external_links: summary.total_external_links,
+        total_referring_domains: summary.total_referring_domains,
+        orphan_pages: summary.orphan_pages,
+        top_pages_by_pagerank: top_pages,
+    }))
+}
+
 // ---------------------------------------------------------------------------
 // Background crawl task
 // ---------------------------------------------------------------------------
@@ -615,6 +679,10 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/crawls", post(start_crawl).get(list_crawls))
         .route("/api/v1/crawls/{crawl_id}", get(get_crawl_status))
         .route("/api/v1/crawls/{crawl_id}/stats", get(get_crawl_stats))
+        .route(
+            "/api/v1/crawls/{crawl_id}/backlinks",
+            get(get_crawl_backlinks),
+        )
         .route("/api/v1/keys", post(create_api_key).get(list_api_keys))
         .layer(middleware::from_fn_with_state(
             state.clone(),

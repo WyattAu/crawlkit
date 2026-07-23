@@ -814,6 +814,77 @@ impl Storage {
             Err(e) => Err(StorageError::Database(e)),
         }
     }
+
+    /// Get all links for a crawl, grouped by source URL.
+    ///
+    /// Returns `Vec<(source_url, Vec<target_url>)>` suitable for
+    /// feeding into `BacklinkAnalyzer::load_from_crawl_data`.
+    pub fn get_links_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<(String, Vec<String>)>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT l.source_url, l.target_url
+             FROM links l
+             JOIN pages p ON l.page_id = p.id
+             WHERE p.crawl_id = ?1
+             ORDER BY l.source_url",
+        )?;
+
+        let rows = stmt.query_map(params![crawl_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        let mut links: std::collections::HashMap<String, Vec<String>> =
+            std::collections::HashMap::new();
+        for row in rows {
+            let (source, target) = row?;
+            links.entry(source).or_default().push(target);
+        }
+
+        Ok(links.into_iter().collect())
+    }
+
+    /// Get all external links for a crawl.
+    pub fn get_external_links(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<(String, String)>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT l.source_url, l.target_url
+             FROM links l
+             JOIN pages p ON l.page_id = p.id
+             WHERE p.crawl_id = ?1 AND l.is_external = 1",
+        )?;
+
+        let rows = stmt.query_map(params![crawl_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?;
+
+        let mut links = Vec::new();
+        for row in rows {
+            links.push(row?);
+        }
+
+        Ok(links)
+    }
+
+    /// Get all page URLs for a crawl.
+    pub fn get_page_urls(&self, crawl_id: &str) -> Result<Vec<String>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT url FROM pages WHERE crawl_id = ?1 ORDER BY url")?;
+
+        let rows = stmt.query_map(params![crawl_id], |row| row.get::<_, String>(0))?;
+
+        let mut urls = Vec::new();
+        for row in rows {
+            urls.push(row?);
+        }
+
+        Ok(urls)
+    }
 }
 
 #[cfg(test)]

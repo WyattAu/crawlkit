@@ -171,6 +171,25 @@ enum Commands {
         #[arg(long, default_value = "light")]
         theme: String,
     },
+
+    /// Analyze backlinks from an existing crawl
+    Backlinks {
+        /// Crawl database path or directory
+        #[arg(short, long)]
+        crawl: PathBuf,
+
+        /// Output file for the analysis
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Output format: json or md
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Fetch external backlinks from a source (ahrefs, gsc, majestic)
+        #[arg(long)]
+        source: Option<String>,
+    },
 }
 
 #[tokio::main]
@@ -260,6 +279,12 @@ async fn main() -> Result<()> {
             format,
             theme,
         } => run_report(&crawl, output.as_deref(), &format, &theme).await,
+        Commands::Backlinks {
+            crawl,
+            output,
+            format,
+            source,
+        } => run_backlinks(&crawl, output.as_deref(), &format, source.as_deref()).await,
     }
 }
 
@@ -417,6 +442,21 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             if crawl_start.elapsed() >= max_time {
                 tracing::info!("Crawl time limit reached: {max_time:?}");
                 break;
+            }
+        }
+
+        // Check memory budget (every 100 pages)
+        if pages_crawled % 100 == 0 && pages_crawled > 0 {
+            if let Ok(rss_bytes) = get_process_rss_bytes() {
+                let limit = 512 * 1024 * 1024; // 512 MB default
+                if rss_bytes > limit {
+                    tracing::warn!(
+                        "Memory limit reached: {}MB > {}MB limit. Stopping crawl.",
+                        rss_bytes / (1024 * 1024),
+                        limit / (1024 * 1024)
+                    );
+                    break;
+                }
             }
         }
 
@@ -781,12 +821,39 @@ async fn run_report(
         .get_stats(&crawl_id)
         .context("Failed to get crawl statistics")?;
 
+    // Run backlink analysis
+    let backlink_data = {
+        let link_pairs = storage.get_links_for_crawl(&crawl_id).unwrap_or_default();
+        let external_links = storage.get_external_links(&crawl_id).unwrap_or_default();
+        let page_urls = storage.get_page_urls(&crawl_id).unwrap_or_default();
+
+        let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+        analyzer.load_from_crawl_data(&link_pairs);
+
+        // Add external backlinks
+        for (source, target) in &external_links {
+            analyzer.add_backlink(crawlkit_core::Backlink {
+                source_url: source.clone(),
+                target_url: target.clone(),
+                anchor_text: String::new(),
+                is_followed: true,
+                is_internal: false,
+            });
+        }
+
+        let _known_urls: std::collections::HashSet<String> = page_urls.into_iter().collect();
+        let pagerank = analyzer.compute_pagerank(0.85, 20);
+        let summary = analyzer.summarize();
+
+        Some((summary, pagerank))
+    };
+
     pb.set_message("Generating report...");
 
     // Generate report based on format
     let report = match format {
         "json" => {
-            let data = serde_json::json!({
+            let mut data = serde_json::json!({
                 "crawl_id": crawl_id,
                 "total_pages": stats.total_pages,
                 "total_issues": stats.total_issues,
@@ -796,10 +863,36 @@ async fn run_report(
                 "total_body_size": stats.total_body_size,
                 "status": "completed",
             });
+
+            if let Some((summary, _pagerank)) = &backlink_data {
+                let top_pages: Vec<serde_json::Value> = summary
+                    .pages
+                    .iter()
+                    .take(20)
+                    .map(|p| {
+                        serde_json::json!({
+                            "url": p.url,
+                            "pagerank": p.pagerank,
+                            "inbound_links": p.inbound_links,
+                            "outbound_links": p.outbound_links,
+                            "referring_domains": p.referring_domains,
+                        })
+                    })
+                    .collect();
+
+                data["backlinks"] = serde_json::json!({
+                    "total_internal_links": summary.total_internal_links,
+                    "total_external_links": summary.total_external_links,
+                    "total_referring_domains": summary.total_referring_domains,
+                    "orphan_pages": summary.orphan_pages,
+                    "top_pages_by_pagerank": top_pages,
+                });
+            }
+
             serde_json::to_string_pretty(&data)?
         }
         "markdown" => {
-            format!(
+            let mut md = format!(
                 "# Crawl Report\n\n\
                 - **Crawl ID:** {}\n\
                 - **Total Pages:** {}\n\
@@ -812,7 +905,50 @@ async fn run_report(
                 stats.total_issues,
                 stats.avg_response_time_ms.unwrap_or(0.0),
                 stats.total_body_size.unwrap_or(0)
-            )
+            );
+
+            if let Some((summary, _)) = &backlink_data {
+                md.push_str(&format!(
+                    "\n## Backlinks\n\n\
+                    - **Total Internal Links:** {}\n\
+                    - **Total External Links:** {}\n\
+                    - **Total Referring Domains:** {}\n\
+                    - **Orphan Pages:** {}\n",
+                    summary.total_internal_links,
+                    summary.total_external_links,
+                    summary.total_referring_domains,
+                    summary.orphan_pages.len()
+                ));
+
+                if !summary.orphan_pages.is_empty() {
+                    md.push_str("\n### Orphan Pages\n\n");
+                    for url in summary.orphan_pages.iter().take(10) {
+                        md.push_str(&format!("- {url}\n"));
+                    }
+                    if summary.orphan_pages.len() > 10 {
+                        md.push_str(&format!(
+                            "\n... and {} more\n",
+                            summary.orphan_pages.len() - 10
+                        ));
+                    }
+                }
+
+                md.push_str("\n### Top Pages by PageRank\n\n");
+                md.push_str("| URL | PageRank | Inbound | Outbound | Referring Domains |\n");
+                md.push_str("|-----|----------|---------|----------|------------------|\n");
+                for page in summary.pages.iter().take(10) {
+                    md.push_str(&format!(
+                        "| {} | {:.4} | {} | {} | {} |\n",
+                        page.url,
+                        page.pagerank,
+                        page.inbound_links,
+                        page.outbound_links,
+                        page.referring_domains
+                    ));
+                }
+            }
+
+            md
         }
         "csv" => {
             let mut csv = String::from("crawl_id,total_pages,total_issues,status\n");
@@ -837,4 +973,195 @@ async fn run_report(
     }
 
     Ok(())
+}
+
+/// Analyze backlinks from an existing crawl.
+async fn run_backlinks(
+    crawl_path: &Path,
+    output: Option<&Path>,
+    format: &str,
+    source: Option<&str>,
+) -> Result<()> {
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap(),
+    );
+    pb.set_message("Analyzing backlinks...");
+
+    let db_path = if crawl_path.is_dir() {
+        crawl_path.join("crawlkit.db")
+    } else {
+        crawl_path.to_path_buf()
+    };
+
+    let storage = Storage::new(&db_path)
+        .with_context(|| format!("Failed to open crawl database: {}", db_path.display()))?;
+
+    let crawl_id = storage
+        .get_latest_crawl_id()
+        .context("Failed to get latest crawl ID")?
+        .ok_or_else(|| anyhow::anyhow!("No crawls found in database"))?;
+
+    // Load link data from storage
+    let link_pairs = storage.get_links_for_crawl(&crawl_id)?;
+    let external_links = storage.get_external_links(&crawl_id)?;
+
+    // Build backlink analyzer
+    let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+    analyzer.load_from_crawl_data(&link_pairs);
+    for (source_url, target_url) in &external_links {
+        analyzer.add_backlink(crawlkit_core::Backlink {
+            source_url: source_url.clone(),
+            target_url: target_url.clone(),
+            anchor_text: String::new(),
+            is_followed: true,
+            is_internal: false,
+        });
+    }
+
+    // Optionally fetch external backlinks from API
+    if let Some(src) = source {
+        pb.set_message(format!("Fetching external backlinks from {src}..."));
+        let registry = crawlkit_core::BacklinkAdapterRegistry::with_defaults();
+        if let Some(adapter) = registry.get(src) {
+            let urls = storage.get_page_urls(&crawl_id)?;
+            if let Some(first_url) = urls.first() {
+                let domain = url::Url::parse(first_url)
+                    .ok()
+                    .and_then(|u| u.host_str().map(String::from))
+                    .unwrap_or_default();
+                match adapter.fetch_backlinks(&domain, 1000).await {
+                    Ok(ext_backlinks) => {
+                        for bl in &ext_backlinks {
+                            analyzer.add_backlink(crawlkit_core::Backlink {
+                                source_url: bl.source_url.clone(),
+                                target_url: bl.target_url.clone(),
+                                anchor_text: bl.anchor_text.clone(),
+                                is_followed: bl.is_followed,
+                                is_internal: false,
+                            });
+                        }
+                        pb.set_message(format!(
+                            "Fetched {} external backlinks",
+                            ext_backlinks.len()
+                        ));
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to fetch from {src}: {e}");
+                    }
+                }
+            }
+        } else {
+            tracing::warn!("Unknown backlink source: {src}. Available: ahrefs, gsc, majestic");
+        }
+    }
+
+    let _pagerank = analyzer.compute_pagerank(0.85, 20);
+    let summary = analyzer.summarize();
+
+    let output_str = match format {
+        "json" => {
+            let top_pages: Vec<serde_json::Value> = summary
+                .pages
+                .iter()
+                .take(20)
+                .map(|p| {
+                    serde_json::json!({
+                        "url": p.url,
+                        "pagerank": p.pagerank,
+                        "inbound_links": p.inbound_links,
+                        "outbound_links": p.outbound_links,
+                        "referring_domains": p.referring_domains,
+                    })
+                })
+                .collect();
+
+            serde_json::to_string_pretty(&serde_json::json!({
+                "crawl_id": crawl_id,
+                "total_internal_links": summary.total_internal_links,
+                "total_external_links": summary.total_external_links,
+                "total_referring_domains": summary.total_referring_domains,
+                "orphan_pages": summary.orphan_pages,
+                "orphan_count": summary.orphan_pages.len(),
+                "top_pages_by_pagerank": top_pages,
+            }))?
+        }
+        "md" => {
+            let mut md = format!(
+                "# Backlink Analysis\n\n\
+                - **Crawl ID:** {crawl_id}\n\
+                - **Total Internal Links:** {}\n\
+                - **Total External Links:** {}\n\
+                - **Total Referring Domains:** {}\n\
+                - **Orphan Pages:** {}\n",
+                summary.total_internal_links,
+                summary.total_external_links,
+                summary.total_referring_domains,
+                summary.orphan_pages.len()
+            );
+
+            if !summary.orphan_pages.is_empty() {
+                md.push_str("\n## Orphan Pages\n\n");
+                for url in &summary.orphan_pages {
+                    md.push_str(&format!("- {url}\n"));
+                }
+            }
+
+            md.push_str("\n## Top Pages by PageRank\n\n");
+            md.push_str("| URL | PageRank | Inbound | Outbound | Referring Domains |\n");
+            md.push_str("|-----|----------|---------|----------|------------------|\n");
+            for page in summary.pages.iter().take(20) {
+                md.push_str(&format!(
+                    "| {} | {:.4} | {} | {} | {} |\n",
+                    page.url,
+                    page.pagerank,
+                    page.inbound_links,
+                    page.outbound_links,
+                    page.referring_domains
+                ));
+            }
+
+            md
+        }
+        _ => {
+            return Err(anyhow::anyhow!(
+                "Unsupported format: {format}. Use json or md."
+            ))
+        }
+    };
+
+    pb.finish_with_message(format!(
+        "Analysis complete: {} internal links, {} external links, {} orphan pages",
+        summary.total_internal_links,
+        summary.total_external_links,
+        summary.orphan_pages.len()
+    ));
+
+    if let Some(out) = output {
+        std::fs::write(out, &output_str)?;
+        tracing::info!("Wrote backlink analysis to {}", out.display());
+    } else {
+        println!("{output_str}");
+    }
+
+    Ok(())
+}
+
+/// Get the current process RSS (Resident Set Size) in bytes.
+///
+/// Uses `/proc/self/statm` on Linux, returns `Err` on unsupported platforms.
+fn get_process_rss_bytes() -> Result<u64> {
+    #[cfg(target_os = "linux")]
+    {
+        let statm = std::fs::read_to_string("/proc/self/statm")?;
+        let fields: Vec<&str> = statm.split_whitespace().collect();
+        if fields.len() >= 2 {
+            let pages: u64 = fields[1].parse()?;
+            let page_size = 4096u64; // standard page size
+            return Ok(pages * page_size);
+        }
+    }
+    Err(anyhow::anyhow!("RSS not available on this platform"))
 }

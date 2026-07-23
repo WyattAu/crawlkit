@@ -11,7 +11,11 @@
 ```bash
 git clone https://github.com/WyattAu/crawlkit.git
 cd crawlkit
-cp .git/hooks/pre-commit .git/hooks/pre-commit  # Install pre-commit hook
+
+# Install the pre-commit hook (runs fmt, clippy -D warnings, tests, audit)
+cp .git/hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+
 cargo build
 cargo test
 ```

@@ -35,15 +35,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Playwright integration (placeholder for JS rendering)
 - JS rendering decision logic
 - Real User Monitoring (RUM) integration
+- Workspace-level lint configuration (`unsafe_code = "forbid"`, clippy safety lints)
+- Pre-commit hook with fmt, clippy `-D warnings`, tests, audit, build checks
 
 ### Changed
 - HTTP/2 compatibility improved (http2_prior_knowledge disabled for broader compatibility)
 - SQLite storage now uses WAL mode with batch inserts
 - CLI expanded with crawl, compare, report subcommands
+- Refactored `run_crawl` to use `CrawlParams` struct (eliminates 14-argument function)
+- CI workflow now enforces `RUSTFLAGS="-D warnings"` and clippy `-D warnings`
+- Release workflow uses `cross` for aarch64-linux-gnu cross-compilation
+- Docs workflow uses `cargo doc` instead of broken npm-based approach
+- HTML export reports now include WCAG accessibility attributes (scope, aria-label, sr-only)
+- Renamed `Permission::from_str` to `Permission::parse` (eliminates std::str::FromStr confusion)
 
 ### Fixed
 - HTTP/2 compatibility issue (removed http2_prior_knowledge)
 - Scope filtering and progress reporting issues
+- MutexGuard held across await point in ratelimit.rs (async safety)
+- 6 field-assignment-outside-initializer patterns in queue.rs tests
+- 2 manual RangeInclusive::contains patterns (analyzers.rs, ratelimit.rs)
+- map_or to is_some_and conversion in wasm_analyzers.rs
+- Unused imports in integration tests and benchmarks
+- Redundant pattern matching in basic-crawl.rs example
+- Dead code warning for unused OutputConfig::format field
+- Cross-sign modulo arithmetic in benchmarks
 
 ## [0.1.0] - 2026-07-22
 

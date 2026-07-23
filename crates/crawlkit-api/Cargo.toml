@@ -12,6 +12,9 @@ readme.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "crawlkit-api"
 path = "src/main.rs"

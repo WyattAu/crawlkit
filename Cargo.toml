@@ -2,6 +2,19 @@
 members = ["crates/*"]
 resolver = "2"
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Critical lints (warn level -- do not block CI yet)
+# These flag patterns that should be eliminated in production code
+unwrap_used = "allow"          # Flag but do not block; fix incrementally
+expect_used = "allow"          # Flag but do not block; fix incrementally
+panic = "allow"                # Flag but do not block; fix incrementally
+exit = "deny"                  # Never call process::exit in library code
+modulo_arithmetic = "warn"
+
+
 [workspace.package]
 version = "0.4.0"
 edition = "2021"

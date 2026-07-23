@@ -6,6 +6,7 @@ on:
     paths:
       - 'docs/**'
       - 'README.md'
+      - 'crates/**'
 
 permissions:
   contents: read
@@ -18,16 +19,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
 
       - name: Build documentation
-        run: npm run build
+        run: cargo doc --workspace --no-deps
+
+      - name: Prepare pages artifact
+        run: |
+          mkdir -p dist
+          cp -r target/doc/* dist/
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

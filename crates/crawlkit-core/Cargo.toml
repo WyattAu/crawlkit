@@ -12,6 +12,9 @@ readme.workspace = true
 homepage.workspace = true
 documentation.workspace = true
 
+[lints]
+workspace = true
+
 [[bench]]
 name = "crawlkit_benchmarks"
 harness = false

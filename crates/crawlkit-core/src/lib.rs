@@ -17,6 +17,7 @@ pub mod compare;
 pub mod determinism;
 pub mod dns;
 pub mod encryption;
+pub mod enterprise;
 pub mod export;
 pub mod feature_flags;
 pub mod http;

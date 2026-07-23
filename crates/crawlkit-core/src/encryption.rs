@@ -174,7 +174,7 @@ impl EncryptionManager {
         })?;
 
         // Create AES-256-GCM cipher
-        use aes_gcm::aead::OsRng;
+
         use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
 
         let cipher = Aes256Gcm::new_from_slice(key)

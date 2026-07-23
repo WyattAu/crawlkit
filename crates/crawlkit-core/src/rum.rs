@@ -119,7 +119,7 @@ impl GoogleAnalyticsAdapter {
                     results.push(RumDataPoint {
                         path: path.clone(),
                         lcp: metric_values
-                            .get(0)
+                            .first()
                             .and_then(|v| v["value"].as_str())
                             .and_then(|s| s.parse().ok()),
                         inp: None,

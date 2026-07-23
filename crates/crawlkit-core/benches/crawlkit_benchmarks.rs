@@ -19,7 +19,7 @@ fn make_bench_page() -> ParsedPage {
         meta: MetaTags {
             title: Some("Benchmark Page".to_string()),
             description: Some("A page for benchmarking".to_string()),
-            canonical: Some("https://example.com/benchmark".to_string()),
+            canonical: Some(url::Url::parse("https://example.com/benchmark").unwrap()),
             ..Default::default()
         },
         headings: vec![

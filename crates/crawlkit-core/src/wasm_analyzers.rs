@@ -1,5 +1,5 @@
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
-use crate::playwright::{ConsoleMessage, RenderedPage, WasmError};
+use crate::playwright::RenderedPage;
 use crate::storage::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
@@ -205,7 +205,7 @@ impl WasmRuntimeAnalyzer {
 
         // WASM-R004: WASM network request failure
         for req in &rendered.network_requests {
-            if req.url.contains(".wasm") && req.status.map_or(false, |s| s >= 400) {
+            if req.url.contains(".wasm") && req.status.is_some_and(|s| s >= 400) {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Custom("Reliability".to_string()),
@@ -345,6 +345,7 @@ mod tests {
     use super::*;
     use crate::meta::MetaTags;
     use crate::parser::{ParsedPage, ScriptInfo};
+    use crate::playwright::ConsoleMessage;
     use std::time::Duration;
 
     fn make_page(url: &str, script_src: &str) -> ParsedPage {

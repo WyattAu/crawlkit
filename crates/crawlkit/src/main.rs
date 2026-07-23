@@ -258,7 +258,7 @@ async fn run_crawl(
     depth: Option<usize>,
     user_agent: Option<String>,
     timeout: Option<u64>,
-    respect_robots: Option<bool>,
+    _respect_robots: Option<bool>,
     include: Vec<String>,
     exclude: Vec<String>,
     javascript: bool,
@@ -338,7 +338,7 @@ async fn run_crawl(
     // Seed the queue
     let seed_url = url::Url::parse(url).with_context(|| format!("Invalid URL: {}", url))?;
     {
-        let mut q = queue.lock().await;
+        let q = queue.lock().await;
         q.push(seed_url.clone(), 0, Priority::HIGH);
     }
 
@@ -352,7 +352,7 @@ async fn run_crawl(
     // Crawl loop
     while pages_crawled < max_pages {
         let entry = {
-            let mut q = queue.lock().await;
+            let q = queue.lock().await;
             q.pop()
         };
 
@@ -399,7 +399,7 @@ async fn run_crawl(
 
         // Parse HTML
         let body_text = result.body.clone();
-        let parser = HtmlParser;
+        let _parser = HtmlParser;
         let parsed = match HtmlParser::parse(&body_text, &entry.url) {
             Ok(p) => p,
             Err(e) => {
@@ -500,7 +500,7 @@ async fn run_crawl(
                 Priority::LOW
             };
 
-            let mut q = queue.lock().await;
+            let q = queue.lock().await;
             q.push(link_url, entry.depth + 1, priority);
         }
     }
@@ -595,7 +595,7 @@ async fn run_report(
     crawl_path: &Path,
     output: Option<&Path>,
     format: &str,
-    theme: &str,
+    _theme: &str,
 ) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(

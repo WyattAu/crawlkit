@@ -193,10 +193,10 @@ impl PlaywrightDetector {
     #[must_use]
     pub fn detect() -> Self {
         let binary_path = Self::find_binary();
-        let version = binary_path.as_ref().and_then(|p| Self::get_version(p));
+        let version = binary_path.as_ref().and_then(Self::get_version);
         let available_browsers = binary_path
             .as_ref()
-            .map(|p| Self::get_browsers(p))
+            .map(Self::get_browsers)
             .unwrap_or_default();
 
         Self {
@@ -401,7 +401,7 @@ impl PlaywrightRenderer {
 
     /// Render page via Playwright CLI subprocess.
     async fn render_via_cli(&self, url: &str) -> Result<RenderedPage, PlaywrightError> {
-        let binary = self.detector.binary_path().ok_or_else(|| {
+        let _binary = self.detector.binary_path().ok_or_else(|| {
             PlaywrightError::NotAvailable("Playwright binary not found".to_string())
         })?;
 

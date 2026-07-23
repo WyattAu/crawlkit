@@ -5,8 +5,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::analyzers::{AnalysisContext, Analyzer, Finding};
-use crate::CrawlConfig;
+use crate::analyzers::Analyzer;
 
 /// Plugin errors.
 #[derive(Debug, Error)]
@@ -131,7 +130,7 @@ impl PluginLoader {
                         let path = entry.path();
                         if path
                             .extension()
-                            .map_or(false, |e| e == "so" || e == "dylib" || e == "wasm")
+                            .is_some_and(|e| e == "so" || e == "dylib" || e == "wasm")
                         {
                             if let Err(e) = self.load_plugin(&path) {
                                 errors.push(e);

@@ -45,6 +45,10 @@ pub use analyzers::{
     SslCertificateValidator, StructuredDataValidator, WordCountAnalyzer,
 };
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
+pub use backlink_adapters::{
+    AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
+    GscAdapter, MajesticAdapter,
+};
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
 pub use backpressure::{BackpressureController, BackpressureError, BoundedPipeline};
 pub use circuit_breaker::{
@@ -57,12 +61,23 @@ pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
+pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndicators};
+pub use link_graph::LinkGraph;
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
+pub use playwright::{
+    BrowserContext, BrowserType, ConsoleMessage, NetworkRequest, PlaywrightConfig,
+    PlaywrightDetector, PlaywrightError, PlaywrightRenderer, RenderedPage,
+    WasmError as PlaywrightWasmError,
+};
 pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
+pub use rum::{
+    CruxAdapter, CruxData, FieldMetrics, GoogleAnalyticsAdapter, LabMetrics, MergedMetrics,
+    MetricDeltas, RumDataPoint, RumError,
+};
 pub use storage::{
     CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
-pub use wasm_analyzers::WasmPatternAnalyzer;
+pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
 
 pub mod meta;
 pub mod parser;

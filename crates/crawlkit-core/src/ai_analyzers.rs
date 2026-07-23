@@ -110,9 +110,8 @@ impl Analyzer for AiContentStructureAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        // NOTE: Full content structure analysis requires raw text access.
-        // Currently uses word_count and heading structure as proxies.
-        // TODO: Add visible_text field to ParsedPage for full analysis.
+        // Content structure analysis uses word_count and heading structure as proxies.
+        // Full analysis would require raw text access, which is not available in ParsedPage.
 
         // AI-CS002: Content without subheadings (check heading count vs word count)
         let heading_count = ctx.page.headings.len();

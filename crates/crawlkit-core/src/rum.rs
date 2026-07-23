@@ -58,12 +58,95 @@ impl GoogleAnalyticsAdapter {
     ///
     /// # Errors
     /// Returns error if API call fails.
-    pub async fn fetch_rum_data(&self, _paths: &[String]) -> Result<Vec<RumDataPoint>, RumError> {
+    pub async fn fetch_rum_data(&self, paths: &[String]) -> Result<Vec<RumDataPoint>, RumError> {
         if !self.is_available() {
             return Err(RumError::NotConfigured);
         }
-        // Placeholder: actual API call
-        Ok(Vec::new())
+
+        let property_id = self.property_id.as_ref().unwrap();
+        let api_key = self.api_key.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let mut results = Vec::new();
+
+        for path in paths {
+            let url = format!(
+                "https://analyticsdata.googleapis.com/v1beta/properties/{}:runReport?key={}",
+                property_id, api_key
+            );
+
+            let body = serde_json::json!({
+                "dateRanges": [{ "startDate": "30daysAgo", "endDate": "today" }],
+                "dimensions": [{ "name": "pagePath" }],
+                "metrics": [
+                    { "name": "averageLargestContentfulPaint" },
+                    { "name": "averageCumulativeLayoutShift" },
+                    { "name": "averageFirstContentfulPaint" },
+                    { "name": "averageTimeToFirstByte" },
+                    { "name": "screenPageViews" }
+                ],
+                "dimensionFilter": {
+                    "filter": {
+                        "fieldName": "pagePath",
+                        "stringFilter": { "matchType": "EXACT", "value": path }
+                    }
+                }
+            });
+
+            let response = client
+                .post(&url)
+                .json(&body)
+                .send()
+                .await
+                .map_err(|e| RumError::RequestFailed(e.to_string()))?;
+
+            if !response.status().is_success() {
+                return Err(RumError::RequestFailed(format!(
+                    "HTTP {}",
+                    response.status()
+                )));
+            }
+
+            let data: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| RumError::RequestFailed(e.to_string()))?;
+
+            if let Some(rows) = data["rows"].as_array() {
+                for row in rows {
+                    let empty_vec = vec![];
+                    let metric_values = row["metricValues"].as_array().unwrap_or(&empty_vec);
+                    results.push(RumDataPoint {
+                        path: path.clone(),
+                        lcp: metric_values
+                            .get(0)
+                            .and_then(|v| v["value"].as_str())
+                            .and_then(|s| s.parse().ok()),
+                        inp: None,
+                        cls: metric_values
+                            .get(1)
+                            .and_then(|v| v["value"].as_str())
+                            .and_then(|s| s.parse().ok()),
+                        fcp: metric_values
+                            .get(2)
+                            .and_then(|v| v["value"].as_str())
+                            .and_then(|s| s.parse().ok()),
+                        ttfb: metric_values
+                            .get(3)
+                            .and_then(|v| v["value"].as_str())
+                            .and_then(|s| s.parse().ok()),
+                        page_views: metric_values
+                            .get(4)
+                            .and_then(|v| v["value"].as_str())
+                            .and_then(|s| s.parse().ok())
+                            .unwrap_or(0),
+                        period: "30d".to_string(),
+                    });
+                }
+            }
+        }
+
+        Ok(results)
     }
 }
 
@@ -104,11 +187,51 @@ impl CruxAdapter {
     ///
     /// # Errors
     /// Returns error if API call fails.
-    pub async fn fetch_crux_data(&self, _url: &str) -> Result<Option<CruxData>, RumError> {
+    pub async fn fetch_crux_data(&self, url: &str) -> Result<Option<CruxData>, RumError> {
         if !self.is_available() {
             return Err(RumError::NotConfigured);
         }
-        Ok(None)
+
+        let api_key = self.api_key.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let request_url = format!(
+            "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={}&key={}&strategy=mobile",
+            urlencoding::encode(url),
+            api_key
+        );
+
+        let response = client
+            .get(&request_url)
+            .send()
+            .await
+            .map_err(|e| RumError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(RumError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| RumError::RequestFailed(e.to_string()))?;
+
+        // Extract CrUX data from lighthouse result
+        let lighthouse = &data["lighthouseResult"]["audits"];
+
+        let crux_data = CruxData {
+            url: url.to_string(),
+            lcp_p75: lighthouse["largest-contentful-paint"]["numericValue"].as_f64(),
+            inp_p75: None, // Not directly available in PSI
+            cls_p75: lighthouse["cumulative-layout-shift"]["numericValue"].as_f64(),
+            fcp_p75: lighthouse["first-contentful-paint"]["numericValue"].as_f64(),
+            ttfb_p75: lighthouse["server-response-time"]["numericValue"].as_f64(),
+        };
+
+        Ok(Some(crux_data))
     }
 }
 

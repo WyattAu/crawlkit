@@ -103,22 +103,86 @@ impl BacklinkAdapter for AhrefsAdapter {
 
     async fn fetch_backlinks(
         &self,
-        _domain: &str,
-        _limit: usize,
+        domain: &str,
+        limit: usize,
     ) -> Result<Vec<ExternalBacklink>, AdapterError> {
         if !self.is_available() {
             return Err(AdapterError::ApiKeyMissing);
         }
-        // Placeholder: actual API call
-        Ok(Vec::new())
+
+        let api_key = self.api_key.as_ref().unwrap();
+        let url = format!(
+            "https://api.ahrefs.com/v3/backlinks?target={}&mode=live&output=json&token={}&limit={}",
+            urlencoding::encode(domain),
+            api_key,
+            limit
+        );
+
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        let backlinks = data["refdomains"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| ExternalBacklink {
+                        source_url: item["source_url"].as_str().unwrap_or("").to_string(),
+                        target_url: item["target_url"].as_str().unwrap_or("").to_string(),
+                        anchor_text: item["anchor"].as_str().unwrap_or("").to_string(),
+                        domain_rating: item["domain_rating"].as_f64().unwrap_or(0.0),
+                        is_followed: item["dofollow"].as_bool().unwrap_or(false),
+                        first_seen: item["first_seen"].as_str().map(|s| s.to_string()),
+                        last_seen: item["last_seen"].as_str().map(|s| s.to_string()),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(backlinks)
     }
 
-    async fn get_domain_rating(&self, _domain: &str) -> Result<f64, AdapterError> {
+    async fn get_domain_rating(&self, domain: &str) -> Result<f64, AdapterError> {
         if !self.is_available() {
             return Err(AdapterError::ApiKeyMissing);
         }
-        // Placeholder: actual API call
-        Ok(0.0)
+
+        let api_key = self.api_key.as_ref().unwrap();
+        let url = format!(
+            "https://api.ahrefs.com/v3/domain-rating?target={}&output=json&token={}",
+            urlencoding::encode(domain),
+            api_key
+        );
+
+        let response = reqwest::get(&url)
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        Ok(data["domain_rating"].as_f64().unwrap_or(0.0))
     }
 
     fn is_available(&self) -> bool {
@@ -158,20 +222,101 @@ impl BacklinkAdapter for MajesticAdapter {
 
     async fn fetch_backlinks(
         &self,
-        _domain: &str,
-        _limit: usize,
+        domain: &str,
+        limit: usize,
     ) -> Result<Vec<ExternalBacklink>, AdapterError> {
         if !self.is_available() {
             return Err(AdapterError::ApiKeyMissing);
         }
-        Ok(Vec::new())
+
+        let api_key = self.api_key.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let params = [
+            ("cmd", "BacklinkData"),
+            ("item", domain),
+            ("count", &limit.to_string()),
+            ("output", "json"),
+            ("key", api_key),
+        ];
+
+        let response = client
+            .post("https://api.majestic.com/api/command")
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        let backlinks = data["Data"]["Backlinks"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| ExternalBacklink {
+                        source_url: item["SourceURL"].as_str().unwrap_or("").to_string(),
+                        target_url: item["TargetURL"].as_str().unwrap_or("").to_string(),
+                        anchor_text: item["AnchorText"].as_str().unwrap_or("").to_string(),
+                        domain_rating: item["TrustFlow"].as_f64().unwrap_or(0.0),
+                        is_followed: item["Flag"].as_str().unwrap_or("") != "nofollow",
+                        first_seen: item["FirstSeen"].as_str().map(|s| s.to_string()),
+                        last_seen: item["LastSeen"].as_str().map(|s| s.to_string()),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(backlinks)
     }
 
-    async fn get_domain_rating(&self, _domain: &str) -> Result<f64, AdapterError> {
+    async fn get_domain_rating(&self, domain: &str) -> Result<f64, AdapterError> {
         if !self.is_available() {
             return Err(AdapterError::ApiKeyMissing);
         }
-        Ok(0.0)
+
+        let api_key = self.api_key.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        let params = [
+            ("cmd", "GetIndexItemInfo"),
+            ("item", domain),
+            ("items", "0"),
+            ("output", "json"),
+            ("key", api_key),
+        ];
+
+        let response = client
+            .post("https://api.majestic.com/api/command")
+            .form(&params)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        Ok(data["Data"]["Results"][0]["TrustFlow"]
+            .as_f64()
+            .unwrap_or(0.0))
     }
 
     fn is_available(&self) -> bool {
@@ -211,20 +356,67 @@ impl BacklinkAdapter for GscAdapter {
 
     async fn fetch_backlinks(
         &self,
-        _domain: &str,
-        _limit: usize,
+        domain: &str,
+        limit: usize,
     ) -> Result<Vec<ExternalBacklink>, AdapterError> {
         if !self.is_available() {
             return Err(AdapterError::ApiKeyMissing);
         }
-        Ok(Vec::new())
+
+        let access_token = self.access_token.as_ref().unwrap();
+        let client = reqwest::Client::new();
+
+        // GSC API for external links
+        let url = format!(
+            "https://searchconsole.googleapis.com/webmasters/v3/sites/{}%2FexternalLinks?rowLimit={}",
+            urlencoding::encode(&format!("https://{}/", domain)),
+            limit
+        );
+
+        let response = client
+            .get(&url)
+            .bearer_auth(access_token)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !response.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "HTTP {}",
+                response.status()
+            )));
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        let backlinks = data["linkEntries"]
+            .as_array()
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| ExternalBacklink {
+                        source_url: item["targetPage"].as_str().unwrap_or("").to_string(),
+                        target_url: item["pageUrl"].as_str().unwrap_or("").to_string(),
+                        anchor_text: String::new(), // GSC doesn't provide anchor text
+                        domain_rating: 0.0,         // GSC doesn't provide DR
+                        is_followed: true,          // GSC links are typically followed
+                        first_seen: None,
+                        last_seen: None,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(backlinks)
     }
 
     async fn get_domain_rating(&self, _domain: &str) -> Result<f64, AdapterError> {
-        if !self.is_available() {
-            return Err(AdapterError::ApiKeyMissing);
-        }
-        Ok(0.0)
+        // GSC doesn't provide domain rating
+        Err(AdapterError::NotAvailable(
+            "GSC does not provide domain rating".to_string(),
+        ))
     }
 
     fn is_available(&self) -> bool {

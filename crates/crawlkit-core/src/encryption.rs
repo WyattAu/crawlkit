@@ -43,10 +43,14 @@ impl Default for EncryptionConfig {
     }
 }
 
-/// Encryption manager (placeholder for SQLCipher integration).
+/// Encryption manager for data at rest.
+///
+/// Provides AES-256-GCM encryption for sensitive data.
+/// Key is loaded from file, environment variable, or system keyring.
 pub struct EncryptionManager {
     config: EncryptionConfig,
     initialized: Arc<RwLock<bool>>,
+    key: Arc<RwLock<Option<Vec<u8>>>>,
 }
 
 impl EncryptionManager {
@@ -56,6 +60,7 @@ impl EncryptionManager {
         Self {
             config,
             initialized: Arc::new(RwLock::new(false)),
+            key: Arc::new(RwLock::new(None)),
         }
     }
 
@@ -65,25 +70,145 @@ impl EncryptionManager {
         self.config.enabled
     }
 
-    /// Initialize encryption (placeholder).
+    /// Initialize encryption by loading the key.
     ///
     /// # Errors
-    /// Returns error if key cannot be loaded.
+    /// Returns error if key cannot be loaded or is invalid.
     pub fn initialize(&self) -> Result<(), EncryptionError> {
         if !self.config.enabled {
             return Ok(());
         }
 
-        // Placeholder: actual implementation would load key
-        // and initialize SQLCipher connection
+        let key = self.load_key()?;
+
+        // Validate key length (256 bits = 32 bytes for AES-256)
+        if key.len() != 32 {
+            return Err(EncryptionError::InvalidKeyFormat(format!(
+                "Expected 32 bytes, got {} bytes",
+                key.len()
+            )));
+        }
+
+        *self.key.write() = Some(key);
         *self.initialized.write() = true;
         Ok(())
+    }
+
+    /// Load encryption key from configured source.
+    fn load_key(&self) -> Result<Vec<u8>, EncryptionError> {
+        match &self.config.key_source {
+            KeySource::File(path) => std::fs::read(path).map_err(|e| {
+                EncryptionError::KeyNotFound(format!(
+                    "Failed to read key file {}: {}",
+                    path.display(),
+                    e
+                ))
+            }),
+            KeySource::EnvVar(var_name) => {
+                std::env::var(var_name)
+                    .map(|v| v.into_bytes())
+                    .map_err(|_| {
+                        EncryptionError::KeyNotFound(format!(
+                            "Environment variable {} not set",
+                            var_name
+                        ))
+                    })
+            }
+            KeySource::Keyring(service) => {
+                // Placeholder for system keyring integration
+                // In production, use keyring crate
+                Err(EncryptionError::KeyNotFound(format!(
+                    "Keyring integration not yet implemented for service: {}",
+                    service
+                )))
+            }
+        }
+    }
+
+    /// Encrypt data using AES-256-GCM.
+    ///
+    /// # Errors
+    /// Returns error if encryption fails.
+    pub fn encrypt(&self, plaintext: &[u8]) -> Result<Vec<u8>, EncryptionError> {
+        if !self.config.enabled {
+            return Ok(plaintext.to_vec());
+        }
+
+        let key = self.key.read();
+        let key = key.as_ref().ok_or_else(|| {
+            EncryptionError::InitializationFailed("Encryption not initialized".to_string())
+        })?;
+
+        // Generate random nonce (96 bits for AES-GCM)
+        let mut nonce = [0u8; 12];
+        getrandom::getrandom(&mut nonce).map_err(|e| {
+            EncryptionError::InitializationFailed(format!("Failed to generate nonce: {}", e))
+        })?;
+
+        // Create AES-256-GCM cipher
+        use aes_gcm::aead::OsRng;
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        let cipher = Aes256Gcm::new_from_slice(key)
+            .map_err(|e| EncryptionError::InvalidKeyFormat(format!("Invalid key: {}", e)))?;
+
+        let nonce = Nonce::from_slice(&nonce);
+        let ciphertext = cipher.encrypt(nonce, plaintext).map_err(|e| {
+            EncryptionError::InitializationFailed(format!("Encryption failed: {}", e))
+        })?;
+
+        // Prepend nonce to ciphertext
+        let mut result = nonce.to_vec();
+        result.extend_from_slice(&ciphertext);
+        Ok(result)
+    }
+
+    /// Decrypt data using AES-256-GCM.
+    ///
+    /// # Errors
+    /// Returns error if decryption fails.
+    pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, EncryptionError> {
+        if !self.config.enabled {
+            return Ok(ciphertext.to_vec());
+        }
+
+        let key = self.key.read();
+        let key = key.as_ref().ok_or_else(|| {
+            EncryptionError::InitializationFailed("Encryption not initialized".to_string())
+        })?;
+
+        if ciphertext.len() < 12 {
+            return Err(EncryptionError::InvalidKeyFormat(
+                "Ciphertext too short".to_string(),
+            ));
+        }
+
+        // Extract nonce from ciphertext
+        let (nonce_bytes, actual_ciphertext) = ciphertext.split_at(12);
+
+        use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
+
+        let cipher = Aes256Gcm::new_from_slice(key)
+            .map_err(|e| EncryptionError::InvalidKeyFormat(format!("Invalid key: {}", e)))?;
+
+        let nonce = Nonce::from_slice(nonce_bytes);
+        let plaintext = cipher.decrypt(nonce, actual_ciphertext).map_err(|e| {
+            EncryptionError::InitializationFailed(format!("Decryption failed: {}", e))
+        })?;
+
+        Ok(plaintext)
     }
 
     /// Check if initialized.
     #[must_use]
     pub fn is_initialized(&self) -> bool {
         *self.initialized.read()
+    }
+
+    /// Get configuration.
+    #[must_use]
+    pub fn config(&self) -> &EncryptionConfig {
+        &self.config
     }
 }
 
@@ -125,5 +250,60 @@ mod tests {
         let manager = EncryptionManager::default();
         assert!(!manager.is_enabled());
         assert!(manager.initialize().is_ok());
+    }
+
+    #[test]
+    fn test_encryption_decrypt_roundtrip() {
+        // Create a valid 32-byte key
+        let key = vec![0u8; 32];
+        let config = EncryptionConfig {
+            enabled: true,
+            key_source: KeySource::EnvVar("TEST_KEY".to_string()),
+            algorithm: EncryptionAlgorithm::Aes256Gcm,
+        };
+
+        let manager = EncryptionManager::new(config);
+
+        // Manually set the key for testing
+        *manager.key.write() = Some(key);
+        *manager.initialized.write() = true;
+
+        // Test encrypt/decrypt roundtrip
+        let plaintext = b"Hello, World!";
+        let ciphertext = manager.encrypt(plaintext).unwrap();
+        let decrypted = manager.decrypt(&ciphertext).unwrap();
+
+        assert_eq!(plaintext.to_vec(), decrypted);
+    }
+
+    #[test]
+    fn test_encryption_different_plaintexts() {
+        let key = vec![42u8; 32];
+        let config = EncryptionConfig {
+            enabled: true,
+            key_source: KeySource::EnvVar("TEST_KEY".to_string()),
+            algorithm: EncryptionAlgorithm::Aes256Gcm,
+        };
+
+        let manager = EncryptionManager::new(config);
+        *manager.key.write() = Some(key);
+        *manager.initialized.write() = true;
+
+        // Different plaintexts should produce different ciphertexts
+        let ct1 = manager.encrypt(b"message1").unwrap();
+        let ct2 = manager.encrypt(b"message2").unwrap();
+        assert_ne!(ct1, ct2);
+    }
+
+    #[test]
+    fn test_encryption_disabled_passthrough() {
+        let manager = EncryptionManager::default();
+        let data = b"test data";
+
+        // When disabled, encrypt/decrypt should be passthrough
+        let encrypted = manager.encrypt(data).unwrap();
+        let decrypted = manager.decrypt(&encrypted).unwrap();
+
+        assert_eq!(data.to_vec(), decrypted);
     }
 }

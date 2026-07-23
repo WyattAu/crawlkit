@@ -1,4 +1,5 @@
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
+use crate::playwright::{ConsoleMessage, RenderedPage, WasmError};
 use crate::storage::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
@@ -127,6 +128,215 @@ impl Analyzer for WasmPatternAnalyzer {
 }
 
 // ---------------------------------------------------------------------------
+// WASM Runtime Analyzer (Dynamic - requires Playwright)
+// ---------------------------------------------------------------------------
+
+/// Detects WASM runtime errors via browser console output.
+///
+/// Requires Playwright integration for dynamic analysis.
+pub struct WasmRuntimeAnalyzer;
+
+impl WasmRuntimeAnalyzer {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for WasmRuntimeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WasmRuntimeAnalyzer {
+    /// Analyze rendered page for WASM runtime errors.
+    #[must_use]
+    pub fn analyze_rendered(&self, url: &str, rendered: &RenderedPage) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        // WASM-R001: WASM runtime crash
+        for msg in &rendered.console_messages {
+            if msg.level == "error" && msg.text.to_lowercase().contains("webassembly") {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Custom("Reliability".to_string()),
+                    code: "WASM-R001".to_string(),
+                    title: "WASM runtime error detected".to_string(),
+                    description: format!("Console error: {}", msg.text),
+                    url: url.to_string(),
+                    recommendation: "Check WASM module integrity and compatibility.".to_string(),
+                });
+            }
+        }
+
+        // WASM-R002: WASM module load failure
+        for msg in &rendered.console_messages {
+            if msg.level == "error"
+                && (msg.text.contains("wasm") || msg.text.contains("WebAssembly"))
+                && (msg.text.contains("load") || msg.text.contains("fetch"))
+            {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Custom("Reliability".to_string()),
+                    code: "WASM-R002".to_string(),
+                    title: "WASM module load failure".to_string(),
+                    description: format!("Console error: {}", msg.text),
+                    url: url.to_string(),
+                    recommendation: "Verify WASM module URL and CORS configuration.".to_string(),
+                });
+            }
+        }
+
+        // WASM-R003: WASM deprecation warning
+        for msg in &rendered.console_messages {
+            if msg.level == "warning" && msg.text.to_lowercase().contains("wasm") {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Performance,
+                    code: "WASM-R003".to_string(),
+                    title: "WASM deprecation warning".to_string(),
+                    description: format!("Console warning: {}", msg.text),
+                    url: url.to_string(),
+                    recommendation: "Review WASM usage and update if necessary.".to_string(),
+                });
+            }
+        }
+
+        // WASM-R004: WASM network request failure
+        for req in &rendered.network_requests {
+            if req.url.contains(".wasm") && req.status.map_or(false, |s| s >= 400) {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Custom("Reliability".to_string()),
+                    code: "WASM-R004".to_string(),
+                    title: "WASM module HTTP error".to_string(),
+                    description: format!(
+                        "WASM module at {} returned HTTP {}",
+                        req.url,
+                        req.status.unwrap_or(0)
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Verify WASM module availability and CORS headers.".to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// WASM Performance Analyzer
+// ---------------------------------------------------------------------------
+
+/// Measures WASM impact on Core Web Vitals and page performance.
+pub struct WasmPerformanceAnalyzer;
+
+impl WasmPerformanceAnalyzer {
+    #[must_use]
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for WasmPerformanceAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WasmPerformanceAnalyzer {
+    /// Analyze rendered page for WASM performance issues.
+    #[must_use]
+    pub fn analyze_rendered(&self, url: &str, rendered: &RenderedPage) -> Vec<Finding> {
+        let mut findings = Vec::new();
+
+        // WASM-P001: WASM module count
+        let wasm_modules: Vec<_> = rendered
+            .network_requests
+            .iter()
+            .filter(|r| r.url.contains(".wasm"))
+            .collect();
+
+        if wasm_modules.len() > 5 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "WASM-P001".to_string(),
+                title: "Too many WASM modules".to_string(),
+                description: format!(
+                    "Page loads {} WASM modules. High module count increases memory pressure.",
+                    wasm_modules.len()
+                ),
+                url: url.to_string(),
+                recommendation:
+                    "Consider consolidating WASM modules or lazy-loading non-critical ones."
+                        .to_string(),
+            });
+        }
+
+        // WASM-P002: Total WASM size
+        let total_wasm_size: u64 = wasm_modules.iter().filter_map(|r| r.size).sum();
+
+        if total_wasm_size > 10 * 1024 * 1024 {
+            // 10 MB
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Performance,
+                code: "WASM-P002".to_string(),
+                title: "WASM bundle too large".to_string(),
+                description: format!(
+                    "Total WASM size: {:.2} MB. This exceeds the 10 MB recommendation.",
+                    total_wasm_size as f64 / (1024.0 * 1024.0)
+                ),
+                url: url.to_string(),
+                recommendation: "Optimize WASM with wasm-opt or split into smaller modules."
+                    .to_string(),
+            });
+        }
+
+        // WASM-P003: WASM compilation time (from render time)
+        if rendered.render_time > std::time::Duration::from_secs(1) {
+            // Check if WASM is likely contributing
+            if !wasm_modules.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Performance,
+                    code: "WASM-P003".to_string(),
+                    title: "Slow WASM compilation detected".to_string(),
+                    description: format!(
+                        "Page render took {:?} with {} WASM modules. WASM compilation may be contributing.",
+                        rendered.render_time,
+                        wasm_modules.len()
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Use WebAssembly.compileStreaming() and enable WASM streaming compilation."
+                        .to_string(),
+                });
+            }
+        }
+
+        // WASM-P004: Missing modulepreload
+        let has_modulepreload = rendered.html.contains("rel=\"modulepreload\"");
+        if !wasm_modules.is_empty() && !has_modulepreload {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "WASM-P004".to_string(),
+                title: "Missing WASM module preload".to_string(),
+                description: "WASM modules loaded without modulepreload hint.".to_string(),
+                url: url.to_string(),
+                recommendation: "Add <link rel=\"modulepreload\"> for critical WASM modules."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -213,5 +423,50 @@ mod tests {
         let findings = analyzer.analyze(&ctx, &default_config());
         // No WASM patterns means no WASM-related findings
         assert!(findings.iter().all(|f| !f.code.starts_with("WASM")));
+    }
+
+    #[test]
+    fn test_wasm_runtime_analyzer_console_error() {
+        let analyzer = WasmRuntimeAnalyzer::new();
+        let rendered = RenderedPage {
+            final_url: "https://example.com".to_string(),
+            html: String::new(),
+            console_messages: vec![ConsoleMessage {
+                level: "error".to_string(),
+                text: "WebAssembly.instantiate failed".to_string(),
+                source: None,
+                line: None,
+            }],
+            network_requests: Vec::new(),
+            wasm_errors: Vec::new(),
+            render_time: Duration::from_millis(100),
+            memory_used: 0,
+        };
+
+        let findings = analyzer.analyze_rendered("https://example.com", &rendered);
+        assert!(findings.iter().any(|f| f.code == "WASM-R001"));
+    }
+
+    #[test]
+    fn test_wasm_performance_analyzer_large_bundle() {
+        let analyzer = WasmPerformanceAnalyzer::new();
+        let rendered = RenderedPage {
+            final_url: "https://example.com".to_string(),
+            html: String::new(),
+            console_messages: Vec::new(),
+            network_requests: vec![crate::playwright::NetworkRequest {
+                url: "https://example.com/module.wasm".to_string(),
+                method: "GET".to_string(),
+                status: Some(200),
+                resource_type: "wasm".to_string(),
+                size: Some(15 * 1024 * 1024), // 15 MB
+            }],
+            wasm_errors: Vec::new(),
+            render_time: Duration::from_millis(100),
+            memory_used: 0,
+        };
+
+        let findings = analyzer.analyze_rendered("https://example.com", &rendered);
+        assert!(findings.iter().any(|f| f.code == "WASM-P002"));
     }
 }

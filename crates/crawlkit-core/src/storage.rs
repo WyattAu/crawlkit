@@ -762,6 +762,22 @@ impl Storage {
             total_body_size,
         })
     }
+
+    /// Get the latest crawl ID.
+    pub fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
+        let conn = self.conn.lock().unwrap();
+        let result = conn.query_row(
+            "SELECT id FROM crawls ORDER BY start_time DESC LIMIT 1",
+            [],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
 }
 
 #[cfg(test)]

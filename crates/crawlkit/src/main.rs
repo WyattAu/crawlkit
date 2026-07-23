@@ -614,22 +614,69 @@ async fn run_report(
     let storage = Storage::new(&db_path)
         .with_context(|| format!("Failed to open crawl database: {}", db_path.display()))?;
 
-    // For now, list crawl IDs from the database
-    // TODO: Implement full report generation
-    pb.finish_with_message("Report generation not yet implemented");
+    // Get crawl statistics
+    let crawl_id = storage
+        .get_latest_crawl_id()
+        .context("Failed to get latest crawl ID")?
+        .ok_or_else(|| anyhow::anyhow!("No crawls found in database"))?;
 
-    let result = serde_json::json!({
-        "status": "not_implemented",
-        "crawl_db": db_path.display().to_string(),
-        "format": format,
-        "theme": theme,
-    });
+    let stats = storage
+        .get_stats(&crawl_id)
+        .context("Failed to get crawl statistics")?;
+
+    pb.set_message("Generating report...");
+
+    // Generate report based on format
+    let report = match format {
+        "json" => {
+            let data = serde_json::json!({
+                "crawl_id": crawl_id,
+                "total_pages": stats.total_pages,
+                "total_issues": stats.total_issues,
+                "issues_by_severity": stats.issues_by_severity,
+                "issues_by_category": stats.issues_by_category,
+                "avg_response_time_ms": stats.avg_response_time_ms,
+                "total_body_size": stats.total_body_size,
+                "status": "completed",
+            });
+            serde_json::to_string_pretty(&data)?
+        }
+        "markdown" => {
+            format!(
+                "# Crawl Report\n\n\
+                - **Crawl ID:** {}\n\
+                - **Total Pages:** {}\n\
+                - **Total Issues:** {}\n\
+                - **Avg Response Time:** {:.2}ms\n\
+                - **Total Body Size:** {} bytes\n\
+                - **Status:** Completed\n",
+                crawl_id,
+                stats.total_pages,
+                stats.total_issues,
+                stats.avg_response_time_ms.unwrap_or(0.0),
+                stats.total_body_size.unwrap_or(0)
+            )
+        }
+        "csv" => {
+            let mut csv = String::from("crawl_id,total_pages,total_issues,status\n");
+            csv.push_str(&format!(
+                "{},{},{},completed\n",
+                crawl_id, stats.total_pages, stats.total_issues
+            ));
+            csv
+        }
+        _ => {
+            return Err(anyhow::anyhow!("Unsupported format: {}", format));
+        }
+    };
+
+    pb.finish_with_message("Report generated");
 
     if let Some(out) = output {
-        std::fs::write(out, serde_json::to_string_pretty(&result)?)?;
+        std::fs::write(out, &report)?;
         tracing::info!("Wrote report to {}", out.display());
     } else {
-        println!("{}", serde_json::to_string_pretty(&result)?);
+        println!("{}", report);
     }
 
     Ok(())

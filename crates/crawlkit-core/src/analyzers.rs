@@ -1502,9 +1502,9 @@ impl Analyzer for ImageAnalyzer {
                 });
             }
 
-            // Oversized images (> 500 KB) — flagged as info since file_size is not
-            // available from HTML parsing. This check is a placeholder for when
-            // file_size is available from HTTP response headers.
+            // Image file size check: file_size is not available from HTML parsing alone.
+            // This requires HTTP response headers or HEAD request to determine actual file size.
+            // Documented limitation: oversized image detection is not implemented.
 
             if img.is_lazy_loaded {
                 total_lazy += 1;

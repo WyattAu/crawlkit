@@ -143,6 +143,7 @@ pub struct WasmError {
 }
 
 /// Browser context with resource isolation.
+#[derive(Clone)]
 pub struct BrowserContext {
     /// Context ID.
     pub id: String,
@@ -216,10 +217,7 @@ impl PlaywrightDetector {
         ];
 
         for candidate in &candidates {
-            if let Ok(output) = Command::new("which")
-                .arg(candidate)
-                .output()
-            {
+            if let Ok(output) = Command::new("which").arg(candidate).output() {
                 if output.status.success() {
                     let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
                     if !path.is_empty() {
@@ -240,7 +238,9 @@ impl PlaywrightDetector {
             .ok()
             .and_then(|o| {
                 if o.status.success() {
-                    String::from_utf8(o.stdout).ok().map(|s| s.trim().to_string())
+                    String::from_utf8(o.stdout)
+                        .ok()
+                        .map(|s| s.trim().to_string())
                 } else {
                     None
                 }
@@ -385,32 +385,152 @@ impl PlaywrightRenderer {
         // Create isolated context
         let context = self.create_context()?;
 
-        // Placeholder: actual implementation would:
-        // 1. Launch browser with context isolation
-        // 2. Navigate to URL
-        // 3. Wait for network idle
-        // 4. Capture console messages
-        // 5. Track network requests
-        // 6. Detect WASM errors
-        // 7. Extract rendered HTML
-        // 8. Enforce resource limits
+        // Launch browser and render page via Playwright CLI
+        let rendered = self.render_via_cli(url).await?;
 
         let render_time = start.elapsed();
 
         // Remove context
-        self.contexts
-            .write()
-            .retain(|c| c.id != context.id);
+        self.contexts.write().retain(|c| c.id != context.id);
 
-        // Placeholder return
         Ok(RenderedPage {
-            final_url: url.to_string(),
-            html: String::new(),
-            console_messages: Vec::new(),
-            network_requests: Vec::new(),
-            wasm_errors: Vec::new(),
             render_time,
-            memory_used: 0,
+            ..rendered
+        })
+    }
+
+    /// Render page via Playwright CLI subprocess.
+    async fn render_via_cli(&self, url: &str) -> Result<RenderedPage, PlaywrightError> {
+        let binary = self.detector.binary_path().ok_or_else(|| {
+            PlaywrightError::NotAvailable("Playwright binary not found".to_string())
+        })?;
+
+        // Create a temporary script for Playwright execution
+        let script = format!(
+            r#"
+const {{ chromium }} = require('playwright');
+
+(async () => {{
+    const browser = await chromium.launch({{
+        headless: {},
+        args: {}
+    }});
+    
+    const context = await browser.newContext({{
+        viewport: {{ width: 1920, height: 1080 }},
+        userAgent: 'crawlkit/0.4.0'
+    }});
+    
+    const page = await context.newPage();
+    
+    const consoleMessages = [];
+    const networkRequests = [];
+    
+    page.on('console', msg => {{
+        consoleMessages.push({{
+            level: msg.type(),
+            text: msg.text(),
+            source: msg.location().url || null,
+            line: msg.location().lineNumber || null
+        }});
+    }});
+    
+    page.on('request', req => {{
+        networkRequests.push({{
+            url: req.url(),
+            method: req.method(),
+            status: null,
+            resourceType: req.resourceType(),
+            size: null
+        }});
+    }});
+    
+    page.on('response', res => {{
+        const req = networkRequests.find(r => r.url === res.url());
+        if (req) {{
+            req.status = res.status();
+        }}
+    }});
+    
+    try {{
+        await page.goto('{}', {{ waitUntil: 'networkidle', timeout: {} }});
+    }} catch (e) {{
+        console.error('Navigation error:', e.message);
+    }}
+    
+    const html = await page.content();
+    const finalUrl = page.url();
+    
+    // Detect WASM errors
+    const wasmErrors = [];
+    for (const msg of consoleMessages) {{
+        if (msg.level === 'error' && 
+            (msg.text.toLowerCase().includes('webassembly') || 
+             msg.text.toLowerCase().includes('wasm'))) {{
+            wasmErrors.push({{
+                error_type: 'runtime',
+                message: msg.text,
+                source: msg.source,
+                timestamp: Date.now()
+            }});
+        }}
+    }}
+    
+    const result = {{
+        final_url: finalUrl,
+        html: html,
+        console_messages: consoleMessages,
+        network_requests: networkRequests,
+        wasm_errors: wasmErrors,
+        memory_used: process.memoryUsage().heapUsed
+    }};
+    
+    console.log(JSON.stringify(result));
+    
+    await browser.close();
+}})();
+"#,
+            self.config.headless,
+            serde_json::to_string(&self.config.args).unwrap_or_else(|_| "[]".to_string()),
+            url,
+            self.config.timeout.as_millis()
+        );
+
+        // Write script to temporary file
+        let temp_dir = std::env::temp_dir();
+        let script_path = temp_dir.join(format!("crawlkit_playwright_{}.js", uuid::Uuid::new_v4()));
+        std::fs::write(&script_path, &script)
+            .map_err(|e| PlaywrightError::BrowserLaunchFailed(e.to_string()))?;
+
+        // Execute Playwright script
+        let output = tokio::process::Command::new("node")
+            .arg(&script_path)
+            .output()
+            .await
+            .map_err(|e| PlaywrightError::BrowserLaunchFailed(e.to_string()))?;
+
+        // Clean up temporary script
+        let _ = std::fs::remove_file(&script_path);
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(PlaywrightError::BrowserLaunchFailed(stderr.to_string()));
+        }
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let result: serde_json::Value = serde_json::from_str(&stdout)
+            .map_err(|e| PlaywrightError::JsEvaluationFailed(e.to_string()))?;
+
+        Ok(RenderedPage {
+            final_url: result["final_url"].as_str().unwrap_or(url).to_string(),
+            html: result["html"].as_str().unwrap_or("").to_string(),
+            console_messages: serde_json::from_value(result["console_messages"].clone())
+                .unwrap_or_default(),
+            network_requests: serde_json::from_value(result["network_requests"].clone())
+                .unwrap_or_default(),
+            wasm_errors: serde_json::from_value(result["wasm_errors"].clone()).unwrap_or_default(),
+            render_time: Duration::from_millis(0), // Will be set by caller
+            memory_used: result["memory_used"].as_u64().unwrap_or(0),
         })
     }
 

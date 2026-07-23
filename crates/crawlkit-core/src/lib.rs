@@ -23,6 +23,7 @@ pub mod js_render_decision;
 pub mod link_graph;
 pub mod observability;
 pub mod playwright;
+pub mod plugin;
 pub mod queue;
 pub mod ratelimit;
 pub mod resource_monitor;

@@ -186,8 +186,6 @@ pub struct HttpClientConfig {
     pub pool_max_idle_per_host: usize,
     /// Maximum number of idle connections across all hosts.
     pub pool_max_idle: usize,
-    /// Whether to enable HTTP/2 prior knowledge (force h2).
-    pub http2_prior_knowledge: bool,
     /// Whether to enable TCP keepalive.
     pub tcp_keepalive: Option<Duration>,
 }
@@ -202,7 +200,6 @@ impl From<&CrawlConfig> for HttpClientConfig {
             max_body_size: 10 * 1024 * 1024, // 10MB default
             pool_max_idle_per_host: 16,
             pool_max_idle: 32,
-            http2_prior_knowledge: false,
             tcp_keepalive: Some(Duration::from_secs(60)),
         }
     }
@@ -257,10 +254,6 @@ impl HttpClient {
             .pool_idle_timeout(Duration::from_secs(90))
             .connect_timeout(Duration::from_secs(10));
 
-        if config.http2_prior_knowledge {
-            builder = builder.http2_prior_knowledge();
-        }
-
         if let Some(keepalive) = config.tcp_keepalive {
             builder = builder.tcp_keepalive(keepalive);
         }
@@ -289,7 +282,6 @@ impl HttpClient {
         let cfg = HttpClientConfig {
             pool_max_idle_per_host: 64,
             pool_max_idle: 128,
-            http2_prior_knowledge: false,
             tcp_keepalive: Some(Duration::from_secs(60)),
             ..config
         };

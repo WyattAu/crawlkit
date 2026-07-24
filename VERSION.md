@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** 6 (v1.0.0 Release)
-**Version:** 1.0.0
+**Current Phase:** 15 (v2.0.0 Release)
+**Version:** 2.0.0
 **Status:** Release Candidate
 **Last Updated:** 2026-07-24
 

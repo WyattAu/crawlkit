@@ -81,7 +81,6 @@ async fn main() -> Result<()> {
         max_body_size: 10 * 1024 * 1024, // 10 MB
         pool_max_idle_per_host: 32,
         pool_max_idle: 64,
-        http2_prior_knowledge: false,
         tcp_keepalive: Some(Duration::from_secs(30)),
     };
     let client = HttpClient::new(http_config)?;

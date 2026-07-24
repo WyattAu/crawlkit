@@ -608,7 +608,6 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         max_body_size: 10 * 1024 * 1024,
         pool_max_idle_per_host,
         pool_max_idle,
-        http2_prior_knowledge: true,
         tcp_keepalive: Some(std::time::Duration::from_secs(60)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
@@ -1706,7 +1705,6 @@ async fn run_inspect(
         max_body_size: 10 * 1024 * 1024,
         pool_max_idle_per_host: 32,
         pool_max_idle: 64,
-        http2_prior_knowledge: false,
         tcp_keepalive: Some(std::time::Duration::from_secs(30)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;

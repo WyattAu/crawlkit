@@ -24,6 +24,7 @@ Thumbs.db
 *.json
 !crates/*/Cargo.json
 !package.json
+!package-lock.json
 
 # SQLite databases
 *.db

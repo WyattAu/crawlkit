@@ -7,7 +7,6 @@ on:
       - 'docs/**'
       - 'web/**'
       - 'README.md'
-      - 'crates/**'
       - '.github/workflows/docs.yml'
 
 permissions:
@@ -30,6 +29,8 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: 'npm'
+          cache-dependency-path: 'web/package-lock.json'
 
       - name: Install dependencies
         working-directory: web

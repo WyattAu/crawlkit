@@ -1,0 +1,144 @@
+name: Benchmark Regression Detection
+
+on:
+  pull_request:
+    branches: [main]
+
+env:
+  CARGO_TERM_COLOR: always
+  REGRESSION_THRESHOLD: 10
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    concurrency:
+      group: benchmark-${{ github.head_ref || github.run_id }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Run benchmarks (baseline on main)
+        if: github.base_ref == 'main'
+        run: |
+          git checkout origin/main -- crates/crawlkit-core/benches/ || true
+          cargo bench --workspace -- --output-format bencher | tee baseline.txt
+          git checkout HEAD -- crates/crawlkit-core/benches/
+
+      - name: Run benchmarks (PR)
+        run: cargo bench --workspace -- --output-format bencher | tee output.txt
+
+      - name: Compare benchmark results
+        run: |
+          python3 << 'PYEOF'
+          import re
+          import sys
+
+          def parse_bencher_output(filepath):
+              results = {}
+              try:
+                  with open(filepath) as f:
+                      for line in f:
+                          # bencher format: test name \t time ns \t (+/-) variance
+                          match = re.match(r'^(.+?)\s+(\d+)\s+(\+/-\s+[\d.]+%)?', line.strip())
+                          if match:
+                              name = match.group(1).strip()
+                              time_ns = int(match.group(2))
+                              results[name] = time_ns
+              except FileNotFoundError:
+                  pass
+              return results
+
+          baseline = parse_bencher_output('baseline.txt')
+          current = parse_bencher_output('output.txt')
+
+          if not baseline:
+              print("::warning::No baseline results found. Skipping comparison.")
+              sys.exit(0)
+
+          if not current:
+              print("::error::No current benchmark results found.")
+              sys.exit(1)
+
+          regressions = []
+          improvements = []
+          threshold = int('${{ env.REGRESSION_THRESHOLD }}')
+
+          for name, current_time in current.items():
+              if name in baseline:
+                  baseline_time = baseline[name]
+                  if baseline_time > 0:
+                      change_pct = ((float(current_time) - float(baseline_time)) / float(baseline_time)) * 100.0
+                      if change_pct > threshold:
+                          regressions.append((name, baseline_time, current_time, change_pct))
+                      elif change_pct < -threshold:
+                          improvements.append((name, baseline_time, current_time, change_pct))
+
+          # Build comment body
+          comment_lines = ["## Benchmark Results\n"]
+
+          if regressions:
+              comment_lines.append("### ⚠️ Regressions (>{}% slower)\n".format(threshold))
+              comment_lines.append("| Benchmark | Baseline | Current | Change |")
+              comment_lines.append("|-----------|----------|---------|--------|")
+              for name, base, curr, pct in sorted(regressions, key=lambda x: -x[3]):
+                  comment_lines.append(
+                      f"| `{name}` | {base/1000.0:.1f} µs | {curr/1000.0:.1f} µs | +{pct:.1f}% |"
+                  )
+              comment_lines.append("")
+
+          if improvements:
+              comment_lines.append("### ✅ Improvements (>{}% faster)\n".format(threshold))
+              comment_lines.append("| Benchmark | Baseline | Current | Change |")
+              comment_lines.append("|-----------|----------|---------|--------|")
+              for name, base, curr, pct in sorted(improvements, key=lambda x: x[3]):
+                  comment_lines.append(
+                      f"| `{name}` | {base/1000.0:.1f} µs | {curr/1000.0:.1f} µs | {pct:.1f}% |"
+                  )
+              comment_lines.append("")
+
+          stable = [n for n in current if n in baseline and n not in [r[0] for r in regressions] and n not in [i[0] for i in improvements]]
+          if stable:
+              comment_lines.append("### Stable benchmarks\n")
+              comment_lines.append(f"{len(stable)} benchmarks within ±{threshold}% threshold.\n")
+
+          if not regressions:
+              comment_lines.append("No performance regressions detected.")
+          else:
+              comment_lines.append(f"**{len(regressions)} benchmark(s) regressed by more than {threshold}%.**")
+
+          comment = "\n".join(comment_lines)
+          print(comment)
+
+          # Write to file for the next step
+          with open('benchmark_comment.md', 'w') as f:
+              f.write(comment)
+
+          if regressions:
+              sys.exit(1)
+          PYEOF
+
+      - name: Find existing comment
+        uses: peter-evans/find-comment@v3
+        id: find_comment
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          comment-author: 'github-actions[bot]'
+          body-includes: '## Benchmark Results'
+
+      - name: Create or update comment
+        uses: peter-evans/create-or-update-comment@v4
+        with:
+          comment-id: ${{ steps.find_comment.outputs.comment-id }}
+          issue-number: ${{ github.event.pull_request.number }}
+          body-file: benchmark_comment.md
+          edit-mode: replace

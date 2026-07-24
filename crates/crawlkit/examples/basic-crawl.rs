@@ -232,10 +232,9 @@ async fn main() -> Result<()> {
     println!("\nCrawl complete: {pages_crawled} pages, {issues_found} issues");
 
     // 10. Export results
-    let conn = &*storage.conn();
 
     // JSON export
-    let json = export_json(conn, &crawl_id, true)?;
+    let json = export_json(&storage, &crawl_id, true)?;
     let json_path = output_dir.join("results.json");
     std::fs::write(&json_path, &json)?;
     println!("JSON → {}", json_path.display());
@@ -250,13 +249,14 @@ async fn main() -> Result<()> {
         issue_count: true,
         ..Default::default()
     };
+    let conn = &*storage.conn();
     let csv_bytes = export_csv(conn, &crawl_id, &selector)?;
     let csv_path = output_dir.join("results.csv");
     std::fs::write(&csv_path, &csv_bytes)?;
     println!("CSV  → {}", csv_path.display());
 
     // HTML report
-    let html = export_html(conn, &crawl_id)?;
+    let html = export_html(&storage, &crawl_id)?;
     let html_path = output_dir.join("report.html");
     std::fs::write(&html_path, &html)?;
     println!("HTML → {}", html_path.display());

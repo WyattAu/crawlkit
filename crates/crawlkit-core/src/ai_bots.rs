@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::storage::Severity;
+
 /// Represents an AI crawler/bot that may access web content.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiBot {
@@ -11,14 +13,6 @@ pub struct AiBot {
     pub purpose: &'static str,
     /// Severity when this bot is blocked.
     pub severity: Severity,
-}
-
-/// Severity levels for AI bot blocking findings.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum Severity {
-    Critical,
-    Warning,
-    Info,
 }
 
 /// Registry of known AI bots for robots.txt analysis.
@@ -74,31 +68,31 @@ pub static AI_BOTS: &[AiBot] = &[
         name: "GPTBot",
         owner: "OpenAI",
         purpose: "ChatGPT training and browsing",
-        severity: Severity::Critical,
+        severity: Severity::Error,
     },
     AiBot {
         name: "Google-Extended",
         owner: "Google",
         purpose: "Gemini/AI Overviews training",
-        severity: Severity::Critical,
+        severity: Severity::Error,
     },
     AiBot {
         name: "PerplexityBot",
         owner: "Perplexity AI",
         purpose: "Real-time search answers",
-        severity: Severity::Critical,
+        severity: Severity::Error,
     },
     AiBot {
         name: "ClaudeBot",
         owner: "Anthropic",
         purpose: "Claude web search",
-        severity: Severity::Critical,
+        severity: Severity::Error,
     },
     AiBot {
         name: "Anthropic-AI",
         owner: "Anthropic",
         purpose: "Claude training",
-        severity: Severity::Critical,
+        severity: Severity::Error,
     },
     AiBot {
         name: "Bytespider",

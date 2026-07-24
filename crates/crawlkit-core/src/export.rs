@@ -2,7 +2,7 @@ use rusqlite::Connection;
 use serde::Serialize;
 use thiserror::Error;
 
-use crate::storage::CrawlStats;
+use crate::storage::{CrawlStats, Storage, StorageError};
 use crate::CrawlError;
 
 /// Errors specific to export operations.
@@ -23,6 +23,10 @@ pub enum ExportError {
     /// SQLite error.
     #[error("database error: {0}")]
     Database(#[from] rusqlite::Error),
+
+    /// Storage error.
+    #[error("storage error: {0}")]
+    Storage(#[from] StorageError),
 }
 
 impl From<ExportError> for CrawlError {
@@ -252,15 +256,16 @@ pub struct JsonIssue {
 }
 
 /// Export crawl data to a structured JSON value.
-pub fn export_json(conn: &Connection, crawl_id: &str, pretty: bool) -> Result<String, ExportError> {
-    let meta = read_crawl_meta(conn, crawl_id)?;
-    let pages = read_pages(conn, crawl_id)?;
-    let stats = read_stats(conn, crawl_id)?;
+pub fn export_json(storage: &Storage, crawl_id: &str, pretty: bool) -> Result<String, ExportError> {
+    let stats = storage.get_stats(crawl_id)?;
+    let conn = storage.conn();
+    let meta = read_crawl_meta(&conn, crawl_id)?;
+    let pages = read_pages(&conn, crawl_id)?;
 
     let json_pages: Vec<JsonPage> = pages
         .iter()
         .map(|p| {
-            let issues = read_issues_for_page(conn, &p.id)
+            let issues = read_issues_for_page(&conn, &p.id)
                 .unwrap_or_default()
                 .into_iter()
                 .map(|i| JsonIssue {
@@ -274,7 +279,7 @@ pub fn export_json(conn: &Connection, crawl_id: &str, pretty: bool) -> Result<St
                     recommendation: i.recommendation,
                 })
                 .collect();
-            let links = read_links_for_page(conn, &p.id).unwrap_or_default();
+            let links = read_links_for_page(&conn, &p.id).unwrap_or_default();
             JsonPage {
                 id: p.id.clone(),
                 url: p.url.clone(),
@@ -312,10 +317,11 @@ pub fn export_json(conn: &Connection, crawl_id: &str, pretty: bool) -> Result<St
 // ---------------------------------------------------------------------------
 
 /// Generate a Markdown summary report.
-pub fn export_markdown(conn: &Connection, crawl_id: &str) -> Result<String, ExportError> {
-    let meta = read_crawl_meta(conn, crawl_id)?;
-    let stats = read_stats(conn, crawl_id)?;
-    let top_issues = read_top_issues(conn, crawl_id, 10)?;
+pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, ExportError> {
+    let stats = storage.get_stats(crawl_id)?;
+    let conn = storage.conn();
+    let meta = read_crawl_meta(&conn, crawl_id)?;
+    let top_issues = read_top_issues(&conn, crawl_id, 10)?;
 
     let mut md = String::new();
 
@@ -390,12 +396,13 @@ pub fn export_markdown(conn: &Connection, crawl_id: &str) -> Result<String, Expo
 // ---------------------------------------------------------------------------
 
 /// Generate a self-contained HTML report.
-pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportError> {
-    let meta = read_crawl_meta(conn, crawl_id)?;
-    let stats = read_stats(conn, crawl_id)?;
-    let top_issues = read_top_issues(conn, crawl_id, 20)?;
-    let pages = read_pages(conn, crawl_id)?;
-    let crux_metrics = read_crux_metrics(conn, crawl_id)?;
+pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportError> {
+    let stats = storage.get_stats(crawl_id)?;
+    let conn = storage.conn();
+    let meta = read_crawl_meta(&conn, crawl_id)?;
+    let top_issues = read_top_issues(&conn, crawl_id, 20)?;
+    let pages = read_pages(&conn, crawl_id)?;
+    let crux_metrics = read_crux_metrics(&conn, crawl_id)?;
 
     let severity_color = |s: &str| -> &'static str {
         match s {
@@ -409,7 +416,7 @@ pub fn export_html(conn: &Connection, crawl_id: &str) -> Result<String, ExportEr
 
     let mut rows = String::new();
     for page in &pages {
-        let issue_count = count_issues_for_page(conn, &page.id).unwrap_or(0);
+        let issue_count = count_issues_for_page(&conn, &page.id).unwrap_or(0);
         let status_class = if page.status_code >= 400 {
             "status-error"
         } else if page.status_code >= 300 {
@@ -725,75 +732,6 @@ fn read_links_for_page(conn: &Connection, page_id: &str) -> Result<Vec<String>, 
         .query_map([page_id], |row| row.get::<_, String>(0))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(rows)
-}
-
-fn read_stats(conn: &Connection, crawl_id: &str) -> Result<CrawlStats, ExportError> {
-    let total_pages: usize = conn.query_row(
-        "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
-        [crawl_id],
-        |row| row.get::<_, i64>(0),
-    )? as usize;
-
-    let total_issues: usize = conn
-        .query_row(
-            "SELECT COALESCE(COUNT(*), 0) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1",
-            [crawl_id],
-            |row| row.get::<_, i64>(0),
-        )? as usize;
-
-    let mut issues_by_severity = std::collections::HashMap::new();
-    {
-        let mut stmt = conn.prepare(
-            "SELECT f.severity, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1 GROUP BY f.severity",
-        )?;
-        for row in stmt.query_map([crawl_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
-        })? {
-            let (sev, count) = row?;
-            issues_by_severity.insert(sev, count);
-        }
-    }
-
-    let mut issues_by_category = std::collections::HashMap::new();
-    {
-        let mut stmt = conn.prepare(
-            "SELECT f.category, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1 GROUP BY f.category",
-        )?;
-        for row in stmt.query_map([crawl_id], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
-        })? {
-            let (cat, count) = row?;
-            issues_by_category.insert(cat, count);
-        }
-    }
-
-    let avg_response_time_ms: Option<f64> = conn
-        .query_row(
-            "SELECT AVG(load_time_ms) FROM pages WHERE crawl_id = ?1 AND load_time_ms IS NOT NULL",
-            [crawl_id],
-            |row| row.get::<_, Option<f64>>(0),
-        )
-        .ok()
-        .flatten();
-
-    let total_body_size: Option<usize> = conn
-        .query_row(
-            "SELECT SUM(body_size) FROM pages WHERE crawl_id = ?1 AND body_size IS NOT NULL",
-            [crawl_id],
-            |row| row.get::<_, Option<i64>>(0),
-        )
-        .ok()
-        .flatten()
-        .map(|v| v as usize);
-
-    Ok(CrawlStats {
-        total_pages,
-        total_issues,
-        issues_by_severity,
-        issues_by_category,
-        avg_response_time_ms,
-        total_body_size,
-    })
 }
 
 #[derive(Debug, Clone)]
@@ -1228,8 +1166,7 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         seed_data(&storage, &crawl_id);
 
-        let conn = &*storage.conn();
-        let json_str = export_json(conn, &crawl_id, true).unwrap();
+        let json_str = export_json(&storage, &crawl_id, true).unwrap();
 
         assert!(json_str.contains("schema_version"));
         assert!(json_str.contains(JSON_SCHEMA_VERSION));
@@ -1244,8 +1181,7 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         seed_data(&storage, &crawl_id);
 
-        let conn = &*storage.conn();
-        let json_str = export_json(conn, &crawl_id, false).unwrap();
+        let json_str = export_json(&storage, &crawl_id, false).unwrap();
 
         // Compact has no extra whitespace
         assert!(!json_str.contains('\n'));
@@ -1260,8 +1196,7 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         seed_data(&storage, &crawl_id);
 
-        let conn = &*storage.conn();
-        let json_str = export_json(conn, &crawl_id, true).unwrap();
+        let json_str = export_json(&storage, &crawl_id, true).unwrap();
         let v: serde_json::Value = serde_json::from_str(&json_str).unwrap();
 
         let pages = v["pages"].as_array().unwrap();
@@ -1281,8 +1216,7 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         seed_data(&storage, &crawl_id);
 
-        let conn = &*storage.conn();
-        let md = export_markdown(conn, &crawl_id).unwrap();
+        let md = export_markdown(&storage, &crawl_id).unwrap();
 
         assert!(md.contains("# Crawl Report"));
         assert!(md.contains("## Summary"));
@@ -1298,8 +1232,7 @@ mod tests {
         let storage = Storage::new_in_memory().unwrap();
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
 
-        let conn = &*storage.conn();
-        let md = export_markdown(conn, &crawl_id).unwrap();
+        let md = export_markdown(&storage, &crawl_id).unwrap();
 
         assert!(md.contains("| Pages crawled | 0 |"));
         assert!(md.contains("| Total issues | 0 |"));
@@ -1313,8 +1246,7 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         seed_data(&storage, &crawl_id);
 
-        let conn = &*storage.conn();
-        let html = export_html(conn, &crawl_id).unwrap();
+        let html = export_html(&storage, &crawl_id).unwrap();
 
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("Crawl Report"));
@@ -1328,8 +1260,7 @@ mod tests {
         let storage = Storage::new_in_memory().unwrap();
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
 
-        let conn = &*storage.conn();
-        let html = export_html(conn, &crawl_id).unwrap();
+        let html = export_html(&storage, &crawl_id).unwrap();
 
         assert!(html.contains("<!DOCTYPE html>"));
         assert!(html.contains("0")); // zero counts

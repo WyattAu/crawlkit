@@ -4,13 +4,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-/// Alert severity levels.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AlertSeverity {
-    Info,
-    Warning,
-    Critical,
-}
+use crate::storage::Severity;
 
 /// Alert definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -22,7 +16,7 @@ pub struct Alert {
     /// Alert description.
     pub description: String,
     /// Alert severity.
-    pub severity: AlertSeverity,
+    pub severity: Severity,
     /// Metric to monitor.
     pub metric: String,
     /// Threshold value.
@@ -292,7 +286,7 @@ mod tests {
             id: "test".to_string(),
             name: "Test Alert".to_string(),
             description: "Test alert".to_string(),
-            severity: AlertSeverity::Warning,
+            severity: Severity::Warning,
             metric: "pages_crawled".to_string(),
             threshold: 100.0,
             operator: AlertOperator::GreaterThan,
@@ -311,7 +305,7 @@ mod tests {
             id: "test".to_string(),
             name: "Test Alert".to_string(),
             description: "Test alert".to_string(),
-            severity: AlertSeverity::Warning,
+            severity: Severity::Warning,
             metric: "pages_crawled".to_string(),
             threshold: 100.0,
             operator: AlertOperator::GreaterThan,

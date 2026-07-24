@@ -1,4 +1,4 @@
-use crate::ai_bots::{AiBotRegistry, Severity as AiSeverity};
+use crate::ai_bots::AiBotRegistry;
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::storage::{IssueCategory, Severity};
 use crate::CrawlConfig;
@@ -44,7 +44,7 @@ impl Analyzer for AiCrawlerAccessibilityAnalyzer {
             for bot in self.registry.bots() {
                 if crate::ai_bots::robots_txt_disallows_bot(txt, bot.name) {
                     findings.push(Finding {
-                        severity: map_ai_severity(bot.severity),
+                        severity: bot.severity.clone(),
                         category: IssueCategory::Seo,
                         code: format!("AI-ACC{:03}", bot.ordinal()),
                         title: format!("AI bot '{}' blocked by robots.txt", bot.name),
@@ -383,14 +383,6 @@ impl Analyzer for AiAnswerBoxAnalyzer {
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
-
-fn map_ai_severity(severity: AiSeverity) -> Severity {
-    match severity {
-        AiSeverity::Critical => Severity::Error,
-        AiSeverity::Warning => Severity::Warning,
-        AiSeverity::Info => Severity::Info,
-    }
-}
 
 fn extract_robots_txt<'a>(ctx: &AnalysisContext<'a>) -> Option<&'a str> {
     // Read pre-fetched robots.txt from AnalysisContext.

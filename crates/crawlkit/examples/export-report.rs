@@ -117,11 +117,9 @@ fn main() -> Result<()> {
     storage.insert_issues(&issues)?;
     storage.finish_crawl(&crawl_id, 3, 4)?;
 
-    let conn = &*storage.conn();
-
     // 2. JSON export (pretty-printed)
     println!("=== JSON Export ===\n");
-    let json = export_json(conn, &crawl_id, true)?;
+    let json = export_json(&storage, &crawl_id, true)?;
     let json_path = Path::new("crawl-output/export.json");
     std::fs::create_dir_all("crawl-output")?;
     std::fs::write(json_path, &json)?;
@@ -137,6 +135,7 @@ fn main() -> Result<()> {
         issue_count: true,
         ..Default::default()
     };
+    let conn = &*storage.conn();
     let csv_bytes = export_csv(conn, &crawl_id, &selector)?;
     let csv_path = Path::new("crawl-output/export.csv");
     std::fs::write(csv_path, &csv_bytes)?;
@@ -151,7 +150,7 @@ fn main() -> Result<()> {
 
     // 4. Markdown summary
     println!("=== Markdown Export ===\n");
-    let md = export_markdown(conn, &crawl_id)?;
+    let md = export_markdown(&storage, &crawl_id)?;
     let md_path = Path::new("crawl-output/report.md");
     std::fs::write(md_path, &md)?;
     println!("Written to {md_path:?} ({} bytes)\n", md.len());
@@ -164,7 +163,7 @@ fn main() -> Result<()> {
 
     // 5. HTML report (self-contained, interactive)
     println!("=== HTML Report ===\n");
-    let html = export_html(conn, &crawl_id)?;
+    let html = export_html(&storage, &crawl_id)?;
     let html_path = Path::new("crawl-output/report.html");
     std::fs::write(html_path, &html)?;
     println!("Written to {html_path:?} ({} bytes)\n", html.len());

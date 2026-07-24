@@ -1,26 +1,26 @@
 ---
 title: Analyzers
-description: Complete reference for all 28 SEO analyzers
+description: Complete reference for all SEO analyzers
 ---
 
 ## Analyzer Categories
 
 | Category | Analyzers | Count |
 |----------|-----------|-------|
-| HTTP | Status codes, redirects | 2 |
-| SEO | Meta tags, canonical, hreflang, sitemap, robots.txt | 5 |
-| Content | Readability, keywords, word count, ecommerce, international | 5 |
-| Links | Internal/external, broken links, orphan pages | 1 |
-| Images | Alt text, dimensions, lazy loading | 1 |
-| Schema | JSON-LD, Microdata validation | 1 |
-| Security | CSP, HSTS, X-Frame-Options, SSL | 2 |
-| Performance | TTFB, FCP, page size | 1 |
-| Mobile | Viewport, touch targets, font sizes | 1 |
-| Accessibility | WCAG 2.1 AA (16 checks) | 1 |
-| Social | Open Graph, Twitter Cards | 1 |
-| Entity | Named entity extraction | 1 |
-| AI | Crawler accessibility, content structure, citation eligibility, answer box | 4 |
-| WASM | Pattern detection | 1 |
+| HTTP | HttpStatusAnalyzer, RedirectChainAnalyzer | 2 |
+| SEO | MetaTagAnalyzer, CanonicalUrlValidator, HreflangValidator, SitemapAnalyzer, RobotsTxtAnalyzer | 5 |
+| Content | EnhancedReadabilityAnalyzer, KeywordAnalyzer, WordCountAnalyzer, EcommerceSignalsAnalyzer, InternationalSeoAnalyzer, ContentQualityAnalyzer, HeadingHierarchyAnalyzer | 7 |
+| Links | LinkAnalyzer | 1 |
+| Images | ImageAnalyzer | 1 |
+| Schema | StructuredDataValidator | 1 |
+| Security | SecurityHeaderAnalyzer, SslCertificateValidator | 2 |
+| Mobile | MobileFriendlinessChecker | 1 |
+| Accessibility | AccessibilityAnalyzer (WCAG 2.1 AA, 16 checks) | 1 |
+| Social | SocialMediaAnalyzer | 1 |
+| Entity | EntityAnalyzer | 1 |
+| AI | AiCrawlerAccessibilityAnalyzer, AiContentStructureAnalyzer, AiCitationEligibilityAnalyzer, AiAnswerBoxAnalyzer | 4 |
+| WASM | WasmPatternAnalyzer | 1 |
+| **Total** | | **28** |
 
 ## Analyzer Interface
 

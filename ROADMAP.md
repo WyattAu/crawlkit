@@ -6,30 +6,40 @@ Status: Living document. Updated after each audit cycle.
 
 ## Current State (v0.4.0)
 
-- 425 tests passing, zero clippy warnings, zero rustfmt diffs
+- 430 tests passing, zero clippy warnings in production code, zero rustfmt diffs
 - 28 analyzers (23 core + 4 AI + 1 WASM)
 - CLI + REST API + HTML/JSON/CSV/Markdown export
-- CI/CD: format, clippy -D warnings, tests, security audit, release builds, MSRV check
+- CI/CD: format, clippy -D warnings, tests, security audit, supply chain audit, release builds, MSRV check
 - Pre-commit hook: fmt, clippy, build, tests, security audit, secret scan, unsafe code check
 - Astro Starlight documentation site: 13 pages, 823 words indexed
+- Supply chain security: cargo-deny for license compliance and advisory auditing
 
-### Audit Fixes Applied (2026-07-23)
+### Audit Fixes Applied (2026-07-24)
 
 | Category | Fix | File | Severity |
 |----------|-----|------|----------|
 | Correctness | Cache returned 1 page instead of N | storage.rs | Critical |
 | Correctness | `insert_page` missing SQLite transaction | storage.rs | Critical |
 | Correctness | `insert_pages` loop without batching | storage.rs | Critical |
-| Security | SHA-256 audit hash (was DefaultHasher) | audit.rs | High |
-| Security | Playwright JS injection via URL interpolation | playwright.rs | High |
+| Thread Safety | `std::sync::Mutex` poisoning risk replaced with `parking_lot::Mutex` | storage.rs | Critical |
 | Thread Safety | `dec_connections` underflow to u64::MAX | observability.rs | High |
 | Thread Safety | `UserAgentRotator` Relaxed ordering | http.rs | Medium |
+| Security | SHA-256 audit hash (was DefaultHasher) | audit.rs | High |
+| Security | Playwright JS injection via URL interpolation | playwright.rs | High |
+| Security | API metrics expect() replaced with error handling | api/main.rs | High |
 | Correctness | HSTS validation byte-slicing by wrong index | analyzers.rs | High |
 | Correctness | Operator precedence in `is_weak_algorithm` | analyzers.rs | Medium |
 | Correctness | `backlinks` NaN panic in sort | backlinks.rs | Medium |
-| Dead Code | `plugin.rs` home dir not expanded | plugin.rs | Medium |
-| Dead Code | Parser `expect` in library code | parser.rs | Medium |
-| Dead Code | Redundant if/else in http.rs | http.rs | Low |
+| Correctness | Hardcoded user-agent "crawlkit/0.1.0" replaced with CARGO_PKG_VERSION | main.rs | High |
+| Correctness | VERSION.md version mismatch (0.1.0 vs 0.4.0) fixed | VERSION.md | Medium |
+| Performance | CSS selectors parsed on every call; cached via OnceLock | parser.rs | Medium |
+| Correctness | rum.rs unwrap() on Option replaced with error propagation | rum.rs | Medium |
+| Linting | Workspace clippy lints hardened: unwrap_used, expect_used, panic -> warn | Cargo.toml | High |
+| Linting | cast_lossless, items_after_statements, if_not_else, unused_async, redundant_clone fixed | api/main.rs, main.rs | Medium |
+| Infrastructure | Pre-commit hook tracked in repo (scripts/pre-commit.sh) | scripts/ | Medium |
+| Infrastructure | cargo-deny config for supply chain security | deny.toml | Medium |
+| Infrastructure | justfile for build automation | justfile | Low |
+| Infrastructure | Supply chain audit CI workflow | .github/workflows/audit.yml | Medium |
 
 ---
 

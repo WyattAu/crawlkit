@@ -7,7 +7,7 @@
 [![Analyzers](https://img.shields.io/badge/analyzers-28-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
 
-High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 28 analyzers, formal verification scaffolding, zero clippy warnings.
+High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 28 analyzers, supply chain security auditing, zero clippy warnings.
 
 ## Features
 

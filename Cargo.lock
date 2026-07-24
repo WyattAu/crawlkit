@@ -658,7 +658,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "chrono",
@@ -682,7 +682,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-api"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -715,7 +715,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-engine"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -752,7 +752,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-plugin-sdk"
-version = "1.0.0"
+version = "2.0.0"
 dependencies = [
  "serde",
  "serde_json",

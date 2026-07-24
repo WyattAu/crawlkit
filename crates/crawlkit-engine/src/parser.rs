@@ -1126,6 +1126,92 @@ impl HtmlParser {
     }
 }
 
+/// Streaming HTML parser that processes content incrementally.
+///
+/// Buffers HTML chunks as they arrive and parses when a complete document
+/// is detected. This is useful for processing HTML from streaming sources
+/// like HTTP responses.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_engine::parser::StreamingHtmlParser;
+///
+/// let mut parser = StreamingHtmlParser::new();
+/// parser.feed("<!DOCTYPE html><html><head><title>Test</title></head>");
+/// parser.feed("<body><h1>Hello</h1></body></html>");
+///
+/// assert!(parser.has_complete_document());
+/// let page = parser.parse().unwrap();
+/// assert_eq!(page.meta.title.as_deref(), Some("Test"));
+/// ```
+pub struct StreamingHtmlParser {
+    buffer: String,
+}
+
+impl StreamingHtmlParser {
+    /// Create a new streaming parser.
+    pub fn new() -> Self {
+        Self {
+            buffer: String::new(),
+        }
+    }
+
+    /// Feed a chunk of HTML content into the parser.
+    ///
+    /// The chunk is appended to the internal buffer for later parsing.
+    pub fn feed(&mut self, chunk: &str) {
+        self.buffer.push_str(chunk);
+    }
+
+    /// Check if the accumulated content contains a complete HTML document.
+    ///
+    /// Returns `true` if the buffer contains `</html>` or `</body>` tags,
+    /// indicating the document is likely complete.
+    pub fn has_complete_document(&self) -> bool {
+        self.buffer.contains("</html>") || self.buffer.contains("</body>")
+    }
+
+    /// Parse the accumulated HTML content.
+    ///
+    /// Delegates to [`HtmlParser::parse`] with a blank URL.
+    /// Returns a [`ParsedPage`] containing all extracted SEO data.
+    ///
+    /// # Errors
+    ///
+    /// Returns `ParseError` if parsing fails (currently never happens).
+    pub fn parse(&mut self) -> Result<ParsedPage, ParseError> {
+        let url = url::Url::parse("about:blank")?;
+        HtmlParser::parse(&self.buffer, &url)
+    }
+
+    /// Get the current buffer size in bytes.
+    pub fn buffer_size(&self) -> usize {
+        self.buffer.len()
+    }
+
+    /// Clear the internal buffer.
+    pub fn clear(&mut self) {
+        self.buffer.clear();
+    }
+
+    /// Get a reference to the buffered content.
+    pub fn buffer(&self) -> &str {
+        &self.buffer
+    }
+
+    /// Consume the parser and return the buffered content.
+    pub fn into_inner(self) -> String {
+        self.buffer
+    }
+}
+
+impl Default for StreamingHtmlParser {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -1432,5 +1518,106 @@ mod tests {
         assert_eq!(page.meta.title, deser.meta.title);
         assert_eq!(page.headings.len(), deser.headings.len());
         assert_eq!(page.word_count, deser.word_count);
+    }
+
+    #[test]
+    fn test_streaming_parser_new() {
+        let parser = StreamingHtmlParser::new();
+        assert_eq!(parser.buffer_size(), 0);
+        assert!(!parser.has_complete_document());
+    }
+
+    #[test]
+    fn test_streaming_parser_default() {
+        let parser = StreamingHtmlParser::default();
+        assert_eq!(parser.buffer_size(), 0);
+    }
+
+    #[test]
+    fn test_streaming_parser_feed() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<html><body>");
+        assert_eq!(parser.buffer_size(), 12);
+        assert!(!parser.has_complete_document());
+
+        parser.feed("<h1>Hello</h1>");
+        assert_eq!(parser.buffer_size(), 26);
+        assert!(!parser.has_complete_document());
+    }
+
+    #[test]
+    fn test_streaming_parser_complete_document_html() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<!DOCTYPE html><html><head><title>Test</title></head>");
+        parser.feed("<body><h1>Hello</h1></body></html>");
+        assert!(parser.has_complete_document());
+    }
+
+    #[test]
+    fn test_streaming_parser_complete_document_body() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<!DOCTYPE html><html><head><title>Test</title></head>");
+        parser.feed("<body><h1>Hello</h1></body>");
+        assert!(parser.has_complete_document());
+    }
+
+    #[test]
+    fn test_streaming_parser_parse() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed(r#"<!DOCTYPE html><html><head><title>Stream Test</title></head>"#);
+        parser.feed(r#"<body><h1>Hello World</h1><a href="/link">link</a></body></html>"#);
+
+        let page = parser.parse().unwrap();
+        assert_eq!(page.meta.title.as_deref(), Some("Stream Test"));
+        assert_eq!(page.url, "about:blank");
+    }
+
+    #[test]
+    fn test_streaming_parser_parse_incomplete() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed(r#"<!DOCTYPE html><html><head><title>Incomplete</title></head>"#);
+        parser.feed(r#"<body><h1>Partial content"#);
+
+        // Should still parse, even without complete document markers
+        let page = parser.parse().unwrap();
+        assert_eq!(page.meta.title.as_deref(), Some("Incomplete"));
+    }
+
+    #[test]
+    fn test_streaming_parser_clear() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<html><body><h1>Hello</h1></body></html>");
+        assert_eq!(parser.buffer_size(), 40);
+
+        parser.clear();
+        assert_eq!(parser.buffer_size(), 0);
+        assert!(!parser.has_complete_document());
+    }
+
+    #[test]
+    fn test_streaming_parser_into_inner() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<html><body></body></html>");
+        let buffer = parser.into_inner();
+        assert_eq!(buffer, "<html><body></body></html>");
+    }
+
+    #[test]
+    fn test_streaming_parser_multiple_chunks() {
+        let mut parser = StreamingHtmlParser::new();
+        parser.feed("<!DOCTYPE html>");
+        parser.feed("<html>");
+        parser.feed("<head>");
+        parser.feed("<title>Multi Chunk</title>");
+        parser.feed("</head>");
+        parser.feed("<body>");
+        parser.feed("<p>Content</p>");
+        parser.feed("</body>");
+        parser.feed("</html>");
+
+        assert!(parser.has_complete_document());
+        let page = parser.parse().unwrap();
+        assert_eq!(page.meta.title.as_deref(), Some("Multi Chunk"));
+        assert_eq!(page.word_count, 1);
     }
 }

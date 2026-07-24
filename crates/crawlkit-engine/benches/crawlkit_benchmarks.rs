@@ -365,6 +365,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                         body_size: Some(4096),
                         fetched_at: chrono::Utc::now(),
                         links: vec![],
+                        tenant_id: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -392,6 +393,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                         body_size: Some(4096),
                         fetched_at: chrono::Utc::now(),
                         links: vec![],
+                        tenant_id: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -423,6 +425,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                     body_size: Some(4096),
                     fetched_at: chrono::Utc::now(),
                     links: vec![],
+                    tenant_id: None,
                 };
                 storage.insert_page(&crawl_id, &page).unwrap();
                 (storage, crawl_id)
@@ -439,6 +442,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                         description: format!("Description for issue {i}"),
                         element: None,
                         recommendation: "Fix this".to_string(),
+                        tenant_id: None,
                     })
                     .collect();
                 storage.insert_issues(&issues).unwrap();

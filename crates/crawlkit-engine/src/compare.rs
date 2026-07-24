@@ -541,6 +541,7 @@ mod tests {
             body_size: Some(size),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         }
     }
 

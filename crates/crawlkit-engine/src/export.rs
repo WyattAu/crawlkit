@@ -988,6 +988,7 @@ mod tests {
                 body_size: Some(4096),
                 fetched_at: Utc::now(),
                 links: vec![Url::parse("https://example.com/about").unwrap()],
+                tenant_id: None,
             },
             PageData {
                 id: "p2".into(),
@@ -1002,6 +1003,7 @@ mod tests {
                 body_size: Some(512),
                 fetched_at: Utc::now(),
                 links: vec![],
+                tenant_id: None,
             },
             PageData {
                 id: "p3".into(),
@@ -1019,6 +1021,7 @@ mod tests {
                     Url::parse("https://example.com/").unwrap(),
                     Url::parse("https://external.com/other").unwrap(),
                 ],
+                tenant_id: None,
             },
         ];
         storage.insert_pages(crawl_id, &pages).unwrap();
@@ -1034,6 +1037,7 @@ mod tests {
                 description: "Page has no meta description".into(),
                 element: Some("meta[name=description]".into()),
                 recommendation: "Add a meta description".into(),
+                tenant_id: None,
             },
             Issue {
                 id: "i2".into(),
@@ -1045,6 +1049,7 @@ mod tests {
                 description: "Page returns 404".into(),
                 element: None,
                 recommendation: "Fix or remove the page".into(),
+                tenant_id: None,
             },
             Issue {
                 id: "i3".into(),
@@ -1056,6 +1061,7 @@ mod tests {
                 description: "An image has no alt attribute".into(),
                 element: Some("img.logo".into()),
                 recommendation: "Add descriptive alt text".into(),
+                tenant_id: None,
             },
             Issue {
                 id: "i4".into(),
@@ -1067,6 +1073,7 @@ mod tests {
                 description: "Page is missing a canonical URL".into(),
                 element: None,
                 recommendation: "Add a canonical link tag".into(),
+                tenant_id: None,
             },
             Issue {
                 id: "i5".into(),
@@ -1078,6 +1085,7 @@ mod tests {
                 description: "Page took over 200ms to load".into(),
                 element: None,
                 recommendation: "Optimize page load speed".into(),
+                tenant_id: None,
             },
         ];
         storage.insert_issues(&issues).unwrap();

@@ -7,6 +7,7 @@
 
 mod auth;
 mod auth_mw;
+mod oidc;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -37,6 +38,7 @@ use crawlkit_engine::CrawlConfig;
 
 use auth::{AuthManager, User};
 use auth_mw::auth_middleware as jwt_auth_middleware;
+use oidc::OidcManager;
 
 // ---------------------------------------------------------------------------
 // API key management
@@ -195,6 +197,19 @@ impl Metrics {
 // Application state
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct Tenant {
+    id: String,
+    name: String,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateTenantRequest {
+    id: String,
+    name: String,
+}
+
 #[derive(Clone)]
 struct AppState {
     storage: Arc<Storage>,
@@ -207,6 +222,9 @@ struct AppState {
     schedules: Arc<DashMap<String, ScheduleConfig>>,
     http_client: reqwest::Client,
     auth: Arc<AuthManager>,
+    oidc: Option<Arc<OidcManager>>,
+    oidc_states: Arc<DashMap<String, ()>>,
+    tenants: Arc<dashmap::DashMap<String, Tenant>>,
 }
 
 // ---------------------------------------------------------------------------
@@ -711,6 +729,62 @@ async fn get_audit_events(State(state): State<AppState>) -> Json<Vec<crawlkit_en
 }
 
 // ---------------------------------------------------------------------------
+// Tenant management handlers (admin only)
+// ---------------------------------------------------------------------------
+
+async fn list_tenants(State(state): State<AppState>) -> Json<Vec<Tenant>> {
+    let tenants: Vec<Tenant> = state
+        .tenants
+        .iter()
+        .map(|entry| entry.value().clone())
+        .collect();
+    Json(tenants)
+}
+
+async fn create_tenant(
+    State(state): State<AppState>,
+    Json(input): Json<CreateTenantRequest>,
+) -> Result<(StatusCode, Json<Tenant>), ApiError> {
+    if state.tenants.contains_key(&input.id) {
+        return Err(ApiError::BadRequest(format!(
+            "Tenant '{}' already exists",
+            input.id
+        )));
+    }
+
+    let tenant = Tenant {
+        id: input.id,
+        name: input.name,
+        created_at: Utc::now(),
+    };
+
+    state.tenants.insert(tenant.id.clone(), tenant.clone());
+    Ok((StatusCode::CREATED, Json(tenant)))
+}
+
+async fn get_tenant(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<Json<Tenant>, ApiError> {
+    state
+        .tenants
+        .get(&id)
+        .map(|entry| Json(entry.value().clone()))
+        .ok_or_else(|| ApiError::NotFound(format!("Tenant {id} not found")))
+}
+
+async fn delete_tenant(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .tenants
+        .remove(&id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .ok_or_else(|| ApiError::NotFound(format!("Tenant {id} not found")))
+}
+
+// ---------------------------------------------------------------------------
 // Auth handlers
 // ---------------------------------------------------------------------------
 
@@ -821,6 +895,112 @@ async fn get_me(
         tenant_id: user.tenant_id,
         roles: user.roles,
         enabled: user.enabled,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// OIDC handlers
+// ---------------------------------------------------------------------------
+
+async fn oidc_authorize(State(state): State<AppState>) -> Result<Response, ApiError> {
+    let oidc = state
+        .oidc
+        .as_ref()
+        .ok_or_else(|| ApiError::Internal("OIDC not configured".to_string()))?;
+
+    let state_token = uuid::Uuid::new_v4().to_string();
+    state.oidc_states.insert(state_token.clone(), ());
+
+    let url = oidc.authorization_url(&state_token);
+    let parsed_url = url::Url::parse(&url)
+        .map_err(|e| ApiError::Internal(format!("Invalid authorization URL: {e}")))?;
+
+    Ok((
+        StatusCode::FOUND,
+        [("location", parsed_url.as_str().to_string())],
+    )
+        .into_response())
+}
+
+#[derive(Deserialize)]
+struct OidcCallbackParams {
+    code: Option<String>,
+    state: Option<String>,
+    error: Option<String>,
+}
+
+async fn oidc_callback(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<OidcCallbackParams>,
+) -> Result<Json<LoginResponse>, ApiError> {
+    if let Some(error) = &params.error {
+        return Err(ApiError::BadRequest(format!(
+            "OIDC provider error: {error}"
+        )));
+    }
+
+    let code = params
+        .code
+        .as_deref()
+        .ok_or_else(|| ApiError::BadRequest("Missing authorization code".to_string()))?;
+
+    let state_token = params
+        .state
+        .as_deref()
+        .ok_or_else(|| ApiError::BadRequest("Missing state parameter".to_string()))?;
+
+    if !state.oidc_states.contains_key(state_token) {
+        return Err(ApiError::BadRequest("Invalid state parameter".to_string()));
+    }
+    state.oidc_states.remove(state_token);
+
+    let oidc = state
+        .oidc
+        .as_ref()
+        .ok_or_else(|| ApiError::Internal("OIDC not configured".to_string()))?;
+
+    let tokens = oidc
+        .exchange_code(code)
+        .await
+        .map_err(|e| ApiError::Internal(format!("Token exchange failed: {e}")))?;
+
+    let user_info = oidc
+        .get_user_info(&tokens.access_token)
+        .await
+        .map_err(|e| ApiError::Internal(format!("User info fetch failed: {e}")))?;
+
+    let user = state
+        .auth
+        .find_user_by_id(&user_info.sub)
+        .unwrap_or_else(|| {
+            let new_user = User {
+                id: user_info.sub.clone(),
+                email: user_info.email.unwrap_or_default(),
+                name: user_info.name.unwrap_or_default(),
+                password_hash: String::new(),
+                tenant_id: "default".to_string(),
+                roles: vec!["viewer".to_string()],
+                enabled: true,
+            };
+            state.auth.add_user(new_user.clone());
+            new_user
+        });
+
+    let token = state
+        .auth
+        .generate_token(&user)
+        .map_err(|e| ApiError::Internal(format!("Failed to generate token: {e}")))?;
+
+    Ok(Json(LoginResponse {
+        token,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            tenant_id: user.tenant_id,
+            roles: user.roles,
+            enabled: user.enabled,
+        },
     }))
 }
 
@@ -1339,6 +1519,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
                 .iter()
                 .filter_map(|l| url::Url::parse(&l.href).ok())
                 .collect(),
+            tenant_id: None,
         };
 
         let _ = state.storage.insert_page(&crawl_id, &page_data);
@@ -1354,6 +1535,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
                 description: finding.description.clone(),
                 element: None,
                 recommendation: finding.recommendation.clone(),
+                tenant_id: None,
             };
             let _ = state.storage.insert_issue(&issue);
         }
@@ -1517,6 +1699,46 @@ async fn main() -> anyhow::Result<()> {
         enabled: true,
     });
 
+    // Initialize OIDC if configured via environment variables
+    let oidc = match (
+        std::env::var("OIDC_PROVIDER"),
+        std::env::var("OIDC_CLIENT_ID"),
+        std::env::var("OIDC_DISCOVERY_URL"),
+    ) {
+        (Ok(provider), Ok(client_id), Ok(discovery_url)) => {
+            let scopes: Vec<String> = std::env::var("OIDC_SCOPES")
+                .unwrap_or_else(|_| "openid email profile".to_string())
+                .split_whitespace()
+                .map(String::from)
+                .collect();
+            let redirect_uri = std::env::var("OIDC_REDIRECT_URI")
+                .unwrap_or_else(|_| "http://localhost:4000/api/v1/auth/oidc/callback".to_string());
+            let client_secret_env = std::env::var("OIDC_CLIENT_SECRET_ENV")
+                .unwrap_or_else(|_| "OIDC_CLIENT_SECRET".to_string());
+
+            let config = oidc::OidcConfig {
+                provider,
+                client_id,
+                client_secret_env,
+                discovery_url,
+                scopes,
+                redirect_uri,
+            };
+            let manager = Arc::new(OidcManager::new(config));
+            if let Err(e) = manager.discover().await {
+                tracing::warn!("OIDC discovery failed: {e}. OIDC auth will not be available.");
+                None
+            } else {
+                tracing::info!("OIDC authentication enabled");
+                Some(manager)
+            }
+        }
+        _ => {
+            tracing::info!("OIDC not configured, using local auth only");
+            None
+        }
+    };
+
     let state = AppState {
         storage: Arc::new(storage),
         api_keys,
@@ -1528,6 +1750,9 @@ async fn main() -> anyhow::Result<()> {
         schedules: Arc::new(DashMap::new()),
         http_client: reqwest::Client::new(),
         auth,
+        oidc,
+        oidc_states: Arc::new(DashMap::new()),
+        tenants: Arc::new(DashMap::new()),
     };
 
     let cors = CorsLayer::new()
@@ -1561,6 +1786,11 @@ async fn main() -> anyhow::Result<()> {
             axum::routing::delete(delete_schedule),
         )
         .route("/api/v1/audit", get(get_audit_events))
+        .route("/api/v1/tenants", post(create_tenant).get(list_tenants))
+        .route(
+            "/api/v1/tenants/{id}",
+            get(get_tenant).delete(delete_tenant),
+        )
         .route("/api/v1/users", post(create_user).get(list_users))
         .route("/api/v1/users/{id}", axum::routing::delete(delete_user))
         .route_layer(middleware::from_fn_with_state(
@@ -1572,6 +1802,8 @@ async fn main() -> anyhow::Result<()> {
         .route("/health", get(health))
         .route("/metrics", get(metrics_endpoint))
         .route("/api/v1/auth/login", post(login))
+        .route("/api/v1/auth/oidc/authorize", get(oidc_authorize))
+        .route("/api/v1/auth/oidc/callback", get(oidc_callback))
         .merge(protected)
         .layer(cors)
         .layer(middleware::from_fn_with_state(

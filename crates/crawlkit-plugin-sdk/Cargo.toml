@@ -1,0 +1,32 @@
+[package]
+name = "crawlkit-plugin-sdk"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "SDK for building crawlkit WASM plugins"
+repository.workspace = true
+homepage.workspace = true
+documentation = "https://docs.rs/crawlkit-plugin-sdk"
+readme.workspace = true
+keywords = ["seo", "crawler", "plugin", "wasm", "sdk"]
+categories = ["wasm", "web-programming"]
+
+[lints.rust]
+unsafe_code = "allow"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+panic = "warn"
+exit = "deny"
+modulo_arithmetic = "warn"
+redundant_clone = "warn"
+unused_async = "warn"
+if_not_else = "warn"
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]

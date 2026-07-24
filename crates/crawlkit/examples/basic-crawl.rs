@@ -187,6 +187,7 @@ async fn main() -> Result<()> {
                 .iter()
                 .filter_map(|l| Url::parse(&l.href).ok())
                 .collect(),
+            tenant_id: None,
         };
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
             eprintln!("  Storage error: {e}");
@@ -204,6 +205,7 @@ async fn main() -> Result<()> {
                 description: finding.description.clone(),
                 element: None,
                 recommendation: finding.recommendation.clone(),
+                tenant_id: None,
             };
             let _ = storage.insert_issue(&issue);
         }

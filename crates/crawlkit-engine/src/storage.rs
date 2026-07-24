@@ -174,6 +174,8 @@ pub struct PageData {
     pub fetched_at: DateTime<Utc>,
     /// Links discovered on this page.
     pub links: Vec<Url>,
+    /// Tenant ID for multi-tenancy.
+    pub tenant_id: Option<String>,
 }
 
 /// An issue/finding detected during analysis.
@@ -200,6 +202,8 @@ pub struct Issue {
     pub element: Option<String>,
     /// Recommendation for fixing the issue.
     pub recommendation: String,
+    /// Tenant ID for multi-tenancy.
+    pub tenant_id: Option<String>,
 }
 
 /// Filters for querying issues.
@@ -429,6 +433,7 @@ impl Storage {
                 load_time_ms  INTEGER,
                 body_size     INTEGER,
                 fetched_at    DATETIME NOT NULL,
+                tenant_id     TEXT,
                 UNIQUE(crawl_id, url)
             );
 
@@ -452,7 +457,8 @@ impl Storage {
                 title         TEXT NOT NULL,
                 description   TEXT NOT NULL,
                 element       TEXT,
-                recommendation TEXT
+                recommendation TEXT,
+                tenant_id     TEXT
             );
 
             CREATE TABLE IF NOT EXISTS images (
@@ -488,11 +494,13 @@ impl Storage {
             );
 
             CREATE INDEX IF NOT EXISTS idx_pages_crawl ON pages(crawl_id);
+            CREATE INDEX IF NOT EXISTS idx_pages_tenant ON pages(tenant_id);
             CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_url);
             CREATE INDEX IF NOT EXISTS idx_links_target ON links(target_url);
             CREATE INDEX IF NOT EXISTS idx_findings_page ON findings(page_id);
             CREATE INDEX IF NOT EXISTS idx_findings_category ON findings(category);
             CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
+            CREATE INDEX IF NOT EXISTS idx_findings_tenant ON findings(tenant_id);
             ",
         )?;
         Ok(())
@@ -541,8 +549,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
             params![
                 page.id,
                 crawl_id,
@@ -556,6 +564,7 @@ impl Storage {
                 page.load_time_ms.map(|v| v as i64),
                 page.body_size.map(|v| v as i64),
                 page.fetched_at.to_rfc3339(),
+                page.tenant_id,
             ],
         )?;
 
@@ -590,8 +599,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -611,6 +620,7 @@ impl Storage {
                 page.load_time_ms.map(|v| v as i64),
                 page.body_size.map(|v| v as i64),
                 page.fetched_at.to_rfc3339(),
+                page.tenant_id,
             ])?;
 
             for link in &page.links {
@@ -636,8 +646,8 @@ impl Storage {
     pub fn insert_issue(&self, issue: &Issue) -> Result<(), StorageError> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 issue.id,
                 issue.page_id,
@@ -648,6 +658,7 @@ impl Storage {
                 issue.description,
                 issue.element,
                 issue.recommendation,
+                issue.tenant_id,
             ],
         )?;
         Ok(())
@@ -657,8 +668,8 @@ impl Storage {
     pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )?;
         for issue in issues {
             stmt.execute(params![
@@ -671,6 +682,7 @@ impl Storage {
                 issue.description,
                 issue.element,
                 issue.recommendation,
+                issue.tenant_id,
             ])?;
         }
         Ok(())
@@ -683,7 +695,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -711,6 +723,7 @@ impl Storage {
                         .map(|dt| dt.with_timezone(&Utc))
                         .unwrap_or_else(|_| Utc::now()),
                     links: Vec::new(),
+                    tenant_id: row.get(11)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -727,7 +740,7 @@ impl Storage {
         let conn = self.conn.lock();
 
         let mut query = String::from(
-            "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation
+            "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
              FROM findings f
              JOIN pages p ON f.page_id = p.id
              WHERE p.crawl_id = ?1",
@@ -773,6 +786,126 @@ impl Storage {
                     description: row.get(6)?,
                     element: row.get(7)?,
                     recommendation: row.get(8)?,
+                    tenant_id: row.get(9)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(issues)
+    }
+
+    /// Get pages for a specific tenant.
+    ///
+    /// Returns pages belonging to the given tenant, or pages with no tenant
+    /// assigned (shared/global data). This ensures tenant isolation at the
+    /// storage layer while still allowing access to unscoped data.
+    pub fn get_pages_for_tenant(
+        &self,
+        crawl_id: &str,
+        tenant_id: &str,
+        limit: usize,
+    ) -> Result<Vec<PageData>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id
+             FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
+             ORDER BY fetched_at ASC LIMIT ?3",
+        )?;
+
+        let pages = stmt
+            .query_map(params![crawl_id, tenant_id, limit as i64], |row| {
+                let url_str: String = row.get(1)?;
+                let final_url_str: String = row.get(2)?;
+                let canonical_str: Option<String> = row.get(6)?;
+                let fetched_at_str: String = row.get(10)?;
+
+                Ok(PageData {
+                    id: row.get(0)?,
+                    url: Url::parse(&url_str)
+                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
+                    final_url: Url::parse(&final_url_str)
+                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
+                    status_code: row.get(3)?,
+                    title: row.get(4)?,
+                    description: row.get(5)?,
+                    canonical_url: canonical_str.and_then(|s| Url::parse(&s).ok()),
+                    word_count: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+                    load_time_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+                    body_size: row.get::<_, Option<i64>>(9)?.map(|v| v as usize),
+                    fetched_at: DateTime::parse_from_rfc3339(&fetched_at_str)
+                        .map(|dt| dt.with_timezone(&Utc))
+                        .unwrap_or_else(|_| Utc::now()),
+                    links: Vec::new(),
+                    tenant_id: row.get(11)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(pages)
+    }
+
+    /// Get issues for a specific tenant.
+    ///
+    /// Returns issues belonging to the given tenant, or issues with no tenant
+    /// assigned (shared/global data). This ensures tenant isolation at the
+    /// storage layer while still allowing access to unscoped data.
+    pub fn get_issues_for_tenant(
+        &self,
+        crawl_id: &str,
+        tenant_id: &str,
+        filters: &IssueFilter,
+    ) -> Result<Vec<Issue>, StorageError> {
+        let conn = self.conn.lock();
+
+        let mut query = String::from(
+            "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
+             FROM findings f
+             JOIN pages p ON f.page_id = p.id
+             WHERE p.crawl_id = ?1 AND (f.tenant_id = ?2 OR f.tenant_id IS NULL)",
+        );
+        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
+        param_values.push(Box::new(crawl_id.to_string()));
+        param_values.push(Box::new(tenant_id.to_string()));
+
+        if let Some(ref severity) = filters.severity {
+            query.push_str(&format!(" AND f.severity = ?{}", param_values.len() + 1));
+            param_values.push(Box::new(severity.as_str().to_string()));
+        }
+        if let Some(ref category) = filters.category {
+            query.push_str(&format!(" AND f.category = ?{}", param_values.len() + 1));
+            param_values.push(Box::new(category.as_str()));
+        }
+        if let Some(ref page_id) = filters.page_id {
+            query.push_str(&format!(" AND f.page_id = ?{}", param_values.len() + 1));
+            param_values.push(Box::new(page_id.clone()));
+        }
+        if let Some(ref code_prefix) = filters.code_prefix {
+            query.push_str(&format!(" AND f.code LIKE ?{}", param_values.len() + 1));
+            param_values.push(Box::new(format!("{code_prefix}%")));
+        }
+
+        query.push_str(" ORDER BY f.id ASC");
+
+        let mut stmt = conn.prepare(&query)?;
+        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
+            param_values.iter().map(|p| p.as_ref()).collect();
+
+        let issues = stmt
+            .query_map(params_refs.as_slice(), |row| {
+                let category_str: String = row.get(2)?;
+                let severity_str: String = row.get(3)?;
+
+                Ok(Issue {
+                    id: row.get(0)?,
+                    page_id: row.get(1)?,
+                    category: IssueCategory::parse_category(&category_str),
+                    severity: Severity::parse_severity(&severity_str).unwrap_or(Severity::Info),
+                    code: row.get(4)?,
+                    title: row.get(5)?,
+                    description: row.get(6)?,
+                    element: row.get(7)?,
+                    recommendation: row.get(8)?,
+                    tenant_id: row.get(9)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1064,6 +1197,7 @@ mod tests {
             body_size: Some(1024),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         }
     }
 
@@ -1078,6 +1212,7 @@ mod tests {
             description: format!("Description for issue {id}"),
             element: None,
             recommendation: "Fix this".to_string(),
+            tenant_id: None,
         }
     }
 

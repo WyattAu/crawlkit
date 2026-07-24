@@ -36,6 +36,7 @@ fn main() -> Result<()> {
             body_size: Some(4096),
             fetched_at: Utc::now(),
             links: vec![Url::parse("https://example.com/about")?],
+            tenant_id: None,
         },
         PageData {
             id: "p2".into(),
@@ -50,6 +51,7 @@ fn main() -> Result<()> {
             body_size: Some(2048),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         },
         PageData {
             id: "p3".into(),
@@ -64,6 +66,7 @@ fn main() -> Result<()> {
             body_size: Some(512),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         },
     ];
     storage.insert_pages(&crawl_id, &pages)?;
@@ -79,6 +82,7 @@ fn main() -> Result<()> {
             description: "Title is 25 characters, below the recommended minimum of 30.".into(),
             element: None,
             recommendation: "Expand the title to 30-60 characters.".into(),
+            tenant_id: None,
         },
         Issue {
             id: "i2".into(),
@@ -90,6 +94,7 @@ fn main() -> Result<()> {
             description: "The page returned a 404 status code.".into(),
             element: None,
             recommendation: "Remove links to this page or redirect to a valid URL.".into(),
+            tenant_id: None,
         },
         Issue {
             id: "i3".into(),
@@ -101,6 +106,7 @@ fn main() -> Result<()> {
             description: "No <link rel=\"canonical\"> tag was found.".into(),
             element: None,
             recommendation: "Add a canonical URL tag pointing to the preferred version.".into(),
+            tenant_id: None,
         },
         Issue {
             id: "i4".into(),
@@ -112,6 +118,7 @@ fn main() -> Result<()> {
             description: "An image has no alt attribute.".into(),
             element: Some("img.hero".into()),
             recommendation: "Add descriptive alt text to all images.".into(),
+            tenant_id: None,
         },
     ];
     storage.insert_issues(&issues)?;
@@ -189,6 +196,7 @@ fn main() -> Result<()> {
             body_size: Some(5120),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         },
         // p2 unchanged, p3 removed, p4 new
         PageData {
@@ -204,6 +212,7 @@ fn main() -> Result<()> {
             body_size: Some(3072),
             fetched_at: Utc::now(),
             links: vec![],
+            tenant_id: None,
         },
     ];
     storage2.insert_pages(&crawl_id2, &pages2)?;

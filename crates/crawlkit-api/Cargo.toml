@@ -45,3 +45,5 @@ jsonwebtoken = "9"
 argon2 = "0.5"
 rand = "0.8"
 parking_lot.workspace = true
+urlencoding = "2.1"
+thiserror.workspace = true

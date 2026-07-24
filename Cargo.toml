@@ -63,3 +63,6 @@ codegen-units = 1
 opt-level = 3
 strip = true
 panic = "abort"
+
+[workspace.metadata.fuzz]
+targets = ["fuzz_parser"]

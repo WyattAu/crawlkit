@@ -94,6 +94,7 @@ struct Cli {
 }
 
 #[derive(Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum Commands {
     /// Crawl a website and analyze pages for SEO signals
     Crawl {
@@ -175,6 +176,10 @@ enum Commands {
         /// Export metrics snapshot to JSON file
         #[arg(long)]
         metrics_json: Option<PathBuf>,
+
+        /// Tenant ID for multi-tenant operations
+        #[arg(long)]
+        tenant: Option<String>,
     },
 
     /// Compare two crawl results
@@ -347,6 +352,7 @@ async fn main() -> Result<()> {
             enable_wasm,
             encrypt,
             metrics_json,
+            tenant,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -380,6 +386,7 @@ async fn main() -> Result<()> {
                 enable_wasm,
                 encrypt,
                 metrics_json,
+                tenant,
                 feature_flags,
             };
             run_crawl(&params).await
@@ -445,6 +452,7 @@ struct CrawlParams {
     enable_wasm: bool,
     encrypt: bool,
     metrics_json: Option<PathBuf>,
+    tenant: Option<String>,
     feature_flags: crawlkit_engine::FeatureFlags,
 }
 
@@ -988,6 +996,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                 .iter()
                 .filter_map(|l| url::Url::parse(&l.href).ok())
                 .collect(),
+            tenant_id: None,
         };
 
         // Encrypt sensitive fields if encryption is enabled
@@ -1043,6 +1052,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                 description: finding.description.clone(),
                 element: None,
                 recommendation: finding.recommendation.clone(),
+                tenant_id: None,
             };
             if let Err(e) = storage.insert_issue(&issue) {
                 tracing::warn!("Failed to store issue: {}", e);

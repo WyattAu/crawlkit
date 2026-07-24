@@ -202,7 +202,7 @@ impl From<&CrawlConfig> for HttpClientConfig {
             max_body_size: 10 * 1024 * 1024, // 10MB default
             pool_max_idle_per_host: 16,
             pool_max_idle: 32,
-            http2_prior_knowledge: true,
+            http2_prior_knowledge: false,
             tcp_keepalive: Some(Duration::from_secs(60)),
         }
     }
@@ -252,6 +252,7 @@ impl HttpClient {
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
             .https_only(true)
+            .http1_only()
             .pool_max_idle_per_host(config.pool_max_idle_per_host)
             .pool_idle_timeout(Duration::from_secs(90))
             .connect_timeout(Duration::from_secs(10));
@@ -288,7 +289,7 @@ impl HttpClient {
         let cfg = HttpClientConfig {
             pool_max_idle_per_host: 64,
             pool_max_idle: 128,
-            http2_prior_knowledge: true,
+            http2_prior_knowledge: false,
             tcp_keepalive: Some(Duration::from_secs(60)),
             ..config
         };

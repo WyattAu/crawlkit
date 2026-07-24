@@ -98,6 +98,7 @@ fn make_page_data(url: &str) -> PageData {
         body_size: Some(1024),
         fetched_at: Utc::now(),
         links: Vec::new(),
+        tenant_id: None,
     }
 }
 
@@ -409,6 +410,7 @@ fn test_storage_integration() {
         description: "Page lacks meta description".to_string(),
         element: None,
         recommendation: "Add meta description".to_string(),
+        tenant_id: None,
     };
     storage.insert_issue(&issue).unwrap();
 }
@@ -460,6 +462,7 @@ fn test_full_crawl_pipeline() {
                 description: finding.description.clone(),
                 element: None,
                 recommendation: finding.recommendation.clone(),
+                tenant_id: None,
             };
             storage.insert_issue(&issue).unwrap();
         }

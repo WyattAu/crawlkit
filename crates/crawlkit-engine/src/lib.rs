@@ -251,7 +251,7 @@ pub mod parser;
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{
     ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParseError,
-    ParsedPage, ScriptInfo, StructuredData, StyleInfo,
+    ParsedPage, ScriptInfo, StreamingHtmlParser, StructuredData, StyleInfo,
 };
 
 mod duration_ms {

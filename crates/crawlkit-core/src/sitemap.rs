@@ -238,6 +238,7 @@ pub enum SitemapError {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

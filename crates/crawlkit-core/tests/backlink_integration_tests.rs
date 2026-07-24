@@ -1,6 +1,7 @@
 //! Integration tests for backlink adapters
 //!
 //! Tests Ahrefs, Majestic, and GSC adapters
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crawlkit_core::backlink_adapters::{
     AhrefsAdapter, BacklinkAdapter, GscAdapter, MajesticAdapter,

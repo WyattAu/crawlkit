@@ -1,6 +1,7 @@
 //! Integration tests for RUM adapters
 //!
 //! Tests Google Analytics and CrUX adapters
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crawlkit_core::rum::{CruxAdapter, GoogleAnalyticsAdapter};
 

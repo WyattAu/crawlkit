@@ -3,6 +3,7 @@
 //! This crate provides the foundational types, HTTP fetching, HTML parsing,
 //! SEO analyzers, crawl queue, storage, and observability primitives used by
 //! the crawlkit CLI and API server.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -251,7 +252,8 @@ pub struct CrawlConfig {
 impl Default for CrawlConfig {
     fn default() -> Self {
         Self {
-            start_url: Url::parse("https://example.com").expect("valid default URL"),
+            start_url: Url::parse("https://example.com")
+                .unwrap_or_else(|_| unreachable!("static URL string is always valid")),
             max_pages: 100,
             max_time: None,
             max_depth: None,
@@ -326,6 +328,7 @@ pub struct RedirectHop {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

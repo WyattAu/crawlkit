@@ -6,13 +6,15 @@ resolver = "2"
 unsafe_code = "forbid"
 
 [workspace.lints.clippy]
-# Critical lints (warn level -- do not block CI yet)
-# These flag patterns that should be eliminated in production code
-unwrap_used = "allow"          # Flag but do not block; fix incrementally
-expect_used = "allow"          # Flag but do not block; fix incrementally
-panic = "allow"                # Flag but do not block; fix incrementally
+# Lints enforced at workspace level
+unwrap_used = "warn"           # Prohibit unwrap() in production; fix incrementally
+expect_used = "warn"           # Prohibit expect() in production; fix incrementally
+panic = "warn"                 # Prohibit panic!() in production; use error propagation
 exit = "deny"                  # Never call process::exit in library code
 modulo_arithmetic = "warn"
+redundant_clone = "warn"
+unused_async = "warn"
+if_not_else = "warn"
 
 
 [workspace.package]

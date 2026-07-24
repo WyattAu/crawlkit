@@ -1,10 +1,10 @@
 use chrono::{DateTime, Utc};
 use lru::LruCache;
+use parking_lot::Mutex;
 use rusqlite::{params, Connection};
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
 use thiserror::Error;
 use url::Url;
 
@@ -247,8 +247,8 @@ pub struct Storage {
 
 impl Storage {
     /// Lock and return the underlying connection guard.
-    pub fn conn(&self) -> std::sync::MutexGuard<'_, Connection> {
-        self.conn.lock().unwrap()
+    pub fn conn(&self) -> parking_lot::MutexGuard<'_, Connection> {
+        self.conn.lock()
     }
 
     /// Open or create a SQLite database at the given path.
@@ -270,7 +270,9 @@ impl Storage {
 
         let storage = Self {
             conn: Mutex::new(conn),
-            page_cache: Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())),
+            page_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(1000).unwrap_or(NonZeroUsize::MIN),
+            )),
             memory_usage: AtomicUsize::new(0),
             mmap_enabled: true,
         };
@@ -288,7 +290,9 @@ impl Storage {
         )?;
         let storage = Self {
             conn: Mutex::new(conn),
-            page_cache: Mutex::new(LruCache::new(NonZeroUsize::new(1000).unwrap())),
+            page_cache: Mutex::new(LruCache::new(
+                NonZeroUsize::new(1000).unwrap_or(NonZeroUsize::MIN),
+            )),
             memory_usage: AtomicUsize::new(0),
             mmap_enabled: false,
         };
@@ -311,7 +315,7 @@ impl Storage {
         let storage = Self {
             conn: Mutex::new(conn),
             page_cache: Mutex::new(LruCache::new(
-                NonZeroUsize::new(cache_size).unwrap_or(NonZeroUsize::new(1000).unwrap()),
+                NonZeroUsize::new(cache_size).unwrap_or(NonZeroUsize::MIN),
             )),
             memory_usage: AtomicUsize::new(0),
             mmap_enabled: true,
@@ -332,7 +336,7 @@ impl Storage {
 
     /// Returns cache statistics (hits, misses, current size).
     pub fn cache_stats(&self) -> CacheStats {
-        let cache = self.page_cache.lock().unwrap();
+        let cache = self.page_cache.lock();
         CacheStats {
             capacity: cache.cap().get(),
             size: cache.len(),
@@ -343,7 +347,7 @@ impl Storage {
 
     /// Clears the page cache.
     pub fn clear_cache(&self) {
-        let mut cache = self.page_cache.lock().unwrap();
+        let mut cache = self.page_cache.lock();
         let evicted = cache.len();
         cache.clear();
         if evicted > 0 {
@@ -354,7 +358,7 @@ impl Storage {
 
     /// Create the database schema if it doesn't already exist.
     fn create_schema(&self) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS crawls (
@@ -456,7 +460,7 @@ impl Storage {
         config_json: Option<&str>,
     ) -> Result<String, StorageError> {
         let crawl_id = uuid::Uuid::new_v4().to_string();
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "INSERT INTO crawls (id, start_time, target_url, config_json) VALUES (?1, ?2, ?3, ?4)",
             params![crawl_id, Utc::now().to_rfc3339(), target_url, config_json,],
@@ -471,7 +475,7 @@ impl Storage {
         pages_crawled: usize,
         total_issues: usize,
     ) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "UPDATE crawls SET end_time = ?1, pages_crawled = ?2, total_issues = ?3 WHERE id = ?4",
             params![
@@ -488,7 +492,7 @@ impl Storage {
     /// Uses a single SQLite transaction for the page row + all link rows
     /// to avoid per-statement fsync overhead.
     pub fn insert_page(&self, crawl_id: &str, page: &PageData) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
@@ -537,7 +541,7 @@ impl Storage {
         if pages.is_empty() {
             return Ok(());
         }
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
@@ -585,7 +589,7 @@ impl Storage {
 
     /// Insert a single issue/finding into the database.
     pub fn insert_issue(&self, issue: &Issue) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -606,7 +610,7 @@ impl Storage {
 
     /// Insert a batch of issues for performance.
     pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -632,7 +636,7 @@ impl Storage {
     /// Results are not cached because the cache type (`LruCache<String, PageData>`)
     /// cannot store `Vec<PageData>`. The query is fast with proper indexing.
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
@@ -647,12 +651,10 @@ impl Storage {
 
                 Ok(PageData {
                     id: row.get(0)?,
-                    url: Url::parse(&url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid").expect("about:invalid is a valid URL")
-                    }),
-                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid").expect("about:invalid is a valid URL")
-                    }),
+                    url: Url::parse(&url_str)
+                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
+                    final_url: Url::parse(&final_url_str)
+                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
                     description: row.get(5)?,
@@ -677,7 +679,7 @@ impl Storage {
         crawl_id: &str,
         filters: &IssueFilter,
     ) -> Result<Vec<Issue>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
 
         let mut query = String::from(
             "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation
@@ -735,7 +737,7 @@ impl Storage {
 
     /// Get aggregate statistics for a crawl.
     pub fn get_stats(&self, crawl_id: &str) -> Result<CrawlStats, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
 
         let total_pages: usize = conn.query_row(
             "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = ?1",
@@ -814,7 +816,7 @@ impl Storage {
 
     /// Get the latest crawl ID.
     pub fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let result = conn.query_row(
             "SELECT id FROM crawls ORDER BY start_time DESC LIMIT 1",
             [],
@@ -836,7 +838,7 @@ impl Storage {
         &self,
         crawl_id: &str,
     ) -> Result<Vec<(String, Vec<String>)>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT l.source_url, l.target_url
              FROM links l
@@ -864,7 +866,7 @@ impl Storage {
         &self,
         crawl_id: &str,
     ) -> Result<Vec<(String, String)>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT l.source_url, l.target_url
              FROM links l
@@ -886,7 +888,7 @@ impl Storage {
 
     /// Get all page URLs for a crawl.
     pub fn get_page_urls(&self, crawl_id: &str) -> Result<Vec<String>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare("SELECT url FROM pages WHERE crawl_id = ?1 ORDER BY url")?;
 
         let rows = stmt.query_map(params![crawl_id], |row| row.get::<_, String>(0))?;
@@ -910,7 +912,7 @@ impl Storage {
         fcp_p75: Option<f64>,
         ttfb_p75: Option<f64>,
     ) -> Result<(), StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         conn.execute(
             "INSERT OR REPLACE INTO crux_metrics (id, page_id, url, lcp_p75, inp_p75, cls_p75, fcp_p75, ttfb_p75, fetched_at)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
@@ -931,7 +933,7 @@ impl Storage {
 
     /// Get CrUX metrics for a page.
     pub fn get_crux_metrics(&self, page_id: &str) -> Result<Option<CruxMetrics>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let result = conn.query_row(
             "SELECT url, lcp_p75, inp_p75, cls_p75, fcp_p75, ttfb_p75 FROM crux_metrics WHERE page_id = ?1",
             params![page_id],
@@ -959,7 +961,7 @@ impl Storage {
         &self,
         crawl_id: &str,
     ) -> Result<Vec<CruxMetrics>, StorageError> {
-        let conn = self.conn.lock().unwrap();
+        let conn = self.conn.lock();
         let mut stmt = conn.prepare(
             "SELECT cm.url, cm.lcp_p75, cm.inp_p75, cm.cls_p75, cm.fcp_p75, cm.ttfb_p75
              FROM crux_metrics cm
@@ -999,6 +1001,7 @@ pub struct CruxMetrics {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

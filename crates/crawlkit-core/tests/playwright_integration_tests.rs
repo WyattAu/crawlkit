@@ -2,6 +2,7 @@
 //!
 //! Tests actual browser rendering with Playwright.
 //! All tests have timeouts to prevent hanging under code coverage tools.
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::time::Duration;
 

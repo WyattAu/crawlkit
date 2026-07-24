@@ -63,8 +63,8 @@ impl GoogleAnalyticsAdapter {
             return Err(RumError::NotConfigured);
         }
 
-        let property_id = self.property_id.as_ref().unwrap();
-        let api_key = self.api_key.as_ref().unwrap();
+        let property_id = self.property_id.as_deref().ok_or(RumError::NotConfigured)?;
+        let api_key = self.api_key.as_deref().ok_or(RumError::NotConfigured)?;
         let client = reqwest::Client::new();
 
         let mut results = Vec::new();
@@ -192,7 +192,7 @@ impl CruxAdapter {
             return Err(RumError::NotConfigured);
         }
 
-        let api_key = self.api_key.as_ref().unwrap();
+        let api_key = self.api_key.as_deref().ok_or(RumError::NotConfigured)?;
         let client = reqwest::Client::new();
 
         let request_url = format!(

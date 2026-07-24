@@ -3,6 +3,7 @@
 //! Built on Axum with API-key authentication and per-key rate limiting.
 //! Start a crawl via `POST /api/v1/crawls` and poll status at
 //! `GET /api/v1/crawls/{crawl_id}`.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -54,9 +55,9 @@ struct RateLimitBucket {
 impl RateLimitBucket {
     fn new(rpm: u32) -> Self {
         Self {
-            tokens: rpm as f64,
-            max_tokens: rpm as f64,
-            refill_rate: rpm as f64 / 60.0,
+            tokens: f64::from(rpm),
+            max_tokens: f64::from(rpm),
+            refill_rate: f64::from(rpm) / 60.0,
             last_refill: std::time::Instant::now(),
         }
     }
@@ -169,6 +170,9 @@ struct AppState {
     crawl_results: Arc<DashMap<String, CrawlResult>>,
     audit_trail: Arc<AuditTrail>,
     metrics: Arc<Metrics>,
+    webhooks: Arc<DashMap<String, WebhookConfig>>,
+    schedules: Arc<DashMap<String, ScheduleConfig>>,
+    http_client: reqwest::Client,
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +250,79 @@ struct ApiKeyResponse {
 struct HealthResponse {
     status: String,
     version: String,
+}
+
+// ---------------------------------------------------------------------------
+// Webhook types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct WebhookConfig {
+    id: String,
+    url: String,
+    events: Vec<String>,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateWebhookRequest {
+    url: String,
+    #[serde(default = "default_webhook_events")]
+    events: Vec<String>,
+}
+
+fn default_webhook_events() -> Vec<String> {
+    vec!["crawl.completed".to_string(), "crawl.failed".to_string()]
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WebhookPayload {
+    event: String,
+    crawl_id: String,
+    pages_crawled: usize,
+    issues_found: usize,
+    timestamp: DateTime<Utc>,
+}
+
+// ---------------------------------------------------------------------------
+// Scheduled crawl types
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ScheduleConfig {
+    id: String,
+    crawl_config: CrawlConfig,
+    interval_secs: u64,
+    enabled: bool,
+    next_run: DateTime<Utc>,
+    created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct CreateScheduleRequest {
+    start_url: String,
+    #[serde(default = "default_max_pages")]
+    max_pages: usize,
+    #[serde(default = "default_delay")]
+    request_delay_ms: u64,
+    #[serde(default = "default_concurrency")]
+    concurrency: usize,
+    #[serde(default = "default_schedule_interval")]
+    interval_secs: u64,
+}
+
+fn default_schedule_interval() -> u64 {
+    3600
+}
+
+#[derive(Debug, Serialize)]
+struct ScheduleResponse {
+    id: String,
+    start_url: String,
+    interval_secs: u64,
+    enabled: bool,
+    next_run: DateTime<Utc>,
+    created_at: DateTime<Utc>,
 }
 
 // ---------------------------------------------------------------------------
@@ -337,7 +414,14 @@ fn validate_delay(ms: u64) -> Result<(), ApiError> {
 async fn metrics_endpoint(State(state): State<AppState>) -> Response {
     let registry = state.metrics.registry.read().await;
     let mut buffer = String::new();
-    encode(&mut buffer, &registry).expect("Failed to encode metrics");
+    if let Err(e) = encode(&mut buffer, &registry) {
+        tracing::error!("Failed to encode metrics: {e}");
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "Failed to encode metrics",
+        )
+            .into_response();
+    }
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
@@ -405,7 +489,9 @@ async fn auth_middleware(
         return Err(ApiError::RateLimited);
     }
 
+    #[allow(clippy::cast_possible_truncation)]
     let remaining = bucket.tokens.floor() as u64;
+    #[allow(clippy::cast_possible_truncation)]
     let reset_seconds = ((bucket.max_tokens - bucket.tokens) / bucket.refill_rate).ceil() as u64;
     drop(bucket);
 
@@ -469,6 +555,17 @@ async fn list_api_keys(State(state): State<AppState>) -> Json<Vec<ApiKeyResponse
     Json(keys)
 }
 
+async fn delete_api_key(
+    State(state): State<AppState>,
+    axum::extract::Path(key): axum::extract::Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .api_keys
+        .remove(&key)
+        .map(|_| StatusCode::NO_CONTENT)
+        .ok_or_else(|| ApiError::NotFound(format!("API key {key} not found")))
+}
+
 async fn start_crawl(
     State(state): State<AppState>,
     Json(req): Json<CreateCrawlRequest>,
@@ -512,7 +609,6 @@ async fn start_crawl(
     state.metrics.active_crawls.inc();
 
     // Spawn crawl task in background
-    let state_clone = state.clone();
     let crawl_id_clone = crawl_id.clone();
     let config = CrawlConfig {
         start_url,
@@ -523,7 +619,7 @@ async fn start_crawl(
     };
 
     tokio::spawn(async move {
-        run_crawl_task(state_clone, crawl_id_clone, config).await;
+        run_crawl_task(state, crawl_id_clone, config).await;
     });
 
     Ok((
@@ -645,6 +741,195 @@ async fn get_crawl_backlinks(
 }
 
 // ---------------------------------------------------------------------------
+// Webhook handlers
+// ---------------------------------------------------------------------------
+
+async fn create_webhook(
+    State(state): State<AppState>,
+    Json(req): Json<CreateWebhookRequest>,
+) -> Result<(StatusCode, Json<WebhookConfig>), ApiError> {
+    url::Url::parse(&req.url)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid webhook URL: {e}")))?;
+
+    for event in &req.events {
+        if event != "crawl.completed" && event != "crawl.failed" {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid event type: {event}. Must be 'crawl.completed' or 'crawl.failed'"
+            )));
+        }
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let config = WebhookConfig {
+        id: id.clone(),
+        url: req.url,
+        events: req.events,
+        created_at: Utc::now(),
+    };
+
+    state.webhooks.insert(id, config.clone());
+    Ok((StatusCode::CREATED, Json(config)))
+}
+
+async fn list_webhooks(State(state): State<AppState>) -> Json<Vec<WebhookConfig>> {
+    Json(state.webhooks.iter().map(|e| e.value().clone()).collect())
+}
+
+async fn delete_webhook(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .webhooks
+        .remove(&id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))
+}
+
+// ---------------------------------------------------------------------------
+// Schedule handlers
+// ---------------------------------------------------------------------------
+
+async fn create_schedule(
+    State(state): State<AppState>,
+    Json(req): Json<CreateScheduleRequest>,
+) -> Result<(StatusCode, Json<ScheduleResponse>), ApiError> {
+    validate_url(&req.start_url)?;
+    validate_max_pages(req.max_pages)?;
+    validate_concurrency(req.concurrency)?;
+    validate_delay(req.request_delay_ms)?;
+
+    let start_url = url::Url::parse(&req.start_url)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
+
+    if req.interval_secs < 60 {
+        return Err(ApiError::BadRequest(
+            "interval_secs must be at least 60".to_string(),
+        ));
+    }
+
+    let crawl_config = CrawlConfig {
+        start_url,
+        max_pages: req.max_pages,
+        request_delay: std::time::Duration::from_millis(req.request_delay_ms),
+        concurrency: req.concurrency,
+        ..Default::default()
+    };
+
+    let id = Uuid::new_v4().to_string();
+    let now = Utc::now();
+    let schedule = ScheduleConfig {
+        id: id.clone(),
+        crawl_config: crawl_config.clone(),
+        interval_secs: req.interval_secs,
+        enabled: true,
+        next_run: now + chrono::Duration::seconds(req.interval_secs as i64),
+        created_at: now,
+    };
+
+    let response = ScheduleResponse {
+        id: schedule.id.clone(),
+        start_url: crawl_config.start_url.to_string(),
+        interval_secs: schedule.interval_secs,
+        enabled: schedule.enabled,
+        next_run: schedule.next_run,
+        created_at: schedule.created_at,
+    };
+
+    state.schedules.insert(id, schedule);
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn list_schedules(State(state): State<AppState>) -> Json<Vec<ScheduleResponse>> {
+    Json(
+        state
+            .schedules
+            .iter()
+            .map(|e| {
+                let s = e.value();
+                ScheduleResponse {
+                    id: s.id.clone(),
+                    start_url: s.crawl_config.start_url.to_string(),
+                    interval_secs: s.interval_secs,
+                    enabled: s.enabled,
+                    next_run: s.next_run,
+                    created_at: s.created_at,
+                }
+            })
+            .collect(),
+    )
+}
+
+async fn delete_schedule(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<StatusCode, ApiError> {
+    state
+        .schedules
+        .remove(&id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))
+}
+
+// ---------------------------------------------------------------------------
+// Webhook firing helper
+// ---------------------------------------------------------------------------
+
+fn fire_webhooks(
+    state: &AppState,
+    event: &str,
+    crawl_id: &str,
+    pages_crawled: usize,
+    issues_found: usize,
+) {
+    let payload = WebhookPayload {
+        event: event.to_string(),
+        crawl_id: crawl_id.to_string(),
+        pages_crawled,
+        issues_found,
+        timestamp: Utc::now(),
+    };
+
+    let matching: Vec<WebhookConfig> = state
+        .webhooks
+        .iter()
+        .filter(|entry| entry.value().events.iter().any(|e| e == event))
+        .map(|entry| entry.value().clone())
+        .collect();
+
+    if matching.is_empty() {
+        return;
+    }
+
+    let client = state.http_client.clone();
+    tokio::spawn(async move {
+        for webhook in matching {
+            let client = client.clone();
+            let payload = payload.clone();
+            let url = webhook.url.clone();
+            tokio::spawn(async move {
+                match client
+                    .post(&url)
+                    .json(&payload)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+                    .await
+                {
+                    Ok(resp) => {
+                        if !resp.status().is_success() {
+                            tracing::warn!("Webhook to {url} returned status {}", resp.status());
+                        }
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to send webhook to {url}: {e}");
+                    }
+                }
+            });
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Background crawl task
 // ---------------------------------------------------------------------------
 
@@ -663,6 +948,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
                 result.status = "failed".to_string();
                 result.completed_at = Some(Utc::now());
             }
+            fire_webhooks(&state, "crawl.failed", &crawl_id, 0, 0);
             return;
         }
     };
@@ -796,7 +1082,11 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             description: parsed.meta.description.clone(),
             canonical_url: parsed.meta.canonical.clone(),
             word_count: Some(parsed.word_count),
-            load_time_ms: Some(fetch_time.as_millis() as u64),
+            load_time_ms: Some({
+                #[allow(clippy::cast_possible_truncation)]
+                let v = fetch_time.as_millis() as u64;
+                v
+            }),
             body_size: Some(result.body.len()),
             fetched_at: Utc::now(),
             links: parsed
@@ -855,7 +1145,63 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
     }
 
     state.metrics.active_crawls.dec();
+    fire_webhooks(
+        &state,
+        "crawl.completed",
+        &crawl_id,
+        pages_crawled,
+        total_issues,
+    );
     tracing::info!("Crawl {crawl_id} completed: {pages_crawled} pages, {total_issues} issues");
+}
+
+// ---------------------------------------------------------------------------
+// Scheduler background task
+// ---------------------------------------------------------------------------
+
+async fn run_scheduler(state: AppState) {
+    loop {
+        tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+        let now = Utc::now();
+
+        let due: Vec<(String, CrawlConfig)> = state
+            .schedules
+            .iter()
+            .filter(|entry| entry.value().enabled && entry.value().next_run <= now)
+            .map(|entry| {
+                let s = entry.value();
+                (s.id.clone(), s.crawl_config.clone())
+            })
+            .collect();
+
+        for (schedule_id, config) in due {
+            if let Some(mut schedule) = state.schedules.get_mut(&schedule_id) {
+                schedule.next_run = now + chrono::Duration::seconds(schedule.interval_secs as i64);
+            }
+
+            let crawl_id = Uuid::new_v4().to_string();
+            let result = CrawlResult {
+                crawl_id: crawl_id.clone(),
+                start_url: config.start_url.to_string(),
+                status: "running".to_string(),
+                pages_crawled: 0,
+                issues_found: 0,
+                created_at: Utc::now(),
+                completed_at: None,
+            };
+            state.crawl_results.insert(crawl_id.clone(), result);
+            state.metrics.crawls_total.inc();
+            state.metrics.active_crawls.inc();
+
+            let state_clone = state.clone();
+            let crawl_id_clone = crawl_id.clone();
+            tokio::spawn(async move {
+                run_crawl_task(state_clone, crawl_id_clone, config).await;
+            });
+
+            tracing::info!("Scheduled crawl {crawl_id} started from schedule {schedule_id}");
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -864,7 +1210,6 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    use opentelemetry::trace::TracerProvider as _;
     use tracing_opentelemetry::OpenTelemetryLayer;
     use tracing_subscriber::layer::SubscriberExt;
     use tracing_subscriber::util::SubscriberInitExt;
@@ -919,6 +1264,9 @@ async fn main() -> anyhow::Result<()> {
         crawl_results: Arc::new(DashMap::new()),
         audit_trail: Arc::new(AuditTrail::new()),
         metrics: Arc::new(Metrics::new()),
+        webhooks: Arc::new(DashMap::new()),
+        schedules: Arc::new(DashMap::new()),
+        http_client: reqwest::Client::new(),
     };
 
     let cors = CorsLayer::new()
@@ -937,6 +1285,20 @@ async fn main() -> anyhow::Result<()> {
             get(get_crawl_backlinks),
         )
         .route("/api/v1/keys", post(create_api_key).get(list_api_keys))
+        .route("/api/v1/keys/{key}", axum::routing::delete(delete_api_key))
+        .route("/api/v1/webhooks", post(create_webhook).get(list_webhooks))
+        .route(
+            "/api/v1/webhooks/{id}",
+            axum::routing::delete(delete_webhook),
+        )
+        .route(
+            "/api/v1/schedules",
+            post(create_schedule).get(list_schedules),
+        )
+        .route(
+            "/api/v1/schedules/{id}",
+            axum::routing::delete(delete_schedule),
+        )
         .route("/api/v1/audit", get(get_audit_events))
         .layer(cors)
         .layer(middleware::from_fn_with_state(
@@ -948,12 +1310,17 @@ async fn main() -> anyhow::Result<()> {
             auth_middleware,
         ))
         .layer(TraceLayer::new_for_http())
-        .with_state(state);
+        .with_state(state.clone());
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 4000));
     tracing::info!("crawlkit API listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
+
+    tokio::spawn(async move {
+        run_scheduler(state).await;
+    });
+
     axum::serve(listener, app).await?;
 
     Ok(())

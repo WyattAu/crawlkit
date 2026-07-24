@@ -316,6 +316,7 @@ fn domain_matches_pattern(domain: &str, pattern: &str) -> bool {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

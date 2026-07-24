@@ -1,6 +1,12 @@
 //! Integration tests for crawlkit-core
 //!
 //! Tests the full pipeline: fetch -> parse -> analyze -> store -> export
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::redundant_clone
+)]
 
 use std::time::Duration;
 

@@ -110,7 +110,7 @@ impl BacklinkAdapter for AhrefsAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let api_key = self.api_key.as_ref().unwrap();
+        let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let url = format!(
             "https://api.ahrefs.com/v3/backlinks?target={}&mode=live&output=json&token={}&limit={}",
             urlencoding::encode(domain),
@@ -159,7 +159,7 @@ impl BacklinkAdapter for AhrefsAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let api_key = self.api_key.as_ref().unwrap();
+        let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let url = format!(
             "https://api.ahrefs.com/v3/domain-rating?target={}&output=json&token={}",
             urlencoding::encode(domain),
@@ -229,7 +229,7 @@ impl BacklinkAdapter for MajesticAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let api_key = self.api_key.as_ref().unwrap();
+        let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let client = reqwest::Client::new();
 
         let params = [
@@ -284,7 +284,7 @@ impl BacklinkAdapter for MajesticAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let api_key = self.api_key.as_ref().unwrap();
+        let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let client = reqwest::Client::new();
 
         let params = [
@@ -363,7 +363,10 @@ impl BacklinkAdapter for GscAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let access_token = self.access_token.as_ref().unwrap();
+        let access_token = self
+            .access_token
+            .as_deref()
+            .ok_or(AdapterError::ApiKeyMissing)?;
         let client = reqwest::Client::new();
 
         // GSC API for external links
@@ -464,7 +467,10 @@ impl GscAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let access_token = self.access_token.as_ref().unwrap();
+        let access_token = self
+            .access_token
+            .as_deref()
+            .ok_or(AdapterError::ApiKeyMissing)?;
         let client = reqwest::Client::new();
 
         let site_url = format!("https://{domain}/");
@@ -558,7 +564,10 @@ impl GscAdapter {
             return Err(AdapterError::ApiKeyMissing);
         }
 
-        let access_token = self.access_token.as_ref().unwrap();
+        let access_token = self
+            .access_token
+            .as_deref()
+            .ok_or(AdapterError::ApiKeyMissing)?;
         let client = reqwest::Client::new();
 
         let site_url = format!("https://{domain}/");

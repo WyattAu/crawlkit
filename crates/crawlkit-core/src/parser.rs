@@ -4,6 +4,63 @@ use url::Url;
 
 use crate::meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 
+/// Cached CSS selectors compiled once, reused on every parse call.
+/// `OnceLock` guarantees thread-safe lazy initialization with zero cost after first use.
+/// All selector patterns are static compile-time-known strings.
+#[allow(clippy::expect_used)]
+mod selectors {
+    use scraper::Selector;
+    use std::sync::OnceLock;
+
+    fn cached(pattern: &str) -> &Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse(pattern).expect("static CSS selector is valid"))
+    }
+
+    pub fn html() -> &'static Selector {
+        cached("html")
+    }
+    pub fn header() -> &'static Selector {
+        cached("header")
+    }
+    pub fn nav() -> &'static Selector {
+        cached("nav")
+    }
+    pub fn main() -> &'static Selector {
+        cached("main")
+    }
+    pub fn aside() -> &'static Selector {
+        cached("aside")
+    }
+    pub fn footer() -> &'static Selector {
+        cached("footer")
+    }
+    pub fn form() -> &'static Selector {
+        cached("form")
+    }
+    pub fn section_aria() -> &'static Selector {
+        cached("section[aria-label], section[aria-labelledby]")
+    }
+    pub fn role_banner() -> &'static Selector {
+        cached("[role=banner]")
+    }
+    pub fn role_navigation() -> &'static Selector {
+        cached("[role=navigation]")
+    }
+    pub fn role_main() -> &'static Selector {
+        cached("[role=main]")
+    }
+    pub fn role_complementary() -> &'static Selector {
+        cached("[role=complementary]")
+    }
+    pub fn role_contentinfo() -> &'static Selector {
+        cached("[role=contentinfo]")
+    }
+    pub fn input_select_textarea() -> &'static Selector {
+        cached("input, select, textarea")
+    }
+}
+
 /// Errors that can occur during HTML parsing.
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
@@ -447,10 +504,9 @@ impl HtmlParser {
 
                 // Collect all input nodes that are descendants of a <label>
                 let inputs_in_labels: std::collections::HashSet<ego_tree::NodeId> = {
-                    let inner_input_sel = Selector::parse("input, select, textarea")
-                        .unwrap_or_else(|_| Selector::parse("input").unwrap());
+                    let inner_input_sel = selectors::input_select_textarea();
                     form.select(&label_sel)
-                        .flat_map(|label| label.select(&inner_input_sel))
+                        .flat_map(|label| label.select(inner_input_sel))
                         .map(|input| input.id())
                         .collect()
                 };
@@ -736,7 +792,7 @@ impl HtmlParser {
         // Check html lang
         let has_lang;
         let html_lang;
-        if let Some(html_el) = document.select(&Selector::parse("html").unwrap()).next() {
+        if let Some(html_el) = document.select(selectors::html()).next() {
             html_lang = html_el.value().attr("lang").map(String::from);
             has_lang = html_lang.is_some();
         } else {
@@ -745,67 +801,36 @@ impl HtmlParser {
         }
 
         // Landmark detection via semantic HTML elements
-        if document
-            .select(&Selector::parse("header").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::header()).next().is_some() {
             landmarks.push("banner".to_string());
         }
-        if document
-            .select(&Selector::parse("nav").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::nav()).next().is_some() {
             landmarks.push("navigation".to_string());
             has_nav = true;
         }
-        if document
-            .select(&Selector::parse("main").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::main()).next().is_some() {
             landmarks.push("main".to_string());
             has_main = true;
         }
-        if document
-            .select(&Selector::parse("aside").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::aside()).next().is_some() {
             landmarks.push("complementary".to_string());
         }
-        if document
-            .select(&Selector::parse("footer").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::footer()).next().is_some() {
             landmarks.push("contentinfo".to_string());
         }
-        if document
-            .select(&Selector::parse("form").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::form()).next().is_some() {
             landmarks.push("form".to_string());
         }
-        if document
-            .select(&Selector::parse("section[aria-label], section[aria-labelledby]").unwrap())
-            .next()
-            .is_some()
-        {
+        if document.select(selectors::section_aria()).next().is_some() {
             landmarks.push("region".to_string());
         }
-        if document
-            .select(&Selector::parse("[role=banner]").unwrap())
-            .next()
-            .is_some()
+        if document.select(selectors::role_banner()).next().is_some()
             && !landmarks.contains(&"banner".to_string())
         {
             landmarks.push("banner".to_string());
         }
         if document
-            .select(&Selector::parse("[role=navigation]").unwrap())
+            .select(selectors::role_navigation())
             .next()
             .is_some()
             && !landmarks.contains(&"navigation".to_string())
@@ -813,17 +838,14 @@ impl HtmlParser {
             landmarks.push("navigation".to_string());
             has_nav = true;
         }
-        if document
-            .select(&Selector::parse("[role=main]").unwrap())
-            .next()
-            .is_some()
+        if document.select(selectors::role_main()).next().is_some()
             && !landmarks.contains(&"main".to_string())
         {
             landmarks.push("main".to_string());
             has_main = true;
         }
         if document
-            .select(&Selector::parse("[role=complementary]").unwrap())
+            .select(selectors::role_complementary())
             .next()
             .is_some()
             && !landmarks.contains(&"complementary".to_string())
@@ -831,7 +853,7 @@ impl HtmlParser {
             landmarks.push("complementary".to_string());
         }
         if document
-            .select(&Selector::parse("[role=contentinfo]").unwrap())
+            .select(selectors::role_contentinfo())
             .next()
             .is_some()
             && !landmarks.contains(&"contentinfo".to_string())
@@ -996,6 +1018,7 @@ impl HtmlParser {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 

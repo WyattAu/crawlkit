@@ -3,12 +3,18 @@
 //! Provides subcommands to **crawl** a website, **compare** two crawl results,
 //! and **generate reports** from stored crawl data. Configuration can be supplied
 //! via CLI flags or a TOML config file.
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use indicatif::{ProgressBar, ProgressStyle};
+use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::path::{Path, PathBuf};
+use tracing_opentelemetry::OpenTelemetryLayer;
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
+use tracing_subscriber::Layer;
 
 use crawlkit_core::storage::Storage;
 
@@ -227,13 +233,6 @@ async fn main() -> Result<()> {
         "info"
     };
 
-    use opentelemetry::trace::TracerProvider as _;
-    use opentelemetry_sdk::trace::SdkTracerProvider;
-    use tracing_opentelemetry::OpenTelemetryLayer;
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::Layer;
-
     let use_otel = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
 
     let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
@@ -316,13 +315,13 @@ async fn main() -> Result<()> {
             crawl2,
             output,
             format,
-        } => run_compare(&crawl1, &crawl2, output.as_deref(), &format).await,
+        } => run_compare(&crawl1, &crawl2, output.as_deref(), &format),
         Commands::Report {
             crawl,
             output,
             format,
             theme,
-        } => run_report(&crawl, output.as_deref(), &format, &theme).await,
+        } => run_report(&crawl, output.as_deref(), &format, &theme),
         Commands::Backlinks {
             crawl,
             output,
@@ -398,7 +397,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     pb.set_style(
         ProgressStyle::default_bar()
             .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos}/{len} pages ({eta} remaining) - {msg}")
-            .unwrap()
+            .unwrap_or_else(|_| ProgressStyle::default_bar())
             .progress_chars("#>-"),
     );
     pb.set_message("Initializing...");
@@ -426,7 +425,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![params
             .user_agent
             .clone()
-            .unwrap_or_else(|| "crawlkit/0.1.0".to_string())])),
+            .unwrap_or_else(|| format!("crawlkit/{}", env!("CARGO_PKG_VERSION")))])),
         max_body_size: 10 * 1024 * 1024,
         pool_max_idle_per_host: 32,
         pool_max_idle: 64,
@@ -775,7 +774,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 }
 
 /// Compare two crawl results.
-async fn run_compare(
+fn run_compare(
     crawl1_path: &Path,
     crawl2_path: &Path,
     output: Option<&Path>,
@@ -785,7 +784,7 @@ async fn run_compare(
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap(),
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
     pb.set_message("Comparing crawls...");
 
@@ -848,17 +847,12 @@ async fn run_compare(
 }
 
 /// Generate a report from an existing crawl.
-async fn run_report(
-    crawl_path: &Path,
-    output: Option<&Path>,
-    format: &str,
-    _theme: &str,
-) -> Result<()> {
+fn run_report(crawl_path: &Path, output: Option<&Path>, format: &str, _theme: &str) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap(),
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
     pb.set_message("Generating report...");
 
@@ -1046,7 +1040,7 @@ async fn run_backlinks(
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap(),
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
     pb.set_message("Analyzing backlinks...");
 
@@ -1225,7 +1219,7 @@ async fn run_inspect(
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
-            .unwrap(),
+            .unwrap_or_else(|_| ProgressStyle::default_spinner()),
     );
 
     let url = url::Url::parse(url_str).with_context(|| format!("Invalid URL: {url_str}"))?;
@@ -1377,7 +1371,9 @@ async fn run_inspect(
 
             md.push_str(&format!("\n## Findings ({} total)\n\n", findings.len()));
 
-            if !findings.is_empty() {
+            if findings.is_empty() {
+                md.push_str("No issues found.\n");
+            } else {
                 md.push_str("| Severity | Code | Title |\n");
                 md.push_str("|----------|------|-------|\n");
                 for f in &findings {
@@ -1388,8 +1384,6 @@ async fn run_inspect(
                         f.title
                     ));
                 }
-            } else {
-                md.push_str("No issues found.\n");
             }
 
             if let Some(ref d) = crux_data {

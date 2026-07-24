@@ -1,9 +1,9 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crawlkit_core::analyzers::AnalyzerRegistry;
+use crawlkit_core::backlinks::BacklinkAnalyzer;
 use crawlkit_core::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
 use crawlkit_core::feature_flags::FeatureFlags;
-use crawlkit_core::link_graph::LinkGraph;
 use crawlkit_core::meta::MetaTags;
 use crawlkit_core::parser::{Heading, HtmlParser, ParsedPage, ScriptInfo};
 use crawlkit_core::queue::{Priority, ScopeConfig, UrlQueue};
@@ -470,21 +470,20 @@ fn bench_circuit_breaker(c: &mut Criterion) {
 }
 
 fn bench_link_graph_pagerank(c: &mut Criterion) {
-    let mut graph = LinkGraph::new();
+    let mut analyzer = BacklinkAnalyzer::new();
     for i in 0_usize..100 {
         let source = format!("https://example.com/page{}", i);
         let target = format!("https://example.com/page{}", (i + 1) % 100);
-        graph.add_link(&source, &target);
+        analyzer.add_link(&source, &target);
         if i % 10 == 0 {
             let backlink = format!("https://example.com/page{}", (i + 50) % 100);
-            graph.add_link(&backlink, &source);
+            analyzer.add_link(&backlink, &source);
         }
     }
 
     c.bench_function("link_graph_pagerank_100_nodes", |b| {
         b.iter(|| {
-            let mut g = graph.clone();
-            g.compute_pagerank(black_box(0.85), 20);
+            black_box(analyzer.compute_pagerank(black_box(0.85), 20));
         })
     });
 }

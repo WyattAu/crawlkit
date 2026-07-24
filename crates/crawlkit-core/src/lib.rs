@@ -47,8 +47,7 @@ pub mod feature_flags;
 pub mod http;
 /// Decision engine for determining whether a page requires JavaScript rendering.
 pub mod js_render_decision;
-/// Directed graph of inter-page links for site structure analysis.
-pub mod link_graph;
+
 /// Metrics collection and observability hooks.
 pub mod observability;
 /// Playwright-based headless browser integration for JS-rendered pages.
@@ -104,7 +103,7 @@ pub use feature_flags::{
 };
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
 pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndicators};
-pub use link_graph::LinkGraph;
+
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
 pub use playwright::{
     BrowserContext, BrowserType, ConsoleMessage, NetworkRequest, PlaywrightConfig,

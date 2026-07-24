@@ -15,9 +15,9 @@ use url::Url;
 
 use crawlkit_core::ai_analyzers::AiCrawlerAccessibilityAnalyzer;
 use crawlkit_core::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry};
+use crawlkit_core::backlinks::BacklinkAnalyzer;
 use crawlkit_core::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
 use crawlkit_core::feature_flags::{FeatureFlags, FLAG_AI_ANALYZERS};
-use crawlkit_core::link_graph::LinkGraph;
 use crawlkit_core::meta::MetaTags;
 use crawlkit_core::parser::{Heading, ParsedPage, ScriptInfo};
 use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightRenderer};
@@ -174,42 +174,42 @@ fn test_feature_flags_integration() {
 
 #[test]
 fn test_link_graph_integration() {
-    let mut graph = LinkGraph::new();
+    let mut analyzer = BacklinkAnalyzer::new();
 
     // Build a link graph
-    graph.add_link("https://example.com/", "https://example.com/about");
-    graph.add_link("https://example.com/", "https://example.com/contact");
-    graph.add_link("https://example.com/about", "https://example.com/");
-    graph.add_link("https://example.com/contact", "https://example.com/");
-    graph.add_link("https://example.com/blog", "https://example.com/");
+    analyzer.add_link("https://example.com/", "https://example.com/about");
+    analyzer.add_link("https://example.com/", "https://example.com/contact");
+    analyzer.add_link("https://example.com/about", "https://example.com/");
+    analyzer.add_link("https://example.com/contact", "https://example.com/");
+    analyzer.add_link("https://example.com/blog", "https://example.com/");
 
     // Compute PageRank
-    graph.compute_pagerank(0.85, 20);
+    let scores = analyzer.compute_pagerank(0.85, 20);
 
     // All pages should have scores
-    assert!(!graph.pagerank.is_empty());
+    assert!(!scores.is_empty());
 
     // Homepage should have highest PageRank (most inbound links)
-    let homepage_pr = graph.pagerank.get("https://example.com/").unwrap();
-    let about_pr = graph.pagerank.get("https://example.com/about").unwrap();
+    let homepage_pr = scores.get("https://example.com/").unwrap();
+    let about_pr = scores.get("https://example.com/about").unwrap();
     assert!(homepage_pr > about_pr);
 }
 
 #[test]
 fn test_link_graph_export() {
-    let mut graph = LinkGraph::new();
-    graph.add_link("A", "B");
-    graph.add_link("B", "C");
-    graph.compute_pagerank(0.85, 10);
+    let mut analyzer = BacklinkAnalyzer::new();
+    analyzer.add_link("A", "B");
+    analyzer.add_link("B", "C");
+    let scores = analyzer.compute_pagerank(0.85, 10);
 
     // Test DOT export
-    let dot = graph.to_dot();
+    let dot = analyzer.to_dot();
     assert!(dot.contains("digraph"));
     assert!(dot.contains("\"A\" -> \"B\""));
     assert!(dot.contains("\"B\" -> \"C\""));
 
     // Test CSV export
-    let csv = graph.to_csv();
+    let csv = analyzer.to_csv(&scores);
     assert!(csv.contains("source,target"));
     assert!(csv.contains("A,B"));
     assert!(csv.contains("B,C"));

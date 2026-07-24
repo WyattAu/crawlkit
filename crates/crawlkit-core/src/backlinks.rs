@@ -352,6 +352,36 @@ impl BacklinkAnalyzer {
     pub fn known_urls(&self) -> &HashSet<String> {
         &self.all_urls
     }
+
+    /// Export the link graph as DOT format for Graphviz.
+    #[must_use]
+    pub fn to_dot(&self) -> String {
+        let mut dot = String::from("digraph linkgraph {\n");
+        for (source, targets) in &self.outgoing {
+            for target in targets {
+                dot.push_str(&format!("  \"{}\" -> \"{}\";\n", source, target));
+            }
+        }
+        dot.push('}');
+        dot
+    }
+
+    /// Export the link graph as CSV adjacency list.
+    #[must_use]
+    pub fn to_csv(&self, pagerank_scores: &HashMap<String, f64>) -> String {
+        let mut csv = String::from("source,target,pagerank_source,pagerank_target\n");
+        for (source, targets) in &self.outgoing {
+            let pr_source = pagerank_scores.get(source).unwrap_or(&0.0);
+            for target in targets {
+                let pr_target = pagerank_scores.get(target).unwrap_or(&0.0);
+                csv.push_str(&format!(
+                    "{},{},{:.6},{:.6}\n",
+                    source, target, pr_source, pr_target
+                ));
+            }
+        }
+        csv
+    }
 }
 
 impl Default for BacklinkAnalyzer {

@@ -54,6 +54,8 @@ pub mod observability;
 pub mod playwright;
 /// Plugin system for extending the crawler with custom analyzers.
 pub mod plugin;
+
+pub use plugin::{PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmPlugin};
 /// Priority URL queue with depth and scope filtering.
 pub mod queue;
 /// Per-domain rate limiting to respect politeness constraints.

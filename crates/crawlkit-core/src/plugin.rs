@@ -5,8 +5,6 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::analyzers::Analyzer;
-
 /// Plugin errors.
 #[derive(Debug, Error)]
 pub enum PluginError {
@@ -16,136 +14,262 @@ pub enum PluginError {
     #[error("plugin load failed: {0}")]
     LoadFailed(String),
 
-    #[error("plugin symbol not found: {0}")]
-    SymbolNotFound(String),
+    #[error("plugin init failed: {0}")]
+    InitFailed(String),
 
-    #[error("plugin initialization failed: {0}")]
-    InitializationFailed(String),
+    #[error("plugin analysis failed: {0}")]
+    AnalysisFailed(String),
+
+    #[error("incompatible API version: {0} (expected 1.0)")]
+    IncompatibleApiVersion(String),
+
+    #[error("manifest parse error: {0}")]
+    ManifestParse(String),
+
+    #[error("WASM execution error: {0}")]
+    WasmExecution(String),
 }
 
-/// Plugin metadata.
+/// Plugin manifest (crawlkit-plugin.toml).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginManifest {
+    pub plugin: PluginMetadata,
+}
+
+/// Plugin metadata from manifest.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PluginMetadata {
-    /// Plugin name.
     pub name: String,
-    /// Plugin version.
     pub version: String,
-    /// Plugin author.
-    pub author: String,
-    /// Plugin description.
-    pub description: String,
-    /// Plugin API version (for compatibility).
     pub api_version: String,
+    pub author: String,
+    pub description: String,
+    pub license: String,
+    pub trust_level: Option<String>,
+    pub entry: PluginEntry,
+    pub permissions: Option<PluginPermissions>,
+    pub analyzer: Option<PluginAnalyzerInfo>,
 }
 
-/// Plugin trait for analyzers.
-///
-/// Plugins must implement this trait to be loaded by the plugin system.
-pub trait PluginAnalyzer: Analyzer {
+/// Plugin entry point configuration.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginEntry {
+    pub wasm: Option<String>,
+    pub native: Option<String>,
+}
+
+/// WASM plugin permissions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginPermissions {
+    pub network: Option<bool>,
+    pub filesystem: Option<bool>,
+    pub env_vars: Option<Vec<String>>,
+}
+
+/// Plugin analyzer metadata.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PluginAnalyzerInfo {
+    pub name: String,
+    pub category: Option<String>,
+    pub description: Option<String>,
+    pub severity: Option<String>,
+}
+
+/// Loaded WASM plugin instance.
+pub struct WasmPlugin {
+    pub manifest: PluginMetadata,
+    store: wasmtime::Store<()>,
+    instance: wasmtime::Instance,
+    memory: wasmtime::Memory,
+}
+
+impl WasmPlugin {
+    /// Load a WASM plugin from a directory.
+    pub fn load(plugin_dir: &Path) -> Result<Self, PluginError> {
+        let manifest_path = plugin_dir.join("crawlkit-plugin.toml");
+        let manifest_str = std::fs::read_to_string(&manifest_path)
+            .map_err(|e| PluginError::ManifestParse(format!("Failed to read manifest: {}", e)))?;
+        let manifest: PluginManifest = toml::from_str(&manifest_str)
+            .map_err(|e| PluginError::ManifestParse(format!("Invalid manifest: {}", e)))?;
+
+        if !manifest.plugin.api_version.starts_with("1.") {
+            return Err(PluginError::IncompatibleApiVersion(
+                manifest.plugin.api_version,
+            ));
+        }
+
+        let wasm_file =
+            manifest.plugin.entry.wasm.as_ref().ok_or_else(|| {
+                PluginError::LoadFailed("No WASM entry point specified".to_string())
+            })?;
+        let wasm_path = plugin_dir.join(wasm_file);
+
+        let engine = wasmtime::Engine::default();
+        let module = wasmtime::Module::from_file(&engine, &wasm_path)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to compile WASM: {}", e)))?;
+
+        let mut store = wasmtime::Store::new(&engine, ());
+        let linker = wasmtime::Linker::new(&engine);
+
+        let instance = linker
+            .instantiate(&mut store, &module)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to instantiate WASM: {}", e)))?;
+
+        let memory = instance
+            .get_memory(&mut store, "memory")
+            .ok_or_else(|| PluginError::LoadFailed("No memory export found".to_string()))?;
+
+        let init_func = instance
+            .get_typed_func::<i32, i32>(&mut store, "crawlkit_plugin_init")
+            .map_err(|e| PluginError::InitFailed(format!("Init function not found: {}", e)))?;
+
+        let result = init_func
+            .call(&mut store, 0)
+            .map_err(|e| PluginError::InitFailed(format!("Init failed: {}", e)))?;
+
+        if result != 0 {
+            return Err(PluginError::InitFailed(format!(
+                "Init returned error code: {}",
+                result
+            )));
+        }
+
+        Ok(Self {
+            manifest: manifest.plugin,
+            store,
+            instance,
+            memory,
+        })
+    }
+
+    /// Analyze HTML content using the plugin.
+    pub fn analyze(&mut self, html: &str, url: &str) -> Result<String, PluginError> {
+        let analyze_func = self
+            .instance
+            .get_typed_func::<(i32, i32, i32, i32), i32>(&mut self.store, "crawlkit_plugin_analyze")
+            .map_err(|e| {
+                PluginError::AnalysisFailed(format!("Analyze function not found: {}", e))
+            })?;
+
+        let html_bytes = html.as_bytes();
+        let url_bytes = url.as_bytes();
+
+        let alloc_func = self
+            .instance
+            .get_typed_func::<i32, i32>(&mut self.store, "crawlkit_plugin_alloc")
+            .map_err(|e| PluginError::AnalysisFailed(format!("Alloc function not found: {}", e)))?;
+
+        let html_ptr = alloc_func
+            .call(&mut self.store, html_bytes.len() as i32)
+            .map_err(|e| {
+                PluginError::AnalysisFailed(format!("Failed to allocate for HTML: {}", e))
+            })?;
+
+        let url_ptr = alloc_func
+            .call(&mut self.store, url_bytes.len() as i32)
+            .map_err(|e| {
+                PluginError::AnalysisFailed(format!("Failed to allocate for URL: {}", e))
+            })?;
+
+        self.memory.data_mut(&mut self.store)
+            [html_ptr as usize..(html_ptr as usize + html_bytes.len())]
+            .copy_from_slice(html_bytes);
+
+        self.memory.data_mut(&mut self.store)
+            [url_ptr as usize..(url_ptr as usize + url_bytes.len())]
+            .copy_from_slice(url_bytes);
+
+        let result_ptr = analyze_func
+            .call(
+                &mut self.store,
+                (
+                    html_ptr,
+                    html_bytes.len() as i32,
+                    url_ptr,
+                    url_bytes.len() as i32,
+                ),
+            )
+            .map_err(|e| PluginError::AnalysisFailed(format!("Analyze failed: {}", e)))?;
+
+        let result = self.read_string(result_ptr as usize)?;
+
+        let free_func = self
+            .instance
+            .get_typed_func::<i32, ()>(&mut self.store, "crawlkit_plugin_free")
+            .map_err(|e| PluginError::AnalysisFailed(format!("Free function not found: {}", e)))?;
+        let _ = free_func.call(&mut self.store, html_ptr);
+        let _ = free_func.call(&mut self.store, url_ptr);
+        let _ = free_func.call(&mut self.store, result_ptr);
+
+        Ok(result)
+    }
+
+    /// Read a null-terminated string from WASM memory.
+    fn read_string(&self, ptr: usize) -> Result<String, PluginError> {
+        let data = self.memory.data(&self.store);
+        let end = data[ptr..]
+            .iter()
+            .position(|&b| b == 0)
+            .unwrap_or(data.len() - ptr);
+        let bytes = &data[ptr..ptr + end];
+        String::from_utf8(bytes.to_vec())
+            .map_err(|e| PluginError::WasmExecution(format!("Invalid UTF-8: {}", e)))
+    }
+
     /// Get plugin metadata.
-    fn metadata(&self) -> PluginMetadata;
-
-    /// Initialize the plugin.
-    ///
-    /// # Errors
-    /// Returns error if initialization fails.
-    fn initialize(&mut self) -> Result<(), PluginError>;
+    pub fn metadata(&self) -> &PluginMetadata {
+        &self.manifest
+    }
 }
 
-/// Plugin loader for native libraries.
-pub struct PluginLoader {
-    /// Loaded plugins.
-    plugins: Arc<RwLock<Vec<Box<dyn PluginAnalyzer>>>>,
-    /// Plugin search paths.
+/// Plugin registry managing all loaded plugins.
+pub struct PluginRegistry {
+    plugins: Arc<RwLock<Vec<WasmPlugin>>>,
     search_paths: Vec<PathBuf>,
 }
 
-impl PluginLoader {
-    /// Create a new plugin loader.
-    ///
-    /// Default search paths:
-    /// - `./plugins` (current directory)
-    /// - `$HOME/.crawlkit/plugins` (user home directory, if available)
-    #[must_use]
+impl PluginRegistry {
+    /// Create empty plugin registry.
     pub fn new() -> Self {
-        let mut search_paths = vec![PathBuf::from("./plugins")];
-        if let Some(home) = dirs::home_dir() {
-            search_paths.push(home.join(".crawlkit/plugins"));
-        }
         Self {
             plugins: Arc::new(RwLock::new(Vec::new())),
-            search_paths,
+            search_paths: Vec::new(),
         }
     }
 
-    /// Add a search path for plugins.
+    /// Add a plugin search path.
     pub fn add_search_path(&mut self, path: PathBuf) {
         self.search_paths.push(path);
     }
 
-    /// Load a plugin from a file path.
-    ///
-    /// Validates the plugin manifest and API version compatibility.
-    ///
-    /// # Note
-    /// Dynamic library loading requires the `libloading` crate.
-    /// Currently returns metadata only; actual plugin registration
-    /// must be done programmatically by adding plugins via the loader.
-    ///
-    /// # Errors
-    /// Returns error if manifest is missing, invalid, or incompatible.
-    pub fn load_plugin(&self, path: &Path) -> Result<PluginMetadata, PluginError> {
-        // Check if file exists
-        if !path.exists() {
-            return Err(PluginError::NotFound(path.display().to_string()));
-        }
-
-        // Read plugin manifest (JSON file next to the library)
-        let manifest_path = path.with_extension("json");
-        if !manifest_path.exists() {
-            return Err(PluginError::LoadFailed(format!(
-                "Plugin manifest not found: {}",
-                manifest_path.display()
-            )));
-        }
-
-        let manifest_content = std::fs::read_to_string(&manifest_path)
-            .map_err(|e| PluginError::LoadFailed(format!("Failed to read manifest: {e}")))?;
-
-        let metadata: PluginMetadata = serde_json::from_str(&manifest_content)
-            .map_err(|e| PluginError::LoadFailed(format!("Invalid manifest format: {e}")))?;
-
-        // Validate API version
-        if metadata.api_version != "1.0" {
-            return Err(PluginError::LoadFailed(format!(
-                "Incompatible API version: {} (expected 1.0)",
-                metadata.api_version
-            )));
-        }
-
-        // TODO: Integrate `libloading` for dynamic library loading.
-        // The loaded PluginAnalyzer would be inserted into self.plugins.
-
-        Ok(metadata)
-    }
-
-    /// Load all plugins from search paths.
-    ///
-    /// # Errors
-    /// Returns errors for each failed plugin load.
-    pub fn load_all(&self) -> Vec<PluginError> {
+    /// Scan search paths and load all valid plugins.
+    pub fn load_all(&mut self) -> Vec<PluginError> {
         let mut errors = Vec::new();
 
-        for path in &self.search_paths {
-            if path.exists() {
-                if let Ok(entries) = std::fs::read_dir(path) {
-                    for entry in entries.flatten() {
-                        let path = entry.path();
-                        if path
-                            .extension()
-                            .is_some_and(|e| e == "so" || e == "dylib" || e == "wasm")
-                        {
-                            if let Err(e) = self.load_plugin(&path) {
+        for search_path in &self.search_paths {
+            if !search_path.exists() {
+                continue;
+            }
+
+            if let Ok(entries) = std::fs::read_dir(search_path) {
+                for entry in entries.flatten() {
+                    let plugin_dir = entry.path();
+                    if plugin_dir.is_dir() {
+                        match WasmPlugin::load(&plugin_dir) {
+                            Ok(plugin) => {
+                                tracing::info!(
+                                    "Loaded plugin: {} v{}",
+                                    plugin.metadata().name,
+                                    plugin.metadata().version
+                                );
+                                self.plugins.write().push(plugin);
+                            }
+                            Err(e) => {
+                                tracing::warn!(
+                                    "Failed to load plugin from {}: {}",
+                                    plugin_dir.display(),
+                                    e
+                                );
                                 errors.push(e);
                             }
                         }
@@ -157,59 +281,30 @@ impl PluginLoader {
         errors
     }
 
-    /// Get all loaded plugins.
-    #[must_use]
-    pub fn plugins(&self) -> Vec<PluginMetadata> {
-        self.plugins.read().iter().map(|p| p.metadata()).collect()
+    /// Get list of loaded plugin names.
+    pub fn list(&self) -> Vec<String> {
+        self.plugins
+            .read()
+            .iter()
+            .map(|p| p.metadata().name.clone())
+            .collect()
     }
 
     /// Get plugin count.
-    #[must_use]
     pub fn count(&self) -> usize {
         self.plugins.read().len()
     }
 
-    /// Get search paths.
-    #[must_use]
-    pub fn search_paths(&self) -> &[PathBuf] {
-        &self.search_paths
-    }
-}
+    /// Run analysis through all loaded plugins.
+    pub fn analyze_all(&self, html: &str, url: &str) -> Vec<Result<String, PluginError>> {
+        let mut results = Vec::new();
+        let mut plugins = self.plugins.write();
 
-impl Default for PluginLoader {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Plugin registry for managing plugins.
-pub struct PluginRegistry {
-    loader: PluginLoader,
-}
-
-impl PluginRegistry {
-    /// Create a new plugin registry.
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            loader: PluginLoader::new(),
+        for plugin in plugins.iter_mut() {
+            results.push(plugin.analyze(html, url));
         }
-    }
 
-    /// Load plugins from default paths.
-    pub fn load_defaults(&mut self) -> Vec<PluginError> {
-        self.loader.load_all()
-    }
-
-    /// Get plugin loader.
-    #[must_use]
-    pub fn loader(&self) -> &PluginLoader {
-        &self.loader
-    }
-
-    /// Get mutable plugin loader.
-    pub fn loader_mut(&mut self) -> &mut PluginLoader {
-        &mut self.loader
+        results
     }
 }
 
@@ -228,31 +323,24 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_plugin_loader_default() {
-        let loader = PluginLoader::new();
-        assert_eq!(loader.count(), 0);
-        assert!(!loader.search_paths().is_empty());
+    fn test_plugin_registry_default() {
+        let registry = PluginRegistry::new();
+        assert_eq!(registry.count(), 0);
+        assert!(registry.list().is_empty());
     }
 
     #[test]
     fn test_plugin_loader_add_search_path() {
-        let mut loader = PluginLoader::new();
-        loader.add_search_path(PathBuf::from("/tmp/plugins"));
-        assert!(loader
-            .search_paths()
-            .contains(&PathBuf::from("/tmp/plugins")));
+        let mut registry = PluginRegistry::new();
+        registry.add_search_path(PathBuf::from("/tmp/plugins"));
+        assert_eq!(registry.search_paths.len(), 1);
     }
 
     #[test]
     fn test_plugin_loader_nonexistent_path() {
-        let loader = PluginLoader::new();
-        let result = loader.load_plugin(Path::new("/nonexistent/plugin.so"));
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_plugin_registry_default() {
-        let registry = PluginRegistry::new();
-        assert_eq!(registry.loader().count(), 0);
+        let mut registry = PluginRegistry::new();
+        registry.add_search_path(PathBuf::from("/nonexistent/path"));
+        let errors = registry.load_all();
+        assert!(errors.is_empty());
     }
 }

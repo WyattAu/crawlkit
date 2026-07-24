@@ -5,6 +5,9 @@
 //! `GET /api/v1/crawls/{crawl_id}`.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+mod auth;
+mod auth_mw;
+
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -31,6 +34,9 @@ use uuid::Uuid;
 use crawlkit_core::storage::Storage;
 use crawlkit_core::AuditTrail;
 use crawlkit_core::CrawlConfig;
+
+use auth::{AuthManager, User};
+use auth_mw::auth_middleware as jwt_auth_middleware;
 
 // ---------------------------------------------------------------------------
 // API key management
@@ -200,6 +206,7 @@ struct AppState {
     webhooks: Arc<DashMap<String, WebhookConfig>>,
     schedules: Arc<DashMap<String, ScheduleConfig>>,
     http_client: reqwest::Client,
+    auth: Arc<AuthManager>,
 }
 
 // ---------------------------------------------------------------------------
@@ -486,7 +493,7 @@ async fn request_metrics_middleware(
 // Middleware: API key authentication + rate limiting
 // ---------------------------------------------------------------------------
 
-async fn auth_middleware(
+async fn api_key_auth_middleware(
     State(state): State<AppState>,
     headers: HeaderMap,
     request: axum::extract::Request,
@@ -701,6 +708,204 @@ async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
 
 async fn get_audit_events(State(state): State<AppState>) -> Json<Vec<crawlkit_core::AuditEvent>> {
     Json(state.audit_trail.events())
+}
+
+// ---------------------------------------------------------------------------
+// Auth handlers
+// ---------------------------------------------------------------------------
+
+#[derive(Deserialize)]
+struct LoginRequest {
+    email: String,
+    password: String,
+}
+
+#[derive(Serialize)]
+struct LoginResponse {
+    token: String,
+    user: UserResponse,
+}
+
+#[derive(Serialize)]
+struct UserResponse {
+    id: String,
+    email: String,
+    name: String,
+    tenant_id: String,
+    roles: Vec<String>,
+    enabled: bool,
+}
+
+async fn login(
+    State(state): State<AppState>,
+    Json(req): Json<LoginRequest>,
+) -> Result<Json<LoginResponse>, ApiError> {
+    let user = state
+        .auth
+        .find_user(&req.email)
+        .ok_or_else(|| ApiError::Unauthorized("Invalid credentials".to_string()))?;
+
+    if !user.enabled {
+        return Err(ApiError::Unauthorized("Account disabled".to_string()));
+    }
+
+    if !state
+        .auth
+        .verify_password(&req.password, &user.password_hash)
+    {
+        return Err(ApiError::Unauthorized("Invalid credentials".to_string()));
+    }
+
+    let token = state
+        .auth
+        .generate_token(&user)
+        .map_err(|e| ApiError::Internal(format!("Failed to generate token: {e}")))?;
+
+    Ok(Json(LoginResponse {
+        token,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            tenant_id: user.tenant_id,
+            roles: user.roles,
+            enabled: user.enabled,
+        },
+    }))
+}
+
+async fn refresh_token(
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+    State(state): State<AppState>,
+) -> Result<Json<LoginResponse>, ApiError> {
+    let user = state
+        .auth
+        .find_user_by_id(&claims.sub)
+        .ok_or_else(|| ApiError::Unauthorized("User not found".to_string()))?;
+
+    if !user.enabled {
+        return Err(ApiError::Unauthorized("Account disabled".to_string()));
+    }
+
+    let token = state
+        .auth
+        .generate_token(&user)
+        .map_err(|e| ApiError::Internal(format!("Failed to generate token: {e}")))?;
+
+    Ok(Json(LoginResponse {
+        token,
+        user: UserResponse {
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            tenant_id: user.tenant_id,
+            roles: user.roles,
+            enabled: user.enabled,
+        },
+    }))
+}
+
+async fn get_me(
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+    State(state): State<AppState>,
+) -> Result<Json<UserResponse>, ApiError> {
+    let user = state
+        .auth
+        .find_user_by_id(&claims.sub)
+        .ok_or_else(|| ApiError::NotFound("User not found".to_string()))?;
+
+    Ok(Json(UserResponse {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        tenant_id: user.tenant_id,
+        roles: user.roles,
+        enabled: user.enabled,
+    }))
+}
+
+// ---------------------------------------------------------------------------
+// User management handlers (admin only)
+// ---------------------------------------------------------------------------
+
+async fn list_users(State(state): State<AppState>) -> Json<Vec<UserResponse>> {
+    let users: Vec<UserResponse> = state
+        .auth
+        .list_users()
+        .into_iter()
+        .map(|u| UserResponse {
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            tenant_id: u.tenant_id,
+            roles: u.roles,
+            enabled: u.enabled,
+        })
+        .collect();
+    Json(users)
+}
+
+#[derive(Deserialize)]
+struct CreateUserRequest {
+    email: String,
+    name: String,
+    password: String,
+    #[serde(default = "default_user_tenant")]
+    tenant_id: String,
+    #[serde(default = "default_user_roles")]
+    roles: Vec<String>,
+}
+
+fn default_user_tenant() -> String {
+    "default".to_string()
+}
+
+fn default_user_roles() -> Vec<String> {
+    vec!["viewer".to_string()]
+}
+
+async fn create_user(
+    State(state): State<AppState>,
+    Json(req): Json<CreateUserRequest>,
+) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
+    if state.auth.find_user(&req.email).is_some() {
+        return Err(ApiError::BadRequest(
+            "User with this email already exists".to_string(),
+        ));
+    }
+
+    let password_hash = state.auth.hash_password(&req.password);
+    let user_id = uuid::Uuid::new_v4().to_string();
+    let response = UserResponse {
+        id: user_id.clone(),
+        email: req.email.clone(),
+        name: req.name.clone(),
+        tenant_id: req.tenant_id.clone(),
+        roles: req.roles.clone(),
+        enabled: true,
+    };
+
+    state.auth.add_user(User {
+        id: user_id,
+        email: req.email,
+        name: req.name,
+        password_hash,
+        tenant_id: req.tenant_id,
+        roles: req.roles,
+        enabled: true,
+    });
+    Ok((StatusCode::CREATED, Json(response)))
+}
+
+async fn delete_user(
+    State(state): State<AppState>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+) -> Result<StatusCode, ApiError> {
+    if state.auth.delete_user(&id) {
+        Ok(StatusCode::NO_CONTENT)
+    } else {
+        Err(ApiError::NotFound(format!("User {id} not found")))
+    }
 }
 
 #[derive(Serialize)]
@@ -1297,6 +1502,21 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .unwrap_or_else(|_| "default-secret-change-in-production".to_string());
+    let auth = Arc::new(AuthManager::new(jwt_secret));
+
+    let admin_password = auth.hash_password("admin123");
+    auth.add_user(User {
+        id: uuid::Uuid::new_v4().to_string(),
+        email: "admin@crawlkit.local".to_string(),
+        name: "Admin".to_string(),
+        password_hash: admin_password,
+        tenant_id: "default".to_string(),
+        roles: vec!["admin".to_string()],
+        enabled: true,
+    });
+
     let state = AppState {
         storage: Arc::new(storage),
         api_keys,
@@ -1307,6 +1527,7 @@ async fn main() -> anyhow::Result<()> {
         webhooks: Arc::new(DashMap::new()),
         schedules: Arc::new(DashMap::new()),
         http_client: reqwest::Client::new(),
+        auth,
     };
 
     let cors = CorsLayer::new()
@@ -1314,9 +1535,9 @@ async fn main() -> anyhow::Result<()> {
         .allow_methods(Any)
         .allow_headers(Any);
 
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/metrics", get(metrics_endpoint))
+    let protected = Router::new()
+        .route("/api/v1/auth/refresh", post(refresh_token))
+        .route("/api/v1/auth/me", get(get_me))
         .route("/api/v1/crawls", post(start_crawl).get(list_crawls))
         .route("/api/v1/crawls/{crawl_id}", get(get_crawl_status))
         .route("/api/v1/crawls/{crawl_id}/stats", get(get_crawl_stats))
@@ -1340,6 +1561,18 @@ async fn main() -> anyhow::Result<()> {
             axum::routing::delete(delete_schedule),
         )
         .route("/api/v1/audit", get(get_audit_events))
+        .route("/api/v1/users", post(create_user).get(list_users))
+        .route("/api/v1/users/{id}", axum::routing::delete(delete_user))
+        .route_layer(middleware::from_fn_with_state(
+            state.clone(),
+            jwt_auth_middleware,
+        ));
+
+    let app = Router::new()
+        .route("/health", get(health))
+        .route("/metrics", get(metrics_endpoint))
+        .route("/api/v1/auth/login", post(login))
+        .merge(protected)
         .layer(cors)
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -1347,7 +1580,7 @@ async fn main() -> anyhow::Result<()> {
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            auth_middleware,
+            api_key_auth_middleware,
         ))
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());

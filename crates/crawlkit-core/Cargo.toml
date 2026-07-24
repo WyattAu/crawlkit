@@ -46,6 +46,7 @@ urlencoding = "2.1"
 aes-gcm = "0.10"
 getrandom = "0.2"
 dirs = "5.0"
+wasmtime.workspace = true
 quick-xml = "0.41"
 rayon = "1"
 

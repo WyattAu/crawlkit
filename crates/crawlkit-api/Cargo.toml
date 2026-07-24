@@ -41,3 +41,7 @@ dashmap.workspace = true
 sha2.workspace = true
 prometheus-client = "0.22"
 reqwest.workspace = true
+jsonwebtoken = "9"
+argon2 = "0.5"
+rand = "0.8"
+parking_lot.workspace = true

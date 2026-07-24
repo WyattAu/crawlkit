@@ -40,3 +40,4 @@ opentelemetry-stdout = { version = "0.32", features = ["trace"] }
 dashmap.workspace = true
 sha2.workspace = true
 prometheus-client = "0.22"
+reqwest.workspace = true

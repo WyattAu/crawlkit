@@ -268,26 +268,34 @@ async fn main() -> Result<()> {
         "info"
     };
 
-    let use_otel = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
+    let otel_env = std::env::var("OTEL_EXPORTER").ok();
+    let use_otel = otel_env.as_deref();
 
     let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
         EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| EnvFilter::new(format!("crawlkit={log_level}"))),
     );
 
-    if use_otel {
-        use opentelemetry::trace::TracerProvider;
-        let provider = SdkTracerProvider::builder()
-            .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
-            .build();
-        let tracer = provider.tracer("crawlkit");
-        let otel_layer = OpenTelemetryLayer::new(tracer);
-        tracing_subscriber::registry()
-            .with(fmt_layer)
-            .with(otel_layer)
-            .init();
-    } else {
-        tracing_subscriber::registry().with(fmt_layer).init();
+    match use_otel {
+        Some("stdout") => {
+            use opentelemetry::trace::TracerProvider;
+            let provider = SdkTracerProvider::builder()
+                .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
+                .build();
+            let tracer = provider.tracer("crawlkit");
+            let otel_layer = OpenTelemetryLayer::new(tracer);
+            tracing_subscriber::registry()
+                .with(fmt_layer)
+                .with(otel_layer)
+                .init();
+        }
+        Some("otlp") => {
+            tracing::warn!("OTLP export requires opentelemetry-otlp crate. Install with: cargo add opentelemetry-otlp");
+            tracing_subscriber::registry().with(fmt_layer).init();
+        }
+        _ => {
+            tracing_subscriber::registry().with(fmt_layer).init();
+        }
     }
 
     // Load config file if specified
@@ -459,6 +467,15 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     let delay = params.delay.unwrap_or(500);
     let concurrency = params.concurrency.unwrap_or(4);
     let timeout_secs = params.timeout.unwrap_or(30);
+
+    let _root_span = tracing::info_span!(
+        "crawl",
+        target_url = %params.url,
+        max_pages = max_pages,
+        concurrency = concurrency,
+        seed = params.seed.unwrap_or(0),
+    )
+    .entered();
 
     tracing::info!(
         "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={}, allow_external={})",
@@ -733,6 +750,9 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             continue;
         }
         visited.insert(entry.url.to_string());
+
+        let _page_span =
+            tracing::info_span!("crawl_page", url = %entry.url, depth = entry.depth).entered();
 
         // Robots.txt check
         let robots_raw;

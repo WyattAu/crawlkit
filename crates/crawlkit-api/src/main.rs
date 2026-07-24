@@ -90,8 +90,11 @@ struct Metrics {
     crawls_total: Counter,
     pages_crawled_total: Counter,
     issues_total: Counter,
+    errors_total: Counter,
     requests_total: Family<EndpointLabel, Counter>,
     request_duration_seconds: Histogram,
+    fetch_duration_seconds: Histogram,
+    analysis_duration_seconds: Histogram,
     active_crawls: Gauge,
 }
 
@@ -125,6 +128,13 @@ impl Metrics {
             issues_total.clone(),
         );
 
+        let errors_total = Counter::default();
+        registry.register(
+            "crawlkit_errors_total",
+            "Total errors encountered during crawls",
+            errors_total.clone(),
+        );
+
         let requests_total = Family::<EndpointLabel, Counter>::default();
         registry.register(
             "crawlkit_requests_total",
@@ -139,6 +149,20 @@ impl Metrics {
             request_duration_seconds.clone(),
         );
 
+        let fetch_duration_seconds = Histogram::new(exponential_buckets(0.1, 2.0, 10));
+        registry.register(
+            "crawlkit_fetch_duration_seconds",
+            "HTTP fetch duration in seconds",
+            fetch_duration_seconds.clone(),
+        );
+
+        let analysis_duration_seconds = Histogram::new(exponential_buckets(0.01, 2.0, 10));
+        registry.register(
+            "crawlkit_analysis_duration_seconds",
+            "Page analysis duration in seconds",
+            analysis_duration_seconds.clone(),
+        );
+
         let active_crawls = Gauge::default();
         registry.register(
             "crawlkit_active_crawls",
@@ -151,8 +175,11 @@ impl Metrics {
             crawls_total,
             pages_crawled_total,
             issues_total,
+            errors_total,
             requests_total,
             request_duration_seconds,
+            fetch_duration_seconds,
+            analysis_duration_seconds,
             active_crawls,
         }
     }
@@ -944,6 +971,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         Ok(c) => c,
         Err(e) => {
             tracing::error!("Failed to create HTTP client: {e}");
+            state.metrics.errors_total.inc();
             if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
                 result.status = "failed".to_string();
                 result.completed_at = Some(Utc::now());
@@ -1025,10 +1053,15 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             Ok(r) => r,
             Err(e) => {
                 tracing::warn!("Failed to fetch {}: {e}", entry.url);
+                state.metrics.errors_total.inc();
                 continue;
             }
         };
         let fetch_time = start.elapsed();
+        state
+            .metrics
+            .fetch_duration_seconds
+            .observe(fetch_time.as_secs_f64());
 
         // Content-hash deduplication
         {
@@ -1050,6 +1083,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             Ok(p) => p,
             Err(e) => {
                 tracing::warn!("Failed to parse {}: {e}", entry.url);
+                state.metrics.errors_total.inc();
                 continue;
             }
         };
@@ -1069,7 +1103,13 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
             redirect_chain: &empty_chain,
             robots_txt: robots_ref,
         };
+        let analysis_start = std::time::Instant::now();
         let findings = analyzer_registry.analyze(&ctx, &config);
+        let analysis_time = analysis_start.elapsed();
+        state
+            .metrics
+            .analysis_duration_seconds
+            .observe(analysis_time.as_secs_f64());
         total_issues += findings.len();
         state.metrics.issues_total.inc_by(findings.len() as u64);
 

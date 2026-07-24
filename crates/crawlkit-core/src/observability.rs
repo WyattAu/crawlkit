@@ -25,6 +25,12 @@ pub struct Metrics {
     pub storage_time_us: AtomicU64,
     /// Active connections.
     pub active_connections: AtomicU64,
+    /// Total circuit breaker trips (transitions to Open state).
+    pub circuit_breaker_trips: AtomicU64,
+    /// Total resource limit hits.
+    pub resource_limit_hits: AtomicU64,
+    /// Pages skipped due to circuit breaker being open.
+    pub pages_skipped_circuit_breaker: AtomicU64,
 }
 
 impl Metrics {
@@ -40,6 +46,9 @@ impl Metrics {
             analysis_time_us: AtomicU64::new(0),
             storage_time_us: AtomicU64::new(0),
             active_connections: AtomicU64::new(0),
+            circuit_breaker_trips: AtomicU64::new(0),
+            resource_limit_hits: AtomicU64::new(0),
+            pages_skipped_circuit_breaker: AtomicU64::new(0),
         }
     }
 
@@ -66,6 +75,22 @@ impl Metrics {
     /// Record a failed page crawl.
     pub fn record_page_failure(&self) {
         self.pages_failed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a circuit breaker trip (transition to Open state).
+    pub fn record_circuit_breaker_trip(&self) {
+        self.circuit_breaker_trips.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a resource limit being hit.
+    pub fn record_resource_limit_hit(&self) {
+        self.resource_limit_hits.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a page skipped because the circuit breaker was open.
+    pub fn record_page_skipped_circuit_breaker(&self) {
+        self.pages_skipped_circuit_breaker
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     /// Increment active connections.
@@ -147,6 +172,11 @@ impl Metrics {
             analysis_time_us: self.analysis_time_us.load(Ordering::Relaxed),
             storage_time_us: self.storage_time_us.load(Ordering::Relaxed),
             active_connections: self.active_connections.load(Ordering::Relaxed),
+            circuit_breaker_trips: self.circuit_breaker_trips.load(Ordering::Relaxed),
+            resource_limit_hits: self.resource_limit_hits.load(Ordering::Relaxed),
+            pages_skipped_circuit_breaker: self
+                .pages_skipped_circuit_breaker
+                .load(Ordering::Relaxed),
         }
     }
 
@@ -160,6 +190,10 @@ impl Metrics {
         self.analysis_time_us.store(0, Ordering::Relaxed);
         self.storage_time_us.store(0, Ordering::Relaxed);
         self.active_connections.store(0, Ordering::Relaxed);
+        self.circuit_breaker_trips.store(0, Ordering::Relaxed);
+        self.resource_limit_hits.store(0, Ordering::Relaxed);
+        self.pages_skipped_circuit_breaker
+            .store(0, Ordering::Relaxed);
     }
 }
 
@@ -180,6 +214,9 @@ pub struct MetricsSnapshot {
     pub analysis_time_us: u64,
     pub storage_time_us: u64,
     pub active_connections: u64,
+    pub circuit_breaker_trips: u64,
+    pub resource_limit_hits: u64,
+    pub pages_skipped_circuit_breaker: u64,
 }
 
 /// Shared metrics for concurrent access.

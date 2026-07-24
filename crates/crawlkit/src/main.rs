@@ -171,6 +171,10 @@ enum Commands {
         /// Enable encryption at rest for stored data
         #[arg(long)]
         encrypt: bool,
+
+        /// Export metrics snapshot to JSON file
+        #[arg(long)]
+        metrics_json: Option<PathBuf>,
     },
 
     /// Compare two crawl results
@@ -296,6 +300,23 @@ async fn main() -> Result<()> {
         Config::default()
     };
 
+    // Build feature flags from config (shared across subcommands)
+    let mut feature_flags = crawlkit_core::FeatureFlags::default();
+    if let Some(ref features_config) = config.features {
+        if let Some(v) = features_config.ai_analyzers {
+            feature_flags.set(crawlkit_core::FLAG_AI_ANALYZERS, v);
+        }
+        if let Some(v) = features_config.wasm_analyzers {
+            feature_flags.set(crawlkit_core::FLAG_WASM_ANALYZERS, v);
+        }
+        if let Some(v) = features_config.js_rendering {
+            feature_flags.set(crawlkit_core::FLAG_JS_RENDERING, v);
+        }
+        if let Some(v) = features_config.backlink_analysis {
+            feature_flags.set(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS, v);
+        }
+    }
+
     match cli.command {
         Commands::Crawl {
             url,
@@ -317,22 +338,8 @@ async fn main() -> Result<()> {
             enable_ai,
             enable_wasm,
             encrypt,
+            metrics_json,
         } => {
-            let mut feature_flags = crawlkit_core::FeatureFlags::default();
-            if let Some(ref features_config) = config.features {
-                if let Some(v) = features_config.ai_analyzers {
-                    feature_flags.set(crawlkit_core::FLAG_AI_ANALYZERS, v);
-                }
-                if let Some(v) = features_config.wasm_analyzers {
-                    feature_flags.set(crawlkit_core::FLAG_WASM_ANALYZERS, v);
-                }
-                if let Some(v) = features_config.js_rendering {
-                    feature_flags.set(crawlkit_core::FLAG_JS_RENDERING, v);
-                }
-                if let Some(v) = features_config.backlink_analysis {
-                    feature_flags.set(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS, v);
-                }
-            }
             feature_flags.set(crawlkit_core::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_core::FLAG_WASM_ANALYZERS, enable_wasm);
 
@@ -364,6 +371,7 @@ async fn main() -> Result<()> {
                 enable_ai,
                 enable_wasm,
                 encrypt,
+                metrics_json,
                 feature_flags,
             };
             run_crawl(&params).await
@@ -379,7 +387,7 @@ async fn main() -> Result<()> {
             output,
             format,
             theme,
-        } => run_report(&crawl, output.as_deref(), &format, &theme),
+        } => run_report(&crawl, output.as_deref(), &format, &theme, &feature_flags),
         Commands::Backlinks {
             crawl,
             output,
@@ -399,6 +407,7 @@ async fn main() -> Result<()> {
                 &format,
                 javascript,
                 user_agent.as_deref(),
+                &feature_flags,
             )
             .await
         }
@@ -427,6 +436,7 @@ struct CrawlParams {
     enable_ai: bool,
     enable_wasm: bool,
     encrypt: bool,
+    metrics_json: Option<PathBuf>,
     feature_flags: crawlkit_core::FeatureFlags,
 }
 
@@ -510,17 +520,23 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 
     // Initialize Playwright renderer if --javascript is enabled
     let playwright_detector = PlaywrightDetector::detect();
-    let playwright_available = playwright_detector.is_available();
-    let js_renderer = if params.javascript && playwright_available {
-        let renderer = PlaywrightRenderer::new(PlaywrightConfig {
-            enabled: true,
-            ..Default::default()
-        });
-        tracing::info!("Playwright available, JS rendering enabled");
-        Some(renderer)
-    } else if params.javascript && !playwright_available {
-        tracing::warn!("--javascript flag set but Playwright not available, JS rendering disabled");
-        None
+    let js_renderer = if params.javascript {
+        if playwright_detector.is_available() {
+            tracing::info!("Playwright detected: JS rendering enabled");
+            let renderer = PlaywrightRenderer::new(PlaywrightConfig {
+                enabled: true,
+                timeout: std::time::Duration::from_secs(30),
+                max_memory_per_context: 512 * 1024 * 1024, // 512 MB
+                max_cpu_seconds: 30,
+                max_concurrent: 5,
+                headless: true,
+                ..Default::default()
+            });
+            Some(renderer)
+        } else {
+            tracing::warn!("Playwright not found: JS rendering disabled. Install with: npm install -g playwright");
+            None
+        }
     } else {
         None
     };
@@ -528,12 +544,29 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     // Initialize JS render decision engine
     let js_decision_engine = JsRenderDecisionEngine::new();
 
+    // Initialize audit trail if enabled
+    let audit_trail = crawlkit_core::AuditTrail::new();
+    let audit_enabled = params
+        .feature_flags
+        .get(crawlkit_core::feature_flags::FLAG_AUDIT_TRAIL);
+    if audit_enabled {
+        audit_trail.record(
+            crawlkit_core::AuditEventType::CrawlStarted,
+            "cli",
+            &format!("Crawl started for {}", params.url),
+        );
+    }
+
     // Log feature flags
     tracing::info!(
-        "Feature flags: ai_analyzers={}, wasm_analyzers={}, js_rendering={}",
+        "Feature flags: ai_analyzers={}, wasm_analyzers={}, js_rendering={}, audit_trail={}, observability={}, rum_integration={}, backlink_analysis={}",
         params.feature_flags.get(crawlkit_core::FLAG_AI_ANALYZERS),
         params.feature_flags.get(crawlkit_core::FLAG_WASM_ANALYZERS),
         params.feature_flags.get(crawlkit_core::FLAG_JS_RENDERING),
+        audit_enabled,
+        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_OBSERVABILITY),
+        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_RUM_INTEGRATION),
+        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS),
     );
 
     // Initialize components
@@ -677,6 +710,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                 let exceeded = resource_monitor.exceeded_limits();
                 if !exceeded.is_empty() {
                     tracing::warn!("Resource limits exceeded: {:?}", exceeded);
+                    metrics.record_resource_limit_hit();
                     break;
                 }
             }
@@ -752,6 +786,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         let breaker = circuit_breaker_registry.get_or_create(domain);
         if !breaker.is_allowed() {
             tracing::debug!("Circuit breaker open for domain: {}", domain);
+            metrics.record_page_skipped_circuit_breaker();
             continue;
         }
 
@@ -773,7 +808,11 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             }
             Err(e) => {
                 tracing::warn!("Failed to fetch {}: {}", entry.url, e);
+                let was_allowed = breaker.is_allowed();
                 breaker.record_failure();
+                if was_allowed && !breaker.is_allowed() {
+                    metrics.record_circuit_breaker_trip();
+                }
                 metrics.record_page_failure();
                 continue;
             }
@@ -827,13 +866,26 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                     tracing::info!("JS render decision for {}: {}", entry.url, reason);
                     if let Some(ref renderer) = js_renderer {
                         if renderer.is_available() {
-                            match renderer.render(entry.url.as_str()).await {
-                                Ok(rendered) => {
+                            let render_result = tokio::time::timeout(
+                                std::time::Duration::from_secs(30),
+                                renderer.render(entry.url.as_str()),
+                            )
+                            .await;
+
+                            match render_result {
+                                Ok(Ok(rendered)) => {
+                                    if rendered.memory_used > 0 {
+                                        tracing::debug!(
+                                            "Playwright used {}MB for {}",
+                                            rendered.memory_used / (1024 * 1024),
+                                            entry.url
+                                        );
+                                    }
                                     body_text = rendered.html;
-                                    tracing::info!(
-                                        "JS rendered {} ({}ms)",
+                                    tracing::debug!(
+                                        "JS rendered {} in {:?}",
                                         entry.url,
-                                        rendered.render_time.as_millis()
+                                        rendered.render_time
                                     );
                                     match HtmlParser::parse(&body_text, &entry.url) {
                                         Ok(re_parsed) => parsed = re_parsed,
@@ -846,8 +898,15 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                                         }
                                     }
                                 }
-                                Err(e) => {
-                                    tracing::warn!("JS rendering failed for {}: {}", entry.url, e);
+                                Ok(Err(e)) => {
+                                    tracing::warn!(
+                                        "Playwright render failed for {}: {}",
+                                        entry.url,
+                                        e
+                                    );
+                                }
+                                Err(_) => {
+                                    tracing::warn!("Playwright render timed out for {}", entry.url);
                                 }
                             }
                         } else {
@@ -935,6 +994,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             tracing::warn!("Failed to store page {}: {}", entry.url, e);
         } else {
             pages_stored += 1;
+            if audit_enabled {
+                audit_trail.record(
+                    crawlkit_core::AuditEventType::PageFetched,
+                    "cli",
+                    &format!("Fetched: {} (status {})", entry.url, result.status_code),
+                );
+            }
         }
 
         // Store findings
@@ -958,13 +1024,18 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         let storage_time = storage_start.elapsed();
 
         // Record metrics and resource monitor
-        metrics.record_page_success(
-            result.body.len() as u64,
-            fetch_time.as_micros() as u64,
-            analysis_time.as_micros() as u64,
-            storage_time.as_micros() as u64,
-            findings.len() as u64,
-        );
+        if params
+            .feature_flags
+            .get(crawlkit_core::feature_flags::FLAG_OBSERVABILITY)
+        {
+            metrics.record_page_success(
+                result.body.len() as u64,
+                fetch_time.as_micros() as u64,
+                analysis_time.as_micros() as u64,
+                storage_time.as_micros() as u64,
+                findings.len() as u64,
+            );
+        }
         resource_monitor.record_page();
 
         // Extract and queue new links
@@ -1019,6 +1090,17 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         pages_crawled, pages_stored, issues_found, skipped_external, skipped_robots, skipped_duplicate
     ));
 
+    if audit_enabled {
+        audit_trail.record(
+            crawlkit_core::AuditEventType::CrawlCompleted,
+            "cli",
+            &format!(
+                "Crawl completed: {} pages crawled, {} stored, {} issues",
+                pages_crawled, pages_stored, issues_found
+            ),
+        );
+    }
+
     storage.finish_crawl(&crawl_id, pages_crawled, 0)?;
 
     // Log metrics snapshot
@@ -1032,6 +1114,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         snapshot.bytes_fetched,
         snapshot.pages_failed,
     );
+
+    // Export metrics JSON if requested
+    if let Some(metrics_path) = &params.metrics_json {
+        let snapshot = metrics.snapshot();
+        std::fs::write(metrics_path, serde_json::to_string_pretty(&snapshot)?)?;
+        tracing::info!("Wrote metrics to {}", metrics_path.display());
+    }
 
     // Alert manager: check for threshold violations
     let alert_manager = AlertManager::new();
@@ -1174,7 +1263,13 @@ fn run_compare(
 }
 
 /// Generate a report from an existing crawl.
-fn run_report(crawl_path: &Path, output: Option<&Path>, format: &str, _theme: &str) -> Result<()> {
+fn run_report(
+    crawl_path: &Path,
+    output: Option<&Path>,
+    format: &str,
+    _theme: &str,
+    feature_flags: &crawlkit_core::FeatureFlags,
+) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner()
@@ -1206,7 +1301,7 @@ fn run_report(crawl_path: &Path, output: Option<&Path>, format: &str, _theme: &s
         .context("Failed to get crawl statistics")?;
 
     // Run backlink analysis
-    let backlink_data = {
+    let backlink_data = if feature_flags.get(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS) {
         let link_pairs = storage.get_links_for_crawl(&crawl_id).unwrap_or_default();
         let external_links = storage.get_external_links(&crawl_id).unwrap_or_default();
         let page_urls = storage.get_page_urls(&crawl_id).unwrap_or_default();
@@ -1230,6 +1325,8 @@ fn run_report(crawl_path: &Path, output: Option<&Path>, format: &str, _theme: &s
         let summary = analyzer.summarize();
 
         Some((summary, pagerank))
+    } else {
+        None
     };
 
     pb.set_message("Generating report...");
@@ -1540,6 +1637,7 @@ async fn run_inspect(
     format: &str,
     _javascript: bool,
     user_agent: Option<&str>,
+    feature_flags: &crawlkit_core::FeatureFlags,
 ) -> Result<()> {
     use crawlkit_core::analyzers::AnalyzerRegistry;
     use crawlkit_core::http::HttpClient;
@@ -1602,7 +1700,7 @@ async fn run_inspect(
     let findings = registry.analyze(&ctx, &config);
 
     // Fetch CrUX data from PageSpeed Insights if API key is available
-    let crux_data = {
+    let crux_data = if feature_flags.get(crawlkit_core::feature_flags::FLAG_RUM_INTEGRATION) {
         let adapter = crawlkit_core::CruxAdapter::from_env();
         if adapter.is_available() {
             pb.set_message("Fetching CrUX data from PageSpeed Insights...");
@@ -1610,6 +1708,8 @@ async fn run_inspect(
         } else {
             None
         }
+    } else {
+        None
     };
 
     // Build report

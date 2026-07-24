@@ -33,6 +33,40 @@ Bounded pipeline with configurable capacity. Prevents memory exhaustion under hi
 ### Analyzer Registry
 28 analyzers dispatched in parallel. Each implements the `Analyzer` trait with `analyze(ctx, config) -> Vec<Finding>`.
 
+## Wired Modules
+
+The following modules are now integrated into the crawl pipeline:
+
+### Observability
+Atomic metrics collection for pages crawled, bytes fetched, fetch/analysis times, and throughput. Exported via `--metrics-json`.
+
+### Resource Monitor
+Enforces memory, CPU, disk, and page count limits. Replaces ad-hoc RSS checking.
+
+### Circuit Breaker
+Per-domain fault isolation. Opens circuit after consecutive failures, preventing cascade failures.
+
+### Backpressure
+Bounded pipeline with semaphore-based concurrency control. Prevents memory explosion under high concurrency.
+
+### Determinism
+Seed-based reproducible crawls via `--seed` flag. Same seed + same config = same output.
+
+### Feature Flags
+Runtime feature toggles via TOML configuration. CLI flags override config.
+
+### JS Render Decision
+SPA detection engine that identifies React, Vue, Angular, Next.js, Nuxt, SvelteKit pages.
+
+### Playwright Integration
+JavaScript rendering for SPA pages when `--javascript` is enabled.
+
+### Alert Manager
+Monitors crawl metrics and triggers alerts when thresholds are exceeded.
+
+### Encryption at Rest
+AES-256-GCM encryption for stored data when `--encrypt` is enabled.
+
 ## Thread Safety
 
 - `RateLimiter`: `DashMap` for domain buckets, `parking_lot::Mutex` for global (dropped before await)

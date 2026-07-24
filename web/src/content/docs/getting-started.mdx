@@ -35,6 +35,30 @@ crawlkit crawl https://example.com \
 crawlkit report crawl-data/ --format html --output report.html
 ```
 
+## Reproducible Crawls
+
+```bash
+# Crawl with a specific seed for reproducible results
+crawlkit crawl https://example.com --seed 42 --output crawl-seed42
+
+# Crawl again with the same seed -- results are identical
+crawlkit crawl https://example.com --seed 42 --output crawl-seed42-v2
+```
+
+## Encrypted Storage
+
+```bash
+# Crawl with encryption at rest
+CRAWLKIT_ENCRYPTION_KEY=$(openssl rand -hex 32) crawlkit crawl https://example.com --encrypt
+```
+
+## Metrics Export
+
+```bash
+# Export metrics snapshot to JSON
+crawlkit crawl https://example.com --metrics-json metrics.json
+```
+
 ## REST API Mode
 
 ```bash

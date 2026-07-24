@@ -31,6 +31,24 @@ formats = ["json", "sqlite", "html"]
 output_dir = "./crawl-results"
 ```
 
+## Feature Flags
+
+Feature flags can be set in `crawlkit.toml` under the `[features]` section:
+
+```toml
+[features]
+js_rendering = false
+ai_analyzers = true
+wasm_analyzers = true
+backlink_analysis = true
+encryption_at_rest = false
+audit_trail = true
+observability = true
+rum_integration = false
+```
+
+CLI flags `--enable-ai`, `--enable-wasm`, and `--javascript` override these settings.
+
 ## CLI Flags
 
 All configuration file options can be overridden via CLI flags:

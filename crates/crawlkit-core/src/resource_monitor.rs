@@ -5,6 +5,10 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 /// Resource limits for a crawl session.
+///
+/// Defines maximum thresholds for memory, CPU, disk, file descriptors,
+/// duration, and page count. When any limit is exceeded, the crawl
+/// should be terminated gracefully.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ResourceLimits {
     /// Maximum memory usage in bytes.
@@ -35,17 +39,41 @@ impl Default for ResourceLimits {
 }
 
 /// Current resource usage.
+///
+/// Snapshot of resource consumption at a point in time. Compared against
+/// [`ResourceLimits`] to determine if the crawl should be stopped.
 #[derive(Debug, Clone, Default)]
 pub struct ResourceUsage {
+    /// Current memory usage in bytes.
     pub memory_bytes: u64,
+    /// CPU time used in seconds.
     pub cpu_seconds: u64,
+    /// Disk usage in bytes.
     pub disk_bytes: u64,
+    /// Number of open file descriptors.
     pub open_files: u32,
+    /// Elapsed time since crawl start.
     pub elapsed: Duration,
+    /// Number of pages processed.
     pub pages_processed: usize,
 }
 
 /// Resource monitor for tracking and enforcing limits.
+///
+/// Thread-safe monitor that tracks resource usage and compares against
+/// configured limits. Use [`is_over_limit`](ResourceMonitor::is_over_limit)
+/// to check if the crawl should be terminated.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{ResourceMonitor, ResourceLimits};
+///
+/// let limits = ResourceLimits { max_pages: Some(10), ..Default::default() };
+/// let monitor = ResourceMonitor::new(limits);
+/// monitor.record_page();
+/// assert!(!monitor.is_over_limit());
+/// ```
 pub struct ResourceMonitor {
     limits: ResourceLimits,
     usage: Arc<RwLock<ResourceUsage>>,

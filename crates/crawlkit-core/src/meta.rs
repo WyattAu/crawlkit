@@ -2,48 +2,105 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 /// Open Graph protocol tags for social media previews.
+///
+/// Extracted from `<meta property="og:*">` tags. Used by the
+/// [`SocialMediaAnalyzer`](crate::SocialMediaAnalyzer) to check
+/// completeness of social sharing metadata.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct OpenGraphTags {
+    /// `og:title` — title for social sharing.
     pub title: Option<String>,
+    /// `og:description` — description for social sharing.
     pub description: Option<String>,
+    /// `og:image` — image URL for social preview.
     pub image: Option<String>,
+    /// `og:url` — canonical URL for social sharing.
     pub url: Option<String>,
+    /// `og:type` — content type (website, article, etc.).
     pub r#type: Option<String>,
+    /// `og:site_name` — site name.
     pub site_name: Option<String>,
+    /// `og:locale` — content locale (e.g., "en_US").
     pub locale: Option<String>,
 }
 
 /// Twitter Card tags for Twitter/X previews.
+///
+/// Extracted from `<meta name="twitter:*">` tags. Used by the
+/// [`SocialMediaAnalyzer`](crate::SocialMediaAnalyzer) to check
+/// Twitter Card completeness.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct TwitterTags {
+    /// `twitter:card` — card type (summary, summary_large_image).
     pub card: Option<String>,
+    /// `twitter:site` — site Twitter handle.
     pub site: Option<String>,
+    /// `twitter:creator` — author Twitter handle.
     pub creator: Option<String>,
+    /// `twitter:title` — title for Twitter sharing.
     pub title: Option<String>,
+    /// `twitter:description` — description for Twitter sharing.
     pub description: Option<String>,
+    /// `twitter:image` — image URL for Twitter card.
     pub image: Option<String>,
+    /// `twitter:image:alt` — alt text for Twitter card image.
     pub image_alt: Option<String>,
 }
 
 /// A single hreflang alternate link.
+///
+/// Represents a `<link rel="alternate" hreflang="..." href="...">` tag
+/// for international SEO. Validated by the [`HreflangValidator`](crate::HreflangValidator).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HreflangTag {
+    /// Language code (e.g., "en", "fr-CA", "x-default").
     pub lang: String,
+    /// URL of the alternate language version.
     pub url: Url,
 }
 
 /// Complete set of meta tags extracted from a page.
+///
+/// Aggregates all SEO-relevant meta information including title,
+/// description, canonical URL, robots directives, Open Graph,
+/// Twitter Cards, and hreflang tags. Provides helper methods
+/// for common checks.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::MetaTags;
+///
+/// let meta = MetaTags {
+///     title: Some("My Page".to_string()),
+///     robots: Some("noindex, nofollow".to_string()),
+///     ..Default::default()
+/// };
+/// assert!(meta.is_noindex());
+/// assert!(meta.is_nofollow());
+/// assert_eq!(meta.title_length(), Some(7));
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct MetaTags {
+    /// Page title (`<title>` tag).
     pub title: Option<String>,
+    /// Meta description.
     pub description: Option<String>,
+    /// Canonical URL (`<link rel="canonical">`).
     pub canonical: Option<Url>,
+    /// Robots directive (`<meta name="robots">`).
     pub robots: Option<String>,
+    /// Page language (`<html lang="...">`).
     pub language: Option<String>,
+    /// Character encoding (`<meta charset="...">`).
     pub charset: Option<String>,
+    /// Viewport meta tag.
     pub viewport: Option<String>,
+    /// Open Graph tags.
     pub og: OpenGraphTags,
+    /// Twitter Card tags.
     pub twitter: TwitterTags,
+    /// Hreflang alternate links.
     pub hreflang: Vec<HreflangTag>,
 }
 

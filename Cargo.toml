@@ -18,17 +18,17 @@ if_not_else = "warn"
 
 
 [workspace.package]
-version = "0.4.0"
+version = "1.0.0"
 edition = "2021"
 authors = ["Wyatt Au"]
 license = "Apache-2.0"
-description = "A high-performance Rust-based site crawler for SEO analysis"
+description = "High-performance Rust web crawler and SEO analysis toolkit with 28 analyzers, WASM plugin system, and enterprise features"
 repository = "https://github.com/WyattAu/crawlkit"
-keywords = ["seo", "crawler", "web-crawler", "analysis", "rust"]
-categories = ["command-line-utilities", "web-programming"]
-readme = "README.md"
 homepage = "https://github.com/WyattAu/crawlkit"
-documentation = "https://github.com/WyattAu/crawlkit"
+documentation = "https://docs.rs/crawlkit-core"
+readme = "README.md"
+keywords = ["seo", "crawler", "web-crawler", "analysis", "rust"]
+categories = ["command-line-utilities", "web-programming", "wasm"]
 
 [workspace.dependencies]
 tokio = { version = "1", features = ["full"] }

@@ -10,29 +10,39 @@ use thiserror::Error;
 /// Errors from Playwright operations.
 #[derive(Debug, Error)]
 pub enum PlaywrightError {
+    /// Playwright binary is not installed or not found.
     #[error("playwright not available: {0}")]
     NotAvailable(String),
 
+    /// Page navigation failed.
     #[error("page navigation failed: {0}")]
     NavigationFailed(String),
 
+    /// Page rendering timed out.
     #[error("page timeout after {0:?}")]
     Timeout(Duration),
 
+    /// JavaScript evaluation on the page failed.
     #[error("JavaScript evaluation failed: {0}")]
     JsEvaluationFailed(String),
 
+    /// Browser launch failed.
     #[error("browser launch failed: {0}")]
     BrowserLaunchFailed(String),
 
+    /// Browser context creation failed.
     #[error("context creation failed: {0}")]
     ContextCreationFailed(String),
 
+    /// Resource limit exceeded during rendering.
     #[error("resource limit exceeded: {0}")]
     ResourceLimitExceeded(String),
 }
 
 /// Configuration for Playwright browser rendering.
+///
+/// Controls browser type, timeouts, concurrency limits, and resource
+/// constraints. Default is disabled with Chromium headless mode.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PlaywrightConfig {
     /// Enable JavaScript rendering.
@@ -78,8 +88,11 @@ impl Default for PlaywrightConfig {
 /// Browser type for rendering.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum BrowserType {
+    /// Google Chrome / Chromium.
     Chromium,
+    /// Mozilla Firefox.
     Firefox,
+    /// Apple WebKit (Safari engine).
     WebKit,
 }
 
@@ -96,9 +109,12 @@ impl BrowserType {
 }
 
 /// Result of JavaScript rendering.
+///
+/// Contains the rendered HTML, console messages, network requests,
+/// and WASM errors detected during page rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RenderedPage {
-    /// Final URL after JS rendering.
+    /// Final URL after JS rendering and redirects.
     pub final_url: String,
     /// Rendered HTML content.
     pub html: String,
@@ -108,7 +124,7 @@ pub struct RenderedPage {
     pub network_requests: Vec<NetworkRequest>,
     /// WASM-related errors detected.
     pub wasm_errors: Vec<WasmError>,
-    /// Render time.
+    /// Time taken to render the page.
     pub render_time: Duration,
     /// Memory used during render (bytes).
     pub memory_used: u64,
@@ -117,28 +133,41 @@ pub struct RenderedPage {
 /// Console message from browser.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleMessage {
+    /// Message level (log, warn, error, etc.).
     pub level: String,
+    /// Message text.
     pub text: String,
+    /// Source file URL (if available).
     pub source: Option<String>,
+    /// Line number in source (if available).
     pub line: Option<u32>,
 }
 
 /// Network request during rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkRequest {
+    /// Request URL.
     pub url: String,
+    /// HTTP method (GET, POST, etc.).
     pub method: String,
+    /// Response status code (if received).
     pub status: Option<u16>,
+    /// Resource type (document, script, stylesheet, etc.).
     pub resource_type: String,
+    /// Response size in bytes (if available).
     pub size: Option<u64>,
 }
 
 /// WASM error detected during rendering.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WasmError {
+    /// Error type (runtime, compilation, etc.).
     pub error_type: String,
+    /// Error message.
     pub message: String,
+    /// Source file (if available).
     pub source: Option<String>,
+    /// Timestamp when error occurred.
     pub timestamp: u64,
 }
 
@@ -297,6 +326,19 @@ impl PlaywrightDetector {
 }
 
 /// Playwright renderer with browser context isolation.
+///
+/// Manages browser contexts with resource limits (memory, CPU) and
+/// provides page rendering via Playwright CLI subprocess. Each render
+/// creates an isolated browser context that is destroyed after use.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{PlaywrightRenderer, PlaywrightConfig};
+///
+/// let renderer = PlaywrightRenderer::new(PlaywrightConfig::default());
+/// assert!(!renderer.is_available()); // disabled by default
+/// ```
 pub struct PlaywrightRenderer {
     config: PlaywrightConfig,
     detector: PlaywrightDetector,

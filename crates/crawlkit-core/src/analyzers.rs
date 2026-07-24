@@ -36,6 +36,10 @@ pub struct SslCertificateInfo {
 // ---------------------------------------------------------------------------
 
 /// Context for analyzing a page, bundling parsed HTML with HTTP metadata.
+///
+/// Passed to each [`Analyzer`] to provide all the data needed for analysis.
+/// The context borrows the parsed page and response metadata to avoid
+/// unnecessary cloning.
 pub struct AnalysisContext<'a> {
     /// The parsed page content.
     pub page: &'a ParsedPage,
@@ -52,18 +56,48 @@ pub struct AnalysisContext<'a> {
 }
 
 /// A finding/issue detected by an analyzer.
+///
+/// Represents a single SEO or technical issue found during page analysis.
+/// Each finding has a severity, category, machine-readable code, and
+/// a human-readable recommendation for fixing the issue.
 #[derive(Debug, Clone)]
 pub struct Finding {
+    /// Issue severity (Critical, Error, Warning, Info).
     pub severity: Severity,
+    /// Issue category (SEO, HTTP, Links, etc.).
     pub category: IssueCategory,
+    /// Machine-readable issue code (e.g., "META001", "HTTP005").
     pub code: String,
+    /// Short human-readable title.
     pub title: String,
+    /// Detailed description of the issue.
     pub description: String,
+    /// URL of the page where the issue was found.
     pub url: String,
+    /// Recommendation for fixing the issue.
     pub recommendation: String,
 }
 
 /// Trait for page analyzers.
+///
+/// Implement this trait to create custom SEO analyzers. Each analyzer
+/// receives an [`AnalysisContext`] and returns a list of [`Finding`]s.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::analyzers::{Analyzer, AnalysisContext, Finding};
+/// use crawlkit_core::CrawlConfig;
+///
+/// struct MyAnalyzer;
+///
+/// impl Analyzer for MyAnalyzer {
+///     fn name(&self) -> &str { "my-analyzer" }
+///     fn analyze(&self, _ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+///         vec![]
+///     }
+/// }
+/// ```
 pub trait Analyzer: Send + Sync {
     /// Returns the human-readable name of this analyzer.
     fn name(&self) -> &str;
@@ -5036,12 +5070,31 @@ impl Analyzer for InternationalSeoAnalyzer {
 // Analyzer Registry
 // ---------------------------------------------------------------------------
 
+/// Registry of SEO analyzers that can be run against crawled pages.
+///
+/// Manages a collection of [`Analyzer`] implementations and runs them
+/// in parallel using rayon. The default registry includes 28+ analyzers
+/// covering HTTP, SEO, content, links, images, security, accessibility,
+/// and AI-specific checks.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{CrawlConfig, analyzers::AnalyzerRegistry};
+///
+/// let registry = AnalyzerRegistry::new(&CrawlConfig::default());
+/// assert!(registry.len() > 20);
+/// ```
 pub struct AnalyzerRegistry {
     analyzers: Vec<Box<dyn Analyzer>>,
 }
 
 impl AnalyzerRegistry {
     /// Create a registry with all default analyzers.
+    ///
+    /// Registers 28+ built-in analyzers covering HTTP status, redirects,
+    /// canonical URLs, meta tags, headings, links, images, structured data,
+    /// security, accessibility, social media, AI crawlers, and WASM patterns.
     pub fn new(_config: &CrawlConfig) -> Self {
         Self {
             analyzers: vec![
@@ -5080,16 +5133,25 @@ impl AnalyzerRegistry {
     }
 
     /// Create a registry with custom analyzers.
+    ///
+    /// Use this when you want full control over which analyzers are run,
+    /// without the default set.
     pub fn with_analyzers(analyzers: Vec<Box<dyn Analyzer>>) -> Self {
         Self { analyzers }
     }
 
     /// Add an analyzer to the registry.
+    ///
+    /// Custom analyzers are appended to the end and run after all
+    /// previously registered analyzers.
     pub fn register(&mut self, analyzer: Box<dyn Analyzer>) {
         self.analyzers.push(analyzer);
     }
 
     /// Run all analyzers on a page and collect findings.
+    ///
+    /// Analyzers run in parallel via rayon for performance. Returns a
+    /// flat list of all [`Finding`]s from all analyzers.
     pub fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding> {
         use rayon::prelude::*;
 

@@ -7,6 +7,21 @@ use tokio::sync::{mpsc, Semaphore};
 ///
 /// Ensures producers block when consumers are overwhelmed,
 /// preventing memory explosion and maintaining system stability.
+/// Uses tokio semaphores for concurrency limiting.
+///
+/// # Examples
+///
+/// ```rust
+/// # async fn example() {
+/// use crawlkit_core::BackpressureController;
+///
+/// let controller = BackpressureController::new(10);
+/// let permit = controller.acquire().await.unwrap();
+/// assert_eq!(controller.active_count(), 1);
+/// drop(permit);
+/// assert_eq!(controller.active_count(), 0);
+/// # }
+/// ```
 pub struct BackpressureController {
     semaphore: Arc<Semaphore>,
     #[allow(dead_code)]
@@ -133,6 +148,22 @@ pub enum BackpressureError {
 }
 
 /// Bounded channel wrapper with backpressure.
+///
+/// Provides a typed mpsc channel with a fixed buffer size. Producers
+/// block when the buffer is full, naturally implementing backpressure.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::BoundedPipeline;
+///
+/// let mut pipeline = BoundedPipeline::<i32>::new(10);
+/// assert_eq!(pipeline.capacity(), 10);
+/// let tx = pipeline.sender();
+/// tx.try_send(42).unwrap();
+/// let mut rx = pipeline.receiver().unwrap();
+/// assert_eq!(rx.try_recv().unwrap(), 42);
+/// ```
 pub struct BoundedPipeline<T> {
     tx: mpsc::Sender<T>,
     rx: Option<mpsc::Receiver<T>>,

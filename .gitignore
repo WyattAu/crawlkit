@@ -40,7 +40,6 @@ Thumbs.db
 .reports/
 .knowledge_graph/
 .patterns/
-.adrs/
 CAPABILITY_MATRIX.md
 INSTRUCTION_VERSIONS.md
 STANDARD_CONFLICTS.md

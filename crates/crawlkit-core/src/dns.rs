@@ -28,7 +28,19 @@ impl DnsEntry {
 /// A concurrent DNS cache with background prefetching.
 ///
 /// Caches DNS resolution results with configurable TTL and provides
-/// background prefetching for upcoming URLs.
+/// background prefetching for upcoming URLs. Uses `DashMap` for
+/// concurrent access without external locking.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::DnsCache;
+/// use std::time::Duration;
+///
+/// let cache = DnsCache::new(Duration::from_secs(300), 10_000);
+/// cache.insert("example.com", vec!["93.184.216.34:443".parse().unwrap()]);
+/// assert!(cache.get_cached("example.com").is_some());
+/// ```
 pub struct DnsCache {
     /// Domain -> cached resolution.
     cache: DashMap<String, DnsEntry>,
@@ -266,12 +278,17 @@ pub enum DnsError {
     /// DNS resolution failed.
     #[error("DNS resolution failed for {domain}: {source}")]
     ResolutionFailed {
+        /// The domain that failed to resolve.
         domain: String,
+        /// The underlying I/O error.
         source: std::io::Error,
     },
     /// No DNS records found.
     #[error("no DNS records found for {domain}")]
-    NoRecords { domain: String },
+    NoRecords {
+        /// The domain with no records.
+        domain: String,
+    },
 }
 
 #[cfg(test)]

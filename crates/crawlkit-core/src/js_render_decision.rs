@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
 /// SPA detection indicators.
+///
+/// Contains patterns for detecting single-page application frameworks
+/// from HTML content and API endpoint URLs.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpaIndicators {
     /// Common SPA framework root elements.
@@ -40,6 +43,21 @@ impl Default for SpaIndicators {
 }
 
 /// Decision engine for whether to use JavaScript rendering.
+///
+/// Analyzes URL patterns and HTML hints to decide if a page needs
+/// Playwright rendering. Checks skip/force patterns first, then
+/// SPA framework indicators.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::JsRenderDecisionEngine;
+/// use crawlkit_core::JsRenderDecision;
+///
+/// let engine = JsRenderDecisionEngine::new();
+/// let decision = engine.should_render_js("https://example.com/page", None);
+/// assert!(matches!(decision, JsRenderDecision::Skip { .. }));
+/// ```
 pub struct JsRenderDecisionEngine {
     indicators: SpaIndicators,
     /// URL patterns that should always use JS rendering.
@@ -124,8 +142,16 @@ impl Default for JsRenderDecisionEngine {
 /// Decision on whether to render with JavaScript.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum JsRenderDecision {
-    Render { reason: String },
-    Skip { reason: String },
+    /// Page should be rendered with JavaScript.
+    Render {
+        /// Reason for the decision.
+        reason: String,
+    },
+    /// Page should be fetched without JavaScript rendering.
+    Skip {
+        /// Reason for the decision.
+        reason: String,
+    },
 }
 
 // ---------------------------------------------------------------------------

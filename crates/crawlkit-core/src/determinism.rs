@@ -7,6 +7,18 @@ use std::sync::Arc;
 ///
 /// Ensures same input + same config → same output.
 /// Uses seed-based PRNG for any randomized operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::DeterminismController;
+///
+/// let ctrl = DeterminismController::new(42);
+/// assert_eq!(ctrl.seed(), 42);
+/// let seed1 = ctrl.derive_seed("context1");
+/// let seed2 = ctrl.derive_seed("context1");
+/// assert_ne!(seed1, seed2); // counter makes each call unique
+/// ```
 pub struct DeterminismController {
     /// Base seed for reproducible randomness.
     seed: u64,

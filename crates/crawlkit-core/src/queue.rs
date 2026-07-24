@@ -9,6 +9,9 @@ use url::Url;
 use crate::CrawlConfig;
 
 /// Priority score for a URL entry (lower = higher priority).
+///
+/// Constants are provided for common priority levels. Custom values
+/// can be created with [`Priority::new`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Priority(u8);
 
@@ -56,6 +59,10 @@ impl Ord for Priority {
 use serde::{Deserialize, Serialize};
 
 /// A URL entry in the crawl queue.
+///
+/// Contains the URL, its canonical form, crawl depth, priority,
+/// discovery timestamp, and optional referrer. Ordered by priority
+/// (lower value = higher priority) for the min-heap queue.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct QueueEntry {
     /// The URL to crawl.
@@ -99,6 +106,9 @@ impl Ord for QueueEntry {
 }
 
 /// Scope control for URL filtering.
+///
+/// Defines which domains and paths are allowed or blocked during crawling.
+/// Supports wildcard patterns for domain matching (e.g., "*.example.com").
 #[derive(Debug, Clone, Default)]
 pub struct ScopeConfig {
     /// Allowed domain patterns (e.g. `["example.com", "*.example.org"]`).
@@ -126,6 +136,22 @@ impl From<&CrawlConfig> for ScopeConfig {
 }
 
 /// Priority URL queue with deduplication and scope control.
+///
+/// Binary heap-based priority queue that ensures URLs are crawled in
+/// priority order. Automatically deduplicates URLs and enforces scope
+/// control (allowed/blocked domains and paths).
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::queue::{UrlQueue, ScopeConfig, Priority};
+/// use url::Url;
+///
+/// let queue = UrlQueue::new(ScopeConfig::default());
+/// let url = Url::parse("https://example.com").unwrap();
+/// queue.push(url, 0, Priority::HIGH);
+/// assert_eq!(queue.len(), 1);
+/// ```
 pub struct UrlQueue {
     heap: Mutex<BinaryHeap<QueueEntry>>,
     seen: DashSet<String>,

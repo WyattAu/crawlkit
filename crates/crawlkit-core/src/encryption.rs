@@ -5,6 +5,9 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 /// Encryption configuration for data at rest.
+///
+/// Controls whether encryption is enabled, where to load the key from,
+/// and which algorithm to use. Default is disabled with AES-256-GCM.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EncryptionConfig {
     /// Enable encryption at rest.
@@ -45,8 +48,21 @@ impl Default for EncryptionConfig {
 
 /// Encryption manager for data at rest.
 ///
-/// Provides AES-256-GCM encryption for sensitive data.
-/// Key is loaded from file, environment variable, or system keyring.
+/// Provides AES-256-GCM encryption for sensitive data. Key is loaded from
+/// file, environment variable, or system keyring. When encryption is disabled,
+/// `encrypt` and `decrypt` are passthrough operations.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{EncryptionManager, EncryptionConfig};
+///
+/// let manager = EncryptionManager::default();
+/// assert!(!manager.is_enabled());
+/// // When disabled, encrypt/decrypt are identity operations
+/// let data = b"hello";
+/// assert_eq!(manager.encrypt(data).unwrap(), data);
+/// ```
 pub struct EncryptionManager {
     config: EncryptionConfig,
     initialized: Arc<RwLock<bool>>,
@@ -243,12 +259,15 @@ impl EncryptionManager {
 /// Encryption errors.
 #[derive(Debug, thiserror::Error)]
 pub enum EncryptionError {
+    /// The encryption key could not be found.
     #[error("encryption key not found: {0}")]
     KeyNotFound(String),
 
+    /// The encryption key has invalid format or length.
     #[error("invalid key format: {0}")]
     InvalidKeyFormat(String),
 
+    /// Encryption/decryption initialization failed.
     #[error("encryption initialization failed: {0}")]
     InitializationFailed(String),
 }

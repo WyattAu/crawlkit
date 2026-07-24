@@ -11,6 +11,9 @@ use url::Url;
 use crate::CrawlError;
 
 /// Errors specific to storage operations.
+///
+/// Wraps SQLite database errors and URL parsing errors that can occur
+/// during crawl data persistence.
 #[derive(Debug, Error)]
 pub enum StorageError {
     /// SQLite database error.
@@ -29,6 +32,9 @@ impl From<StorageError> for CrawlError {
 }
 
 /// Severity level for an issue/finding.
+///
+/// Used by analyzers to classify the importance of detected issues.
+/// Stored in the database as a lowercase string for querying.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Severity {
     /// Critical issue requiring immediate attention.
@@ -65,6 +71,9 @@ impl Severity {
 }
 
 /// Category of an analysis finding.
+///
+/// Groups related issues for filtering and reporting. Stored in the
+/// database as a lowercase string. Custom categories use a `custom:` prefix.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum IssueCategory {
     /// HTTP-related issues (status codes, redirects, headers).
@@ -136,6 +145,9 @@ impl IssueCategory {
 }
 
 /// A page extracted from the crawl, with full data for storage.
+///
+/// Contains all metadata needed to persist a crawled page to the database,
+/// including URL, status, content metrics, and discovered links.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageData {
     /// Unique page identifier.
@@ -165,6 +177,9 @@ pub struct PageData {
 }
 
 /// An issue/finding detected during analysis.
+///
+/// Persisted to the database with a reference to the page it belongs to.
+/// Includes category, severity, machine-readable code, and recommendation.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Issue {
     /// Unique issue identifier.
@@ -188,6 +203,9 @@ pub struct Issue {
 }
 
 /// Filters for querying issues.
+///
+/// All fields are optional. When set, they narrow the query results.
+/// When `None`, that filter dimension is not applied.
 #[derive(Debug, Clone, Default)]
 pub struct IssueFilter {
     /// Filter by severity.
@@ -201,6 +219,9 @@ pub struct IssueFilter {
 }
 
 /// Aggregate crawl statistics.
+///
+/// Summary of pages crawled, issues found, and performance metrics.
+/// Returned by [`Storage::get_stats`].
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct CrawlStats {
     /// Total number of pages crawled.
@@ -247,6 +268,9 @@ pub struct Storage {
 
 impl Storage {
     /// Lock and return the underlying connection guard.
+    ///
+    /// Provides direct access to the SQLite connection for advanced
+    /// queries or transactions not covered by the convenience methods.
     pub fn conn(&self) -> parking_lot::MutexGuard<'_, Connection> {
         self.conn.lock()
     }
@@ -254,7 +278,12 @@ impl Storage {
     /// Open or create a SQLite database at the given path.
     ///
     /// Enables WAL mode, memory-mapped I/O, and creates the schema if it
-    /// doesn't exist.
+    /// doesn't exist. Uses a default LRU cache of 1000 entries.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError::Database`] if the database cannot be opened
+    /// or the schema cannot be created.
     pub fn new(path: &Path) -> Result<Self, StorageError> {
         let conn = Connection::open(path)?;
 
@@ -281,6 +310,14 @@ impl Storage {
     }
 
     /// Create in-memory storage for testing.
+    ///
+    /// Uses an in-memory SQLite database with WAL mode enabled.
+    /// Ideal for unit tests that need fast, isolated storage.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError::Database`] if the in-memory database
+    /// cannot be created.
     pub fn new_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
@@ -301,6 +338,14 @@ impl Storage {
     }
 
     /// Create storage with a custom LRU cache size.
+    ///
+    /// Use this when the default 1000-entry cache is not appropriate
+    /// for your workload. Larger caches improve read performance for
+    /// repeat queries but use more memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError::Database`] if the database cannot be opened.
     pub fn with_cache_size(path: &Path, cache_size: usize) -> Result<Self, StorageError> {
         let conn = Connection::open(path)?;
 

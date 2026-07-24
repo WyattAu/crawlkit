@@ -62,6 +62,9 @@ mod selectors {
 }
 
 /// Errors that can occur during HTML parsing.
+///
+/// Covers CSS selector compilation failures, URL resolution errors,
+/// and JSON-LD parsing issues.
 #[derive(Debug, thiserror::Error)]
 pub enum ParseError {
     #[error("selector compilation failed: {0}")]
@@ -75,30 +78,52 @@ pub enum ParseError {
 }
 
 /// A heading extracted from the page (H1–H6).
+///
+/// Used by the [`HeadingHierarchyAnalyzer`](crate::HeadingHierarchyAnalyzer)
+/// to check heading hierarchy and count H1 tags.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Heading {
+    /// Heading level (1-6).
     pub level: u8,
+    /// Text content of the heading.
     pub text: String,
+    /// Character length of the heading text.
     pub length: usize,
 }
 
 /// An image extracted from the page.
+///
+/// Used by the [`ImageAnalyzer`](crate::ImageAnalyzer) to check for
+/// missing alt text, lazy loading, and dimension attributes.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedImage {
+    /// Image source URL.
     pub src: String,
+    /// Alt text for accessibility.
     pub alt: String,
+    /// Width attribute (if specified).
     pub width: Option<u32>,
+    /// Height attribute (if specified).
     pub height: Option<u32>,
+    /// Whether the image has an alt attribute.
     pub has_alt: bool,
+    /// Whether the image uses lazy loading (`loading="lazy"` or `data-src`).
     pub is_lazy_loaded: bool,
 }
 
 /// A link extracted from the page.
+///
+/// Used by the [`LinkAnalyzer`](crate::LinkAnalyzer) to compute internal/external
+/// link counts, nofollow detection, and orphan page identification.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedLink {
+    /// Resolved href URL.
     pub href: String,
+    /// Link anchor text.
     pub text: String,
+    /// Rel attribute values (e.g., "nofollow", "noopener").
     pub rel: Vec<String>,
+    /// Whether the link points to a different domain.
     pub is_external: bool,
     /// ARIA label for the link (accessibility).
     pub aria_label: Option<String>,
@@ -107,69 +132,125 @@ pub struct ExtractedLink {
 }
 
 /// An input element inside a form.
+///
+/// Tracks accessibility attributes (labels, ARIA) and input metadata
+/// for form analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedInput {
+    /// Input type attribute (text, email, file, etc.).
     pub input_type: Option<String>,
+    /// Input name attribute.
     pub name: Option<String>,
+    /// Input id attribute.
     pub id: Option<String>,
+    /// Whether the input has an associated label.
     pub has_label: bool,
+    /// ARIA label for the input.
     pub aria_label: Option<String>,
+    /// ARIA labelledby reference.
     pub aria_labelledby: Option<String>,
+    /// ARIA describedby reference.
     pub aria_describedby: Option<String>,
+    /// Placeholder text.
     pub placeholder: Option<String>,
+    /// Whether the input is required.
     pub required: bool,
 }
 
 /// A form detected on the page.
+///
+/// Used by accessibility analyzers to check form structure, labeling,
+/// and fieldset/legend usage.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExtractedForm {
+    /// Form action URL.
     pub action: Option<String>,
+    /// HTTP method (get, post).
     pub method: String,
+    /// Number of input elements.
     pub input_count: usize,
+    /// Whether the form contains a file input.
     pub has_file_input: bool,
+    /// Whether the form contains a search input.
     pub has_search_input: bool,
+    /// Extracted input elements with accessibility info.
     pub inputs: Vec<ExtractedInput>,
+    /// Whether the form uses a fieldset.
     pub has_fieldset: bool,
+    /// Whether the form uses a legend.
     pub has_legend: bool,
 }
 
 /// Script tag information.
+///
+/// Tracks script loading attributes for performance analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ScriptInfo {
+    /// External script source URL.
     pub src: Option<String>,
+    /// Whether the script has the `async` attribute.
     pub r#async: bool,
+    /// Whether the script has the `defer` attribute.
     pub defer: bool,
+    /// Script type attribute (e.g., "application/ld+json").
     pub script_type: Option<String>,
 }
 
 /// Style/link stylesheet information.
+///
+/// Tracks stylesheet loading for performance and render-blocking analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StyleInfo {
+    /// External stylesheet URL.
     pub href: Option<String>,
+    /// Media query (e.g., "print", "screen").
     pub media: Option<String>,
+    /// Whether this is an inline `<style>` block.
     pub is_inline: bool,
 }
 
 /// Structured data extracted from JSON-LD `<script>` blocks.
+///
+/// Contains the parsed `@context`, `@type`, and full JSON data for
+/// schema validation and analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredData {
+    /// The `@context` value (e.g., "https://schema.org").
     pub context: Option<String>,
+    /// The `@type` value (e.g., "Article", "Product").
     pub r#type: Option<String>,
+    /// The full structured data JSON.
     pub data: serde_json::Value,
 }
 
 /// Complete parsed representation of a page.
+///
+/// Contains all SEO-relevant data extracted from raw HTML by [`HtmlParser`],
+/// including meta tags, headings, links, images, forms, scripts, styles,
+/// structured data, accessibility landmarks, and social media metadata.
+///
+/// This is the primary input to the analysis engine.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ParsedPage {
+    /// The page URL.
     pub url: String,
+    /// Extracted meta tags.
     pub meta: MetaTags,
+    /// Headings (H1-H6) in document order.
     pub headings: Vec<Heading>,
+    /// All links on the page.
     pub links: Vec<ExtractedLink>,
+    /// All images on the page.
     pub images: Vec<ExtractedImage>,
+    /// Forms detected on the page.
     pub forms: Vec<ExtractedForm>,
+    /// Script tags on the page.
     pub scripts: Vec<ScriptInfo>,
+    /// Stylesheets (external and inline).
     pub styles: Vec<StyleInfo>,
+    /// JSON-LD structured data blocks.
     pub structured_data: Vec<StructuredData>,
+    /// Word count of visible text content.
     pub word_count: usize,
 
     // Accessibility fields
@@ -208,10 +289,38 @@ pub struct ParsedPage {
 }
 
 /// HTML parser that extracts structured data from raw HTML.
+///
+/// Stateless parser using the `scraper` crate for CSS selector-based
+/// extraction. All methods are static and thread-safe.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{HtmlParser, parser::ParseError};
+/// use url::Url;
+///
+/// let html = r#"<!DOCTYPE html><html><head><title>Test</title></head>
+/// <body><h1>Hello</h1><a href="/link">link</a></body></html>"#;
+/// let url = Url::parse("https://example.com/page").unwrap();
+/// let page = HtmlParser::parse(html, &url).unwrap();
+///
+/// assert_eq!(page.meta.title.as_deref(), Some("Test"));
+/// assert_eq!(page.headings.len(), 1);
+/// assert_eq!(page.links.len(), 1);
+/// ```
 pub struct HtmlParser;
 
 impl HtmlParser {
     /// Parse an HTML document and extract all SEO-relevant data.
+    ///
+    /// Extracts meta tags, headings, links, images, forms, scripts,
+    /// stylesheets, structured data (JSON-LD), accessibility landmarks,
+    /// and social media metadata.
+    ///
+    /// # Errors
+    ///
+    /// Currently always returns `Ok`. The `ParseError` type is reserved
+    /// for future selector compilation or URL resolution failures.
     pub fn parse(html: &str, url: &Url) -> Result<ParsedPage, ParseError> {
         let document = Html::parse_document(html);
 

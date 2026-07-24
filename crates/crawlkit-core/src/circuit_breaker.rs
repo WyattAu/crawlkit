@@ -7,8 +7,11 @@ use serde::{Deserialize, Serialize};
 /// Circuit breaker state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CircuitState {
+    /// Circuit is closed — requests are allowed.
     Closed,
+    /// Circuit is open — requests are blocked.
     Open,
+    /// Circuit is testing recovery — requests are allowed.
     HalfOpen,
 }
 
@@ -16,6 +19,12 @@ pub enum CircuitState {
 ///
 /// Prevents cascade failures by breaking the circuit after consecutive failures.
 /// Transitions to Half-Open after cooldown to test recovery.
+///
+/// # States
+///
+/// - **Closed**: Normal operation. Failures increment counter.
+/// - **Open**: Requests are blocked. After cooldown, transitions to Half-Open.
+/// - **Half-Open**: Limited requests allowed. If they succeed, close circuit.
 pub struct CircuitBreaker {
     state: AtomicU8,
     failure_count: AtomicU32,
@@ -27,11 +36,11 @@ pub struct CircuitBreaker {
 /// Configuration for circuit breaker behavior.
 #[derive(Debug, Clone)]
 pub struct CircuitBreakerConfig {
-    /// Number of failures before opening circuit.
+    /// Number of consecutive failures before opening circuit.
     pub failure_threshold: u32,
-    /// Number of successes in Half-Open before closing.
+    /// Number of successes in Half-Open state before closing circuit.
     pub success_threshold: u32,
-    /// Cooldown before transitioning from Open to Half-Open.
+    /// Duration to wait before transitioning from Open to Half-Open.
     pub cooldown: Duration,
 }
 

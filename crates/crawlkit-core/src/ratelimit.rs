@@ -11,7 +11,17 @@ use crate::CrawlConfig;
 ///
 /// Each domain gets its own token bucket. A global bucket throttles
 /// all requests across all domains. A request proceeds only when both
-/// the domain and global buckets have tokens.
+/// the domain and global buckets have tokens. Supports crawl-delay
+/// from robots.txt and optional concurrency limiting.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::ratelimit::RateLimiter;
+///
+/// let limiter = RateLimiter::new(2.0, 10.0);
+/// assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);
+/// ```
 pub struct RateLimiter {
     /// Per-domain token buckets.
     domain_buckets: DashMap<String, TokenBucket>,
@@ -197,7 +207,7 @@ impl RateLimiter {
 /// Errors that can occur during rate limiting.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RateLimitError {
-    /// The wait timed out.
+    /// The wait timed out before a token became available.
     #[error("rate limit acquire timed out")]
     Timeout,
     /// The rate limiter has been closed.

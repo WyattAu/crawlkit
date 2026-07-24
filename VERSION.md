@@ -1,10 +1,9 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** 1 (Deep Testing & Code Quality Audit) — In Progress
-**Next Phase:** 2 (CI/CD Pipeline Audit)
-**Version:** 0.4.0
-**Status:** In Progress
+**Current Phase:** 6 (v1.0.0 Release)
+**Version:** 1.0.0
+**Status:** Release Candidate
 **Last Updated:** 2026-07-24
 
 ---

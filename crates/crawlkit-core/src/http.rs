@@ -14,6 +14,22 @@ use url::Url;
 use crate::{CrawlConfig, CrawlError, FetchResult, RedirectHop};
 
 /// Retry policy for failed requests.
+///
+/// Controls exponential backoff behavior for retryable HTTP status codes
+/// and network errors. The backoff duration is calculated as:
+/// `initial_backoff * backoff_multiplier^attempt`, capped at `max_backoff`.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::http::RetryPolicy;
+/// use std::time::Duration;
+///
+/// let policy = RetryPolicy::default();
+/// assert_eq!(policy.max_retries, 3);
+/// assert!(policy.is_retryable(429));
+/// assert!(!policy.is_retryable(200));
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RetryPolicy {
     /// Maximum number of retry attempts.
@@ -44,6 +60,21 @@ impl Default for RetryPolicy {
 
 impl RetryPolicy {
     /// Returns the backoff duration for a given attempt number (0-indexed).
+    ///
+    /// The duration grows exponentially: `initial_backoff * multiplier^attempt`,
+    /// capped at `max_backoff`.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_core::http::RetryPolicy;
+    /// use std::time::Duration;
+    ///
+    /// let policy = RetryPolicy::default();
+    /// assert_eq!(policy.backoff_duration(0), Duration::from_secs(1));
+    /// assert_eq!(policy.backoff_duration(1), Duration::from_secs(2));
+    /// assert_eq!(policy.backoff_duration(10), Duration::from_secs(30)); // capped
+    /// ```
     pub fn backoff_duration(&self, attempt: usize) -> Duration {
         let base = self.initial_backoff.as_secs_f64();
         let backoff = base * self.backoff_multiplier.powi(attempt as i32);
@@ -52,12 +83,31 @@ impl RetryPolicy {
     }
 
     /// Returns `true` if the given status code should trigger a retry.
+    ///
+    /// By default retries on: 429 (Too Many Requests), 500, 502, 503, 504.
     pub fn is_retryable(&self, status: u16) -> bool {
         self.retryable_statuses.contains(&status)
     }
 }
 
 /// User-agent rotator that cycles through a list of user-agent strings.
+///
+/// Thread-safe rotation using atomic operations. Useful for distributing
+/// requests across multiple identity strings to avoid detection.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::http::UserAgentRotator;
+///
+/// let rotator = UserAgentRotator::new(vec![
+///     "bot/1.0".to_string(),
+///     "bot/2.0".to_string(),
+/// ]);
+/// assert_eq!(rotator.next(), "bot/1.0");
+/// assert_eq!(rotator.next(), "bot/2.0");
+/// assert_eq!(rotator.next(), "bot/1.0"); // wraps around
+/// ```
 #[derive(Debug)]
 pub struct UserAgentRotator {
     agents: Vec<String>,
@@ -108,6 +158,18 @@ impl Default for UserAgentRotator {
 }
 
 /// Configuration for the HTTP client.
+///
+/// Controls timeout, redirect policy, retry behavior, connection pooling,
+/// and HTTP/2 settings. Can be constructed from a [`CrawlConfig`].
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_core::{CrawlConfig, http::HttpClientConfig};
+///
+/// let config = HttpClientConfig::from(&CrawlConfig::default());
+/// assert_eq!(config.max_body_size, 10 * 1024 * 1024);
+/// ```
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
     /// Request timeout.
@@ -147,6 +209,28 @@ impl From<&CrawlConfig> for HttpClientConfig {
 }
 
 /// An HTTP client with retry, redirect tracking, and user-agent rotation.
+///
+/// Built on top of `reqwest::Client` with additional features for web crawling:
+/// - Manual redirect following with hop recording
+/// - Exponential backoff retry for transient failures
+/// - User-agent rotation across requests
+/// - Response body size limiting
+/// - Streaming responses
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use crawlkit_core::{CrawlConfig, HttpClient};
+/// use url::Url;
+///
+/// # async fn example() -> Result<(), crawlkit_core::CrawlError> {
+/// let client = HttpClient::from_crawl_config(&CrawlConfig::default())?;
+/// let url = Url::parse("https://example.com")?;
+/// let result = client.fetch(&url).await?;
+/// assert_eq!(result.status_code, 200);
+/// # Ok(())
+/// # }
+/// ```
 pub struct HttpClient {
     client: Client,
     config: HttpClientConfig,
@@ -157,6 +241,11 @@ impl HttpClient {
     ///
     /// Builds a `reqwest::Client` with TLS, HTTP/2 multiplexing, connection
     /// pooling, and redirect policy.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] if the underlying reqwest client
+    /// cannot be built (e.g., invalid TLS configuration).
     pub fn new(config: HttpClientConfig) -> Result<Self, CrawlError> {
         let mut builder = Client::builder()
             .timeout(config.timeout)
@@ -181,6 +270,13 @@ impl HttpClient {
     }
 
     /// Creates a new `HttpClient` from a `CrawlConfig`.
+    ///
+    /// Convenience method that converts the crawl config into an
+    /// [`HttpClientConfig`] and builds the client.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] if the client cannot be built.
     pub fn from_crawl_config(config: &CrawlConfig) -> Result<Self, CrawlError> {
         Self::new(HttpClientConfig::from(config))
     }
@@ -201,8 +297,14 @@ impl HttpClient {
 
     /// Fetches a URL with retry logic and redirect tracking.
     ///
-    /// Returns a `FetchResult` with the final URL, status, headers, and body.
-    /// Follows redirects manually up to `max_redirects` to record each hop.
+    /// Returns a [`FetchResult`] with the final URL, status, headers, and body.
+    /// Follows redirects manually to record each hop in the chain.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] on network errors after retries
+    /// are exhausted, or [`CrawlError::TooManyRedirects`] if the redirect
+    /// limit is exceeded.
     pub async fn fetch(&self, url: &Url) -> Result<FetchResult, CrawlError> {
         self.fetch_with_redirects(url, self.config.max_redirects)
             .await
@@ -211,7 +313,11 @@ impl HttpClient {
     /// Fetches a URL, following up to `max_hops` redirects manually.
     ///
     /// Each redirect hop is recorded. If the hop limit is exceeded,
-    /// `CrawlError::TooManyRedirects` is returned.
+    /// [`CrawlError::TooManyRedirects`] is returned.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors for network failures or exceeded redirect limits.
     pub async fn fetch_with_redirects(
         &self,
         url: &Url,
@@ -398,6 +504,10 @@ impl HttpClient {
     ///
     /// This is useful for large pages where you want to process HTML as it
     /// arrives rather than buffering the entire response in memory.
+    ///
+    /// # Errors
+    ///
+    /// Returns errors for network failures or redirect limit exceeded.
     pub async fn fetch_stream<F>(
         &self,
         url: &Url,
@@ -501,7 +611,11 @@ impl HttpClient {
     /// Fetches a URL and returns the response as a streaming reader.
     ///
     /// Returns the response metadata (status, headers) and a streaming body.
-    /// The caller can read chunks from the stream.
+    /// The caller can read chunks from the stream via [`FetchStreamReader::next_chunk`].
+    ///
+    /// # Errors
+    ///
+    /// Returns errors for network failures.
     pub async fn fetch_reader(&self, url: &Url) -> Result<FetchStreamReader, CrawlError> {
         let start = Instant::now();
         let user_agent = self.config.user_agent.next();
@@ -555,8 +669,26 @@ impl HttpClient {
 
 /// A streaming HTTP response reader.
 ///
-/// Read chunks from the body using the `next_chunk` method. The stream
-/// automatically respects `max_body_size`.
+/// Read chunks from the body using the [`next_chunk`](FetchStreamReader::next_chunk) method.
+/// The stream automatically respects `max_body_size`. Can be converted into
+/// a [`FetchResult`] via [`into_fetch_result`](FetchStreamReader::into_fetch_result).
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use crawlkit_core::{CrawlConfig, HttpClient};
+/// use url::Url;
+///
+/// # async fn example() -> Result<(), crawlkit_core::CrawlError> {
+/// let client = HttpClient::from_crawl_config(&CrawlConfig::default())?;
+/// let url = Url::parse("https://example.com")?;
+/// let mut reader = client.fetch_reader(&url).await?;
+/// while let Some(chunk) = reader.next_chunk().await? {
+///     // process chunk
+/// }
+/// # Ok(())
+/// # }
+/// ```
 pub struct FetchStreamReader {
     pub final_url: Url,
     pub status_code: u16,
@@ -571,7 +703,11 @@ impl FetchStreamReader {
     /// Reads the next chunk of the response body.
     ///
     /// Returns `Ok(Some(bytes))` if data is available, `Ok(None)` if the
-    /// stream is complete, or `Err` on error.
+    /// stream is complete, or `Err` on error. Respects `max_body_size`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] on network errors.
     pub async fn next_chunk(&mut self) -> Result<Option<Vec<u8>>, CrawlError> {
         if self.max_body_size > 0 && self.body_size >= self.max_body_size {
             return Ok(None);
@@ -590,6 +726,13 @@ impl FetchStreamReader {
     }
 
     /// Reads the entire remaining body into a String.
+    ///
+    /// Convenience method that drains all remaining chunks and concatenates
+    /// them into a single UTF-8 string (lossy conversion).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] on network errors.
     pub async fn read_body(&mut self) -> Result<String, CrawlError> {
         let mut body = String::new();
         while let Some(chunk) = self.next_chunk().await? {
@@ -598,7 +741,14 @@ impl FetchStreamReader {
         Ok(body)
     }
 
-    /// Converts this into a FetchResult by reading the full body.
+    /// Converts this into a [`FetchResult`] by reading the full body.
+    ///
+    /// Consumes the reader and returns the complete response including
+    /// headers, status, and body content.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] on network errors.
     pub async fn into_fetch_result(mut self) -> Result<FetchResult, CrawlError> {
         let body = self.read_body().await?;
         let body_size = self.body_size;

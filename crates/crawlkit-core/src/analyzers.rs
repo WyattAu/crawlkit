@@ -5091,8 +5091,10 @@ impl AnalyzerRegistry {
 
     /// Run all analyzers on a page and collect findings.
     pub fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding> {
+        use rayon::prelude::*;
+
         self.analyzers
-            .iter()
+            .par_iter()
             .flat_map(|a| a.analyze(ctx, config))
             .collect()
     }

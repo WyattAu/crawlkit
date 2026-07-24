@@ -570,6 +570,8 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     );
 
     // Initialize components
+    let pool_max_idle_per_host = concurrency * 4;
+    let pool_max_idle = concurrency * 8;
     let http_config = crawlkit_core::http::HttpClientConfig {
         timeout: std::time::Duration::from_secs(timeout_secs),
         max_redirects: 20,
@@ -579,10 +581,10 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             .clone()
             .unwrap_or_else(|| format!("crawlkit/{}", env!("CARGO_PKG_VERSION")))])),
         max_body_size: 10 * 1024 * 1024,
-        pool_max_idle_per_host: 32,
-        pool_max_idle: 64,
-        http2_prior_knowledge: false,
-        tcp_keepalive: Some(std::time::Duration::from_secs(30)),
+        pool_max_idle_per_host,
+        pool_max_idle,
+        http2_prior_knowledge: true,
+        tcp_keepalive: Some(std::time::Duration::from_secs(60)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let client = Arc::new(client);

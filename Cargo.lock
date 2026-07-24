@@ -529,6 +529,7 @@ dependencies = [
  "lru",
  "parking_lot",
  "quick-xml",
+ "rayon",
  "reqwest",
  "rusqlite",
  "scraper",

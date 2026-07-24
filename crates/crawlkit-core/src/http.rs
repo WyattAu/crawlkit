@@ -138,10 +138,10 @@ impl From<&CrawlConfig> for HttpClientConfig {
             retry_policy: RetryPolicy::default(),
             user_agent: Arc::new(UserAgentRotator::new(vec![config.user_agent.clone()])),
             max_body_size: 10 * 1024 * 1024, // 10MB default
-            pool_max_idle_per_host: 32,
-            pool_max_idle: 64,
-            http2_prior_knowledge: false, // Negotiate via ALPN
-            tcp_keepalive: Some(Duration::from_secs(30)),
+            pool_max_idle_per_host: 16,
+            pool_max_idle: 32,
+            http2_prior_knowledge: true,
+            tcp_keepalive: Some(Duration::from_secs(60)),
         }
     }
 }
@@ -192,7 +192,7 @@ impl HttpClient {
         let cfg = HttpClientConfig {
             pool_max_idle_per_host: 64,
             pool_max_idle: 128,
-            http2_prior_knowledge: false, // Use ALPN negotiation
+            http2_prior_knowledge: true,
             tcp_keepalive: Some(Duration::from_secs(60)),
             ..config
         };

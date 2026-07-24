@@ -164,17 +164,44 @@ Status: Living document. Updated after each audit cycle.
 
 ## Known Technical Debt
 
+### Critical: Dead Code (~40% of modules)
+
+The following modules are fully implemented but never wired into the crawl loop, CLI, or API. They represent scaffolding from earlier development phases. Decision required: wire them in or delete.
+
+| Module | Status | Recommendation |
+|--------|--------|----------------|
+| `link_graph.rs` | Dead (divergent PageRank from backlinks.rs) | Delete; merge into backlinks |
+| `plugin.rs` | Dead (TODO: libloading integration) | Delete or move to separate crate |
+| `enterprise.rs` | Dead (RBAC/SSO/SLO never instantiated) | Delete or move to separate crate |
+| `encryption.rs` | Dead (never instantiated) | Delete or feature-gate |
+| `playwright.rs` | Dead (--javascript flag ignored) | Wire in or delete |
+| `resource_monitor.rs` | Dead (CLI uses inline RSS check) | Replace inline check or delete |
+| `backpressure.rs` | Dead (never instantiated) | Delete |
+| `circuit_breaker.rs` | Dead (never instantiated) | Wire into HTTP client or delete |
+| `determinism.rs` | Dead (never instantiated) | Delete |
+| `observability.rs` | Dead (API uses Prometheus instead) | Delete |
+| `dns.rs` | Dead (reqwest handles DNS internally) | Delete |
+| `advanced_features.rs` | Dead (alerts/scheduler never used) | Delete |
+| `js_render_decision.rs` | Dead (Playwright not wired) | Delete |
+| `feature_flags.rs` | Dead (flags defined but never checked) | Wire in or delete |
+
+### Resolved in This Audit
+
+| Item | Status | Fix |
+|------|--------|-----|
+| Duplicate CrawlStats SQL | RESOLVED | export.rs now calls Storage::get_stats() |
+| Duplicate Severity enums | RESOLVED | Unified to storage::Severity |
+| Duplicate PageRank | OPEN | link_graph.rs divergent impl (see above) |
+
+### Remaining Issues
+
 | Item | Severity | Location | Notes |
 |------|----------|----------|-------|
-| Duplicate PageRank implementations | Medium | link_graph.rs, backlinks.rs | Consolidate into single impl |
-| Duplicate CrawlStats SQL | Medium | storage.rs, export.rs | export.rs should call Storage::get_stats |
-| Duplicate Severity enums | Low | storage.rs, ai_bots.rs | Merge or clarify naming |
 | `AuditTrail::clear()` breaks chain | Low | audit.rs | Remove or restrict access |
 | `DnsCache` memory tracking inaccuracy | Low | dns.rs | Include Vec size in new_size calc |
 | `BoundedPipeline::is_full` semantics | Low | backpressure.rs | Use try_send or proper capacity check |
 | Error type erasure in CrawlError | Low | storage/export/compare | Add distinct CrawlError variants |
 | `rate_limit` domain_buckets unbounded | Low | ratelimit.rs | Add LRU eviction for long-running crawls |
-| `plugin.rs` load_plugin no dynamic loading | Low | plugin.rs | Requires libloading integration |
 | N+1 query pattern in export.rs | Low | export.rs | Batch reads for CSV/JSON/HTML export |
 | `circuit_breaker` TOCTOU race | Low | circuit_breaker.rs | State getter has side effects |
 | Analyzer code duplication (14 patterns) | Low | analyzers.rs | Extract shared utilities (syllables, sentences, flesch) |

@@ -11,7 +11,7 @@ use std::sync::Arc;
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::DeterminismController;
+/// use crawlkit_engine::DeterminismController;
 ///
 /// let ctrl = DeterminismController::new(42);
 /// assert_eq!(ctrl.seed(), 42);

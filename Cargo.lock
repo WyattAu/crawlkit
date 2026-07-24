@@ -663,7 +663,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "clap",
- "crawlkit-core",
+ "crawlkit-engine",
  "indicatif",
  "opentelemetry",
  "opentelemetry-stdout",
@@ -688,7 +688,7 @@ dependencies = [
  "argon2",
  "axum",
  "chrono",
- "crawlkit-core",
+ "crawlkit-engine",
  "dashmap",
  "jsonwebtoken",
  "opentelemetry",
@@ -712,7 +712,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "crawlkit-core"
+name = "crawlkit-engine"
 version = "1.0.0"
 dependencies = [
  "aes-gcm",

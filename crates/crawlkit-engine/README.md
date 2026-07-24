@@ -1,4 +1,4 @@
-# crawlkit-core
+# crawlkit-engine
 
 Core library for [crawlkit](https://github.com/WyattAu/crawlkit) — a high-performance Rust web crawler for SEO analysis.
 
@@ -18,11 +18,11 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crawlkit-core = "1.0.0"
+crawlkit-engine = "1.0.0"
 ```
 
 ## Documentation
 
-- [API Documentation](https://docs.rs/crawlkit-core)
+- [API Documentation](https://docs.rs/crawlkit-engine)
 - [GitHub Repository](https://github.com/WyattAu/crawlkit)
 - [Security Guide](https://github.com/WyattAu/crawlkit/blob/main/docs/SECURITY.md)

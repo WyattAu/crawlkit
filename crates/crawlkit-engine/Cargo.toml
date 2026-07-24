@@ -1,5 +1,5 @@
 [package]
-name = "crawlkit-core"
+name = "crawlkit-engine"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

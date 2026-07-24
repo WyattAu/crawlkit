@@ -30,9 +30,9 @@ jobs:
       - name: Run benchmarks (baseline on main)
         if: github.base_ref == 'main'
         run: |
-          git checkout origin/main -- crates/crawlkit-core/benches/ || true
+          git checkout origin/main -- crates/crawlkit-engine/benches/ || true
           cargo bench --workspace -- --output-format bencher | tee baseline.txt
-          git checkout HEAD -- crates/crawlkit-core/benches/
+          git checkout HEAD -- crates/crawlkit-engine/benches/
 
       - name: Run benchmarks (PR)
         run: cargo bench --workspace -- --output-format bencher | tee output.txt

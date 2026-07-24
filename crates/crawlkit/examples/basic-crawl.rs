@@ -17,13 +17,13 @@ use std::time::Duration;
 
 use anyhow::Result;
 use chrono::Utc;
-use crawlkit_core::analyzers::{AnalysisContext, AnalyzerRegistry};
-use crawlkit_core::export::{export_csv, export_html, export_json, CsvColumnSelector};
-use crawlkit_core::http::{HttpClient, HttpClientConfig, RetryPolicy, UserAgentRotator};
-use crawlkit_core::queue::{Priority, ScopeConfig, UrlQueue};
-use crawlkit_core::ratelimit::RateLimiter;
-use crawlkit_core::storage::{PageData, Storage};
-use crawlkit_core::{CrawlConfig, HtmlParser};
+use crawlkit_engine::analyzers::{AnalysisContext, AnalyzerRegistry};
+use crawlkit_engine::export::{export_csv, export_html, export_json, CsvColumnSelector};
+use crawlkit_engine::http::{HttpClient, HttpClientConfig, RetryPolicy, UserAgentRotator};
+use crawlkit_engine::queue::{Priority, ScopeConfig, UrlQueue};
+use crawlkit_engine::ratelimit::RateLimiter;
+use crawlkit_engine::storage::{PageData, Storage};
+use crawlkit_engine::{CrawlConfig, HtmlParser};
 use tokio::sync::Mutex;
 use url::Url;
 
@@ -194,7 +194,7 @@ async fn main() -> Result<()> {
 
         // Store findings as issues
         for finding in &findings {
-            let issue = crawlkit_core::storage::Issue {
+            let issue = crawlkit_engine::storage::Issue {
                 id: uuid::Uuid::new_v4().to_string(),
                 page_id: page_data.id.clone(),
                 category: finding.category.clone(),

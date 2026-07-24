@@ -144,7 +144,7 @@ impl From<&CrawlConfig> for ScopeConfig {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::queue::{UrlQueue, ScopeConfig, Priority};
+/// use crawlkit_engine::queue::{UrlQueue, ScopeConfig, Priority};
 /// use url::Url;
 ///
 /// let queue = UrlQueue::new(ScopeConfig::default());

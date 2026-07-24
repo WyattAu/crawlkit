@@ -3,7 +3,7 @@
 //! Tests Google Analytics and CrUX adapters
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use crawlkit_core::rum::{CruxAdapter, GoogleAnalyticsAdapter};
+use crawlkit_engine::rum::{CruxAdapter, GoogleAnalyticsAdapter};
 
 #[tokio::test]
 async fn test_ga_adapter_config_required() {
@@ -25,7 +25,7 @@ async fn test_crux_adapter_config_required() {
 
 #[test]
 fn test_merged_metrics_calculation() {
-    let lab = crawlkit_core::LabMetrics {
+    let lab = crawlkit_engine::LabMetrics {
         lcp: Some(2500.0),
         fid: Some(100.0),
         cls: Some(0.1),
@@ -34,7 +34,7 @@ fn test_merged_metrics_calculation() {
         tti: Some(3000.0),
     };
 
-    let field = crawlkit_core::FieldMetrics {
+    let field = crawlkit_engine::FieldMetrics {
         lcp_p75: Some(3000.0),
         inp_p75: Some(150.0),
         cls_p75: Some(0.15),
@@ -43,13 +43,13 @@ fn test_merged_metrics_calculation() {
     };
 
     // Calculate deltas
-    let deltas = crawlkit_core::MetricDeltas {
+    let deltas = crawlkit_engine::MetricDeltas {
         lcp_delta: Some(field.lcp_p75.unwrap_or(0.0) - lab.lcp.unwrap_or(0.0)),
         cls_delta: Some(field.cls_p75.unwrap_or(0.0) - lab.cls.unwrap_or(0.0)),
         fcp_delta: Some(field.fcp_p75.unwrap_or(0.0) - lab.fcp.unwrap_or(0.0)),
     };
 
-    let merged = crawlkit_core::MergedMetrics {
+    let merged = crawlkit_engine::MergedMetrics {
         url: "https://example.com".to_string(),
         lab,
         field: Some(field),

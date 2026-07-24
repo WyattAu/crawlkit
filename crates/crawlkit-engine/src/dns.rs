@@ -34,7 +34,7 @@ impl DnsEntry {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::DnsCache;
+/// use crawlkit_engine::DnsCache;
 /// use std::time::Duration;
 ///
 /// let cache = DnsCache::new(Duration::from_secs(300), 10_000);

@@ -31,9 +31,9 @@ use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
-use crawlkit_core::storage::Storage;
-use crawlkit_core::AuditTrail;
-use crawlkit_core::CrawlConfig;
+use crawlkit_engine::storage::Storage;
+use crawlkit_engine::AuditTrail;
+use crawlkit_engine::CrawlConfig;
 
 use auth::{AuthManager, User};
 use auth_mw::auth_middleware as jwt_auth_middleware;
@@ -706,7 +706,7 @@ async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
     Json(results)
 }
 
-async fn get_audit_events(State(state): State<AppState>) -> Json<Vec<crawlkit_core::AuditEvent>> {
+async fn get_audit_events(State(state): State<AppState>) -> Json<Vec<crawlkit_engine::AuditEvent>> {
     Json(state.audit_trail.events())
 }
 
@@ -932,10 +932,10 @@ async fn get_crawl_backlinks(
         .get_external_links(&crawl_id)
         .map_err(|e| ApiError::Internal(format!("Failed to get external links: {e}")))?;
 
-    let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+    let mut analyzer = crawlkit_engine::BacklinkAnalyzer::new();
     analyzer.load_from_crawl_data(&link_pairs);
     for (source, target) in &external_links {
-        analyzer.add_backlink(crawlkit_core::Backlink {
+        analyzer.add_backlink(crawlkit_engine::Backlink {
             source_url: source.clone(),
             target_url: target.clone(),
             anchor_text: String::new(),
@@ -1166,10 +1166,10 @@ fn fire_webhooks(
 // ---------------------------------------------------------------------------
 
 async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) {
-    use crawlkit_core::analyzers::AnalyzerRegistry;
-    use crawlkit_core::http::HttpClient;
-    use crawlkit_core::queue::{Priority, UrlQueue};
-    use crawlkit_core::HtmlParser;
+    use crawlkit_engine::analyzers::AnalyzerRegistry;
+    use crawlkit_engine::http::HttpClient;
+    use crawlkit_engine::queue::{Priority, UrlQueue};
+    use crawlkit_engine::HtmlParser;
 
     let max_pages = config.max_pages;
     let http_client = match HttpClient::from_crawl_config(&config) {
@@ -1187,7 +1187,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
     };
 
     let http_client = Arc::new(http_client);
-    let robots_cache = Arc::new(crawlkit_core::RobotsTxtCache::new(
+    let robots_cache = Arc::new(crawlkit_engine::RobotsTxtCache::new(
         http_client.clone(),
         &config,
     ));
@@ -1294,13 +1294,13 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         };
 
         let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
+        let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
         let robots_ref = if robots_raw.is_empty() {
             None
         } else {
             Some(robots_raw.as_str())
         };
-        let ctx = crawlkit_core::analyzers::AnalysisContext {
+        let ctx = crawlkit_engine::analyzers::AnalysisContext {
             page: &parsed,
             status_code: Some(result.status_code),
             headers: &headers_vec,
@@ -1318,7 +1318,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         total_issues += findings.len();
         state.metrics.issues_total.inc_by(findings.len() as u64);
 
-        let page_data = crawlkit_core::storage::PageData {
+        let page_data = crawlkit_engine::storage::PageData {
             id: Uuid::new_v4().to_string(),
             url: entry.url.clone(),
             final_url: result.final_url.clone(),
@@ -1344,7 +1344,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         let _ = state.storage.insert_page(&crawl_id, &page_data);
 
         for finding in &findings {
-            let issue = crawlkit_core::storage::Issue {
+            let issue = crawlkit_engine::storage::Issue {
                 id: Uuid::new_v4().to_string(),
                 page_id: page_data.id.clone(),
                 category: finding.category.clone(),

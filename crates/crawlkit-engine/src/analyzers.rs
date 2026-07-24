@@ -86,8 +86,8 @@ pub struct Finding {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::analyzers::{Analyzer, AnalysisContext, Finding};
-/// use crawlkit_core::CrawlConfig;
+/// use crawlkit_engine::analyzers::{Analyzer, AnalysisContext, Finding};
+/// use crawlkit_engine::CrawlConfig;
 ///
 /// struct MyAnalyzer;
 ///
@@ -5080,7 +5080,7 @@ impl Analyzer for InternationalSeoAnalyzer {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{CrawlConfig, analyzers::AnalyzerRegistry};
+/// use crawlkit_engine::{CrawlConfig, analyzers::AnalyzerRegistry};
 ///
 /// let registry = AnalyzerRegistry::new(&CrawlConfig::default());
 /// assert!(registry.len() > 20);

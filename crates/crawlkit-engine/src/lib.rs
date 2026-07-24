@@ -21,8 +21,8 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use crawlkit_core::{CrawlConfig, HttpClient, HtmlParser};
-//! use crawlkit_core::analyzers::AnalyzerRegistry;
+//! use crawlkit_engine::{CrawlConfig, HttpClient, HtmlParser};
+//! use crawlkit_engine::analyzers::AnalyzerRegistry;
 //!
 //! # async fn example() -> Result<(), Box<dyn std::error::Error>> {
 //! let config = CrawlConfig::default();
@@ -303,7 +303,7 @@ mod opt_duration_ms {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::CrawlError;
+/// use crawlkit_engine::CrawlError;
 ///
 /// let err = CrawlError::TooManyRedirects(20);
 /// assert!(err.to_string().contains("20"));
@@ -348,7 +348,7 @@ pub enum CrawlError {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::CrawlConfig;
+/// use crawlkit_engine::CrawlConfig;
 /// use std::time::Duration;
 ///
 /// let config = CrawlConfig {

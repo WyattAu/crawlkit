@@ -13,7 +13,7 @@ use tokio::sync::{mpsc, Semaphore};
 ///
 /// ```rust
 /// # async fn example() {
-/// use crawlkit_core::BackpressureController;
+/// use crawlkit_engine::BackpressureController;
 ///
 /// let controller = BackpressureController::new(10);
 /// let permit = controller.acquire().await.unwrap();
@@ -155,7 +155,7 @@ pub enum BackpressureError {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::BoundedPipeline;
+/// use crawlkit_engine::BoundedPipeline;
 ///
 /// let mut pipeline = BoundedPipeline::<i32>::new(10);
 /// assert_eq!(pipeline.capacity(), 10);

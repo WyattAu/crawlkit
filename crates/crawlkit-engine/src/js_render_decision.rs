@@ -51,8 +51,8 @@ impl Default for SpaIndicators {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::JsRenderDecisionEngine;
-/// use crawlkit_core::JsRenderDecision;
+/// use crawlkit_engine::JsRenderDecisionEngine;
+/// use crawlkit_engine::JsRenderDecision;
 ///
 /// let engine = JsRenderDecisionEngine::new();
 /// let decision = engine.should_render_js("https://example.com/page", None);

@@ -6,7 +6,7 @@
 
 use std::time::Duration;
 
-use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightRenderer};
+use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightRenderer};
 
 /// Timeout for all playwright tests (30 seconds).
 const TIMEOUT: Duration = Duration::from_secs(30);

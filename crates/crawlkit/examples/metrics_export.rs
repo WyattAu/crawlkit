@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example metrics_export
 
-use crawlkit_core::observability::Metrics;
+use crawlkit_engine::observability::Metrics;
 use std::time::Duration;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

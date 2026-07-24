@@ -67,7 +67,7 @@ pub struct ResourceUsage {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{ResourceMonitor, ResourceLimits};
+/// use crawlkit_engine::{ResourceMonitor, ResourceLimits};
 ///
 /// let limits = ResourceLimits { max_pages: Some(10), ..Default::default() };
 /// let monitor = ResourceMonitor::new(limits);

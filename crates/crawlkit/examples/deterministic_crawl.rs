@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example deterministic_crawl
 
-use crawlkit_core::determinism::DeterminismController;
+use crawlkit_engine::determinism::DeterminismController;
 
 fn main() {
     let seed = 42;

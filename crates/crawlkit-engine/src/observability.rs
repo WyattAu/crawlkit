@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::Metrics;
+/// use crawlkit_engine::Metrics;
 /// use std::time::Duration;
 ///
 /// let metrics = Metrics::new();

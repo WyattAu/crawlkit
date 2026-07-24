@@ -2,8 +2,8 @@
 //!
 //! Run with: cargo run --example crawl_and_analyze
 
-use crawlkit_core::analyzers::AnalyzerRegistry;
-use crawlkit_core::{CrawlConfig, HtmlParser, HttpClient};
+use crawlkit_engine::analyzers::AnalyzerRegistry;
+use crawlkit_engine::{CrawlConfig, HtmlParser, HttpClient};
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -23,7 +23,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Links: {}", parsed.links.len());
     println!("Images: {}", parsed.images.len());
 
-    let ctx = crawlkit_core::analyzers::AnalysisContext {
+    let ctx = crawlkit_engine::analyzers::AnalysisContext {
         page: &parsed,
         status_code: Some(result.status_code),
         headers: &result.headers,

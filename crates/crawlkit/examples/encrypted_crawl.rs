@@ -2,7 +2,7 @@
 //!
 //! Run with: CRAWLKIT_ENCRYPTION_KEY=$(openssl rand -hex 32) cargo run --example encrypted_crawl
 
-use crawlkit_core::encryption::{EncryptionConfig, EncryptionManager, KeySource};
+use crawlkit_engine::encryption::{EncryptionConfig, EncryptionManager, KeySource};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = EncryptionConfig {

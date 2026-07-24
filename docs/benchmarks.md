@@ -11,7 +11,7 @@ All benchmarks use [Criterion](https://bheisler.github.io/criterion.rs/book/) wi
 - **Min samples**: 10
 - **Statistical significance**: 95% confidence interval
 
-Benchmarks run on the reference hardware below. Results are in `crates/crawlkit-core/benches/crawlkit_benchmarks.rs`.
+Benchmarks run on the reference hardware below. Results are in `crates/crawlkit-engine/benches/crawlkit_benchmarks.rs`.
 
 ### What we measure
 
@@ -174,13 +174,13 @@ crawlkit trades raw throughput for:
 
 ```bash
 # Run all benchmarks
-cargo bench -p crawlkit-core
+cargo bench -p crawlkit-engine
 
 # Run a specific benchmark
-cargo bench -p crawlkit-core -- html_parse_small
+cargo bench -p crawlkit-engine -- html_parse_small
 
 # Generate HTML reports
-cargo bench -p crawlkit-core -- --output-format html
+cargo bench -p crawlkit-engine -- --output-format html
 # Open target/criterion/report/index.html
 ```
 
@@ -190,12 +190,12 @@ cargo bench -p crawlkit-core -- --output-format html
 git clone https://github.com/WyattAu/crawlkit.git
 cd crawlkit
 git checkout <commit-hash>
-cargo bench -p crawlkit-core 2>&1 | tee bench-results.txt
+cargo bench -p crawlkit-engine 2>&1 | tee bench-results.txt
 ```
 
 Results are stored in `target/criterion/` and can be compared across commits:
 
 ```bash
 # Compare against previous run
-cargo bench -p crawlkit-core -- --baseline <commit-hash>
+cargo bench -p crawlkit-engine -- --baseline <commit-hash>
 ```

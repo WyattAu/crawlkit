@@ -2,9 +2,9 @@
 //!
 //! Run with: cargo run --example custom_analyzer
 
-use crawlkit_core::analyzers::{AnalysisContext, Analyzer, Finding};
-use crawlkit_core::storage::{IssueCategory, Severity};
-use crawlkit_core::CrawlConfig;
+use crawlkit_engine::analyzers::{AnalysisContext, Analyzer, Finding};
+use crawlkit_engine::storage::{IssueCategory, Severity};
+use crawlkit_engine::CrawlConfig;
 
 /// Custom analyzer that checks for specific content patterns.
 pub struct ContentPatternAnalyzer {

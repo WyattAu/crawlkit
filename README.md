@@ -217,7 +217,7 @@ crawlkit-api --port 8080 --api-key my-secret-key
 ```
 crawlkit/
 ├── crates/
-│   ├── crawlkit-core/     # Core types, analyzers, storage, export
+│   ├── crawlkit-engine/     # Core types, analyzers, storage, export
 │   ├── crawlkit/          # CLI binary
 │   └── crawlkit-api/      # REST API server
 ├── docs/                  # Architecture, roadmap, competitive analysis

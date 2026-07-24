@@ -602,10 +602,10 @@ HTML report gets new section:
 
 | File | Path | Purpose |
 |------|------|---------|
-| `ai_analyzers.rs` | `crates/crawlkit-core/src/ai_analyzers.rs` | All 4 AI analyzers |
-| `ai_bots.rs` | `crates/crawlkit-core/src/ai_bots.rs` | AI bot registry |
-| `ai_test_vectors.toml` | `crates/crawlkit-core/test_vectors/ai_test_vectors.toml` | Test data |
-| `ai_integration_test.rs` | `crates/crawlkit-core/tests/ai_integration_test.rs` | Integration tests |
+| `ai_analyzers.rs` | `crates/crawlkit-engine/src/ai_analyzers.rs` | All 4 AI analyzers |
+| `ai_bots.rs` | `crates/crawlkit-engine/src/ai_bots.rs` | AI bot registry |
+| `ai_test_vectors.toml` | `crates/crawlkit-engine/test_vectors/ai_test_vectors.toml` | Test data |
+| `ai_integration_test.rs` | `crates/crawlkit-engine/tests/ai_integration_test.rs` | Integration tests |
 
 ---
 

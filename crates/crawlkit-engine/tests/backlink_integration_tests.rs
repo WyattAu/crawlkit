@@ -3,7 +3,7 @@
 //! Tests Ahrefs, Majestic, and GSC adapters
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use crawlkit_core::backlink_adapters::{
+use crawlkit_engine::backlink_adapters::{
     AhrefsAdapter, BacklinkAdapter, GscAdapter, MajesticAdapter,
 };
 
@@ -45,7 +45,7 @@ async fn test_gsc_adapter_token_required() {
 
 #[test]
 fn test_backlink_registry() {
-    let registry = crawlkit_core::BacklinkAdapterRegistry::with_defaults();
+    let registry = crawlkit_engine::BacklinkAdapterRegistry::with_defaults();
 
     // Check that all adapters are registered
     assert!(registry.get("ahrefs").is_some());

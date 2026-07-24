@@ -55,7 +55,7 @@ impl Default for EncryptionConfig {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{EncryptionManager, EncryptionConfig};
+/// use crawlkit_engine::{EncryptionManager, EncryptionConfig};
 ///
 /// let manager = EncryptionManager::default();
 /// assert!(!manager.is_enabled());

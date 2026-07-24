@@ -9,11 +9,11 @@
 
 use anyhow::Result;
 use chrono::Utc;
-use crawlkit_core::compare::{diff_to_json, diff_to_markdown};
-use crawlkit_core::export::{
+use crawlkit_engine::compare::{diff_to_json, diff_to_markdown};
+use crawlkit_engine::export::{
     export_csv, export_html, export_json, export_markdown, CsvColumnSelector,
 };
-use crawlkit_core::storage::{Issue, IssueCategory, PageData, Severity, Storage};
+use crawlkit_engine::storage::{Issue, IssueCategory, PageData, Severity, Storage};
 use std::path::Path;
 use url::Url;
 
@@ -212,7 +212,7 @@ fn main() -> Result<()> {
     // Compare via in-memory connections
     let conn1 = &*storage.conn();
     let conn2 = &*storage2.conn();
-    let diff = crawlkit_core::compare::compare_crawl_ids(conn1, &crawl_id, conn2, &crawl_id2)?;
+    let diff = crawlkit_engine::compare::compare_crawl_ids(conn1, &crawl_id, conn2, &crawl_id2)?;
 
     let diff_json = diff_to_json(&diff, true)?;
     println!("Diff (JSON):\n  {diff_json}\n");

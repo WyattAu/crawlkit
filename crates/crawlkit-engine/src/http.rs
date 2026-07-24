@@ -22,7 +22,7 @@ use crate::{CrawlConfig, CrawlError, FetchResult, RedirectHop};
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::http::RetryPolicy;
+/// use crawlkit_engine::http::RetryPolicy;
 /// use std::time::Duration;
 ///
 /// let policy = RetryPolicy::default();
@@ -67,7 +67,7 @@ impl RetryPolicy {
     /// # Examples
     ///
     /// ```rust
-    /// use crawlkit_core::http::RetryPolicy;
+    /// use crawlkit_engine::http::RetryPolicy;
     /// use std::time::Duration;
     ///
     /// let policy = RetryPolicy::default();
@@ -98,7 +98,7 @@ impl RetryPolicy {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::http::UserAgentRotator;
+/// use crawlkit_engine::http::UserAgentRotator;
 ///
 /// let rotator = UserAgentRotator::new(vec![
 ///     "bot/1.0".to_string(),
@@ -165,7 +165,7 @@ impl Default for UserAgentRotator {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{CrawlConfig, http::HttpClientConfig};
+/// use crawlkit_engine::{CrawlConfig, http::HttpClientConfig};
 ///
 /// let config = HttpClientConfig::from(&CrawlConfig::default());
 /// assert_eq!(config.max_body_size, 10 * 1024 * 1024);
@@ -220,10 +220,10 @@ impl From<&CrawlConfig> for HttpClientConfig {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use crawlkit_core::{CrawlConfig, HttpClient};
+/// use crawlkit_engine::{CrawlConfig, HttpClient};
 /// use url::Url;
 ///
-/// # async fn example() -> Result<(), crawlkit_core::CrawlError> {
+/// # async fn example() -> Result<(), crawlkit_engine::CrawlError> {
 /// let client = HttpClient::from_crawl_config(&CrawlConfig::default())?;
 /// let url = Url::parse("https://example.com")?;
 /// let result = client.fetch(&url).await?;
@@ -676,10 +676,10 @@ impl HttpClient {
 /// # Examples
 ///
 /// ```rust,no_run
-/// use crawlkit_core::{CrawlConfig, HttpClient};
+/// use crawlkit_engine::{CrawlConfig, HttpClient};
 /// use url::Url;
 ///
-/// # async fn example() -> Result<(), crawlkit_core::CrawlError> {
+/// # async fn example() -> Result<(), crawlkit_engine::CrawlError> {
 /// let client = HttpClient::from_crawl_config(&CrawlConfig::default())?;
 /// let url = Url::parse("https://example.com")?;
 /// let mut reader = client.fetch_reader(&url).await?;

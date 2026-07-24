@@ -213,8 +213,8 @@ All new analyzers must comply with `.adrs/coding-standards.md` (Engineering Stan
 ## Related Documentation
 
 - `docs/ROADMAP.md` — Phase 4.4 (WASM plugins), Phase 7.1 (Playwright)
-- `crates/crawlkit-core/src/analyzers.rs` — Existing analyzer implementations
-- `crates/crawlkit-core/src/parser.rs` — HTML parsing (script tag extraction)
+- `crates/crawlkit-engine/src/analyzers.rs` — Existing analyzer implementations
+- `crates/crawlkit-engine/src/parser.rs` — HTML parsing (script tag extraction)
 
 ---
 

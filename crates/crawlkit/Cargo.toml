@@ -20,7 +20,7 @@ name = "crawlkit"
 path = "src/main.rs"
 
 [dependencies]
-crawlkit-core = { path = "../crawlkit-core" }
+crawlkit-engine = { path = "../crawlkit-engine" }
 tokio.workspace = true
 clap.workspace = true
 tracing.workspace = true

@@ -17,7 +17,7 @@ use crate::CrawlConfig;
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::ratelimit::RateLimiter;
+/// use crawlkit_engine::ratelimit::RateLimiter;
 ///
 /// let limiter = RateLimiter::new(2.0, 10.0);
 /// assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);

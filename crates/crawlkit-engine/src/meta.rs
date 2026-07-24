@@ -69,7 +69,7 @@ pub struct HreflangTag {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::MetaTags;
+/// use crawlkit_engine::MetaTags;
 ///
 /// let meta = MetaTags {
 ///     title: Some("My Page".to_string()),

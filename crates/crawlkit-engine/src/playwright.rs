@@ -334,7 +334,7 @@ impl PlaywrightDetector {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{PlaywrightRenderer, PlaywrightConfig};
+/// use crawlkit_engine::{PlaywrightRenderer, PlaywrightConfig};
 ///
 /// let renderer = PlaywrightRenderer::new(PlaywrightConfig::default());
 /// assert!(!renderer.is_available()); // disabled by default

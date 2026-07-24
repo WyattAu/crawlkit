@@ -244,9 +244,9 @@ Dynamic signals (WASM-P002, WASM-P003, WASM-P004) require Playwright.
 
 | File | Path | Purpose |
 |------|------|---------|
-| `wasm_analyzers.rs` | `crates/crawlkit-core/src/wasm_analyzers.rs` | All 3 WASM analyzers |
-| `wasm_test_vectors.toml` | `crates/crawlkit-core/test_vectors/wasm_test_vectors.toml` | Test data |
-| `wasm_integration_test.rs` | `crates/crawlkit-core/tests/wasm_integration_test.rs` | Integration tests |
+| `wasm_analyzers.rs` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | All 3 WASM analyzers |
+| `wasm_test_vectors.toml` | `crates/crawlkit-engine/test_vectors/wasm_test_vectors.toml` | Test data |
+| `wasm_integration_test.rs` | `crates/crawlkit-engine/tests/wasm_integration_test.rs` | Integration tests |
 
 ---
 

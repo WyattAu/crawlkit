@@ -296,7 +296,7 @@ pub struct ParsedPage {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_core::{HtmlParser, parser::ParseError};
+/// use crawlkit_engine::{HtmlParser, parser::ParseError};
 /// use url::Url;
 ///
 /// let html = r#"<!DOCTYPE html><html><head><title>Test</title></head>

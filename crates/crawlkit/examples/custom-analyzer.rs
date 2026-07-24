@@ -11,9 +11,9 @@
 use std::time::Duration;
 
 use anyhow::Result;
-use crawlkit_core::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry, Finding};
-use crawlkit_core::storage::{IssueCategory, Severity};
-use crawlkit_core::{CrawlConfig, HtmlParser};
+use crawlkit_engine::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry, Finding};
+use crawlkit_engine::storage::{IssueCategory, Severity};
+use crawlkit_engine::{CrawlConfig, HtmlParser};
 use url::Url;
 
 // ---------------------------------------------------------------------------

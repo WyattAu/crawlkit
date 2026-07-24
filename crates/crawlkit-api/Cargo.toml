@@ -20,7 +20,7 @@ name = "crawlkit-api"
 path = "src/main.rs"
 
 [dependencies]
-crawlkit-core = { path = "../crawlkit-core" }
+crawlkit-engine = { path = "../crawlkit-engine" }
 tokio.workspace = true
 axum = { version = "0.8", features = ["macros"] }
 tower = { version = "0.5", features = ["full"] }

@@ -1,14 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
-use crawlkit_core::analyzers::AnalyzerRegistry;
-use crawlkit_core::backlinks::BacklinkAnalyzer;
-use crawlkit_core::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
-use crawlkit_core::feature_flags::FeatureFlags;
-use crawlkit_core::meta::MetaTags;
-use crawlkit_core::parser::{Heading, HtmlParser, ParsedPage, ScriptInfo};
-use crawlkit_core::queue::{Priority, ScopeConfig, UrlQueue};
-use crawlkit_core::storage::{Issue, IssueCategory, PageData, Severity, Storage};
-use crawlkit_core::CrawlConfig;
+use crawlkit_engine::analyzers::AnalyzerRegistry;
+use crawlkit_engine::backlinks::BacklinkAnalyzer;
+use crawlkit_engine::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig};
+use crawlkit_engine::feature_flags::FeatureFlags;
+use crawlkit_engine::meta::MetaTags;
+use crawlkit_engine::parser::{Heading, HtmlParser, ParsedPage, ScriptInfo};
+use crawlkit_engine::queue::{Priority, ScopeConfig, UrlQueue};
+use crawlkit_engine::storage::{Issue, IssueCategory, PageData, Severity, Storage};
+use crawlkit_engine::CrawlConfig;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use std::time::Duration;
 use url::Url;
@@ -265,7 +265,7 @@ fn bench_analyzer_registry(c: &mut Criterion) {
 
     c.bench_function("analyzer_registry_full_suite", |b| {
         b.iter(|| {
-            let ctx = crawlkit_core::AnalysisContext {
+            let ctx = crawlkit_engine::AnalysisContext {
                 page: black_box(&page),
                 status_code: Some(200),
                 headers: &[],
@@ -443,7 +443,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                     .collect();
                 storage.insert_issues(&issues).unwrap();
                 let retrieved = storage
-                    .get_issues(&crawl_id, &crawlkit_core::storage::IssueFilter::default())
+                    .get_issues(&crawl_id, &crawlkit_engine::storage::IssueFilter::default())
                     .unwrap();
                 black_box(retrieved);
             },

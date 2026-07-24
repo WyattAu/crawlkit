@@ -13,20 +13,20 @@ use std::time::Duration;
 use chrono::Utc;
 use url::Url;
 
-use crawlkit_core::ai_analyzers::AiCrawlerAccessibilityAnalyzer;
-use crawlkit_core::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry};
-use crawlkit_core::backlinks::BacklinkAnalyzer;
-use crawlkit_core::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
-use crawlkit_core::feature_flags::{FeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING};
-use crawlkit_core::js_render_decision::{JsRenderDecision, JsRenderDecisionEngine};
-use crawlkit_core::meta::MetaTags;
-use crawlkit_core::parser::{Heading, ParsedPage, ScriptInfo};
-use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightRenderer};
-use crawlkit_core::ratelimit::RateLimiter;
-use crawlkit_core::resource_monitor::{ResourceLimits, ResourceMonitor};
-use crawlkit_core::storage::{Issue, IssueCategory, PageData, Severity, Storage};
-use crawlkit_core::wasm_analyzers::WasmPatternAnalyzer;
-use crawlkit_core::CrawlConfig;
+use crawlkit_engine::ai_analyzers::AiCrawlerAccessibilityAnalyzer;
+use crawlkit_engine::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry};
+use crawlkit_engine::backlinks::BacklinkAnalyzer;
+use crawlkit_engine::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitState};
+use crawlkit_engine::feature_flags::{FeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING};
+use crawlkit_engine::js_render_decision::{JsRenderDecision, JsRenderDecisionEngine};
+use crawlkit_engine::meta::MetaTags;
+use crawlkit_engine::parser::{Heading, ParsedPage, ScriptInfo};
+use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightRenderer};
+use crawlkit_engine::ratelimit::RateLimiter;
+use crawlkit_engine::resource_monitor::{ResourceLimits, ResourceMonitor};
+use crawlkit_engine::storage::{Issue, IssueCategory, PageData, Severity, Storage};
+use crawlkit_engine::wasm_analyzers::WasmPatternAnalyzer;
+use crawlkit_engine::CrawlConfig;
 
 // ---------------------------------------------------------------------------
 // Test Helpers
@@ -219,7 +219,7 @@ fn test_link_graph_export() {
 
 #[test]
 fn test_observability_metrics() {
-    let metrics = crawlkit_core::Metrics::new();
+    let metrics = crawlkit_engine::Metrics::new();
 
     // Record some activity
     metrics.record_page_success(1024, 1000, 500, 100, 3); // 1ms fetch, 0.5ms analysis
@@ -259,21 +259,21 @@ fn test_observability_metrics() {
 
 #[test]
 fn test_audit_trail_integration() {
-    let trail = crawlkit_core::AuditTrail::new();
+    let trail = crawlkit_engine::AuditTrail::new();
 
     // Record events
     let e1 = trail.record(
-        crawlkit_core::AuditEventType::CrawlStarted,
+        crawlkit_engine::AuditEventType::CrawlStarted,
         "test",
         "Crawl started",
     );
     let e2 = trail.record(
-        crawlkit_core::AuditEventType::PageFetched,
+        crawlkit_engine::AuditEventType::PageFetched,
         "test",
         "Page fetched",
     );
     let e3 = trail.record(
-        crawlkit_core::AuditEventType::CrawlCompleted,
+        crawlkit_engine::AuditEventType::CrawlCompleted,
         "test",
         "Crawl completed",
     );
@@ -423,7 +423,7 @@ fn test_full_crawl_pipeline() {
     let config = make_test_config();
     let registry = AnalyzerRegistry::new(&config);
     let storage = Storage::new_in_memory().unwrap();
-    let metrics = crawlkit_core::Metrics::new();
+    let metrics = crawlkit_engine::Metrics::new();
 
     // Start crawl
     let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
@@ -489,15 +489,15 @@ fn test_full_crawl_pipeline() {
 
 #[test]
 fn test_determinism_produces_identical_results() {
-    let ctrl1 = crawlkit_core::DeterminismController::new(42);
+    let ctrl1 = crawlkit_engine::DeterminismController::new(42);
 
     // Same seed should produce same content hashes
-    let hash1 = crawlkit_core::DeterminismController::content_hash("https://example.com/page1");
-    let hash2 = crawlkit_core::DeterminismController::content_hash("https://example.com/page1");
+    let hash1 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page1");
+    let hash2 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page1");
     assert_eq!(hash1, hash2);
 
     // Different content should produce different hashes
-    let hash3 = crawlkit_core::DeterminismController::content_hash("https://example.com/page2");
+    let hash3 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page2");
     assert_ne!(hash1, hash3);
 
     // Derive seeds should be deterministic for the same controller state.
@@ -508,18 +508,18 @@ fn test_determinism_produces_identical_results() {
     assert_ne!(seed1, seed2);
 
     // A fresh controller with the same seed produces deterministic content hashes
-    let hash4 = crawlkit_core::DeterminismController::content_hash("https://example.com/page1");
+    let hash4 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page1");
     assert_eq!(hash1, hash4);
 }
 
 #[test]
 fn test_encryption_roundtrip() {
-    let config = crawlkit_core::EncryptionConfig {
+    let config = crawlkit_engine::EncryptionConfig {
         enabled: true,
-        key_source: crawlkit_core::encryption::KeySource::EnvVar("CRAWLKIT_TEST_KEY".to_string()),
+        key_source: crawlkit_engine::encryption::KeySource::EnvVar("CRAWLKIT_TEST_KEY".to_string()),
         ..Default::default()
     };
-    let manager = crawlkit_core::EncryptionManager::new(config);
+    let manager = crawlkit_engine::EncryptionManager::new(config);
 
     // Set a test key (32 bytes for AES-256)
     std::env::set_var("CRAWLKIT_TEST_KEY", "0123456789abcdef0123456789abcdef");
@@ -561,7 +561,7 @@ fn test_circuit_breaker_opens_after_failures() {
 
 #[tokio::test]
 async fn test_backpressure_limits_concurrency() {
-    use crawlkit_core::BackpressureController;
+    use crawlkit_engine::BackpressureController;
 
     let controller = BackpressureController::new(2);
 
@@ -635,7 +635,7 @@ fn test_js_render_decision_detects_spa() {
 
 #[test]
 fn test_metrics_comprehensive() {
-    let metrics = crawlkit_core::Metrics::new();
+    let metrics = crawlkit_engine::Metrics::new();
 
     // Record multiple pages (bytes, fetch_us, analysis_us, storage_us, findings)
     metrics.record_page_success(1024, 100, 50, 10, 3);

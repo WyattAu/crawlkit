@@ -16,7 +16,7 @@ use tracing_subscriber::util::SubscriberInitExt;
 use tracing_subscriber::EnvFilter;
 use tracing_subscriber::Layer;
 
-use crawlkit_core::storage::Storage;
+use crawlkit_engine::storage::Storage;
 
 /// CLI configuration file structure.
 #[derive(serde::Deserialize, Default)]
@@ -309,19 +309,19 @@ async fn main() -> Result<()> {
     };
 
     // Build feature flags from config (shared across subcommands)
-    let mut feature_flags = crawlkit_core::FeatureFlags::default();
+    let mut feature_flags = crawlkit_engine::FeatureFlags::default();
     if let Some(ref features_config) = config.features {
         if let Some(v) = features_config.ai_analyzers {
-            feature_flags.set(crawlkit_core::FLAG_AI_ANALYZERS, v);
+            feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, v);
         }
         if let Some(v) = features_config.wasm_analyzers {
-            feature_flags.set(crawlkit_core::FLAG_WASM_ANALYZERS, v);
+            feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, v);
         }
         if let Some(v) = features_config.js_rendering {
-            feature_flags.set(crawlkit_core::FLAG_JS_RENDERING, v);
+            feature_flags.set(crawlkit_engine::FLAG_JS_RENDERING, v);
         }
         if let Some(v) = features_config.backlink_analysis {
-            feature_flags.set(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS, v);
+            feature_flags.set(crawlkit_engine::feature_flags::FLAG_BACKLINK_ANALYSIS, v);
         }
     }
 
@@ -348,8 +348,8 @@ async fn main() -> Result<()> {
             encrypt,
             metrics_json,
         } => {
-            feature_flags.set(crawlkit_core::FLAG_AI_ANALYZERS, enable_ai);
-            feature_flags.set(crawlkit_core::FLAG_WASM_ANALYZERS, enable_wasm);
+            feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
+            feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
 
             let params = CrawlParams {
                 url,
@@ -445,19 +445,19 @@ struct CrawlParams {
     enable_wasm: bool,
     encrypt: bool,
     metrics_json: Option<PathBuf>,
-    feature_flags: crawlkit_core::FeatureFlags,
+    feature_flags: crawlkit_engine::FeatureFlags,
 }
 
 /// Execute a crawl with the given parameters.
 async fn run_crawl(params: &CrawlParams) -> Result<()> {
-    use crawlkit_core::advanced_features::{AlertManager, AlertOperator};
-    use crawlkit_core::http::HttpClient;
-    use crawlkit_core::js_render_decision::{JsRenderDecision, JsRenderDecisionEngine};
-    use crawlkit_core::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
-    use crawlkit_core::queue::{Priority, UrlQueue};
-    use crawlkit_core::ratelimit::RateLimiter;
-    use crawlkit_core::storage::Severity;
-    use crawlkit_core::HtmlParser;
+    use crawlkit_engine::advanced_features::{AlertManager, AlertOperator};
+    use crawlkit_engine::http::HttpClient;
+    use crawlkit_engine::js_render_decision::{JsRenderDecision, JsRenderDecisionEngine};
+    use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
+    use crawlkit_engine::queue::{Priority, UrlQueue};
+    use crawlkit_engine::ratelimit::RateLimiter;
+    use crawlkit_engine::storage::Severity;
+    use crawlkit_engine::HtmlParser;
     use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -509,7 +509,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     let storage = Storage::new(&db_path)
         .with_context(|| format!("Failed to open storage at {}", db_path.display()))?;
 
-    let encryption = crawlkit_core::EncryptionManager::new(crawlkit_core::EncryptionConfig {
+    let encryption = crawlkit_engine::EncryptionManager::new(crawlkit_engine::EncryptionConfig {
         enabled: params.encrypt,
         ..Default::default()
     });
@@ -524,13 +524,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     tracing::info!("Crawl ID: {}", crawl_id);
 
     // Initialize observability, resource monitoring, circuit breaker, backpressure
-    let metrics = crawlkit_core::Metrics::new();
-    let resource_monitor = crawlkit_core::ResourceMonitor::with_default_limits();
-    let circuit_breaker_registry = crawlkit_core::CircuitBreakerRegistry::with_default_config();
-    let backpressure = crawlkit_core::BackpressureController::new(concurrency);
+    let metrics = crawlkit_engine::Metrics::new();
+    let resource_monitor = crawlkit_engine::ResourceMonitor::with_default_limits();
+    let circuit_breaker_registry = crawlkit_engine::CircuitBreakerRegistry::with_default_config();
+    let backpressure = crawlkit_engine::BackpressureController::new(concurrency);
 
     // Determinism controller (if seed provided)
-    let determinism = params.seed.map(crawlkit_core::DeterminismController::new);
+    let determinism = params.seed.map(crawlkit_engine::DeterminismController::new);
     if let Some(ref det) = determinism {
         tracing::info!("Deterministic mode enabled with seed: {}", det.seed());
     }
@@ -562,13 +562,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     let js_decision_engine = JsRenderDecisionEngine::new();
 
     // Initialize audit trail if enabled
-    let audit_trail = crawlkit_core::AuditTrail::new();
+    let audit_trail = crawlkit_engine::AuditTrail::new();
     let audit_enabled = params
         .feature_flags
-        .get(crawlkit_core::feature_flags::FLAG_AUDIT_TRAIL);
+        .get(crawlkit_engine::feature_flags::FLAG_AUDIT_TRAIL);
     if audit_enabled {
         audit_trail.record(
-            crawlkit_core::AuditEventType::CrawlStarted,
+            crawlkit_engine::AuditEventType::CrawlStarted,
             "cli",
             &format!("Crawl started for {}", params.url),
         );
@@ -577,23 +577,23 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     // Log feature flags
     tracing::info!(
         "Feature flags: ai_analyzers={}, wasm_analyzers={}, js_rendering={}, audit_trail={}, observability={}, rum_integration={}, backlink_analysis={}",
-        params.feature_flags.get(crawlkit_core::FLAG_AI_ANALYZERS),
-        params.feature_flags.get(crawlkit_core::FLAG_WASM_ANALYZERS),
-        params.feature_flags.get(crawlkit_core::FLAG_JS_RENDERING),
+        params.feature_flags.get(crawlkit_engine::FLAG_AI_ANALYZERS),
+        params.feature_flags.get(crawlkit_engine::FLAG_WASM_ANALYZERS),
+        params.feature_flags.get(crawlkit_engine::FLAG_JS_RENDERING),
         audit_enabled,
-        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_OBSERVABILITY),
-        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_RUM_INTEGRATION),
-        params.feature_flags.get(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS),
+        params.feature_flags.get(crawlkit_engine::feature_flags::FLAG_OBSERVABILITY),
+        params.feature_flags.get(crawlkit_engine::feature_flags::FLAG_RUM_INTEGRATION),
+        params.feature_flags.get(crawlkit_engine::feature_flags::FLAG_BACKLINK_ANALYSIS),
     );
 
     // Initialize components
     let pool_max_idle_per_host = concurrency * 4;
     let pool_max_idle = concurrency * 8;
-    let http_config = crawlkit_core::http::HttpClientConfig {
+    let http_config = crawlkit_engine::http::HttpClientConfig {
         timeout: std::time::Duration::from_secs(timeout_secs),
         max_redirects: 20,
-        retry_policy: crawlkit_core::http::RetryPolicy::default(),
-        user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![params
+        retry_policy: crawlkit_engine::http::RetryPolicy::default(),
+        user_agent: std::sync::Arc::new(crawlkit_engine::http::UserAgentRotator::new(vec![params
             .user_agent
             .clone()
             .unwrap_or_else(|| format!("crawlkit/{}", env!("CARGO_PKG_VERSION")))])),
@@ -605,13 +605,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let client = Arc::new(client);
-    let scope = crawlkit_core::queue::ScopeConfig {
+    let scope = crawlkit_engine::queue::ScopeConfig {
         max_depth: params.depth,
         ..Default::default()
     };
     let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
     let rate_limiter = RateLimiter::new(concurrency as f64, 1.0 / (delay as f64 / 1000.0));
-    let crawl_config = crawlkit_core::CrawlConfig {
+    let crawl_config = crawlkit_engine::CrawlConfig {
         respect_robots_txt: params.respect_robots.unwrap_or(true),
         max_time: params.max_time_secs.map(Duration::from_secs),
         max_depth: params.depth,
@@ -619,48 +619,53 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     };
 
     // Build analyzer registry conditionally based on feature flags
-    let mut analyzers: Vec<Box<dyn crawlkit_core::analyzers::Analyzer>> = vec![
-        Box::new(crawlkit_core::HttpStatusAnalyzer::new()),
-        Box::new(crawlkit_core::RedirectChainAnalyzer::new()),
-        Box::new(crawlkit_core::CanonicalUrlValidator::new()),
-        Box::new(crawlkit_core::HreflangValidator::new()),
-        Box::new(crawlkit_core::SitemapAnalyzer::empty()),
-        Box::new(crawlkit_core::RobotsTxtAnalyzer::empty()),
-        Box::new(crawlkit_core::MetaTagAnalyzer::new()),
-        Box::new(crawlkit_core::HeadingHierarchyAnalyzer::new()),
-        Box::new(crawlkit_core::LinkAnalyzer::new()),
-        Box::new(crawlkit_core::ImageAnalyzer::new()),
-        Box::new(crawlkit_core::StructuredDataValidator::new()),
-        Box::new(crawlkit_core::ContentQualityAnalyzer::new()),
-        Box::new(crawlkit_core::WordCountAnalyzer::new()),
-        Box::new(crawlkit_core::SecurityHeaderAnalyzer::new()),
-        Box::new(crawlkit_core::SslCertificateValidator::empty()),
-        Box::new(crawlkit_core::MobileFriendlinessChecker::new()),
-        Box::new(crawlkit_core::AccessibilityAnalyzer::new()),
-        Box::new(crawlkit_core::SocialMediaAnalyzer::new()),
-        Box::new(crawlkit_core::EntityAnalyzer::new()),
-        Box::new(crawlkit_core::EnhancedReadabilityAnalyzer::new()),
-        Box::new(crawlkit_core::KeywordAnalyzer::new()),
-        Box::new(crawlkit_core::EcommerceSignalsAnalyzer::new()),
-        Box::new(crawlkit_core::InternationalSeoAnalyzer::new()),
+    let mut analyzers: Vec<Box<dyn crawlkit_engine::analyzers::Analyzer>> = vec![
+        Box::new(crawlkit_engine::HttpStatusAnalyzer::new()),
+        Box::new(crawlkit_engine::RedirectChainAnalyzer::new()),
+        Box::new(crawlkit_engine::CanonicalUrlValidator::new()),
+        Box::new(crawlkit_engine::HreflangValidator::new()),
+        Box::new(crawlkit_engine::SitemapAnalyzer::empty()),
+        Box::new(crawlkit_engine::RobotsTxtAnalyzer::empty()),
+        Box::new(crawlkit_engine::MetaTagAnalyzer::new()),
+        Box::new(crawlkit_engine::HeadingHierarchyAnalyzer::new()),
+        Box::new(crawlkit_engine::LinkAnalyzer::new()),
+        Box::new(crawlkit_engine::ImageAnalyzer::new()),
+        Box::new(crawlkit_engine::StructuredDataValidator::new()),
+        Box::new(crawlkit_engine::ContentQualityAnalyzer::new()),
+        Box::new(crawlkit_engine::WordCountAnalyzer::new()),
+        Box::new(crawlkit_engine::SecurityHeaderAnalyzer::new()),
+        Box::new(crawlkit_engine::SslCertificateValidator::empty()),
+        Box::new(crawlkit_engine::MobileFriendlinessChecker::new()),
+        Box::new(crawlkit_engine::AccessibilityAnalyzer::new()),
+        Box::new(crawlkit_engine::SocialMediaAnalyzer::new()),
+        Box::new(crawlkit_engine::EntityAnalyzer::new()),
+        Box::new(crawlkit_engine::EnhancedReadabilityAnalyzer::new()),
+        Box::new(crawlkit_engine::KeywordAnalyzer::new()),
+        Box::new(crawlkit_engine::EcommerceSignalsAnalyzer::new()),
+        Box::new(crawlkit_engine::InternationalSeoAnalyzer::new()),
     ];
-    if params.feature_flags.get(crawlkit_core::FLAG_AI_ANALYZERS) {
+    if params.feature_flags.get(crawlkit_engine::FLAG_AI_ANALYZERS) {
         analyzers.push(Box::new(
-            crawlkit_core::AiCrawlerAccessibilityAnalyzer::new(),
+            crawlkit_engine::AiCrawlerAccessibilityAnalyzer::new(),
         ));
-        analyzers.push(Box::new(crawlkit_core::AiContentStructureAnalyzer::new()));
-        analyzers.push(Box::new(crawlkit_core::AiCitationEligibilityAnalyzer::new()));
-        analyzers.push(Box::new(crawlkit_core::AiAnswerBoxAnalyzer::new()));
+        analyzers.push(Box::new(crawlkit_engine::AiContentStructureAnalyzer::new()));
+        analyzers.push(Box::new(
+            crawlkit_engine::AiCitationEligibilityAnalyzer::new(),
+        ));
+        analyzers.push(Box::new(crawlkit_engine::AiAnswerBoxAnalyzer::new()));
     }
-    if params.feature_flags.get(crawlkit_core::FLAG_WASM_ANALYZERS) {
-        analyzers.push(Box::new(crawlkit_core::WasmPatternAnalyzer::new()));
+    if params
+        .feature_flags
+        .get(crawlkit_engine::FLAG_WASM_ANALYZERS)
+    {
+        analyzers.push(Box::new(crawlkit_engine::WasmPatternAnalyzer::new()));
     }
-    let analyzer_registry = crawlkit_core::analyzers::AnalyzerRegistry::with_analyzers(analyzers);
-    let robots_cache = Arc::new(crawlkit_core::RobotsTxtCache::new(
+    let analyzer_registry = crawlkit_engine::analyzers::AnalyzerRegistry::with_analyzers(analyzers);
+    let robots_cache = Arc::new(crawlkit_engine::RobotsTxtCache::new(
         client.clone(),
         &crawl_config,
     ));
-    let sitemap_cache = Arc::new(crawlkit_core::SitemapCache::new(client.clone()));
+    let sitemap_cache = Arc::new(crawlkit_engine::SitemapCache::new(client.clone()));
 
     // Seed the queue
     let seed_url =
@@ -719,7 +724,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         // Check resource limits (every 100 pages)
         if pages_crawled % 100 == 0 && pages_crawled > 0 {
             if let Ok(rss_bytes) = get_process_rss_bytes() {
-                let usage = crawlkit_core::ResourceUsage {
+                let usage = crawlkit_engine::ResourceUsage {
                     memory_bytes: rss_bytes,
                     pages_processed: pages_crawled,
                     elapsed: crawl_start.elapsed(),
@@ -844,7 +849,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         // Content-hash deduplication: skip pages with identical body content
         {
             let is_duplicate = if use_deterministic_hash {
-                let hash = crawlkit_core::DeterminismController::content_hash(&result.body);
+                let hash = crawlkit_engine::DeterminismController::content_hash(&result.body);
                 !content_hashes_u64.insert(hash)
             } else {
                 use sha2::{Digest, Sha256};
@@ -947,13 +952,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 
         // Run analyzers
         let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
+        let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
         let robots_ref = if robots_raw.is_empty() {
             None
         } else {
             Some(robots_raw.as_str())
         };
-        let ctx = crawlkit_core::analyzers::AnalysisContext {
+        let ctx = crawlkit_engine::analyzers::AnalysisContext {
             page: &parsed,
             status_code: Some(result.status_code),
             headers: &headers_vec,
@@ -966,7 +971,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         let analysis_time = analysis_start.elapsed();
 
         // Store page
-        let mut page_data = crawlkit_core::storage::PageData {
+        let mut page_data = crawlkit_engine::storage::PageData {
             id: uuid::Uuid::new_v4().to_string(),
             url: entry.url.clone(),
             final_url: result.final_url.clone(),
@@ -1018,7 +1023,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             pages_stored += 1;
             if audit_enabled {
                 audit_trail.record(
-                    crawlkit_core::AuditEventType::PageFetched,
+                    crawlkit_engine::AuditEventType::PageFetched,
                     "cli",
                     &format!("Fetched: {} (status {})", entry.url, result.status_code),
                 );
@@ -1028,7 +1033,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         // Store findings
         issues_found += findings.len();
         for finding in &findings {
-            let issue = crawlkit_core::storage::Issue {
+            let issue = crawlkit_engine::storage::Issue {
                 id: uuid::Uuid::new_v4().to_string(),
                 page_id: page_data.id.clone(),
                 category: finding.category.clone(),
@@ -1048,7 +1053,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         // Record metrics and resource monitor
         if params
             .feature_flags
-            .get(crawlkit_core::feature_flags::FLAG_OBSERVABILITY)
+            .get(crawlkit_engine::feature_flags::FLAG_OBSERVABILITY)
         {
             metrics.record_page_success(
                 result.body.len() as u64,
@@ -1114,7 +1119,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 
     if audit_enabled {
         audit_trail.record(
-            crawlkit_core::AuditEventType::CrawlCompleted,
+            crawlkit_engine::AuditEventType::CrawlCompleted,
             "cli",
             &format!(
                 "Crawl completed: {} pages crawled, {} stored, {} issues",
@@ -1146,7 +1151,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 
     // Alert manager: check for threshold violations
     let alert_manager = AlertManager::new();
-    alert_manager.add_alert(crawlkit_core::advanced_features::Alert {
+    alert_manager.add_alert(crawlkit_engine::advanced_features::Alert {
         id: "high_error_rate".to_string(),
         name: "High Error Rate".to_string(),
         description: "Error rate exceeds 10% threshold".to_string(),
@@ -1251,13 +1256,13 @@ fn run_compare(
         ));
     }
 
-    let diff = crawlkit_core::compare::compare_crawls(&storage1_path, &storage2_path)
+    let diff = crawlkit_engine::compare::compare_crawls(&storage1_path, &storage2_path)
         .context("Failed to compare crawls")?;
 
     let output_str = match format {
-        "json" => crawlkit_core::compare::diff_to_json(&diff, true)
+        "json" => crawlkit_engine::compare::diff_to_json(&diff, true)
             .context("Failed to serialize comparison")?,
-        "md" => crawlkit_core::compare::diff_to_markdown(&diff),
+        "md" => crawlkit_engine::compare::diff_to_markdown(&diff),
         _ => {
             return Err(anyhow::anyhow!(
                 "Unsupported format: {format}. Use json or md."
@@ -1290,7 +1295,7 @@ fn run_report(
     output: Option<&Path>,
     format: &str,
     _theme: &str,
-    feature_flags: &crawlkit_core::FeatureFlags,
+    feature_flags: &crawlkit_engine::FeatureFlags,
 ) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -1310,7 +1315,7 @@ fn run_report(
         .with_context(|| format!("Failed to open crawl database: {}", db_path.display()))?;
 
     // Initialize encryption manager (disabled — decryption only)
-    let _encryption = crawlkit_core::EncryptionManager::default();
+    let _encryption = crawlkit_engine::EncryptionManager::default();
 
     // Get crawl statistics
     let crawl_id = storage
@@ -1323,17 +1328,18 @@ fn run_report(
         .context("Failed to get crawl statistics")?;
 
     // Run backlink analysis
-    let backlink_data = if feature_flags.get(crawlkit_core::feature_flags::FLAG_BACKLINK_ANALYSIS) {
+    let backlink_data = if feature_flags.get(crawlkit_engine::feature_flags::FLAG_BACKLINK_ANALYSIS)
+    {
         let link_pairs = storage.get_links_for_crawl(&crawl_id).unwrap_or_default();
         let external_links = storage.get_external_links(&crawl_id).unwrap_or_default();
         let page_urls = storage.get_page_urls(&crawl_id).unwrap_or_default();
 
-        let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+        let mut analyzer = crawlkit_engine::BacklinkAnalyzer::new();
         analyzer.load_from_crawl_data(&link_pairs);
 
         // Add external backlinks
         for (source, target) in &external_links {
-            analyzer.add_backlink(crawlkit_core::Backlink {
+            analyzer.add_backlink(crawlkit_engine::Backlink {
                 source_url: source.clone(),
                 target_url: target.clone(),
                 anchor_text: String::new(),
@@ -1512,10 +1518,10 @@ async fn run_backlinks(
     let external_links = storage.get_external_links(&crawl_id)?;
 
     // Build backlink analyzer
-    let mut analyzer = crawlkit_core::BacklinkAnalyzer::new();
+    let mut analyzer = crawlkit_engine::BacklinkAnalyzer::new();
     analyzer.load_from_crawl_data(&link_pairs);
     for (source_url, target_url) in &external_links {
-        analyzer.add_backlink(crawlkit_core::Backlink {
+        analyzer.add_backlink(crawlkit_engine::Backlink {
             source_url: source_url.clone(),
             target_url: target_url.clone(),
             anchor_text: String::new(),
@@ -1527,7 +1533,7 @@ async fn run_backlinks(
     // Optionally fetch external backlinks from API
     if let Some(src) = source {
         pb.set_message(format!("Fetching external backlinks from {src}..."));
-        let registry = crawlkit_core::BacklinkAdapterRegistry::with_defaults();
+        let registry = crawlkit_engine::BacklinkAdapterRegistry::with_defaults();
         if let Some(adapter) = registry.get(src) {
             let urls = storage.get_page_urls(&crawl_id)?;
             if let Some(first_url) = urls.first() {
@@ -1538,7 +1544,7 @@ async fn run_backlinks(
                 match adapter.fetch_backlinks(&domain, 1000).await {
                     Ok(ext_backlinks) => {
                         for bl in &ext_backlinks {
-                            analyzer.add_backlink(crawlkit_core::Backlink {
+                            analyzer.add_backlink(crawlkit_engine::Backlink {
                                 source_url: bl.source_url.clone(),
                                 target_url: bl.target_url.clone(),
                                 anchor_text: bl.anchor_text.clone(),
@@ -1659,11 +1665,11 @@ async fn run_inspect(
     format: &str,
     _javascript: bool,
     user_agent: Option<&str>,
-    feature_flags: &crawlkit_core::FeatureFlags,
+    feature_flags: &crawlkit_engine::FeatureFlags,
 ) -> Result<()> {
-    use crawlkit_core::analyzers::AnalyzerRegistry;
-    use crawlkit_core::http::HttpClient;
-    use crawlkit_core::HtmlParser;
+    use crawlkit_engine::analyzers::AnalyzerRegistry;
+    use crawlkit_engine::http::HttpClient;
+    use crawlkit_engine::HtmlParser;
 
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -1675,16 +1681,16 @@ async fn run_inspect(
     let url = url::Url::parse(url_str).with_context(|| format!("Invalid URL: {url_str}"))?;
 
     // Initialize encryption manager (disabled — decryption only)
-    let encryption = crawlkit_core::EncryptionManager::default();
+    let encryption = crawlkit_engine::EncryptionManager::default();
 
     // Initialize components
     let default_ua = format!("crawlkit/{}", env!("CARGO_PKG_VERSION"));
     let ua = user_agent.unwrap_or(&default_ua);
-    let http_config = crawlkit_core::http::HttpClientConfig {
+    let http_config = crawlkit_engine::http::HttpClientConfig {
         timeout: std::time::Duration::from_secs(30),
         max_redirects: 20,
-        retry_policy: crawlkit_core::http::RetryPolicy::default(),
-        user_agent: std::sync::Arc::new(crawlkit_core::http::UserAgentRotator::new(vec![
+        retry_policy: crawlkit_engine::http::RetryPolicy::default(),
+        user_agent: std::sync::Arc::new(crawlkit_engine::http::UserAgentRotator::new(vec![
             ua.to_string()
         ])),
         max_body_size: 10 * 1024 * 1024,
@@ -1694,7 +1700,7 @@ async fn run_inspect(
         tcp_keepalive: Some(std::time::Duration::from_secs(30)),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
-    let config = crawlkit_core::CrawlConfig::default();
+    let config = crawlkit_engine::CrawlConfig::default();
     let registry = AnalyzerRegistry::new(&config);
 
     // Fetch
@@ -1710,8 +1716,8 @@ async fn run_inspect(
     // Run all analyzers
     pb.set_message("Running 28 analyzers...");
     let headers_vec: Vec<(String, String)> = result.headers.clone();
-    let empty_chain: Vec<crawlkit_core::RedirectHop> = vec![];
-    let ctx = crawlkit_core::analyzers::AnalysisContext {
+    let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
+    let ctx = crawlkit_engine::analyzers::AnalysisContext {
         page: &parsed,
         status_code: Some(result.status_code),
         headers: &headers_vec,
@@ -1722,8 +1728,8 @@ async fn run_inspect(
     let findings = registry.analyze(&ctx, &config);
 
     // Fetch CrUX data from PageSpeed Insights if API key is available
-    let crux_data = if feature_flags.get(crawlkit_core::feature_flags::FLAG_RUM_INTEGRATION) {
-        let adapter = crawlkit_core::CruxAdapter::from_env();
+    let crux_data = if feature_flags.get(crawlkit_engine::feature_flags::FLAG_RUM_INTEGRATION) {
+        let adapter = crawlkit_engine::CruxAdapter::from_env();
         if adapter.is_available() {
             pb.set_message("Fetching CrUX data from PageSpeed Insights...");
             adapter.fetch_crux_data(url_str).await.ok().flatten()
@@ -1901,7 +1907,7 @@ async fn run_inspect(
 
 /// Decrypt an encrypted field value (hex-encoded, prefixed with "enc:").
 fn decrypt_field(
-    encryption: &crawlkit_core::EncryptionManager,
+    encryption: &crawlkit_engine::EncryptionManager,
     field: &Option<String>,
 ) -> Option<String> {
     match field {

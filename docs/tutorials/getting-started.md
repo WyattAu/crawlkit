@@ -140,11 +140,11 @@ The diff shows:
 
 ## Step 6: Programmatic usage (Rust)
 
-Add `crawlkit-core` to your `Cargo.toml`:
+Add `crawlkit-engine` to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-crawlkit-core = { git = "https://github.com/WyattAu/crawlkit" }
+crawlkit-engine = { git = "https://github.com/WyattAu/crawlkit" }
 tokio = { version = "1", features = ["full"] }
 ```
 

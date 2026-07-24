@@ -6,7 +6,7 @@ Status: Proposed. Requires stakeholder approval before execution.
 
 ## Overview
 
-14 modules (~40% of crawlkit-core) are fully implemented but never wired into the
+14 modules (~40% of crawlkit-engine) are fully implemented but never wired into the
 crawl loop, CLI, or API. This plan integrates each module at the correct abstraction
 layer, transforming scaffolding into production code.
 

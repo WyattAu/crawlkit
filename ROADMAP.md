@@ -4,15 +4,38 @@ Status: Living document. Updated after each audit cycle.
 
 ---
 
-## Current State (v0.4.0)
+## Current State (v0.6.0)
 
-- 430 tests passing, zero clippy warnings in production code, zero rustfmt diffs
-- 28 analyzers (23 core + 4 AI + 1 WASM)
+- 434 tests passing, zero clippy warnings in production code, zero rustfmt diffs
+- 28 analyzers (23 core + 4 AI + 1 WASM) with **Rayon parallel execution**
 - CLI + REST API + HTML/JSON/CSV/Markdown export
+- **12 modules wired into production** (observability, resource_monitor, circuit_breaker, backpressure, determinism, feature_flags, js_render_decision, playwright, advanced_features, encryption, alert_manager, metrics)
+- **New CLI flags:** --seed, --encrypt, --enable-ai, --enable-wasm, --metrics-json
+- **HTTP/2 multiplexing** with connection pooling scaled to concurrency
+- **Prometheus metrics** in API (crawlkit_crawls_total, pages_crawled, issues_found, fetch_duration, analysis_duration, errors)
+- **OpenTelemetry spans** with structured attributes (url, depth, seed)
 - CI/CD: format, clippy -D warnings, tests, security audit, supply chain audit, release builds, MSRV check
 - Pre-commit hook: fmt, clippy, build, tests, security audit, secret scan, unsafe code check
-- Astro Starlight documentation site: 13 pages, 823 words indexed
+- Astro Starlight documentation site: 13 pages, all new flags documented
 - Supply chain security: cargo-deny for license compliance and advisory auditing
+
+### Wiring Summary
+
+| Module | Status | Integration |
+|--------|--------|-------------|
+| observability.rs | WIRED | Metrics in crawl loop, exported to metrics.json |
+| resource_monitor.rs | WIRED | Replaces inline RSS check |
+| circuit_breaker.rs | WIRED | Per-domain fault isolation |
+| backpressure.rs | WIRED | Bounded pipeline with semaphore |
+| determinism.rs | WIRED | Seed-based reproducibility |
+| feature_flags.rs | WIRED | Runtime toggles via TOML |
+| js_render_decision.rs | WIRED | SPA detection engine |
+| playwright.rs | WIRED | JS rendering with timeout/memory limits |
+| advanced_features.rs | WIRED | Alert manager with error rate monitoring |
+| encryption.rs | WIRED | AES-256-GCM at rest |
+| link_graph.rs | MERGED | to_dot/to_csv into backlinks.rs, deleted |
+| plugin.rs | DEFERRED | Needs libloading + sandboxing architecture |
+| enterprise.rs | DEFERRED | Needs RBAC/SSO auth architecture |
 
 ### Audit Fixes Applied (2026-07-24)
 

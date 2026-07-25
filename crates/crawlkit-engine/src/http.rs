@@ -709,9 +709,15 @@ impl FetchStreamReader {
         match self.stream.next().await {
             Some(Ok(chunk)) => {
                 let chunk: bytes::Bytes = chunk;
-                let len = chunk.len();
-                self.body_size += len;
-                Ok(Some(chunk.to_vec()))
+                let remaining = self.max_body_size.saturating_sub(self.body_size);
+                let truncated = if remaining > 0 && chunk.len() > remaining {
+                    self.body_size = self.max_body_size;
+                    chunk[..remaining].to_vec()
+                } else {
+                    self.body_size += chunk.len();
+                    chunk.to_vec()
+                };
+                Ok(Some(truncated))
             }
             Some(Err(e)) => Err(CrawlError::RequestFailed(e)),
             None => Ok(None),

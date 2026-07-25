@@ -1211,6 +1211,45 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         let metrics_path = output_dir.join("metrics.json");
         std::fs::write(&metrics_path, serde_json::to_string_pretty(&snapshot)?)?;
         tracing::info!("Wrote metrics to {}", metrics_path.display());
+
+        // Run post-crawl analysis for cross-page checks
+        tracing::info!("Running post-crawl analysis...");
+        let post_analysis =
+            crawlkit_engine::post_crawl::run_post_crawl_analysis(&storage, &crawl_id);
+        tracing::info!(
+            "Post-crawl analysis: {} pages analyzed, {} canonical issues, {} sitemap issues",
+            post_analysis.stats.pages_analyzed,
+            post_analysis.stats.canonical_mismatches,
+            post_analysis.stats.sitemap_issues,
+        );
+
+        // Write post-crawl findings
+        if !post_analysis.findings.is_empty() {
+            let post_findings_path = output_dir.join("post-crawl-findings.json");
+            let findings_json: Vec<serde_json::Value> = post_analysis
+                .findings
+                .iter()
+                .map(|f| {
+                    serde_json::json!({
+                        "page_url": f.page_url,
+                        "severity": format!("{:?}", f.severity).to_lowercase(),
+                        "code": f.code,
+                        "title": f.title,
+                        "description": f.description,
+                        "recommendation": f.recommendation,
+                    })
+                })
+                .collect();
+            std::fs::write(
+                &post_findings_path,
+                serde_json::to_string_pretty(&findings_json)?,
+            )?;
+            tracing::info!(
+                "Wrote {} post-crawl findings to {}",
+                post_analysis.findings.len(),
+                post_findings_path.display()
+            );
+        }
     }
 
     tracing::info!(

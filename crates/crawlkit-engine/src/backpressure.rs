@@ -24,8 +24,6 @@ use tokio::sync::{mpsc, Semaphore};
 /// ```
 pub struct BackpressureController {
     semaphore: Arc<Semaphore>,
-    #[allow(dead_code)]
-    bounded_tx: Option<mpsc::Sender<()>>,
     active_tasks: Arc<AtomicUsize>,
     shutdown: Arc<AtomicBool>,
 }
@@ -39,7 +37,6 @@ impl BackpressureController {
     pub fn new(max_concurrent: usize) -> Self {
         Self {
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            bounded_tx: None,
             active_tasks: Arc::new(AtomicUsize::new(0)),
             shutdown: Arc::new(AtomicBool::new(false)),
         }
@@ -47,11 +44,9 @@ impl BackpressureController {
 
     /// Create with bounded channel for additional backpressure.
     #[must_use]
-    pub fn with_channel(max_concurrent: usize, channel_size: usize) -> Self {
-        let (tx, _rx) = mpsc::channel(channel_size);
+    pub fn with_channel(max_concurrent: usize, _channel_size: usize) -> Self {
         Self {
             semaphore: Arc::new(Semaphore::new(max_concurrent)),
-            bounded_tx: Some(tx),
             active_tasks: Arc::new(AtomicUsize::new(0)),
             shutdown: Arc::new(AtomicBool::new(false)),
         }

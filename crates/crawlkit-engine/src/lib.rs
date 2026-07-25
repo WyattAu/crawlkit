@@ -133,6 +133,7 @@ pub mod http;
 /// Detects SPA frameworks (Next.js, Nuxt, SvelteKit, Angular) via HTML hints
 /// and URL patterns to decide when to invoke Playwright.
 pub mod js_render_decision;
+pub mod post_crawl;
 
 /// Metrics collection and observability hooks.
 ///
@@ -150,7 +151,9 @@ pub mod playwright;
 /// ABI (`crawlkit_plugin_init`, `crawlkit_plugin_analyze`, `crawlkit_plugin_alloc/free`).
 pub mod plugin;
 
-pub use plugin::{PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmPlugin};
+pub use plugin::{
+    PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig, WasmPlugin,
+};
 /// Priority URL queue with depth and scope filtering.
 ///
 /// Binary heap-based priority queue with deduplication, domain tracking,

@@ -73,33 +73,57 @@ impl CircuitBreaker {
         Self::new(CircuitBreakerConfig::default())
     }
 
-    /// Get current state.
+    /// Get current state (pure read, no side effects).
     #[must_use]
     pub fn state(&self) -> CircuitState {
-        let state = self.state.load(Ordering::Acquire);
-        match state {
+        match self.state.load(Ordering::Acquire) {
             0 => CircuitState::Closed,
-            1 => {
-                // Check if cooldown expired
-                let last_failure = self.last_failure_time.load(Ordering::Acquire);
-                let now = now_millis();
-                if now.saturating_sub(last_failure) >= self.config.cooldown.as_millis() as u64 {
-                    self.state
-                        .store(CircuitState::HalfOpen as u8, Ordering::Release);
-                    CircuitState::HalfOpen
-                } else {
-                    CircuitState::Open
-                }
-            }
+            1 => CircuitState::Open,
             2 => CircuitState::HalfOpen,
             _ => CircuitState::Closed,
+        }
+    }
+
+    /// Atomically check if cooldown expired and transition Open → HalfOpen.
+    ///
+    /// Returns `true` if the caller should treat this as HalfOpen
+    /// (the transition happened or was already HalfOpen).
+    fn check_and_transition(&self) -> CircuitState {
+        let raw = self.state.load(Ordering::Acquire);
+        if raw != CircuitState::Open as u8 {
+            return match raw {
+                0 => CircuitState::Closed,
+                2 => CircuitState::HalfOpen,
+                _ => CircuitState::Closed,
+            };
+        }
+        let last_failure = self.last_failure_time.load(Ordering::Acquire);
+        let now = now_millis();
+        if now.saturating_sub(last_failure) >= self.config.cooldown.as_millis() as u64 {
+            if self
+                .state
+                .compare_exchange(
+                    CircuitState::Open as u8,
+                    CircuitState::HalfOpen as u8,
+                    Ordering::AcqRel,
+                    Ordering::Acquire,
+                )
+                .is_ok()
+            {
+                CircuitState::HalfOpen
+            } else {
+                // Another thread won the race — re-read the state.
+                self.state()
+            }
+        } else {
+            CircuitState::Open
         }
     }
 
     /// Check if request is allowed.
     #[must_use]
     pub fn is_allowed(&self) -> bool {
-        match self.state() {
+        match self.check_and_transition() {
             CircuitState::Closed => true,
             CircuitState::HalfOpen => true,
             CircuitState::Open => false,
@@ -108,12 +132,15 @@ impl CircuitBreaker {
 
     /// Record a successful request.
     pub fn record_success(&self) {
-        match self.state() {
-            CircuitState::Closed => {
+        let raw = self.state.load(Ordering::Acquire);
+        match raw {
+            0 => {
+                // Closed — reset counters
                 self.failure_count.store(0, Ordering::Release);
                 self.success_count.store(0, Ordering::Release);
             }
-            CircuitState::HalfOpen => {
+            2 => {
+                // HalfOpen — count toward recovery threshold
                 let successes = self.success_count.fetch_add(1, Ordering::AcqRel) + 1;
                 if successes >= self.config.success_threshold {
                     self.state
@@ -122,7 +149,9 @@ impl CircuitBreaker {
                     self.success_count.store(0, Ordering::Release);
                 }
             }
-            CircuitState::Open => {}
+            _ => {
+                // Open — nothing to do
+            }
         }
     }
 
@@ -131,20 +160,25 @@ impl CircuitBreaker {
         let now = now_millis();
         self.last_failure_time.store(now, Ordering::Release);
 
-        match self.state() {
-            CircuitState::Closed => {
+        let raw = self.state.load(Ordering::Acquire);
+        match raw {
+            0 => {
+                // Closed — increment failure count
                 let failures = self.failure_count.fetch_add(1, Ordering::AcqRel) + 1;
                 if failures >= self.config.failure_threshold {
                     self.state
                         .store(CircuitState::Open as u8, Ordering::Release);
                 }
             }
-            CircuitState::HalfOpen => {
+            2 => {
+                // HalfOpen — failure during recovery, reopen
                 self.state
                     .store(CircuitState::Open as u8, Ordering::Release);
                 self.success_count.store(0, Ordering::Release);
             }
-            CircuitState::Open => {}
+            _ => {
+                // Open — nothing to do
+            }
         }
     }
 

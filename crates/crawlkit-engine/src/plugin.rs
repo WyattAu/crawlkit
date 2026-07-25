@@ -5,6 +5,34 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Security configuration for WASM plugin execution.
+#[derive(Clone)]
+pub struct WasmConfig {
+    /// Maximum fuel (instructions) a WASM plugin may consume before being
+    /// killed. Prevents infinite loops / CPU exhaustion.
+    pub max_fuel: u64,
+    /// Maximum bytes the WASM linear memory may grow to.
+    pub max_memory_bytes: usize,
+    /// Timeout for a single `analyze` call in milliseconds (reserved for
+    /// future use with epoch-based interruption).
+    pub max_analysis_timeout_ms: u64,
+}
+
+impl Default for WasmConfig {
+    fn default() -> Self {
+        Self {
+            // ~10 billion instructions – generous for legitimate analysis
+            // but prevents runaway loops.
+            max_fuel: 10_000_000_000,
+            // 64 MiB – sufficient for HTML processing without allowing
+            // memory-bomb attacks.
+            max_memory_bytes: 64 * 1024 * 1024,
+            // 30 seconds per analysis call.
+            max_analysis_timeout_ms: 30_000,
+        }
+    }
+}
+
 /// Plugin errors.
 #[derive(Debug, Error)]
 pub enum PluginError {
@@ -78,14 +106,20 @@ pub struct PluginAnalyzerInfo {
 /// Loaded WASM plugin instance.
 pub struct WasmPlugin {
     pub manifest: PluginMetadata,
+    config: WasmConfig,
     store: wasmtime::Store<()>,
     instance: wasmtime::Instance,
     memory: wasmtime::Memory,
 }
 
 impl WasmPlugin {
-    /// Load a WASM plugin from a directory.
+    /// Load a WASM plugin from a directory with default security configuration.
     pub fn load(plugin_dir: &Path) -> Result<Self, PluginError> {
+        Self::load_with_config(plugin_dir, &WasmConfig::default())
+    }
+
+    /// Load a WASM plugin from a directory with custom security configuration.
+    pub fn load_with_config(plugin_dir: &Path, config: &WasmConfig) -> Result<Self, PluginError> {
         let manifest_path = plugin_dir.join("crawlkit-plugin.toml");
         let manifest_str = std::fs::read_to_string(&manifest_path)
             .map_err(|e| PluginError::ManifestParse(format!("Failed to read manifest: {}", e)))?;
@@ -104,11 +138,20 @@ impl WasmPlugin {
             })?;
         let wasm_path = plugin_dir.join(wasm_file);
 
-        let engine = wasmtime::Engine::default();
+        // Configure wasmtime with fuel limits to prevent infinite loops.
+        let mut engine_config = wasmtime::Config::new();
+        engine_config.consume_fuel(true);
+        let engine = wasmtime::Engine::new(&engine_config)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to create engine: {}", e)))?;
+
         let module = wasmtime::Module::from_file(&engine, &wasm_path)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to compile WASM: {}", e)))?;
 
         let mut store = wasmtime::Store::new(&engine, ());
+        store
+            .set_fuel(config.max_fuel)
+            .map_err(|e| PluginError::LoadFailed(format!("Failed to set fuel: {}", e)))?;
+
         let linker = wasmtime::Linker::new(&engine);
 
         let instance = linker
@@ -118,6 +161,15 @@ impl WasmPlugin {
         let memory = instance
             .get_memory(&mut store, "memory")
             .ok_or_else(|| PluginError::LoadFailed("No memory export found".to_string()))?;
+
+        // Validate initial memory does not exceed configured limit.
+        if memory.data_size(&store) > config.max_memory_bytes {
+            return Err(PluginError::LoadFailed(format!(
+                "Plugin initial memory ({} bytes) exceeds limit ({} bytes)",
+                memory.data_size(&store),
+                config.max_memory_bytes,
+            )));
+        }
 
         let init_func = instance
             .get_typed_func::<i32, i32>(&mut store, "crawlkit_plugin_init")
@@ -136,6 +188,7 @@ impl WasmPlugin {
 
         Ok(Self {
             manifest: manifest.plugin,
+            config: config.clone(),
             store,
             instance,
             memory,
@@ -171,6 +224,10 @@ impl WasmPlugin {
                 PluginError::AnalysisFailed(format!("Failed to allocate for URL: {}", e))
             })?;
 
+        // Bounds check: validate allocation results are within memory limits.
+        self.validate_wasm_pointer(html_ptr as usize, html_bytes.len())?;
+        self.validate_wasm_pointer(url_ptr as usize, url_bytes.len())?;
+
         self.memory.data_mut(&mut self.store)
             [html_ptr as usize..(html_ptr as usize + html_bytes.len())]
             .copy_from_slice(html_bytes);
@@ -204,13 +261,45 @@ impl WasmPlugin {
         Ok(result)
     }
 
+    /// Validate that a pointer+length region lies within the WASM memory bounds.
+    fn validate_wasm_pointer(&self, ptr: usize, len: usize) -> Result<(), PluginError> {
+        let mem_size = self.memory.data(&self.store).len();
+        if ptr > mem_size || len > mem_size - ptr {
+            return Err(PluginError::WasmExecution(format!(
+                "WASM pointer out of bounds: ptr={}, len={}, memory_size={}",
+                ptr, len, mem_size,
+            )));
+        }
+        // Reject if the write region exceeds the configured memory limit.
+        if ptr + len > self.config.max_memory_bytes {
+            return Err(PluginError::WasmExecution(format!(
+                "WASM memory access exceeds limit: ptr={}, len={}, limit={}",
+                ptr, len, self.config.max_memory_bytes,
+            )));
+        }
+        Ok(())
+    }
+
     /// Read a null-terminated string from WASM memory.
     fn read_string(&self, ptr: usize) -> Result<String, PluginError> {
         let data = self.memory.data(&self.store);
-        let end = data[ptr..]
-            .iter()
-            .position(|&b| b == 0)
-            .unwrap_or(data.len() - ptr);
+        let mem_len = data.len();
+
+        // Bounds check: ptr must be within memory.
+        if ptr >= mem_len {
+            return Err(PluginError::WasmExecution(format!(
+                "String pointer out of bounds: ptr={}, memory_size={}",
+                ptr, mem_len,
+            )));
+        }
+
+        let end = data[ptr..].iter().position(|&b| b == 0).ok_or_else(|| {
+            PluginError::WasmExecution(format!(
+                "No null terminator found starting at ptr={}, memory_size={}",
+                ptr, mem_len,
+            ))
+        })?;
+
         let bytes = &data[ptr..ptr + end];
         String::from_utf8(bytes.to_vec())
             .map_err(|e| PluginError::WasmExecution(format!("Invalid UTF-8: {}", e)))

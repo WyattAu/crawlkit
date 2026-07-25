@@ -64,13 +64,25 @@ impl AuditTrail {
             .map(|e| e.hash.clone())
             .unwrap_or_else(|| "genesis".to_string());
 
+        let id = uuid::Uuid::new_v4().to_string();
+        let timestamp = Utc::now();
+        let event_type_str = format!("{event_type:?}");
+        let hash = compute_hash(
+            &id,
+            &timestamp.to_rfc3339(),
+            &event_type_str,
+            actor,
+            details,
+            &previous_hash,
+        );
+
         let event = AuditEvent {
-            id: uuid::Uuid::new_v4().to_string(),
-            timestamp: Utc::now(),
+            id,
+            timestamp,
             event_type,
             actor: actor.to_string(),
             details: details.to_string(),
-            hash: compute_hash(details, &previous_hash),
+            hash,
             previous_hash,
         };
 
@@ -106,7 +118,15 @@ impl AuditTrail {
             if event.previous_hash != prev_hash {
                 return false;
             }
-            let expected_hash = compute_hash(&event.details, &event.previous_hash);
+            let event_type_str = format!("{:?}", event.event_type);
+            let expected_hash = compute_hash(
+                &event.id,
+                &event.timestamp.to_rfc3339(),
+                &event_type_str,
+                &event.actor,
+                &event.details,
+                &event.previous_hash,
+            );
             if event.hash != expected_hash {
                 return false;
             }
@@ -131,17 +151,31 @@ impl Default for AuditTrail {
 /// Compute SHA-256 hash for tamper evidence.
 ///
 /// Uses SHA-256 (FIPS 180-4) for cryptographic tamper evidence.
-/// The hash chains `details` with `previous_hash` to create an append-only
-/// tamper-evident log.
-fn compute_hash(details: &str, previous_hash: &str) -> String {
+/// Hashes all event fields (`id`, `timestamp`, `event_type`, `actor`,
+/// `details`, `previous_hash`) to create an append-only tamper-evident log.
+fn compute_hash(
+    id: &str,
+    timestamp: &str,
+    event_type: &str,
+    actor: &str,
+    details: &str,
+    previous_hash: &str,
+) -> String {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
+    hasher.update(id.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(timestamp.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(event_type.as_bytes());
+    hasher.update(b"\0");
+    hasher.update(actor.as_bytes());
+    hasher.update(b"\0");
     hasher.update(details.as_bytes());
-    hasher.update(b"\0"); // separator to prevent length-extension ambiguity
+    hasher.update(b"\0");
     hasher.update(previous_hash.as_bytes());
     let result = hasher.finalize();
-    // Format each byte as lowercase hex
     result.iter().map(|b| format!("{b:02x}")).collect()
 }
 

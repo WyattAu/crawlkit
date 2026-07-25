@@ -708,10 +708,14 @@ impl Storage {
 
                 Ok(PageData {
                     id: row.get(0)?,
-                    url: Url::parse(&url_str)
-                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
-                    final_url: Url::parse(&final_url_str)
-                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
+                    url: Url::parse(&url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid")
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                    }),
+                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid")
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                    }),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
                     description: row.get(5)?,
@@ -821,10 +825,14 @@ impl Storage {
 
                 Ok(PageData {
                     id: row.get(0)?,
-                    url: Url::parse(&url_str)
-                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
-                    final_url: Url::parse(&final_url_str)
-                        .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL")),
+                    url: Url::parse(&url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid")
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                    }),
+                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
+                        Url::parse("about:invalid")
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                    }),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
                     description: row.get(5)?,

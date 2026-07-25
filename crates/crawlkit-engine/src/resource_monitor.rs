@@ -28,7 +28,7 @@ pub struct ResourceLimits {
 impl Default for ResourceLimits {
     fn default() -> Self {
         Self {
-            max_memory_bytes: Some(512 * 1024 * 1024), // 500 MB
+            max_memory_bytes: Some(512 * 1024 * 1024), // 512 MB
             max_cpu_seconds: Some(3600),               // 1 hour
             max_disk_bytes: Some(1024 * 1024 * 1024),  // 1 GB
             max_open_files: Some(1024),
@@ -177,6 +177,18 @@ impl ResourceMonitor {
         if let Some(max_cpu) = self.limits.max_cpu_seconds {
             if usage.cpu_seconds > max_cpu {
                 exceeded.push(format!("CPU: {} / {} seconds", usage.cpu_seconds, max_cpu));
+            }
+        }
+
+        if let Some(max_disk) = self.limits.max_disk_bytes {
+            if usage.disk_bytes > max_disk {
+                exceeded.push(format!("Disk: {} / {} bytes", usage.disk_bytes, max_disk));
+            }
+        }
+
+        if let Some(max_files) = self.limits.max_open_files {
+            if usage.open_files > max_files {
+                exceeded.push(format!("Open files: {} / {}", usage.open_files, max_files));
             }
         }
 

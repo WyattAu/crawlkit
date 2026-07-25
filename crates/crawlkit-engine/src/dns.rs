@@ -129,15 +129,16 @@ impl DnsCache {
 
         // Update memory tracking
         let new_size = std::mem::size_of::<DnsEntry>() + domain.len();
-        let old_size = self
-            .cache
-            .get(domain)
-            .map(|e| {
+        // Compute old size BEFORE inserting — drop the DashMap guard explicitly
+        // to avoid deadlock when insert re-acquires the shard lock.
+        let old_size = {
+            self.cache.get(domain).map(|e| {
                 std::mem::size_of::<DnsEntry>()
                     + domain.len()
                     + e.addresses.len() * std::mem::size_of::<SocketAddr>()
             })
-            .unwrap_or(0);
+        }
+        .unwrap_or(0);
 
         self.memory_usage.fetch_add(
             new_size.saturating_sub(old_size),

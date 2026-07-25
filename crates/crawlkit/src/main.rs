@@ -65,7 +65,6 @@ struct OutputConfig {
     /// Default output directory.
     dir: Option<String>,
     /// Default output format.
-    #[allow(dead_code)]
     format: Option<String>,
 }
 
@@ -210,8 +209,8 @@ enum Commands {
         output: Option<PathBuf>,
 
         /// Report format: html or md
-        #[arg(long, default_value = "html")]
-        format: String,
+        #[arg(long)]
+        format: Option<String>,
 
         /// Report theme: light or dark
         #[arg(long, default_value = "light")]
@@ -400,7 +399,12 @@ async fn main() -> Result<()> {
             output,
             format,
             theme,
-        } => run_report(&crawl, output.as_deref(), &format, &theme, &feature_flags),
+        } => {
+            let format = format
+                .or_else(|| config.output.as_ref().and_then(|o| o.format.clone()))
+                .unwrap_or_else(|| "html".to_string());
+            run_report(&crawl, output.as_deref(), &format, &theme, &feature_flags)
+        }
         Commands::Backlinks {
             crawl,
             output,
@@ -467,8 +471,8 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     use tokio::sync::Mutex;
 
     let max_pages = params.max_pages.unwrap_or(100);
-    let delay = params.delay.unwrap_or(500);
-    let concurrency = params.concurrency.unwrap_or(4);
+    let delay = params.delay.unwrap_or(100); // Reduced from 500ms to 100ms
+    let concurrency = params.concurrency.unwrap_or(8); // Increased from 4 to 8
     let timeout_secs = params.timeout.unwrap_or(30);
 
     let _root_span = tracing::info_span!(
@@ -590,8 +594,8 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     );
 
     // Initialize components
-    let pool_max_idle_per_host = concurrency * 4;
-    let pool_max_idle = concurrency * 8;
+    let pool_max_idle_per_host = concurrency * 8; // Increased from 4x to 8x
+    let pool_max_idle = concurrency * 16; // Increased from 8x to 16x
     let http_config = crawlkit_engine::http::HttpClientConfig {
         timeout: std::time::Duration::from_secs(timeout_secs),
         max_redirects: 20,
@@ -962,6 +966,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         };
         let ctx = crawlkit_engine::analyzers::AnalysisContext {
             page: &parsed,
+            body: Some(&body_text),
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetch_time),
@@ -1761,6 +1766,7 @@ async fn run_inspect(
     let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
     let ctx = crawlkit_engine::analyzers::AnalysisContext {
         page: &parsed,
+        body: Some(&result.body),
         status_code: Some(result.status_code),
         headers: &headers_vec,
         response_time: Some(fetch_time),

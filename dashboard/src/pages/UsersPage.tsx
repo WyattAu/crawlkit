@@ -88,11 +88,12 @@ export default function UsersPage() {
       {loading ? (
         <div role="status" className="flex items-center justify-center py-12">
           <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+          <span className="sr-only">Loading...</span>
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full">
+          <table className="w-full" aria-label="Users list">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700">
                 <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Name</th>

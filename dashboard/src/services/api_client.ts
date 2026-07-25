@@ -55,6 +55,10 @@ class ApiClient {
     return this.request<Record<string, unknown>>('GET', `/api/v1/crawls/${crawlId}/stats`);
   }
 
+  async getFindings(crawlId: string) {
+    return this.request<Record<string, unknown>[]>('GET', `/api/v1/crawls/${crawlId}/findings`);
+  }
+
   async listCrawls() {
     return this.request<Record<string, unknown>[]>('GET', '/api/v1/crawls');
   }

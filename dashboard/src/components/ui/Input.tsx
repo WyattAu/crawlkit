@@ -23,6 +23,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           id={inputId}
+          aria-describedby={error ? `${inputId}-error` : undefined}
           className={clsx(
             'block w-full rounded-lg border px-3 py-2 text-sm',
             'border-gray-300 dark:border-gray-600',
@@ -35,7 +36,7 @@ const Input = forwardRef<HTMLInputElement, InputProps>(
           )}
           {...props}
         />
-        {error && <p className="text-sm text-red-500">{error}</p>}
+        {error && <p id={`${inputId}-error`} className="text-sm text-red-500">{error}</p>}
       </div>
     );
   }

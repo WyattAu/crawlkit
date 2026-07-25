@@ -101,6 +101,7 @@ export default function SettingsPage() {
           {loading ? (
             <div role="status" className="flex items-center justify-center py-8">
               <Loader className="w-6 h-6 text-blue-500 animate-spin" />
+              <span className="sr-only">Loading...</span>
             </div>
           ) : tenants.length === 0 ? (
             <p className="text-sm text-gray-500 dark:text-gray-400">No tenants configured.</p>

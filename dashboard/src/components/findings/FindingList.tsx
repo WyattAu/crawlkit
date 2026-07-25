@@ -22,6 +22,7 @@ export default function FindingList({ findings, loading }: FindingListProps) {
     return (
       <div role="status" className="flex items-center justify-center py-12">
         <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

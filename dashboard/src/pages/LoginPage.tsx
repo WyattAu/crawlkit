@@ -54,6 +54,7 @@ export default function LoginPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="admin@crawlkit.local"
+              autoComplete="email"
               required
             />
             <Input
@@ -62,6 +63,7 @@ export default function LoginPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
+              autoComplete="current-password"
               required
             />
             <Button type="submit" className="w-full" disabled={loading}>

@@ -36,7 +36,7 @@ export default function ResultsPage() {
   const navigate = useNavigate();
   const { token } = useAuth();
   const [crawl, setCrawl] = useState<CrawlDetail | null>(null);
-  const [findings] = useState<Finding[]>([]);
+  const [findings, setFindings] = useState<Finding[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,11 +45,13 @@ export default function ResultsPage() {
 
     async function load() {
       try {
-        const [crawlData, statsData] = await Promise.all([
+        const [crawlData, statsData, findingsData] = await Promise.all([
           apiClient.getCrawl(id!),
           apiClient.getCrawlStats(id!).catch(() => null),
+          apiClient.getFindings(id!).catch(() => []),
         ]);
         setCrawl({ ...crawlData, stats: statsData } as CrawlDetail);
+        setFindings(findingsData as Finding[]);
       } catch (error) {
         console.error('Failed to load crawl:', error);
       } finally {
@@ -64,6 +66,7 @@ export default function ResultsPage() {
     return (
       <div role="status" className="flex items-center justify-center py-12">
         <Loader className="w-8 h-8 text-blue-500 animate-spin" />
+        <span className="sr-only">Loading...</span>
       </div>
     );
   }

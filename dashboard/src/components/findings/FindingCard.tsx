@@ -12,11 +12,11 @@ interface FindingCardProps {
 }
 
 const severityConfig: Record<string, { icon: typeof Info; color: string; bg: string }> = {
-  info: { icon: Info, color: 'text-blue-500', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-  low: { icon: Info, color: 'text-green-500', bg: 'bg-green-50 dark:bg-green-900/20' },
-  medium: { icon: AlertTriangle, color: 'text-yellow-500', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
+  info: { icon: Info, color: 'text-blue-700', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+  low: { icon: Info, color: 'text-green-700', bg: 'bg-green-50 dark:bg-green-900/20' },
+  medium: { icon: AlertTriangle, color: 'text-amber-700', bg: 'bg-yellow-50 dark:bg-yellow-900/20' },
   high: { icon: AlertCircle, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
-  critical: { icon: ShieldAlert, color: 'text-red-500', bg: 'bg-red-50 dark:bg-red-900/20' },
+  critical: { icon: ShieldAlert, color: 'text-red-700', bg: 'bg-red-50 dark:bg-red-900/20' },
 };
 
 export default function FindingCard({

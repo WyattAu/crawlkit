@@ -360,7 +360,7 @@ mod tests {
             scopes: vec!["openid".to_string()],
             redirect_uri: "http://localhost/callback".to_string(),
         };
-        let manager = OidcManager::new(config.clone());
+        let manager = OidcManager::new(config);
         assert_eq!(manager.config().provider, "github");
         assert_eq!(manager.config().client_id, "gh-client");
         // Endpoints should be None before discovery
@@ -377,7 +377,7 @@ mod tests {
             scopes: vec!["openid".to_string(), "email".to_string()],
             redirect_uri: "http://localhost:4000/callback".to_string(),
         };
-        let manager = OidcManager::new(config.clone());
+        let manager = OidcManager::new(config);
         let returned_config = manager.config();
         assert_eq!(returned_config.provider, "azure");
         assert_eq!(returned_config.scopes.len(), 2);
@@ -416,7 +416,7 @@ mod tests {
             scopes: vec!["openid".to_string()],
             redirect_uri: "http://localhost/callback".to_string(),
         };
-        let cloned = config.clone();
+        let cloned = config;
         assert_eq!(cloned.provider, "okta");
         assert_eq!(cloned.client_id, "okta-id");
     }

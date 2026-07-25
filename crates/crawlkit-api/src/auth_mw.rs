@@ -100,7 +100,7 @@ mod tests {
     fn test_auth_middleware_claims_insertion() {
         let claims = make_claims(vec!["admin"]);
         let mut request = Request::builder().body(Body::empty()).unwrap();
-        request.extensions_mut().insert(claims.clone());
+        request.extensions_mut().insert(claims);
 
         let retrieved = request.extensions().get::<Claims>().unwrap();
         assert_eq!(retrieved.sub, "user-1");

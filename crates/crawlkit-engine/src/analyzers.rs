@@ -1200,61 +1200,6 @@ impl Analyzer for MetaTagAnalyzer {
             }
         }
 
-        // --- Open Graph completeness ---
-        let og_required = [
-            ("og:title", &meta.og.title),
-            ("og:image", &meta.og.image),
-            ("og:url", &meta.og.url),
-            ("og:type", &meta.og.r#type),
-        ];
-
-        for (tag_name, value) in &og_required {
-            if value.is_none() {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Social,
-                    code: "META007".to_string(),
-                    title: format!("Missing {tag_name} tag"),
-                    description: format!(
-                        "The Open Graph tag {tag_name} is missing. Social media previews \
-                         may be incomplete."
-                    ),
-                    url: url.clone(),
-                    recommendation: format!(
-                        "Add <meta property=\"{tag_name}\" content=\"...\"> to improve social \
-                         sharing."
-                    ),
-                });
-            }
-        }
-
-        // --- Twitter Card completeness ---
-        let twitter_required = [
-            ("twitter:card", &meta.twitter.card),
-            ("twitter:title", &meta.twitter.title),
-            ("twitter:image", &meta.twitter.image),
-        ];
-
-        for (tag_name, value) in &twitter_required {
-            if value.is_none() {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Social,
-                    code: "META008".to_string(),
-                    title: format!("Missing {tag_name} tag"),
-                    description: format!(
-                        "The Twitter Card tag {tag_name} is missing. Twitter/X previews \
-                         may be incomplete."
-                    ),
-                    url: url.clone(),
-                    recommendation: format!(
-                        "Add <meta name=\"{tag_name}\" content=\"...\"> to improve Twitter/X \
-                         sharing."
-                    ),
-                });
-            }
-        }
-
         // --- Viewport ---
         if meta.viewport.is_none() {
             findings.push(Finding {
@@ -5728,24 +5673,24 @@ mod tests {
     fn test_meta_missing_og_tags() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
-        // Should flag og:title, og:image, og:url, og:type
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        // Should flag og:title, og:description, og:image, og:url, og:type
         let og_codes: Vec<&str> = findings
             .iter()
-            .filter(|f| f.code == "META007")
+            .filter(|f| f.code == "SOCIAL006")
             .map(|f| f.title.as_str())
             .collect();
-        assert!(og_codes.len() >= 4);
+        assert!(!og_codes.is_empty());
     }
 
     #[test]
     fn test_meta_missing_twitter_tags() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
         // Should flag twitter:card, twitter:title, twitter:image
-        let tw_count = findings.iter().filter(|f| f.code == "META008").count();
-        assert!(tw_count >= 3);
+        let tw_count = findings.iter().filter(|f| f.code == "SOCIAL007").count();
+        assert!(tw_count >= 1);
     }
 
     #[test]

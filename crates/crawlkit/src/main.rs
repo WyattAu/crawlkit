@@ -382,8 +382,6 @@ async fn main() -> Result<()> {
                 javascript,
                 allow_external,
                 seed,
-                enable_ai,
-                enable_wasm,
                 encrypt,
                 metrics_json,
                 tenant,
@@ -430,7 +428,6 @@ async fn main() -> Result<()> {
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.
-#[allow(dead_code)]
 struct CrawlParams {
     url: String,
     max_pages: Option<usize>,
@@ -448,8 +445,6 @@ struct CrawlParams {
     javascript: bool,
     allow_external: bool,
     seed: Option<u64>,
-    enable_ai: bool,
-    enable_wasm: bool,
     encrypt: bool,
     metrics_json: Option<PathBuf>,
     tenant: Option<String>,
@@ -1051,7 +1046,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
                 description: finding.description.clone(),
                 element: None,
                 recommendation: finding.recommendation.clone(),
-                tenant_id: None,
+                tenant_id: params.tenant.clone(),
             };
             if let Err(e) = storage.insert_issue(&issue) {
                 tracing::warn!("Failed to store issue: {}", e);

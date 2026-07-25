@@ -18,17 +18,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
       - name: Run all tests
         run: cargo test --workspace
       - name: Run clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Security audit
-        run: |
-          cargo install cargo-audit --locked
-          cargo audit
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: Build ${{ matrix.target }}
@@ -36,6 +36,7 @@ jobs:
     needs: [preflight]
     timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-gnu
@@ -56,14 +57,14 @@ jobs:
             archive: zip
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           key: ${{ matrix.target }}
 
@@ -97,32 +98,57 @@ jobs:
           7z a ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip crawlkit.exe
           cd ../../..
 
+      - name: Generate checksum
+        shell: bash
+        run: |
+          cd target/${{ matrix.target }}/release
+          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
+            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
+          else
+            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip > ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
+          fi
+
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: crawlkit-${{ matrix.target }}
-          path: crawlkit-${{ github.ref_name }}-*
+          path: |
+            crawlkit-${{ github.ref_name }}-${{ matrix.target }}.*
+            !crawlkit-${{ github.ref_name }}-${{ matrix.target }}.d
 
   release:
     name: Create Release
     needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment:
+      name: release
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: artifacts
 
-      - name: Generate checksums
+      - name: Aggregate checksums
         run: |
           cd artifacts
-          find . -type f -name "crawlkit-*" -exec sha256sum {} \; > checksums.txt
+          cat */*.sha256 > checksums.txt
+          echo "=== Release checksums ==="
+          cat checksums.txt
+
+      - name: Generate SBOM
+        run: |
+          cargo install cargo-cyclonedx --locked || true
+          if command -v cargo-cyclonedx &> /dev/null; then
+            cargo cyclonedx --format json --output-dir sbom || true
+          else
+            echo '{"warning": "cargo-cyclonedx not available, SBOM generation skipped"}' > sbom/crawlkit-sbom.json
+          fi
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           generate_release_notes: true
           files: |

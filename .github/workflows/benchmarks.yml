@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: write
+
 env:
   CARGO_TERM_COLOR: always
   REGRESSION_THRESHOLD: 10
@@ -15,17 +19,14 @@ jobs:
     concurrency:
       group: benchmark-${{ github.head_ref || github.run_id }}
       cancel-in-progress: true
-    permissions:
-      contents: read
-      pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
 
       - name: Run benchmarks (baseline on main)
         if: github.base_ref == 'main'
@@ -39,30 +40,41 @@ jobs:
 
       - name: Compare benchmark results
         run: |
+          set -euo pipefail
           python3 << 'PYEOF'
           import re
           import sys
+          import os
 
           def parse_bencher_output(filepath):
               results = {}
               try:
                   with open(filepath) as f:
                       for line in f:
-                          # bencher format: test name \t time ns \t (+/-) variance
                           match = re.match(r'^(.+?)\s+(\d+)\s+(\+/-\s+[\d.]+%)?', line.strip())
                           if match:
                               name = match.group(1).strip()
                               time_ns = int(match.group(2))
                               results[name] = time_ns
               except FileNotFoundError:
-                  pass
+                  print(f"::warning::File not found: {filepath}", file=sys.stderr)
               return results
+
+          def format_time(ns):
+              if ns >= 1_000_000:
+                  return f"{ns/1_000_000:.1f} ms"
+              elif ns >= 1_000:
+                  return f"{ns/1_000:.1f} µs"
+              else:
+                  return f"{ns} ns"
 
           baseline = parse_bencher_output('baseline.txt')
           current = parse_bencher_output('output.txt')
 
           if not baseline:
               print("::warning::No baseline results found. Skipping comparison.")
+              with open('benchmark_comment.md', 'w') as f:
+                  f.write("## Benchmark Results\n\nNo baseline results found. Skipping comparison.\n")
               sys.exit(0)
 
           if not current:
@@ -71,7 +83,7 @@ jobs:
 
           regressions = []
           improvements = []
-          threshold = int('${{ env.REGRESSION_THRESHOLD }}')
+          threshold = int(os.environ.get('REGRESSION_THRESHOLD', '10'))
 
           for name, current_time in current.items():
               if name in baseline:
@@ -83,33 +95,32 @@ jobs:
                       elif change_pct < -threshold:
                           improvements.append((name, baseline_time, current_time, change_pct))
 
-          # Build comment body
           comment_lines = ["## Benchmark Results\n"]
 
           if regressions:
-              comment_lines.append("### ⚠️ Regressions (>{}% slower)\n".format(threshold))
+              comment_lines.append(f"### Regressions (>{threshold}% slower)\n")
               comment_lines.append("| Benchmark | Baseline | Current | Change |")
               comment_lines.append("|-----------|----------|---------|--------|")
               for name, base, curr, pct in sorted(regressions, key=lambda x: -x[3]):
                   comment_lines.append(
-                      f"| `{name}` | {base/1000.0:.1f} µs | {curr/1000.0:.1f} µs | +{pct:.1f}% |"
+                      f"| `{name}` | {format_time(base)} | {format_time(curr)} | +{pct:.1f}% |"
                   )
               comment_lines.append("")
 
           if improvements:
-              comment_lines.append("### ✅ Improvements (>{}% faster)\n".format(threshold))
+              comment_lines.append(f"### Improvements (>{threshold}% faster)\n")
               comment_lines.append("| Benchmark | Baseline | Current | Change |")
               comment_lines.append("|-----------|----------|---------|--------|")
               for name, base, curr, pct in sorted(improvements, key=lambda x: x[3]):
                   comment_lines.append(
-                      f"| `{name}` | {base/1000.0:.1f} µs | {curr/1000.0:.1f} µs | {pct:.1f}% |"
+                      f"| `{name}` | {format_time(base)} | {format_time(curr)} | {pct:.1f}% |"
                   )
               comment_lines.append("")
 
           stable = [n for n in current if n in baseline and n not in [r[0] for r in regressions] and n not in [i[0] for i in improvements]]
           if stable:
               comment_lines.append("### Stable benchmarks\n")
-              comment_lines.append(f"{len(stable)} benchmarks within ±{threshold}% threshold.\n")
+              comment_lines.append(f"{len(stable)} benchmarks within +/-{threshold}% threshold.\n")
 
           if not regressions:
               comment_lines.append("No performance regressions detected.")
@@ -119,7 +130,6 @@ jobs:
           comment = "\n".join(comment_lines)
           print(comment)
 
-          # Write to file for the next step
           with open('benchmark_comment.md', 'w') as f:
               f.write(comment)
 
@@ -128,7 +138,7 @@ jobs:
           PYEOF
 
       - name: Find existing comment
-        uses: peter-evans/find-comment@v3
+        uses: peter-evans/find-comment@3eae4d37986fb5a8592848f6a574fdf654e61f9e # v3
         id: find_comment
         with:
           issue-number: ${{ github.event.pull_request.number }}
@@ -136,7 +146,7 @@ jobs:
           body-includes: '## Benchmark Results'
 
       - name: Create or update comment
-        uses: peter-evans/create-or-update-comment@v4
+        uses: peter-evans/create-or-update-comment@71345be0265236311c031f5c7866368bd1eff043 # v4
         with:
           comment-id: ${{ steps.find_comment.outputs.comment-id }}
           issue-number: ${{ github.event.pull_request.number }}

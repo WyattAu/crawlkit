@@ -38,7 +38,7 @@ export default function SettingsPage() {
         apiClient.listTenants().catch(() => []),
         apiClient.health().then(() => setHealthStatus('ok')).catch(() => setHealthStatus('error')),
       ]);
-      setTenants(tenantsData);
+      setTenants(tenantsData as Tenant[]);
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {

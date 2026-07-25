@@ -25,7 +25,7 @@ export function useCrawls() {
     try {
       setLoading(true);
       const data = await apiClient.listCrawls();
-      setCrawls(data);
+      setCrawls(data as unknown as Crawl[]);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load crawls');
@@ -43,7 +43,7 @@ export function useCrawls() {
       if (!token) return;
       apiClient.setToken(token);
       const crawl = await apiClient.startCrawl(config);
-      setCrawls((prev) => [crawl, ...prev]);
+      setCrawls((prev) => [crawl as unknown as Crawl, ...prev]);
       return crawl;
     },
     [token]

@@ -49,3 +49,7 @@ TRACEABILITY_MATRIX.md
 web/node_modules/
 web/dist/
 web/.astro/
+
+# Dashboard
+dashboard/node_modules/
+dashboard/dist/

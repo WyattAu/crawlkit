@@ -1,9 +1,9 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, Spider, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Bug, Users, Settings } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/crawls', icon: Spider, label: 'Crawls' },
+  { to: '/crawls', icon: Bug, label: 'Crawls' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

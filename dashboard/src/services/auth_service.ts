@@ -12,7 +12,7 @@ export interface LoginResponse {
 export const authService = {
   async login(email: string, password: string): Promise<LoginResponse> {
     const response = await apiClient.login(email, password);
-    return response as LoginResponse;
+    return response as unknown as LoginResponse;
   },
 
   async validateToken(token: string): Promise<boolean> {

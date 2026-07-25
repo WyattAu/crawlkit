@@ -1,4 +1,4 @@
-import { LucideIcon, Spider, Play, Check, X } from 'lucide-react';
+import { LucideIcon, Bug, Play, Check, X } from 'lucide-react';
 
 interface MetricCardProps {
   title: string;
@@ -8,14 +8,14 @@ interface MetricCardProps {
 }
 
 const iconMap: Record<string, LucideIcon> = {
-  spider: Spider,
+  spider: Bug,
   play: Play,
   check: Check,
   x: X,
 };
 
 export default function MetricCard({ title, value, icon, color }: MetricCardProps) {
-  const Icon = iconMap[icon] || Spider;
+  const Icon = iconMap[icon] || Bug;
   const colorClasses: Record<string, string> = {
     blue: 'text-blue-500',
     green: 'text-green-500',

@@ -12,7 +12,7 @@ export default function CrawlsPage() {
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState('');
 
-  const handleStartCrawl = async (config: Record<string, unknown>) => {
+  const handleStartCrawl = async (config: { name: string; url: string; max_depth?: number; max_pages?: number; respect_robots?: boolean }) => {
     setStarting(true);
     setError('');
     try {

@@ -37,7 +37,7 @@ export default function UsersPage() {
     try {
       setLoading(true);
       const data = await apiClient.listUsers();
-      setUsers(data);
+      setUsers(data as unknown as User[]);
     } catch (error) {
       console.error('Failed to load users:', error);
     } finally {

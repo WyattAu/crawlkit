@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/use_auth';
 import Input from '../components/ui/Input';
 import Button from '../components/ui/Button';
-import { Spider } from 'lucide-react';
+import { Bug } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -34,7 +34,7 @@ export default function LoginPage() {
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
             <div className="p-3 bg-blue-600 rounded-xl">
-              <Spider className="w-8 h-8 text-white" />
+              <Bug className="w-8 h-8 text-white" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">crawlkit</h1>

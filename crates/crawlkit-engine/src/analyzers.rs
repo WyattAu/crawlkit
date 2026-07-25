@@ -7,6 +7,105 @@ use crate::storage::{IssueCategory, Severity};
 use crate::{CrawlConfig, RedirectHop};
 
 // ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
+
+/// Check if a URL path is a utility/page that should be excluded from analysis.
+fn is_utility_page(url: &str) -> bool {
+    let lower = url.to_lowercase();
+    [
+        "/login",
+        "/register",
+        "/signup",
+        "/signin",
+        "/auth",
+        "/admin",
+        "/dashboard",
+        "/settings",
+        "/account",
+        "/search",
+        "/sitemap",
+        "/robots.txt",
+        "/wp-admin",
+        "/wp-login.php",
+        "/cgi-bin",
+        "/_next",
+        "/_nuxt",
+        "/compare",
+        "/wishlist",
+        "/cart",
+        "/checkout",
+        "/forgot",
+        "/contact",
+        "/about",
+        "/certifications",
+        "/research-use",
+    ]
+    .iter()
+    .any(|p| lower.contains(p))
+}
+
+/// Count sentences in text (by punctuation).
+fn count_sentences(text: &str) -> usize {
+    if text.trim().is_empty() {
+        return 1;
+    }
+    text.chars()
+        .filter(|&c| c == '.' || c == '!' || c == '?')
+        .count()
+        .max(1)
+}
+
+/// Count syllables in a word (approximate heuristic).
+fn count_syllables(word: &str) -> usize {
+    let word = word.to_lowercase();
+    let chars: Vec<char> = word.chars().collect();
+    if chars.is_empty() {
+        return 0;
+    }
+    if chars.len() <= 2 {
+        return 1;
+    }
+
+    let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+    let mut count = 0;
+    let mut prev_vowel = false;
+
+    for &c in &chars {
+        let is_vowel = vowels.contains(&c);
+        if is_vowel && !prev_vowel {
+            count += 1;
+        }
+        prev_vowel = is_vowel;
+    }
+
+    if chars.last() == Some(&'e') && count > 1 {
+        count -= 1;
+    }
+
+    count.max(1)
+}
+
+/// Flesch-Kincaid grade level.
+fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {
+    if words == 0 || sentences == 0 {
+        return 0.0;
+    }
+    0.39 * (words as f64 / sentences as f64) + 11.8 * (syllables as f64 / words as f64) - 15.59
+}
+
+/// Flesch Reading Ease score (0-100, higher = easier).
+fn flesch_reading_ease(words: usize, sentences: usize, syllables: usize) -> f64 {
+    if words == 0 || sentences == 0 {
+        return 0.0;
+    }
+    let score = 206.835
+        - 1.015 * (words as f64 / sentences as f64)
+        - 84.6 * (syllables as f64 / words as f64);
+    score.clamp(0.0, 100.0)
+}
+
+// ---------------------------------------------------------------------------
 // Security Header Analyzer types
 // ---------------------------------------------------------------------------
 
@@ -1067,20 +1166,7 @@ impl Analyzer for MetaTagAnalyzer {
             Some(desc) => {
                 let len = desc.len();
                 if len < 120 {
-                    // Skip short description warning for utility pages
-                    let is_utility_page = url.contains("/account")
-                        || url.contains("/compare")
-                        || url.contains("/wishlist")
-                        || url.contains("/cart")
-                        || url.contains("/checkout")
-                        || url.contains("/login")
-                        || url.contains("/register")
-                        || url.contains("/forgot")
-                        || url.contains("/contact")
-                        || url.contains("/about")
-                        || url.contains("/certifications")
-                        || url.contains("/research-use");
-                    if !is_utility_page {
+                    if !is_utility_page(url) {
                         findings.push(Finding {
                             severity: Severity::Warning,
                             category: IssueCategory::Seo,
@@ -1899,60 +1985,6 @@ impl ContentQualityAnalyzer {
     pub fn new() -> Self {
         Self
     }
-
-    /// Count syllables in a word (approximate heuristic).
-    fn count_syllables(word: &str) -> usize {
-        let word = word.to_lowercase();
-        let chars: Vec<char> = word.chars().collect();
-        if chars.is_empty() {
-            return 0;
-        }
-        if chars.len() <= 2 {
-            return 1;
-        }
-
-        let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
-        let mut count = 0;
-        let mut prev_vowel = false;
-
-        for &c in &chars {
-            let is_vowel = vowels.contains(&c);
-            if is_vowel && !prev_vowel {
-                count += 1;
-            }
-            prev_vowel = is_vowel;
-        }
-
-        // Adjust for silent 'e'
-        if chars.last() == Some(&'e') && count > 1 {
-            count -= 1;
-        }
-
-        count.max(1)
-    }
-
-    /// Count sentences in text (by punctuation).
-    fn count_sentences(text: &str) -> usize {
-        if text.trim().is_empty() {
-            return 0;
-        }
-        let count = text
-            .chars()
-            .filter(|&c| c == '.' || c == '!' || c == '?')
-            .count();
-        count.max(1)
-    }
-
-    /// Flesch-Kincaid readability score (0-100, higher = easier).
-    fn flesch_kincaid(words: usize, sentences: usize, syllables: usize) -> f64 {
-        if words == 0 || sentences == 0 {
-            return 0.0;
-        }
-        let score = 206.835
-            - 1.015 * (words as f64 / sentences as f64)
-            - 84.6 * (syllables as f64 / words as f64);
-        score.clamp(0.0, 100.0)
-    }
 }
 
 impl Default for ContentQualityAnalyzer {
@@ -1980,9 +2012,9 @@ impl Analyzer for ContentQualityAnalyzer {
                 .map(|h| h.text.as_str())
                 .collect::<Vec<_>>()
                 .join(" ");
-            let sentences = Self::count_sentences(text);
-            let syllables: usize = text.split_whitespace().map(Self::count_syllables).sum();
-            let score = Self::flesch_kincaid(word_count, sentences.max(1), syllables);
+            let sentences = count_sentences(text);
+            let syllables: usize = text.split_whitespace().map(count_syllables).sum();
+            let score = flesch_reading_ease(word_count, sentences.max(1), syllables);
 
             findings.push(Finding {
                 severity: Severity::Info,
@@ -2071,15 +2103,7 @@ impl Analyzer for ContentQualityAnalyzer {
             });
         } else if word_count < 300 {
             // Skip thin content warning for utility pages — search engines don't penalize these
-            let is_utility_page = url.contains("/account")
-                || url.contains("/compare")
-                || url.contains("/wishlist")
-                || url.contains("/cart")
-                || url.contains("/checkout")
-                || url.contains("/login")
-                || url.contains("/register")
-                || url.contains("/forgot");
-            if !is_utility_page {
+            if !is_utility_page(url) {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Content,
@@ -2202,15 +2226,7 @@ impl Analyzer for WordCountAnalyzer {
             });
         } else if word_count < 100 {
             // Skip very low word count warning for utility pages
-            let is_utility_page = url.contains("/account")
-                || url.contains("/compare")
-                || url.contains("/wishlist")
-                || url.contains("/cart")
-                || url.contains("/checkout")
-                || url.contains("/login")
-                || url.contains("/register")
-                || url.contains("/forgot");
-            if !is_utility_page {
+            if !is_utility_page(url) {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Content,
@@ -4102,52 +4118,6 @@ impl EnhancedReadabilityAnalyzer {
         text.chars().filter(|c| c.is_alphabetic()).count()
     }
 
-    fn count_sentences(text: &str) -> usize {
-        if text.trim().is_empty() {
-            return 1;
-        }
-        text.chars()
-            .filter(|&c| c == '.' || c == '!' || c == '?')
-            .count()
-            .max(1)
-    }
-
-    fn count_syllables(word: &str) -> usize {
-        let word = word.to_lowercase();
-        let chars: Vec<char> = word.chars().collect();
-        if chars.is_empty() {
-            return 0;
-        }
-        if chars.len() <= 2 {
-            return 1;
-        }
-
-        let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
-        let mut count = 0;
-        let mut prev_vowel = false;
-
-        for &c in &chars {
-            let is_vowel = vowels.contains(&c);
-            if is_vowel && !prev_vowel {
-                count += 1;
-            }
-            prev_vowel = is_vowel;
-        }
-
-        if chars.last() == Some(&'e') && count > 1 {
-            count -= 1;
-        }
-
-        count.max(1)
-    }
-
-    fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {
-        if words == 0 || sentences == 0 {
-            return 0.0;
-        }
-        0.39 * (words as f64 / sentences as f64) + 11.8 * (syllables as f64 / words as f64) - 15.59
-    }
-
     fn coleman_liau_index(letters: usize, words: usize, sentences: usize) -> f64 {
         if words == 0 {
             return 0.0;
@@ -4169,16 +4139,6 @@ impl EnhancedReadabilityAnalyzer {
             return 0.0;
         }
         0.4 * (words as f64 / sentences as f64 + 100.0 * complex_words as f64 / words as f64)
-    }
-
-    fn flesch_reading_ease(words: usize, sentences: usize, syllables: usize) -> f64 {
-        if words == 0 || sentences == 0 {
-            return 0.0;
-        }
-        let score = 206.835
-            - 1.015 * (words as f64 / sentences as f64)
-            - 84.6 * (syllables as f64 / words as f64);
-        score.clamp(0.0, 100.0)
     }
 
     fn reading_ease_label(score: f64) -> &'static str {
@@ -4249,16 +4209,16 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
 
         let words: Vec<&str> = text.split_whitespace().collect();
         let word_count = words.len();
-        let sentence_count = Self::count_sentences(&text);
+        let sentence_count = count_sentences(&text);
         let letter_count = Self::count_letters(&text);
-        let syllable_count: usize = words.iter().map(|w| Self::count_syllables(w)).sum();
+        let syllable_count: usize = words.iter().map(|w| count_syllables(w)).sum();
         let complex_words = Self::complex_words_count(&words);
 
-        let fk_grade = Self::flesch_kincaid_grade(word_count, sentence_count, syllable_count);
+        let fk_grade = flesch_kincaid_grade(word_count, sentence_count, syllable_count);
         let cl_index = Self::coleman_liau_index(letter_count, word_count, sentence_count);
         let ari = Self::automated_readability_index(letter_count, word_count, sentence_count);
         let fog = Self::gunning_fog_index(word_count, sentence_count, complex_words);
-        let fre = Self::flesch_reading_ease(word_count, sentence_count, syllable_count);
+        let fre = flesch_reading_ease(word_count, sentence_count, syllable_count);
 
         findings.push(Finding {
             severity: Severity::Info,
@@ -4352,10 +4312,7 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
 
 impl EnhancedReadabilityAnalyzer {
     fn complex_words_count(words: &[&str]) -> usize {
-        words
-            .iter()
-            .filter(|w| Self::count_syllables(w) >= 3)
-            .count()
+        words.iter().filter(|w| count_syllables(w) >= 3).count()
     }
 }
 
@@ -6669,36 +6626,36 @@ mod tests {
 
     #[test]
     fn test_content_quality_syllable_counting() {
-        assert_eq!(ContentQualityAnalyzer::count_syllables("cat"), 1);
-        assert_eq!(ContentQualityAnalyzer::count_syllables("hello"), 2);
-        assert_eq!(ContentQualityAnalyzer::count_syllables("beautiful"), 3);
-        assert_eq!(ContentQualityAnalyzer::count_syllables("a"), 1);
-        assert_eq!(ContentQualityAnalyzer::count_syllables(""), 0);
+        assert_eq!(count_syllables("cat"), 1);
+        assert_eq!(count_syllables("hello"), 2);
+        assert_eq!(count_syllables("beautiful"), 3);
+        assert_eq!(count_syllables("a"), 1);
+        assert_eq!(count_syllables(""), 0);
     }
 
     #[test]
     fn test_content_quality_sentence_counting() {
-        assert_eq!(ContentQualityAnalyzer::count_sentences("Hello world."), 1);
+        assert_eq!(count_sentences("Hello world."), 1);
         assert_eq!(
-            ContentQualityAnalyzer::count_sentences("First sentence. Second sentence! Third?"),
+            count_sentences("First sentence. Second sentence! Third?"),
             3
         );
-        assert_eq!(ContentQualityAnalyzer::count_sentences(""), 0);
-        assert_eq!(ContentQualityAnalyzer::count_sentences("   "), 0);
+        assert_eq!(count_sentences(""), 1);
+        assert_eq!(count_sentences("   "), 1);
     }
 
     #[test]
     fn test_content_quality_flesch_kincaid() {
         // Simple text should score higher
-        let score = ContentQualityAnalyzer::flesch_kincaid(100, 5, 150);
+        let score = flesch_reading_ease(100, 5, 150);
         assert!(score > 50.0);
 
         // Complex text should score lower
-        let score = ContentQualityAnalyzer::flesch_kincaid(100, 20, 300);
+        let score = flesch_reading_ease(100, 20, 300);
         assert!(score < 50.0);
 
         // Zero words should return 0
-        assert_eq!(ContentQualityAnalyzer::flesch_kincaid(0, 0, 0), 0.0);
+        assert_eq!(flesch_reading_ease(0, 0, 0), 0.0);
     }
 
     // =========================================================================
@@ -8006,11 +7963,11 @@ mod tests {
 
     #[test]
     fn test_readability_syllable_counting() {
-        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("cat"), 1);
-        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("hello"), 2);
-        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("beautiful"), 3);
-        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables("a"), 1);
-        assert_eq!(EnhancedReadabilityAnalyzer::count_syllables(""), 0);
+        assert_eq!(count_syllables("cat"), 1);
+        assert_eq!(count_syllables("hello"), 2);
+        assert_eq!(count_syllables("beautiful"), 3);
+        assert_eq!(count_syllables("a"), 1);
+        assert_eq!(count_syllables(""), 0);
     }
 
     #[test]

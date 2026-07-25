@@ -7,7 +7,7 @@
 // - ISEO007: Hreflang to non-canonical
 // - ISEO008: Hreflang to redirect or broken page
 // - ISEO009: Missing reciprocal hreflang
-// - URL001: Double slash in URL
+// - URL001: Double slash in URL (handled by UrlFormatValidator)
 
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::storage::{IssueCategory, Severity};
@@ -86,24 +86,6 @@ impl Analyzer for AdvancedCanonicalAnalyzer {
                             .to_string(),
                     });
                 }
-            }
-        }
-
-        // URL001: Double slash in URL path
-        if let Some(path_start) = url.find("://") {
-            let path = &url[path_start + 3..];
-            if path.contains("//") {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Seo,
-                    code: "URL001".to_string(),
-                    title: "Double slash in URL path".to_string(),
-                    description: "URL contains double slashes after the scheme. This can cause \
-                         indexing issues and duplicate content problems."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Remove double slashes from the URL path.".to_string(),
-                });
             }
         }
 

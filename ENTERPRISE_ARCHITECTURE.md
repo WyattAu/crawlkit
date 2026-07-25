@@ -1,19 +1,16 @@
 # crawlkit Enterprise Architecture
 
-Status: Proposed. Requires stakeholder approval before execution.
-
----
+*Status: Proposed. Requires stakeholder approval before execution.*
+*Version: 2.0.0 | Last updated: 2026-07-25*
 
 ## Overview
 
-Enterprise features enable multi-tenant, role-based access control with SSO
-integration for team deployments. Designed for compliance with SOC 2, ISO 27001,
-and GDPR requirements.
+Multi-tenant, role-based access control with SSO integration for team deployments. Designed for compliance with SOC 2, ISO 27001, and GDPR requirements.
 
 ## Design Principles
 
 1. **Zero trust** -- Every request authenticated and authorized
-2. **Least privilege** -- Users get minimum required permissions
+2. **Least privilege** -- Users receive minimum required permissions
 3. **Audit everything** -- All actions logged with who/what/when
 4. **Tenant isolation** -- Data separated by tenant
 5. **SSO-first** -- Delegate authentication to enterprise IdPs
@@ -23,30 +20,10 @@ and GDPR requirements.
 ### Hybrid Mode (Recommended)
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Authentication                        │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐ │
-│  │   Local     │    │    OIDC     │    │    SAML     │ │
-│  │   Users     │    │   (OAuth2)  │    │  (Legacy)   │ │
-│  └──────┬──────┘    └──────┬──────┘    └──────┬──────┘ │
-│         │                  │                  │         │
-│         └──────────────────┼──────────────────┘         │
-│                            │                            │
-│                    ┌───────▼───────┐                    │
-│                    │  Auth Router  │                    │
-│                    └───────┬───────┘                    │
-│                            │                            │
-│                    ┌───────▼───────┐                    │
-│                    │  JWT Issuer   │                    │
-│                    └───────┬───────┘                    │
-│                            │                            │
-│                    ┌───────▼───────┐                    │
-│                    │  Token Store  │                    │
-│                    │  (Redis/SQLite)│                    │
-│                    └───────────────┘                    │
-└─────────────────────────────────────────────────────────┘
+Authentication
+  Local Users ─┐
+  OIDC (OAuth2)─┼─> Auth Router > JWT Issuer > Token Store (Redis/SQLite)
+  SAML (Legacy)─┘
 ```
 
 ### Token Structure
@@ -69,11 +46,13 @@ and GDPR requirements.
 
 ### Token Lifecycle
 
-1. **Login** → Issue access token (1h) + refresh token (7d)
-2. **API Request** → Validate access token, check permissions
-3. **Token Refresh** → Issue new access token, rotate refresh token
-4. **Logout** → Revoke refresh token, blacklist access token
-5. **Expiry** → Token invalid, require re-authentication
+| Phase | Action | Token Behavior |
+|-------|--------|----------------|
+| Login | Issue tokens | Access (1h) + Refresh (7d) |
+| API Request | Validate | Check access token permissions |
+| Refresh | Rotate | New access token, rotate refresh token |
+| Logout | Revoke | Blacklist access, revoke refresh |
+| Expiry | Invalidate | Require re-authentication |
 
 ## Role-Based Access Control
 
@@ -89,32 +68,32 @@ Admin
 
 | Resource | Viewer | Editor | Admin |
 |----------|--------|--------|-------|
-| Crawl:Read | Yes | Yes | Yes |
-| Crawl:Write | No | Yes | Yes |
-| Crawl:Delete | No | No | Yes |
-| Report:Read | Yes | Yes | Yes |
-| Report:Write | No | Yes | Yes |
-| Plugin:Read | Yes | Yes | Yes |
-| Plugin:Write | No | Yes | Yes |
-| User:Read | No | No | Yes |
-| User:Write | No | No | Yes |
-| Role:Read | No | No | Yes |
-| Role:Write | No | No | Yes |
-| Tenant:Read | No | No | Yes |
-| Tenant:Write | No | No | Yes |
-| APIKey:Read | No | Yes | Yes |
-| APIKey:Write | No | No | Yes |
-| Webhook:Read | Yes | Yes | Yes |
-| Webhook:Write | No | Yes | Yes |
-| Schedule:Read | Yes | Yes | Yes |
-| Schedule:Write | No | Yes | Yes |
-| Audit:Read | No | No | Yes |
-| Settings:Read | No | No | Yes |
-| Settings:Write | No | No | Yes |
+| crawl:read | Y | Y | Y |
+| crawl:write | - | Y | Y |
+| crawl:delete | - | - | Y |
+| report:read | Y | Y | Y |
+| report:write | - | Y | Y |
+| plugin:read | Y | Y | Y |
+| plugin:write | - | Y | Y |
+| user:read | - | - | Y |
+| user:write | - | - | Y |
+| role:read | - | - | Y |
+| role:write | - | - | Y |
+| tenant:read | - | - | Y |
+| tenant:write | - | - | Y |
+| apikey:read | - | Y | Y |
+| apikey:write | - | - | Y |
+| webhook:read | Y | Y | Y |
+| webhook:write | - | Y | Y |
+| schedule:read | Y | Y | Y |
+| schedule:write | - | Y | Y |
+| audit:read | - | - | Y |
+| settings:read | - | - | Y |
+| settings:write | - | - | Y |
 
 ### Custom Roles
 
-Admins can create custom roles with specific permission sets:
+Admins create custom roles with arbitrary permission subsets:
 
 ```json
 {
@@ -128,43 +107,17 @@ Admins can create custom roles with specific permission sets:
 ### Tenant Isolation Model
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Tenant Isolation                      │
-├─────────────────────────────────────────────────────────┤
-│                                                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐    │
-│  │  Tenant A   │  │  Tenant B   │  │  Tenant C   │    │
-│  │             │  │             │  │             │    │
-│  │  ┌───────┐  │  │  ┌───────┐  │  │  ┌───────┐  │    │
-│  │  │Users  │  │  │  │Users  │  │  │  │Users  │  │    │
-│  │  └───────┘  │  │  └───────┘  │  │  └───────┘  │    │
-│  │  ┌───────┐  │  │  ┌───────┐  │  │  ┌───────┐  │    │
-│  │  │Crawls │  │  │  │Crawls │  │  │  │Crawls │  │    │
-│  │  └───────┘  │  │  └───────┘  │  │  └───────┘  │    │
-│  │  ┌───────┐  │  │  ┌───────┐  │  │  ┌───────┐  │    │
-│  │  │Reports│  │  │  │Reports│  │  │  │Reports│  │    │
-│  │  └───────┘  │  │  └───────┘  │  │  └───────┘  │    │
-│  └─────────────┘  └─────────────┘  └─────────────┘    │
-│                                                         │
-│  ┌─────────────────────────────────────────────────┐   │
-│  │              Shared Database                     │   │
-│  │  (tenant_id column for isolation)                │   │
-│  └─────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────┘
+Tenant A ─┐
+Tenant B ─┼─> Shared Database (tenant_id column for row-level isolation)
+Tenant C ─┘
 ```
 
 ### Storage Isolation
 
-- **Option A: Shared database with tenant_id** (Recommended)
-  - Simpler implementation
-  - Tenant_id column in all tables
-  - Row-level security via WHERE clauses
-  - Backup/restore per tenant
-
-- **Option B: Separate databases**
-  - Stronger isolation
-  - More operational complexity
-  - Better for compliance requirements
+| Option | Isolation | Complexity | Recommendation |
+|--------|-----------|------------|----------------|
+| Shared DB + `tenant_id` | Row-level | Low | Default |
+| Separate databases | Strong | High | Compliance-critical |
 
 ### Tenant Quotas
 
@@ -186,83 +139,49 @@ Admins can create custom roles with specific permission sets:
 
 ### Supported Providers
 
-| Provider | Protocol | Notes |
-|----------|----------|-------|
-| Google | OIDC | `accounts.google.com` |
-| GitHub | OAuth2 | No OIDC, use OAuth2 flow |
-| Azure AD | OIDC | `login.microsoftonline.com` |
-| Okta | OIDC | Custom domain |
-| Keycloak | OIDC | Self-hosted |
-| Auth0 | OIDC | Custom domain |
+| Provider | Protocol | Discovery URL |
+|----------|----------|---------------|
+| Google | OIDC | `accounts.google.com/.well-known/openid-configuration` |
+| GitHub | OAuth2 | N/A (no OIDC) |
+| Azure AD | OIDC | `login.microsoftonline.com/{tenant}/v2.0` |
+| Okta | OIDC | `{domain}/.well-known/openid-configuration` |
+| Keycloak | OIDC | `{host}/realms/{realm}/.well-known/openid-configuration` |
+| Auth0 | OIDC | `{domain}/.well-known/openid-configuration` |
 
-### OIDC Flow
+### OIDC Authorization Code Flow
 
 ```
-1. User clicks "Login with SSO"
-2. crawlkit redirects to IdP authorize endpoint
-3. User authenticates with IdP
-4. IdP redirects back with authorization code
-5. crawlkit exchanges code for tokens
-6. crawlkit validates ID token
-7. crawlkit creates/finds local user
-8. crawlkit issues JWT access token
+1. Client redirects to IdP /authorize endpoint
+2. User authenticates with IdP
+3. IdP redirects back with authorization code
+4. crawlkit exchanges code for tokens at /token endpoint
+5. crawlkit validates ID token (signature, expiry, audience)
+6. crawlkit creates or updates local user record
+7. crawlkit issues JWT access token
 ```
 
 ### Configuration
 
 ```toml
 [auth]
-# Authentication mode: "local" | "oidc" | "hybrid"
-mode = "hybrid"
+mode = "hybrid"  # "local" | "oidc" | "hybrid"
 
 [auth.local]
-# Password hashing algorithm
 hash_algorithm = "argon2id"
-# Password minimum length
 min_password_length = 12
 
 [auth.oidc]
-# OIDC provider name
 provider = "google"
-# Client ID from IdP
 client_id = "123456789.apps.googleusercontent.com"
-# Client secret (from environment variable)
 client_secret_env = "OIDC_CLIENT_SECRET"
-# OIDC discovery URL
 discovery_url = "https://accounts.google.com/.well-known/openid-configuration"
-# Scopes to request
 scopes = ["openid", "email", "profile"]
-# Redirect URI after authentication
 redirect_uri = "https://crawlkit.example.com/api/v1/auth/callback"
 ```
 
-## SLA Monitoring
-
-### SLA Targets
-
-```json
-{
-  "tenant_id": "tenant-789",
-  "targets": {
-    "availability": 99.9,
-    "response_time_ms": 500,
-    "error_rate_percent": 1.0,
-    "uptime_percent": 99.95
-  }
-}
-```
-
-### SLA Monitoring
-
-- Track availability (successful requests / total requests)
-- Track response time (p50, p95, p99)
-- Track error rate (4xx + 5xx / total)
-- Alert when SLA targets are missed
-- Generate SLA reports (monthly/quarterly)
-
 ## Audit Logging
 
-### Audit Event Structure
+### Event Structure
 
 ```json
 {
@@ -279,11 +198,11 @@ redirect_uri = "https://crawlkit.example.com/api/v1/auth/callback"
   },
   "result": "success",
   "ip_address": "192.168.1.100",
-  "user_agent": "crawlkit-cli/0.6.0"
+  "user_agent": "crawlkit-cli/2.0.0"
 }
 ```
 
-### Audit Event Categories
+### Event Categories
 
 | Category | Actions |
 |----------|---------|
@@ -297,79 +216,61 @@ redirect_uri = "https://crawlkit.example.com/api/v1/auth/callback"
 | settings | update |
 | tenant | create, update, quota_change |
 
-### Audit Log Retention
+### Retention
 
-- Default: 90 days
-- Configurable per tenant
-- Export to external SIEM (future)
+Default: 90 days. Configurable per tenant. External SIEM export planned.
 
-## Implementation Phases
+## SLA Monitoring
 
-### Phase 1: Auth Foundation (16h)
-- JWT token generation and validation
-- Authorization middleware
-- User management (CRUD)
-- Login/refresh/logout endpoints
-- Password hashing (argon2id)
+### Targets
 
-### Phase 2: RBAC (8h)
-- Role hierarchy
-- Permission checks
-- Role management endpoints
-- Custom roles
+| Metric | Target |
+|--------|--------|
+| Availability | 99.9% |
+| Response time (p95) | 500 ms |
+| Error rate | < 1.0% |
+| Uptime | 99.95% |
 
-### Phase 3: Multi-Tenancy (8h)
-- Tenant management
-- Tenant isolation
-- Quota enforcement
-- Tenant-scoped queries
+### Monitoring
 
-### Phase 4: OIDC Integration (16h)
-- OIDC discovery
-- Authorization code flow
-- Token exchange
-- User provisioning
-- Provider configuration
-
-### Phase 5: SLA Monitoring (4h)
-- SLA tracking
-- Alert generation
-- SLA reports
-
-### Phase 6: Audit Logging (4h)
-- Event recording
-- Log storage
-- Query API
-- Export
-
-### Phase 7: Team Management UI (16h)
-- User management interface
-- Role assignment
-- Tenant switching
-- SSO configuration
-
-### Phase 8: Billing Integration (16h)
-- Stripe integration
-- Usage tracking
-- Invoice generation
-- Usage dashboard
-
-**Total: ~88h**
+- Availability: `successful_requests / total_requests`
+- Latency: p50, p95, p99
+- Error rate: `(4xx + 5xx) / total`
+- Alerting on SLA breach
+- Monthly/quarterly SLA reports
 
 ## Security Considerations
 
-- All passwords hashed with argon2id (memory-hard)
-- JWT signed with RS256 (asymmetric)
-- Refresh tokens rotatable on use
-- Rate limiting per user and per tenant
-- IP allowlisting (optional)
-- MFA support via OIDC provider
-- Session management (concurrent session limits)
-- Account lockout after failed attempts
+| Control | Implementation |
+|---------|---------------|
+| Password hashing | argon2id (memory-hard) |
+| JWT signing | RS256 (asymmetric) |
+| Refresh tokens | Rotatable on use |
+| Rate limiting | Per-user and per-tenant |
+| IP allowlisting | Optional |
+| MFA | Via OIDC provider |
+| Session management | Concurrent session limits |
+| Account lockout | After N failed attempts |
 
-## Compliance
+## Compliance Mapping
 
-- SOC 2: Audit logging, access controls, encryption
-- ISO 27001: Risk management, incident response
-- GDPR: Data subject rights, data minimization
-- CCPA: Opt-out, data deletion
+| Standard | Controls |
+|----------|----------|
+| SOC 2 | Audit logging, access controls, encryption |
+| ISO 27001 | Risk management, incident response |
+| GDPR | Data subject rights, data minimization |
+| CCPA | Opt-out, data deletion |
+
+## Implementation Phases
+
+| Phase | Scope | Estimate |
+|-------|-------|----------|
+| 1. Auth Foundation | JWT, middleware, user CRUD, login/refresh/logout | 16h |
+| 2. RBAC | Role hierarchy, permission checks, custom roles | 8h |
+| 3. Multi-Tenancy | Tenant mgmt, isolation, quotas, scoped queries | 8h |
+| 4. OIDC Integration | Discovery, auth code flow, token exchange, provisioning | 16h |
+| 5. SLA Monitoring | Tracking, alerting, reports | 4h |
+| 6. Audit Logging | Event recording, storage, query API, export | 4h |
+| 7. Team Management UI | User mgmt, role assignment, tenant switching, SSO config | 16h |
+| 8. Billing Integration | Stripe, usage tracking, invoicing, dashboard | 16h |
+| **Total** | | **88h** |

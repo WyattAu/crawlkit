@@ -1,43 +1,50 @@
 # Contributing to crawlkit
 
+*Version: 2.0.0 | Last updated: 2026-07-25*
+
 ## Prerequisites
 
 - Rust 1.75+ (latest stable)
 - Git
-- Pre-commit hook installed (see below)
+- `cargo-audit` (optional, for dependency auditing)
 
 ## Development Setup
 
 ```bash
 git clone https://github.com/WyattAu/crawlkit.git
 cd crawlkit
-
-# Install the pre-commit hook (runs fmt, clippy -D warnings, tests, audit)
-cp .git/hooks/pre-commit .git/hooks/pre-commit
-chmod +x .git/hooks/pre-commit
-
 cargo build
 cargo test
 ```
 
-## Code Standards
+### Pre-commit Hook
 
-### Mandatory Checks (Pre-commit)
+Install the pre-commit hook to enforce quality gates before each commit:
 
-Every commit must pass:
-1. `cargo fmt --check`
-2. `cargo clippy --all-targets -- -D warnings`
-3. `cargo test --lib`
-4. `cargo audit` (if installed)
+```bash
+cp .git/hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
 
-### Coding Requirements
+The hook executes the following checks sequentially, aborting on first failure:
 
-| Requirement | Threshold | Enforcement |
-|-------------|-----------|-------------|
+| Check | Command | Purpose |
+|-------|---------|---------|
+| Format | `cargo fmt --check` | Enforce rustfmt style |
+| Lint | `cargo clippy --all-targets -- -D warnings` | Zero clippy warnings |
+| Test | `cargo test --lib` | Unit test pass |
+| Audit | `cargo audit` | Dependency vulnerability scan |
+
+## Code Quality Standards
+
+### Metrics and Thresholds
+
+| Metric | Threshold | Enforcement |
+|--------|-----------|-------------|
 | Function length | <= 30 lines | Manual review |
 | Cyclomatic complexity | <= 10 | `cargo clippy` |
 | Cognitive complexity | <= 15 | `cargo clippy` |
-| Test coverage (critical) | >= 95% | `cargo tarpaulin` |
+| Test coverage (critical paths) | >= 95% | `cargo tarpaulin` |
 | Test coverage (overall) | >= 90% | `cargo tarpaulin` |
 | Documentation | 100% public items | `cargo doc` |
 
@@ -52,21 +59,21 @@ Every commit must pass:
 
 ### Error Handling
 
-- Use `thiserror` for library errors
-- Use `?` operator for propagation
-- No `unwrap()` in production code
-- No `expect()` without descriptive message
+- Use `thiserror` for library error types
+- Use `?` operator for error propagation
+- No `unwrap()` in production code paths
+- No `expect()` without a descriptive message
 
 ### Testing
 
-- AAA pattern (Arrange-Act-Assert)
-- Test naming: `test_<function>_<scenario>_<expected>`
+- Follow AAA pattern (Arrange-Act-Assert)
+- Naming convention: `test_<function>_<scenario>_<expected>`
 - All new code requires unit tests
 - Edge cases and error paths must be covered
 
 ## Commit Messages
 
-Use [Conventional Commits](https://www.conventionalcommits.org/):
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
 
 ```
 feat: add AI crawler accessibility analyzer
@@ -77,14 +84,14 @@ test: add token bucket edge cases
 chore: update dependencies
 ```
 
-## Pull Request Process
+## Pull Request Workflow
 
 1. Create feature branch from `main`
 2. Implement changes with tests
-3. Ensure all CI checks pass
-4. Request review (1 approval minimum)
+3. Ensure all CI checks pass (fmt, clippy, test, audit)
+4. Request review (minimum 1 approval)
 5. Address feedback
-6. Squash merge
+6. Squash merge into `main`
 
 ## Architecture Decision Records
 
@@ -95,11 +102,13 @@ Major changes require an ADR in `.adrs/`:
 
 | Field | Value |
 |-------|-------|
-| Status | Proposed/Accepted/Rejected |
+| Status | Proposed / Accepted / Rejected |
 | Date | YYYY-MM-DD |
 
 ## Context
+
 ## Decision
+
 ## Consequences
 ```
 

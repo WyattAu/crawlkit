@@ -1,42 +1,30 @@
 # crawlkit Plugin System Architecture
 
-Status: Proposed. Requires stakeholder approval before execution.
-
----
+*Status: Proposed. Requires stakeholder approval before execution.*
+*Version: 2.0.0 | Last updated: 2026-07-25*
 
 ## Overview
 
-The plugin system enables third-party extensions to crawlkit's analyzer pipeline.
-Plugins run in a sandboxed WASM environment for security, with an optional C ABI
-mode for trusted internal plugins.
+Third-party extension system for crawlkit's analyzer pipeline. Two execution models: WASM sandbox for untrusted plugins, C ABI for trusted internal plugins.
 
 ## Design Principles
 
-1. **Security first** -- All third-party plugins run in WASM sandbox
+1. **Security first** -- All third-party plugins execute in WASM sandbox
 2. **ABI stability** -- WASM target provides stable ABI across versions
-3. **Cross-platform** -- Same .wasm file works on Linux, macOS, Windows
-4. **Performance** -- Trusted plugins can use C ABI for near-native speed
-5. **Extensibility** -- Plugin SDK provides full access to analyzer types
+3. **Cross-platform** -- Single `.wasm` artifact runs on Linux, macOS, Windows
+4. **Performance** -- Trusted plugins use C ABI for near-native throughput
+5. **Extensibility** -- Full access to analyzer type system via SDK
 
 ## Plugin Types
 
-### WASM Plugins (Untrusted)
-
-- Compiled to `wasm32-wasi` target
-- Sandboxed: no file/network/memory access unless granted
-- ABI: function pointers via WASM exports
-- Use case: Third-party, marketplace, community plugins
-
-### C ABI Plugins (Trusted)
-
-- Compiled as shared library (.so/.dylib/.dll)
-- Full system access (trusted code)
-- ABI: C function pointers via `libloading`
-- Use case: Internal plugins, performance-critical extensions
+| Type | Target | Trust | Use Case |
+|------|--------|-------|----------|
+| WASM | `wasm32-wasi` | Untrusted | Third-party, marketplace, community |
+| C ABI | `.so` / `.dylib` / `.dll` | Trusted | Internal, performance-critical |
 
 ## Plugin Manifest
 
-Every plugin must include a `crawlkit-plugin.toml` manifest:
+Every plugin requires a `crawlkit-plugin.toml`:
 
 ```toml
 [plugin]
@@ -44,18 +32,15 @@ name = "my-custom-analyzer"
 version = "1.0.0"
 api_version = "1.0"
 author = "Plugin Author"
-description = "Custom SEO analyzer for specific use case"
+description = "Custom SEO analyzer"
 license = "Apache-2.0"
 trust_level = "untrusted"  # "trusted" | "untrusted"
 
 [plugin.entry]
-# WASM plugins
 wasm = "plugin.wasm"
-# C ABI plugins (mutually exclusive with wasm)
-# native = "libplugin.so"
+# native = "libplugin.so"  # mutually exclusive with wasm
 
 [plugin.permissions]
-# WASM permissions (ignored for C ABI)
 network = false
 filesystem = false
 env_vars = []
@@ -67,23 +52,17 @@ description = "My custom analyzer"
 severity = "warning"
 ```
 
-## Plugin Interface (WASM)
+## WASM Plugin Interface
 
 ### Exports
 
 ```rust
-/// Initialize the plugin. Called once on load.
-/// Returns 0 on success, non-zero on error.
 #[no_mangle]
 pub extern "C" fn crawlkit_plugin_init() -> i32;
 
-/// Get plugin metadata as JSON string.
-/// Caller must free with crawlkit_plugin_free_string().
 #[no_mangle]
 pub extern "C" fn crawlkit_plugin_metadata() -> *mut u8;
 
-/// Analyze HTML content. Returns JSON findings as string.
-/// Caller must free with crawlkit_plugin_free_string().
 #[no_mangle]
 pub extern "C" fn crawlkit_plugin_analyze(
     html_ptr: *const u8,
@@ -92,25 +71,23 @@ pub extern "C" fn crawlkit_plugin_analyze(
     url_len: usize,
 ) -> *mut u8;
 
-/// Free a string returned by plugin functions.
 #[no_mangle]
 pub extern "C" fn crawlkit_plugin_free_string(ptr: *mut u8);
 
-/// Get API version this plugin was compiled against.
 #[no_mangle]
 pub extern "C" fn crawlkit_plugin_api_version() -> *mut u8;
 ```
 
 ### Memory Model
 
-- Plugin allocates memory via WASM allocator
-- Host reads plugin memory via WASM linear memory
+- Plugin allocates via WASM allocator (linear memory)
+- Host reads plugin memory through WASM linear memory interface
 - Host frees plugin memory by calling `crawlkit_plugin_free_string()`
-- No shared memory between host and plugin (sandboxed)
+- No shared memory between host and plugin instance
 
-## Plugin Interface (C ABI)
+## C ABI Plugin Interface
 
-### Exports
+### Types
 
 ```c
 typedef struct {
@@ -132,13 +109,18 @@ typedef struct {
     crawlkit_finding_t* findings;
     size_t count;
 } crawlkit_analysis_result_t;
+```
 
-// Entry points
+### Entry Points
+
+```c
 crawlkit_plugin_info_t* crawlkit_plugin_init(void);
+
 crawlkit_analysis_result_t* crawlkit_plugin_analyze(
     const char* html, size_t html_len,
     const char* url, size_t url_len
 );
+
 void crawlkit_plugin_free_result(crawlkit_analysis_result_t* result);
 ```
 
@@ -151,67 +133,57 @@ void crawlkit_plugin_free_result(crawlkit_analysis_result_t* result);
 4. Call crawlkit_plugin_init() -- check return code
 5. Call crawlkit_plugin_metadata() -- validate metadata
 6. Register plugin in PluginRegistry
-7. Wire plugin's analyze() into AnalyzerRegistry
+7. Wire plugin analyze() into AnalyzerRegistry
 ```
 
 ## CLI Commands
 
-```bash
-# List installed plugins
-crawlkit plugin list
-
-# Install a plugin
-crawlkit plugin install ./my-plugin/
-
-# Test a plugin with sample HTML
-crawlkit plugin test ./my-plugin/ --html "<html>...</html>"
-
-# Remove a plugin
-crawlkit plugin remove my-custom-analyzer
-
-# Search marketplace (future)
-crawlkit plugin search "seo"
-crawlkit plugin install marketplace://author/plugin-name
-```
+| Command | Description |
+|---------|-------------|
+| `crawlkit plugin list` | List installed plugins |
+| `crawlkit plugin install <path>` | Install from directory or archive |
+| `crawlkit plugin test <path> --html "<html>"` | Test with sample HTML |
+| `crawlkit plugin remove <name>` | Uninstall plugin |
+| `crawlkit plugin search <query>` | Search marketplace (future) |
 
 ## API Endpoints
 
-```
-GET    /api/v1/plugins              # List installed plugins
-POST   /api/v1/plugins              # Install plugin (upload .wasm or .zip)
-GET    /api/v1/plugins/{name}       # Get plugin details
-DELETE /api/v1/plugins/{name}       # Uninstall plugin
-POST   /api/v1/plugins/{name}/test  # Test plugin with HTML
-GET    /api/v1/plugins/{name}/stats # Plugin usage statistics
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/plugins` | List installed plugins |
+| POST | `/api/v1/plugins` | Install (upload .wasm or .zip) |
+| GET | `/api/v1/plugins/{name}` | Get plugin details |
+| DELETE | `/api/v1/plugins/{name}` | Uninstall plugin |
+| POST | `/api/v1/plugins/{name}/test` | Test with HTML |
+| GET | `/api/v1/plugins/{name}/stats` | Usage statistics |
 
 ## Security Model
 
-### WASM Sandbox
+### WASM Sandbox Constraints
 
-- No file system access (unless explicitly granted)
-- No network access (unless explicitly granted)
-- No environment variable access (unless explicitly granted)
-- Memory limited to 64MB per plugin instance
-- CPU limited to 100ms per analyze() call
-- No access to host process memory
+| Resource | Default | Grant |
+|----------|---------|-------|
+| File system | Denied | Explicit grant |
+| Network | Denied | Explicit grant |
+| Environment variables | Denied | Explicit grant |
+| Memory limit | 64 MB per instance | Configurable |
+| CPU limit | 100 ms per `analyze()` call | Configurable |
+| Host memory | No access | Enforced by WASM |
 
-### C ABI Trust
+### C ABI Trust Requirements
 
-- Only loaded from configured plugin directories
-- Manifest must specify `trust_level = "trusted"`
+- Loaded only from configured plugin directories
+- Manifest must declare `trust_level = "trusted"`
 - Plugin author must be in trusted authors list
-- Plugin signature verification (future)
+- Signature verification planned
 
 ## Plugin SDK
 
-The `crawlkit-plugin-sdk` crate provides:
+The `crawlkit-plugin-sdk` crate provides the `Analyzer` trait:
 
 ```rust
-// Plugin author imports
 use crawlkit_plugin_sdk::{Analyzer, Finding, Severity, AnalysisContext};
 
-// Implement analyzer
 pub struct MyAnalyzer;
 
 impl Analyzer for MyAnalyzer {
@@ -219,7 +191,6 @@ impl Analyzer for MyAnalyzer {
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
-
         if ctx.html.contains("something") {
             findings.push(Finding {
                 category: "custom".into(),
@@ -230,62 +201,39 @@ impl Analyzer for MyAnalyzer {
                 recommendation: "Remove something".into(),
             });
         }
-
         findings
     }
 }
 
-// Export for WASM
 crawlkit_plugin_sdk::export_analyzer!(MyAnalyzer);
 ```
 
-## Versioning
+## API Versioning
 
-- Plugin API version: `1.0` (major.minor)
-- Backward compatible: major version must match
-- Forward compatible: minor version can differ
-- crawlkit checks `api_version` compatibility on load
+| Rule | Constraint |
+|------|-----------|
+| Major version | Must match between plugin and host |
+| Minor version | May differ (forward compatible) |
+| Compatibility check | Performed at load time |
+
+Format: `major.minor` (e.g., `1.0`).
 
 ## Testing
 
-- Unit tests for plugin loading
-- Integration tests for WASM execution
-- Fuzzing for malformed plugins
-- Benchmark for plugin overhead measurement
+- Unit tests for plugin loading and manifest parsing
+- Integration tests for WASM execution via wasmtime
+- Fuzzing for malformed plugin binaries and manifests
+- Benchmark for per-plugin overhead measurement
 
 ## Implementation Phases
 
-### Phase 1: Core Loading (8h)
-- Add wasmtime dependency
-- Implement WASM plugin loading in plugin.rs
-- Add plugin directory scanning
-- Validate manifests and API versions
-
-### Phase 2: Plugin SDK (8h)
-- Create `crawlkit-plugin-sdk` crate
-- Define Analyzer trait, Finding types
-- Add build script for WASM target
-- Publish to crates.io
-
-### Phase 3: CLI Commands (4h)
-- Add `crawlkit plugin` subcommand
-- Implement list, install, test, remove
-- Add plugin directory configuration
-
-### Phase 4: API Endpoints (4h)
-- Add plugin endpoints to REST API
-- Implement upload, list, test, remove
-- Add plugin statistics
-
-### Phase 5: Example Plugin (4h)
-- Create example analyzer plugin
-- Document plugin development process
-- Add to documentation site
-
-### Phase 6: Marketplace (16h)
-- Design marketplace schema
-- Implement plugin registry
-- Add automated testing
-- Create plugin submission process
-
-**Total: ~44h for core, ~60h with marketplace**
+| Phase | Scope | Estimate |
+|-------|-------|----------|
+| 1. Core Loading | wasmtime integration, directory scanning, manifest validation | 8h |
+| 2. Plugin SDK | `crawlkit-plugin-sdk` crate, Analyzer trait, WASM build script | 8h |
+| 3. CLI Commands | `crawlkit plugin` subcommand (list, install, test, remove) | 4h |
+| 4. API Endpoints | Plugin REST endpoints (upload, list, test, remove, stats) | 4h |
+| 5. Example Plugin | Reference analyzer plugin, development documentation | 4h |
+| 6. Marketplace | Plugin registry, automated testing, submission process | 16h |
+| **Total (core)** | | **28h** |
+| **Total (with marketplace)** | | **44h** |

@@ -3,7 +3,7 @@ title: crawlkit
 description: High-performance Rust web crawler and SEO analysis toolkit
 template: splash
 hero:
-  tagline: Async HTTP/2 crawling engine with 28 analyzers. Zero clippy warnings. CI/CD with supply chain auditing.
+  tagline: Async HTTP/2 crawling engine with 28 analyzers. Supply chain auditing. Zero clippy warnings.
   actions:
     - text: Get Started
       link: /crawlkit/getting-started/
@@ -20,15 +20,15 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
 
 <CardGrid stagger>
   <Card title="Crawl Engine" icon="rocket">
-    Async HTTP/2 with configurable concurrency. 50+ pages/sec. Redirect chain tracking, robots.txt compliance, token-bucket rate limiting.
+    Async HTTP/2 with configurable concurrency. 50+ pages/sec throughput. Redirect chain tracking, robots.txt compliance, token-bucket rate limiting.
   </Card>
   <Card title="28 Analyzers" icon="puzzle">
-    SEO meta tags, structured data validation, content quality scoring, security headers, accessibility, AI search optimization, WASM detection.
+    SEO meta tags, structured data validation, content quality scoring, security headers, accessibility (WCAG 2.1 AA), AI search optimization, WASM pattern detection.
   </Card>
   <Card title="Storage and Export" icon="database">
-    SQLite with WAL mode. Export to JSON, CSV, Markdown, HTML (interactive single-file reports with dark mode).
+    SQLite with WAL mode. Export to JSON, CSV, Markdown, HTML (single-file reports), SQLite.
   </Card>
   <Card title="Enterprise" icon="shield">
-    RBAC, multi-tenant support, SSO integration, SLA monitoring, audit trail, encryption at rest, circuit breaker fault tolerance.
+    RBAC, multi-tenant isolation, SSO integration (OIDC/SAML), SLA monitoring, audit trail, AES-256-GCM encryption at rest, circuit breaker fault tolerance.
   </Card>
 </CardGrid>

@@ -19,7 +19,7 @@ Schema-versioned structured output:
 
 ## CSV
 
-Configurable columns with nested data flattening:
+Configurable columns with nested data flattened to dot-notation keys:
 
 ```csv
 url,status_code,title,description,word_count,load_time_ms
@@ -28,15 +28,11 @@ https://example.com,200,Example,Example page,1234,150
 
 ## HTML
 
-Interactive single-file report with:
-- Severity-colored issue tables
-- Page-by-page breakdown
-- Chart.js visualizations
-- Dark mode support
+Single-file interactive report. Includes severity-colored issue tables, page-by-page breakdown, Chart.js visualizations, and dark mode support. All assets are inlined (no external dependencies).
 
 ## Markdown
 
-Human-readable summary:
+Human-readable summary suitable for CI artifacts or documentation:
 
 ```markdown
 # Crawl Report
@@ -49,7 +45,7 @@ Human-readable summary:
 
 ## SQLite
 
-Normalized schema for ad-hoc queries:
+Normalized relational schema with WAL mode. Suitable for ad-hoc queries and integration with analytics tools:
 
 ```sql
 SELECT p.url, COUNT(f.id) as issue_count

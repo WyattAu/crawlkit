@@ -58,3 +58,67 @@ pub fn require_permission(
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::Request;
+
+    fn make_claims(permissions: Vec<&str>) -> Claims {
+        Claims {
+            sub: "user-1".to_string(),
+            tenant: "default".to_string(),
+            roles: vec!["viewer".to_string()],
+            permissions: permissions.into_iter().map(String::from).collect(),
+            exp: 1700000000,
+            iat: 1699996400,
+            jti: "test-jti".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_require_permission_returns_closure() {
+        let _checker = require_permission("crawl:read");
+    }
+
+    #[test]
+    fn test_permission_check_with_claims() {
+        let claims = make_claims(vec!["crawl:read", "crawl:write"]);
+        assert!(claims.permissions.contains(&"crawl:read".to_string()));
+        assert!(claims.permissions.contains(&"crawl:write".to_string()));
+        assert!(!claims.permissions.contains(&"user:write".to_string()));
+    }
+
+    #[test]
+    fn test_permission_check_empty_permissions() {
+        let claims = make_claims(vec![]);
+        assert!(!claims.permissions.contains(&"crawl:read".to_string()));
+    }
+
+    #[test]
+    fn test_auth_middleware_claims_insertion() {
+        let claims = make_claims(vec!["admin"]);
+        let mut request = Request::builder().body(Body::empty()).unwrap();
+        request.extensions_mut().insert(claims.clone());
+
+        let retrieved = request.extensions().get::<Claims>().unwrap();
+        assert_eq!(retrieved.sub, "user-1");
+        assert_eq!(retrieved.tenant, "default");
+        assert!(retrieved.permissions.contains(&"admin".to_string()));
+    }
+
+    #[test]
+    fn test_auth_middleware_no_claims_in_extensions() {
+        let request = Request::builder().body(Body::empty()).unwrap();
+        assert!(request.extensions().get::<Claims>().is_none());
+    }
+
+    #[test]
+    fn test_permission_string_comparison() {
+        let perm = "crawl:read";
+        let claims = make_claims(vec!["crawl:read"]);
+        let has = claims.permissions.contains(&perm.to_string());
+        assert!(has);
+    }
+}

@@ -21,43 +21,49 @@ Binary output: `target/release/crawlkit`
 ## First Crawl
 
 ```bash
-# Basic crawl
 crawlkit crawl https://example.com --max-pages 50
+```
 
-# Custom settings
+With custom settings:
+
+```bash
 crawlkit crawl https://example.com \
   --max-pages 500 \
   --delay 200 \
   --concurrency 8 \
   --output crawl-data
+```
 
-# Generate HTML report
+Generate an HTML report:
+
+```bash
 crawlkit report crawl-data/ --format html --output report.html
 ```
 
 ## Reproducible Crawls
 
 ```bash
-# Crawl with a specific seed for reproducible results
 crawlkit crawl https://example.com --seed 42 --output crawl-seed42
-
-# Crawl again with the same seed -- results are identical
 crawlkit crawl https://example.com --seed 42 --output crawl-seed42-v2
 ```
+
+Both runs produce identical output given the same configuration and seed.
 
 ## Encrypted Storage
 
 ```bash
-# Crawl with encryption at rest
 CRAWLKIT_ENCRYPTION_KEY=$(openssl rand -hex 32) crawlkit crawl https://example.com --encrypt
 ```
+
+Encryption uses AES-256-GCM. The key is provided via the `CRAWLKIT_ENCRYPTION_KEY` environment variable (base64 or hex-encoded).
 
 ## Metrics Export
 
 ```bash
-# Export metrics snapshot to JSON
 crawlkit crawl https://example.com --metrics-json metrics.json
 ```
+
+Exports an atomic metrics snapshot (pages crawled, bytes fetched, fetch/analysis times, throughput) to a JSON file.
 
 ## REST API Mode
 
@@ -67,7 +73,7 @@ crawlkit-api --port 8080
 
 Default API key: `ck_dev_default_key_for_testing` (development only).
 
-> **Security warning:** The default API key is for local development only. Do not use it in production. Generate a unique key via `POST /api/v1/keys` and store it securely.
+**Security note:** The default API key is for local development only. Generate a unique key via `POST /api/v1/keys` and restrict access in production.
 
 ## Programmatic Usage
 
@@ -79,7 +85,6 @@ let config = CrawlConfig::default();
 let client = HttpClient::from_crawl_config(&config)?;
 let registry = AnalyzerRegistry::new(&config);
 
-// Fetch and analyze
 let url = url::Url::parse("https://example.com")?;
 let result = client.fetch(&url).await?;
 let parsed = HtmlParser::parse(&result.body, &url)?;

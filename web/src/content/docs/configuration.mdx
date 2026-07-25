@@ -33,7 +33,7 @@ output_dir = "./crawl-results"
 
 ## Feature Flags
 
-Feature flags can be set in `crawlkit.toml` under the `[features]` section:
+Feature flags are configured in the `[features]` section of `crawlkit.toml`:
 
 ```toml
 [features]
@@ -47,7 +47,7 @@ observability = true
 rum_integration = false
 ```
 
-CLI flags `--enable-ai`, `--enable-wasm`, and `--javascript` override these settings.
+CLI flags `--enable-ai`, `--enable-wasm`, and `--javascript` override configuration file values.
 
 ## CLI Flags
 
@@ -66,5 +66,6 @@ crawlkit crawl https://example.com \
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `CRAWLKIT_DB_PATH` | SQLite database path (API mode) | `crawlkit-api.db` |
+| `CRAWLKIT_ENCRYPTION_KEY` | AES-256-GCM key (hex or base64) | none |
 | `RUST_LOG` | Log level filter | `crawlkit=info` |
 | `NODE_PATH` | Node.js module path (Playwright) | system default |

@@ -24,6 +24,7 @@ export default function UsersPage() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [password, setPassword] = useState('');
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (token) {
@@ -47,6 +48,7 @@ export default function UsersPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setFormLoading(true);
+    setFormError('');
     try {
       await apiClient.createUser({ email, name, password, tenant_id: 'default', roles: ['viewer'] });
       setShowForm(false);
@@ -54,8 +56,10 @@ export default function UsersPage() {
       setName('');
       setPassword('');
       loadUsers();
-    } catch (error) {
-      console.error('Failed to create user:', error);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create user';
+      setFormError(message);
+      console.error('Failed to create user:', err);
     } finally {
       setFormLoading(false);
     }
@@ -82,11 +86,12 @@ export default function UsersPage() {
       </div>
 
       {loading ? (
-        <div className="flex items-center justify-center py-12">
+        <div role="status" className="flex items-center justify-center py-12">
           <Loader className="w-8 h-8 text-blue-500 animate-spin" />
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700">
@@ -115,6 +120,7 @@ export default function UsersPage() {
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
+                      aria-label={`Delete ${user.name}`}
                       onClick={() => handleDelete(user.id)}
                       className="p-1 text-gray-400 hover:text-red-500 transition-colors"
                     >
@@ -125,11 +131,17 @@ export default function UsersPage() {
               ))}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 
       <Modal open={showForm} onOpenChange={setShowForm} title="Add User">
         <form onSubmit={handleCreate} className="space-y-4">
+          {formError && (
+            <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+              {formError}
+            </div>
+          )}
           <Input
             label="Name"
             value={name}

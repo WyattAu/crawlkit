@@ -1,6 +1,6 @@
 ---
 title: CI Integration
-description: Integrate crawlkit into your CI/CD pipeline
+description: Integrate crawlkit into CI/CD pipelines
 ---
 
 ## GitHub Actions
@@ -44,10 +44,9 @@ seo-audit:
 ## Fail on Critical Issues
 
 ```bash
-# Check for errors in the crawl results
 crawlkit crawl https://your-site.com --format json --output results/
 if jq -e '.total_issues > 0' results/crawl-results.json; then
-  echo "SEO issues found"
+  echo "Issues detected"
   exit 1
 fi
 ```

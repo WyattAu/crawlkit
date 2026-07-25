@@ -189,3 +189,258 @@ impl AuthManager {
         claims.permissions.contains(&permission.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_user(id: &str, email: &str, roles: Vec<&str>) -> User {
+        User {
+            id: id.to_string(),
+            email: email.to_string(),
+            name: format!("User {id}"),
+            password_hash: String::new(),
+            tenant_id: "default".to_string(),
+            roles: roles.into_iter().map(String::from).collect(),
+            enabled: true,
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // AuthManager::new – default roles
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_auth_manager_new_has_default_roles() {
+        let am = AuthManager::new("secret".to_string());
+        let roles = am.roles.read();
+        let names: Vec<&str> = roles.iter().map(|r| r.name.as_str()).collect();
+        assert!(names.contains(&"admin"));
+        assert!(names.contains(&"editor"));
+        assert!(names.contains(&"viewer"));
+    }
+
+    #[test]
+    fn test_auth_manager_new_empty_users() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(am.users.read().is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // add_role / add_user / find_user / find_user_by_id
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_add_and_find_user_by_email() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u1", "alice@example.com", vec!["admin"]);
+        am.add_user(user);
+        let found = am.find_user("alice@example.com");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().id, "u1");
+    }
+
+    #[test]
+    fn test_find_user_not_found() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(am.find_user("nobody@example.com").is_none());
+    }
+
+    #[test]
+    fn test_add_and_find_user_by_id() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u42", "bob@example.com", vec!["viewer"]);
+        am.add_user(user);
+        let found = am.find_user_by_id("u42");
+        assert!(found.is_some());
+        assert_eq!(found.unwrap().email, "bob@example.com");
+    }
+
+    #[test]
+    fn test_find_user_by_id_not_found() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(am.find_user_by_id("nonexistent").is_none());
+    }
+
+    #[test]
+    fn test_list_users() {
+        let am = AuthManager::new("secret".to_string());
+        am.add_user(make_user("u1", "a@b.com", vec!["admin"]));
+        am.add_user(make_user("u2", "c@d.com", vec!["viewer"]));
+        let users = am.list_users();
+        assert_eq!(users.len(), 2);
+    }
+
+    #[test]
+    fn test_list_users_empty() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(am.list_users().is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // delete_user
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_delete_user_existing() {
+        let am = AuthManager::new("secret".to_string());
+        am.add_user(make_user("u1", "a@b.com", vec!["admin"]));
+        assert!(am.delete_user("u1"));
+        assert!(am.find_user_by_id("u1").is_none());
+    }
+
+    #[test]
+    fn test_delete_user_nonexistent() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(!am.delete_user("nope"));
+    }
+
+    // ---------------------------------------------------------------
+    // add_role
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_add_custom_role() {
+        let am = AuthManager::new("secret".to_string());
+        am.add_role(Role {
+            name: "custom".to_string(),
+            permissions: vec!["custom:read".to_string()],
+        });
+        let roles = am.roles.read();
+        let names: Vec<&str> = roles.iter().map(|r| r.name.as_str()).collect();
+        assert!(names.contains(&"custom"));
+    }
+
+    // ---------------------------------------------------------------
+    // Password hashing / verification
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_hash_and_verify_password_correct() {
+        let am = AuthManager::new("secret".to_string());
+        let hash = am.hash_password("my_secure_password");
+        assert!(am.verify_password("my_secure_password", &hash));
+    }
+
+    #[test]
+    fn test_hash_and_verify_password_wrong() {
+        let am = AuthManager::new("secret".to_string());
+        let hash = am.hash_password("correct_password");
+        assert!(!am.verify_password("wrong_password", &hash));
+    }
+
+    #[test]
+    fn test_verify_password_invalid_hash() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(!am.verify_password("anything", "not-a-hash"));
+    }
+
+    #[test]
+    fn test_hash_password_different_each_time() {
+        let am = AuthManager::new("secret".to_string());
+        let h1 = am.hash_password("password");
+        let h2 = am.hash_password("password");
+        assert_ne!(h1, h2, "Argon2 hashes should use different salts");
+    }
+
+    // ---------------------------------------------------------------
+    // JWT generate / validate
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_generate_and_validate_token() {
+        let am = AuthManager::new("test-secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["admin"]);
+        let token = am.generate_token(&user).unwrap();
+        let claims = am.validate_token(&token).unwrap();
+        assert_eq!(claims.sub, "u1");
+        assert_eq!(claims.tenant, "default");
+        assert!(claims.roles.contains(&"admin".to_string()));
+    }
+
+    #[test]
+    fn test_validate_token_wrong_secret() {
+        let am = AuthManager::new("correct-secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["viewer"]);
+        let token = am.generate_token(&user).unwrap();
+
+        let wrong_am = AuthManager::new("wrong-secret".to_string());
+        assert!(wrong_am.validate_token(&token).is_err());
+    }
+
+    #[test]
+    fn test_validate_token_garbage() {
+        let am = AuthManager::new("secret".to_string());
+        assert!(am.validate_token("garbage.token.value").is_err());
+    }
+
+    #[test]
+    fn test_generate_token_includes_permissions() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["editor"]);
+        let token = am.generate_token(&user).unwrap();
+        let claims = am.validate_token(&token).unwrap();
+        // editor role has crawl:read, crawl:write, report:read, report:write
+        assert!(claims.permissions.contains(&"crawl:read".to_string()));
+        assert!(claims.permissions.contains(&"crawl:write".to_string()));
+        assert!(claims.permissions.contains(&"report:read".to_string()));
+        assert!(claims.permissions.contains(&"report:write".to_string()));
+    }
+
+    #[test]
+    fn test_viewer_role_limited_permissions() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["viewer"]);
+        let token = am.generate_token(&user).unwrap();
+        let claims = am.validate_token(&token).unwrap();
+        assert!(claims.permissions.contains(&"crawl:read".to_string()));
+        assert!(!claims.permissions.contains(&"crawl:write".to_string()));
+        assert!(!claims.permissions.contains(&"user:read".to_string()));
+    }
+
+    // ---------------------------------------------------------------
+    // has_permission
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_has_permission_true() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["admin"]);
+        let token = am.generate_token(&user).unwrap();
+        let claims = am.validate_token(&token).unwrap();
+        assert!(am.has_permission(&claims, "crawl:read"));
+        assert!(am.has_permission(&claims, "user:write"));
+    }
+
+    #[test]
+    fn test_has_permission_false() {
+        let am = AuthManager::new("secret".to_string());
+        let user = make_user("u1", "a@b.com", vec!["viewer"]);
+        let token = am.generate_token(&user).unwrap();
+        let claims = am.validate_token(&token).unwrap();
+        assert!(!am.has_permission(&claims, "user:write"));
+        assert!(!am.has_permission(&claims, "apikey:read"));
+    }
+
+    // ---------------------------------------------------------------
+    // Claims serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_claims_serialization_roundtrip() {
+        let claims = Claims {
+            sub: "user-1".to_string(),
+            tenant: "acme".to_string(),
+            roles: vec!["admin".to_string()],
+            permissions: vec!["crawl:read".to_string()],
+            exp: 1700000000,
+            iat: 1699996400,
+            jti: "unique-id".to_string(),
+        };
+        let json = serde_json::to_string(&claims).unwrap();
+        let deserialized: Claims = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.sub, "user-1");
+        assert_eq!(deserialized.tenant, "acme");
+        assert_eq!(deserialized.jti, "unique-id");
+    }
+}

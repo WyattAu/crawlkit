@@ -211,3 +211,233 @@ impl OidcManager {
         &self.config
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------------------------------------------------------------
+    // OidcConfig serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_config_serialization_roundtrip() {
+        let config = OidcConfig {
+            provider: "google".to_string(),
+            client_id: "my-client-id".to_string(),
+            client_secret_env: "GOOGLE_CLIENT_SECRET".to_string(),
+            discovery_url: "https://accounts.google.com".to_string(),
+            scopes: vec![
+                "openid".to_string(),
+                "email".to_string(),
+                "profile".to_string(),
+            ],
+            redirect_uri: "http://localhost:4000/callback".to_string(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: OidcConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.provider, "google");
+        assert_eq!(deserialized.client_id, "my-client-id");
+        assert_eq!(deserialized.client_secret_env, "GOOGLE_CLIENT_SECRET");
+        assert_eq!(deserialized.scopes.len(), 3);
+        assert_eq!(deserialized.redirect_uri, "http://localhost:4000/callback");
+    }
+
+    // ---------------------------------------------------------------
+    // OidcEndpoints serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_endpoints_serialization_roundtrip() {
+        let endpoints = OidcEndpoints {
+            authorization_endpoint: "https://auth.example.com/authorize".to_string(),
+            token_endpoint: "https://auth.example.com/token".to_string(),
+            userinfo_endpoint: "https://auth.example.com/userinfo".to_string(),
+            jwks_uri: "https://auth.example.com/.well-known/jwks.json".to_string(),
+        };
+        let json = serde_json::to_string(&endpoints).unwrap();
+        let deserialized: OidcEndpoints = serde_json::from_str(&json).unwrap();
+        assert_eq!(
+            deserialized.authorization_endpoint,
+            "https://auth.example.com/authorize"
+        );
+        assert_eq!(
+            deserialized.token_endpoint,
+            "https://auth.example.com/token"
+        );
+        assert_eq!(
+            deserialized.userinfo_endpoint,
+            "https://auth.example.com/userinfo"
+        );
+        assert_eq!(
+            deserialized.jwks_uri,
+            "https://auth.example.com/.well-known/jwks.json"
+        );
+    }
+
+    // ---------------------------------------------------------------
+    // OidcTokens serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_tokens_serialization_roundtrip() {
+        let tokens = OidcTokens {
+            access_token: "access-123".to_string(),
+            id_token: "id-456".to_string(),
+            refresh_token: Some("refresh-789".to_string()),
+            expires_in: 3600,
+            token_type: "Bearer".to_string(),
+        };
+        let json = serde_json::to_string(&tokens).unwrap();
+        let deserialized: OidcTokens = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.access_token, "access-123");
+        assert_eq!(deserialized.id_token, "id-456");
+        assert_eq!(deserialized.refresh_token.as_deref(), Some("refresh-789"));
+        assert_eq!(deserialized.expires_in, 3600);
+        assert_eq!(deserialized.token_type, "Bearer");
+    }
+
+    #[test]
+    fn test_oidc_tokens_without_refresh_token() {
+        let tokens = OidcTokens {
+            access_token: "access-123".to_string(),
+            id_token: "id-456".to_string(),
+            refresh_token: None,
+            expires_in: 3600,
+            token_type: "Bearer".to_string(),
+        };
+        let json = serde_json::to_string(&tokens).unwrap();
+        let deserialized: OidcTokens = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.refresh_token.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // OidcUserInfo serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_user_info_serialization_roundtrip() {
+        let info = OidcUserInfo {
+            sub: "user-abc".to_string(),
+            email: Some("user@example.com".to_string()),
+            name: Some("Test User".to_string()),
+            picture: Some("https://example.com/photo.jpg".to_string()),
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: OidcUserInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.sub, "user-abc");
+        assert_eq!(deserialized.email.as_deref(), Some("user@example.com"));
+        assert_eq!(deserialized.name.as_deref(), Some("Test User"));
+    }
+
+    #[test]
+    fn test_oidc_user_info_optional_fields() {
+        let info = OidcUserInfo {
+            sub: "user-abc".to_string(),
+            email: None,
+            name: None,
+            picture: None,
+        };
+        let json = serde_json::to_string(&info).unwrap();
+        let deserialized: OidcUserInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.sub, "user-abc");
+        assert!(deserialized.email.is_none());
+        assert!(deserialized.name.is_none());
+        assert!(deserialized.picture.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // OidcManager::new
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_manager_new() {
+        let config = OidcConfig {
+            provider: "github".to_string(),
+            client_id: "gh-client".to_string(),
+            client_secret_env: "GH_SECRET".to_string(),
+            discovery_url: "https://github.com".to_string(),
+            scopes: vec!["openid".to_string()],
+            redirect_uri: "http://localhost/callback".to_string(),
+        };
+        let manager = OidcManager::new(config.clone());
+        assert_eq!(manager.config().provider, "github");
+        assert_eq!(manager.config().client_id, "gh-client");
+        // Endpoints should be None before discovery
+        assert!(manager.endpoints.read().is_none());
+    }
+
+    #[test]
+    fn test_oidc_manager_config_accessor() {
+        let config = OidcConfig {
+            provider: "azure".to_string(),
+            client_id: "azure-id".to_string(),
+            client_secret_env: "AZURE_SECRET".to_string(),
+            discovery_url: "https://login.microsoftonline.com".to_string(),
+            scopes: vec!["openid".to_string(), "email".to_string()],
+            redirect_uri: "http://localhost:4000/callback".to_string(),
+        };
+        let manager = OidcManager::new(config.clone());
+        let returned_config = manager.config();
+        assert_eq!(returned_config.provider, "azure");
+        assert_eq!(returned_config.scopes.len(), 2);
+    }
+
+    // ---------------------------------------------------------------
+    // OidcError Display
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_error_display() {
+        let err = OidcError::Discovery("bad discovery".to_string());
+        assert!(err.to_string().contains("bad discovery"));
+
+        let err = OidcError::TokenExchange("token fail".to_string());
+        assert!(err.to_string().contains("token fail"));
+
+        let err = OidcError::TokenValidation("validation fail".to_string());
+        assert!(err.to_string().contains("validation fail"));
+
+        let err = OidcError::UserInfo("userinfo fail".to_string());
+        assert!(err.to_string().contains("userinfo fail"));
+    }
+
+    // ---------------------------------------------------------------
+    // OidcConfig clone
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_config_clone() {
+        let config = OidcConfig {
+            provider: "okta".to_string(),
+            client_id: "okta-id".to_string(),
+            client_secret_env: "OKTA_SECRET".to_string(),
+            discovery_url: "https://example.okta.com".to_string(),
+            scopes: vec!["openid".to_string()],
+            redirect_uri: "http://localhost/callback".to_string(),
+        };
+        let cloned = config.clone();
+        assert_eq!(cloned.provider, "okta");
+        assert_eq!(cloned.client_id, "okta-id");
+    }
+
+    // ---------------------------------------------------------------
+    // OidcEndpoints clone
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_oidc_endpoints_clone() {
+        let endpoints = OidcEndpoints {
+            authorization_endpoint: "https://auth.example.com/authorize".to_string(),
+            token_endpoint: "https://auth.example.com/token".to_string(),
+            userinfo_endpoint: "https://auth.example.com/userinfo".to_string(),
+            jwks_uri: "https://auth.example.com/jwks".to_string(),
+        };
+        let cloned = endpoints.clone();
+        assert_eq!(
+            cloned.authorization_endpoint,
+            endpoints.authorization_endpoint
+        );
+        assert_eq!(cloned.token_endpoint, endpoints.token_endpoint);
+    }
+}

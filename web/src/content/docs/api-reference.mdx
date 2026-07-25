@@ -9,7 +9,7 @@ description: REST API endpoints for programmatic access
 http://localhost:4000
 ```
 
-The default port is 4000. Override with `--port` flag:
+Override with `--port`:
 
 ```bash
 crawlkit-api --port 8080
@@ -17,11 +17,13 @@ crawlkit-api --port 8080
 
 ## Authentication
 
-All endpoints require an `X-API-Key` header:
+All endpoints require the `X-API-Key` header:
 
 ```
-X-API-Key: ck_dev_default_key_for_testing
+X-API-Key: <your-api-key>
 ```
+
+Generate keys via `POST /api/v1/keys`. Default key `ck_dev_default_key_for_testing` is for local development only.
 
 ## Endpoints
 
@@ -32,6 +34,7 @@ GET /health
 ```
 
 Response:
+
 ```json
 {
   "status": "ok",
@@ -45,7 +48,8 @@ Response:
 POST /api/v1/crawls
 ```
 
-Request:
+Request body:
+
 ```json
 {
   "start_url": "https://example.com",
@@ -56,6 +60,7 @@ Request:
 ```
 
 Response (202 Accepted):
+
 ```json
 {
   "crawl_id": "uuid",
@@ -88,7 +93,8 @@ GET /api/v1/crawls
 POST /api/v1/keys
 ```
 
-Request:
+Request body:
+
 ```json
 {
   "name": "my-app",
@@ -104,8 +110,4 @@ GET /api/v1/keys
 
 ## Rate Limiting
 
-Each API key has a configurable requests-per-minute limit. Exceeding the limit returns:
-
-```
-HTTP 429 Too Many Requests
-```
+Each API key has a configurable `requests_per_minute` limit. Exceeding the limit returns `HTTP 429 Too Many Requests`.

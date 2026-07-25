@@ -35,6 +35,7 @@ export default function Header() {
       <div />
       <div className="flex items-center gap-4">
         <button
+          aria-label="Toggle dark mode"
           onClick={() => setDarkMode(!darkMode)}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
         >
@@ -50,6 +51,7 @@ export default function Header() {
           </span>
         )}
         <button
+          aria-label="Log out"
           onClick={handleLogout}
           className="p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700"
         >

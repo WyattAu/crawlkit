@@ -1,11 +1,11 @@
 ---
 title: Custom Analyzers
-description: Extend crawlkit with custom SEO analyzers
+description: Extend crawlkit with custom analyzers
 ---
 
 ## Implementing a Custom Analyzer
 
-Create a struct implementing the `Analyzer` trait:
+Implement the `Analyzer` trait:
 
 ```rust
 use crawlkit_core::analyzers::{Analyzer, AnalysisContext, Finding, Severity};
@@ -21,7 +21,6 @@ impl Analyzer for MyCustomAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
         let mut findings = Vec::new();
 
-        // Your analysis logic here
         if ctx.page.title.is_none() {
             findings.push(Finding {
                 category: "custom".into(),
@@ -50,4 +49,4 @@ registry.register(Box::new(MyCustomAnalyzer));
 
 ## Plugin System
 
-For dynamic loading without recompilation, see the `PluginLoader` in `crawlkit_core::plugin`.
+For dynamic loading without recompilation, use the WASM-based plugin system. See `crawlkit_core::plugin` and `PLUGIN_ARCHITECTURE.md` for the plugin interface specification.

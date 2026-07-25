@@ -22,55 +22,69 @@ URL Queue -> DNS Prefetch -> Fetcher -> Parser -> Analyzers -> Storage -> Export
 ## Key Components
 
 ### Rate Limiter
-Token-bucket per domain with global bucket. Concurrency semaphore. Async-safe (no MutexGuard across await).
+
+Token-bucket per domain with a global bucket. Concurrency semaphore. Mutex guards are dropped before `await` points for async safety.
 
 ### Circuit Breaker
-Three-state machine: Closed -> Open -> HalfOpen. Configurable failure/success thresholds and cooldown.
+
+Three-state finite state machine: Closed -> Open -> HalfOpen. Configurable failure threshold, success threshold, and cooldown period. Per-domain fault isolation prevents cascading failures.
 
 ### Backpressure
-Bounded pipeline with configurable capacity. Prevents memory exhaustion under high concurrency.
+
+Bounded pipeline with configurable channel capacity. Semaphore-based concurrency control. Producers block when the bounded channel is full, preventing memory exhaustion under high concurrency.
 
 ### Analyzer Registry
-28 analyzers dispatched in parallel. Each implements the `Analyzer` trait with `analyze(ctx, config) -> Vec<Finding>`.
 
-## Wired Modules
+28 analyzers dispatched in parallel. Each implements the `Analyzer` trait with `analyze(&AnalysisContext, &CrawlConfig) -> Vec<Finding>`.
 
-The following modules are now integrated into the crawl pipeline:
+## Integrated Modules
 
 ### Observability
-Atomic metrics collection for pages crawled, bytes fetched, fetch/analysis times, and throughput. Exported via `--metrics-json`.
+
+Atomic metrics counters (`AtomicU64`) for pages crawled, bytes fetched, fetch time, analysis time, and throughput. Exported via `--metrics-json`.
 
 ### Resource Monitor
-Enforces memory, CPU, disk, and page count limits. Replaces ad-hoc RSS checking.
+
+Enforces configurable limits on memory (RSS), CPU, disk usage, and page count. Replaces ad-hoc RSS checking with structured threshold enforcement.
 
 ### Circuit Breaker
-Per-domain fault isolation. Opens circuit after consecutive failures, preventing cascade failures.
+
+Per-domain fault isolation. Opens circuit after N consecutive failures, skips the domain until cooldown expires, then transitions to HalfOpen for a trial request.
 
 ### Backpressure
-Bounded pipeline with semaphore-based concurrency control. Prevents memory explosion under high concurrency.
+
+Bounded mpsc channels with configurable capacity. Prevents memory explosion when producer rate exceeds consumer rate.
 
 ### Determinism
-Seed-based reproducible crawls via `--seed` flag. Same seed + same config = same output.
+
+Seed-based reproducible crawls via `--seed`. Controls PRNG state for URL ordering, content hashing, and user-agent rotation. Identical seed + configuration yields identical output.
 
 ### Feature Flags
-Runtime feature toggles via TOML configuration. CLI flags override config.
+
+Runtime feature toggles via TOML `[features]` section. CLI flags (`--enable-ai`, `--enable-wasm`, `--javascript`) override configuration file values.
 
 ### JS Render Decision
-SPA detection engine that identifies React, Vue, Angular, Next.js, Nuxt, SvelteKit pages.
+
+Heuristic SPA detection engine. Identifies React, Vue, Angular, Next.js, Nuxt, and SvelteKit pages by inspecting HTML markers and script patterns.
 
 ### Playwright Integration
-JavaScript rendering for SPA pages when `--javascript` is enabled.
+
+JavaScript rendering for pages identified by the JS render decision engine. Requires `--javascript` flag and a Playwright installation. Falls back to static HTML when unavailable.
 
 ### Alert Manager
-Monitors crawl metrics and triggers alerts when thresholds are exceeded.
+
+Threshold-based monitoring. Evaluates crawl metrics against configured thresholds and triggers webhook notifications when exceeded.
 
 ### Encryption at Rest
-AES-256-GCM encryption for stored data when `--encrypt` is enabled.
+
+AES-256-GCM encryption for stored crawl data. Key sourced from `CRAWLKIT_ENCRYPTION_KEY` environment variable, configuration file, or system keyring (priority order).
 
 ## Thread Safety
 
-- `RateLimiter`: `DashMap` for domain buckets, `parking_lot::Mutex` for global (dropped before await)
-- `UrlQueue`: `DashSet` for dedup, `parking_lot::Mutex` for heap
-- `Storage`: `rusqlite::Connection` (single-writer, WAL mode)
-- `Metrics`: `AtomicU64` counters
-- `AuditTrail`: `parking_lot::RwLock<Vec<AuditEvent>>`
+| Component | Synchronization Mechanism |
+|-----------|--------------------------|
+| RateLimiter | `DashMap` (domain buckets), `parking_lot::Mutex` (global, dropped before await) |
+| UrlQueue | `DashSet` (dedup), `parking_lot::Mutex` (heap) |
+| Storage | `rusqlite::Connection` (single-writer, WAL mode) |
+| Metrics | `AtomicU64` counters (lock-free) |
+| AuditTrail | `parking_lot::RwLock<Vec<AuditEvent>>` |

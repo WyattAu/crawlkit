@@ -92,4 +92,4 @@ update:
 
 # Check MSRV (Minimum Supported Rust Version)
 msrv:
-    cargo +1.75.0 check --workspace
+    cargo +1.82.0 check --workspace

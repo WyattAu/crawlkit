@@ -18,7 +18,7 @@ High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetchin
 - **Priority queue** — URLs scored by importance, deduplicated via concurrent hash set
 - **Concurrent DNS cache** — background prefetching with TTL eviction for faster resolution
 
-### SEO Analysis (23 core analyzers)
+### SEO Analysis
 - **Meta tags** — title, description, canonical, OG, Twitter Cards, hreflang
 - **Link analysis** — internal/external counts, broken links, orphan pages, PageRank scoring
 - **Structured data** — JSON-LD and Microdata validation against Schema.org
@@ -32,14 +32,14 @@ High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetchin
 - **Ecommerce signals** — product schema, pricing, availability detection
 - **International SEO** — language targeting, regional content analysis
 
-### AI Search Optimization (4 analyzers)
+### AI Search Optimization
 - **AI crawler accessibility** — detects AI bot blocking in robots.txt
 - **AI content structure** — evaluates AI-friendly content patterns
 - **AI citation eligibility** — identifies source authority signals
 - **AI answer box readiness** — checks FAQ/HowTo/Q&A schema readiness
 - **AI bot registry** — tracks GPTBot, Google-Extended, PerplexityBot, ClaudeBot, and 6 more
 
-### WASM Analysis (1 analyzer)
+### WASM Analysis
 - **WASM pattern detection** — identifies missing modulepreload, legacy instantiation, missing crossorigin
 
 ### Security & Performance

@@ -1,6 +1,6 @@
 ---
 title: Analyzers
-description: Complete reference for all SEO analyzers
+description: Complete reference for all 28 analyzers
 ---
 
 ## Analyzer Categories
@@ -33,12 +33,14 @@ pub trait Analyzer: Send + Sync {
 }
 ```
 
-## Finding Severity
+## Finding Severity Levels
 
-- **Error:** Critical issues that block indexing or accessibility
-- **Warning:** Issues that reduce SEO effectiveness
-- **Info:** Observations and recommendations
+| Level | Description |
+|-------|-------------|
+| `Error` | Critical issues that block indexing or accessibility |
+| `Warning` | Issues that reduce SEO effectiveness |
+| `Info` | Observations and recommendations |
 
 ## Custom Analyzers
 
-See [Custom Analyzers](/crawlkit/tutorials/custom-analyzers/) for extending the registry.
+Implement the `Analyzer` trait and register with `AnalyzerRegistry`. See [Custom Analyzers](/crawlkit/tutorials/custom-analyzers/) for details.

@@ -15,7 +15,7 @@ description: Complete command-line interface reference
 
 ### crawl
 
-Crawl a website and analyze pages for SEO signals.
+Crawl a website and analyze pages.
 
 ```bash
 crawlkit crawl <URL> [OPTIONS]
@@ -33,17 +33,17 @@ crawlkit crawl <URL> [OPTIONS]
 | `--timeout` | Request timeout (seconds) | 30 |
 | `--include` | URL include patterns (glob) | none |
 | `--exclude` | URL exclude patterns (glob) | none |
-| `--javascript` | Enable JavaScript rendering | false |
+| `--javascript` | Enable JavaScript rendering via Playwright | false |
 | `--allow-external` | Follow external links | false |
 | `--seed` | Random seed for reproducible crawls | none |
-| `--encrypt` | Enable encryption at rest | false |
+| `--encrypt` | Enable AES-256-GCM encryption at rest | false |
 | `--enable-ai` | Enable AI analyzers | true |
 | `--enable-wasm` | Enable WASM analyzers | true |
 | `--metrics-json` | Export metrics snapshot to JSON file | none |
 
 ### compare
 
-Compare two crawl results.
+Compare two crawl results and produce a diff.
 
 ```bash
 crawlkit compare <CRAWL1> <CRAWL2> [OPTIONS]

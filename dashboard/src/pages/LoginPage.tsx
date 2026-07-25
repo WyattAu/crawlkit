@@ -24,7 +24,7 @@ export default function LoginPage() {
     if (success) {
       navigate('/dashboard');
     } else {
-      setError('Invalid email or password');
+      setError('Invalid credentials');
     }
   };
 
@@ -44,7 +44,7 @@ export default function LoginPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             {error && (
-              <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+              <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
                 {error}
               </div>
             )}

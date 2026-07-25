@@ -49,11 +49,11 @@ uuid = { version = "1", features = ["v4"] }
 toml = "0.8"
 dashmap = "6"
 parking_lot = "0.12"
-wasmtime = "28"
+wasmtime = "47"
 scraper = "0.22"
 ego-tree = "0.10"
 csv = "1"
-lru = "0.12"
+lru = "0.13"
 sha2 = "0.11"
 criterion = { version = "0.5", features = ["html_reports"] }
 

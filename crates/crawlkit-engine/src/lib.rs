@@ -47,6 +47,7 @@ use url::Url;
 ///
 /// Provides [`AlertManager`](advanced_features::AlertManager) for monitoring
 /// crawl metrics and triggering notifications on threshold breaches.
+pub mod advanced_canonical;
 pub mod advanced_features;
 /// AI-powered page content analyzers for answer boxes, citations, and crawler accessibility.
 ///

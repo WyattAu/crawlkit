@@ -5128,6 +5128,10 @@ impl AnalyzerRegistry {
                 Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()),
                 // Phase 8: WASM Error Detection Analyzers
                 Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()),
+                // Advanced canonical & hreflang analysis
+                Box::new(crate::advanced_canonical::AdvancedCanonicalAnalyzer::new()),
+                Box::new(crate::advanced_canonical::SitemapCanonicalValidator::new()),
+                Box::new(crate::advanced_canonical::UrlFormatValidator::new()),
             ],
         }
     }
@@ -5957,7 +5961,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 28);
+        assert_eq!(registry.len(), 31);
         assert!(!registry.is_empty());
     }
 

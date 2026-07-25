@@ -30,6 +30,9 @@ macro_rules! export_analyzer {
 
         #[no_mangle]
         pub extern "C" fn crawlkit_plugin_init() -> i32 {
+            // SAFETY: WASM modules are single-threaded. This static is only
+            // accessed from the single execution thread of the WASM runtime.
+            #[allow(static_mut_refs)]
             unsafe {
                 ANALYZER = Some(<$analyzer_type>::new());
             }
@@ -61,6 +64,8 @@ macro_rules! export_analyzer {
                 response_time_ms: None,
             };
 
+            // SAFETY: WASM modules are single-threaded.
+            #[allow(static_mut_refs)]
             let analyzer = ANALYZER.as_ref().expect("Analyzer not initialized");
             let findings = analyzer.analyze(&ctx);
 
@@ -91,4 +96,151 @@ macro_rules! export_analyzer {
             ptr as *mut u8
         }
     };
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::{AnalysisContext, Analyzer, Finding, Severity};
+
+    struct TestAnalyzer;
+
+    impl TestAnalyzer {
+        fn new() -> Self {
+            Self
+        }
+    }
+
+    impl Analyzer for TestAnalyzer {
+        fn name(&self) -> &str {
+            "test-analyzer"
+        }
+
+        fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+            if ctx.html.contains("<h1>") {
+                vec![Finding {
+                    severity: Severity::Info,
+                    category: "structure".into(),
+                    code: "STRUCT01".into(),
+                    title: "Has heading".into(),
+                    description: "Page contains an h1 tag".into(),
+                    url: ctx.url.clone(),
+                    recommendation: "None needed".into(),
+                }]
+            } else {
+                vec![]
+            }
+        }
+    }
+
+    export_analyzer!(TestAnalyzer);
+
+    #[test]
+    fn plugin_init_returns_zero() {
+        let result = crawlkit_plugin_init();
+        assert_eq!(result, 0);
+    }
+
+    #[test]
+    fn plugin_api_version_returns_1_0() {
+        let ptr = crawlkit_plugin_api_version();
+        assert!(!ptr.is_null());
+        unsafe {
+            let slice = std::slice::from_raw_parts(ptr, 3);
+            let version = std::str::from_utf8_unchecked(slice);
+            assert_eq!(version, "1.0");
+        }
+    }
+
+    #[test]
+    fn plugin_analyze_with_heading() {
+        let _ = crawlkit_plugin_init();
+        let html = "<html><body><h1>Title</h1></body></html>";
+        let url = "https://example.com";
+        let html_bytes = html.as_bytes();
+        let url_bytes = url.as_bytes();
+
+        let result_ptr = unsafe {
+            crawlkit_plugin_analyze(
+                html_bytes.as_ptr(),
+                html_bytes.len(),
+                url_bytes.as_ptr(),
+                url_bytes.len(),
+            )
+        };
+        assert!(!result_ptr.is_null());
+
+        let expected = vec![Finding {
+            severity: Severity::Info,
+            category: "structure".into(),
+            code: "STRUCT01".into(),
+            title: "Has heading".into(),
+            description: "Page contains an h1 tag".into(),
+            url: "https://example.com".into(),
+            recommendation: "None needed".into(),
+        }];
+        let expected_json = serde_json::to_string(&expected).unwrap();
+        let expected_bytes = expected_json.as_bytes();
+
+        unsafe {
+            let result_slice = std::slice::from_raw_parts(result_ptr, expected_bytes.len());
+            assert_eq!(result_slice, expected_bytes);
+            crawlkit_plugin_free_string(result_ptr);
+        }
+    }
+
+    #[test]
+    fn plugin_analyze_no_findings() {
+        let _ = crawlkit_plugin_init();
+        let html = "<html><body>Plain text</body></html>";
+        let url = "https://example.com/other";
+        let html_bytes = html.as_bytes();
+        let url_bytes = url.as_bytes();
+
+        let result_ptr = unsafe {
+            crawlkit_plugin_analyze(
+                html_bytes.as_ptr(),
+                html_bytes.len(),
+                url_bytes.as_ptr(),
+                url_bytes.len(),
+            )
+        };
+        assert!(!result_ptr.is_null());
+
+        let expected_json = serde_json::to_string(&Vec::<Finding>::new()).unwrap();
+        let expected_bytes = expected_json.as_bytes();
+
+        unsafe {
+            let result_slice = std::slice::from_raw_parts(result_ptr, expected_bytes.len());
+            assert_eq!(result_slice, expected_bytes);
+            crawlkit_plugin_free_string(result_ptr);
+        }
+    }
+
+    #[test]
+    fn plugin_free_null_pointer_is_safe() {
+        unsafe {
+            crawlkit_plugin_free_string(std::ptr::null_mut());
+        }
+    }
+
+    #[test]
+    fn plugin_free_string_after_analyze() {
+        let _ = crawlkit_plugin_init();
+        let html = "<h1>Hi</h1>";
+        let url = "https://a.com";
+        let html_bytes = html.as_bytes();
+        let url_bytes = url.as_bytes();
+
+        let result_ptr = unsafe {
+            crawlkit_plugin_analyze(
+                html_bytes.as_ptr(),
+                html_bytes.len(),
+                url_bytes.as_ptr(),
+                url_bytes.len(),
+            )
+        };
+        unsafe {
+            crawlkit_plugin_free_string(result_ptr);
+        }
+    }
 }

@@ -21,7 +21,7 @@ interface BarChartProps {
 
 export default function BarChart({ data, title, color = '#3b82f6' }: BarChartProps) {
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
+    <div role="img" aria-label={`Bar chart showing ${title || 'data'}`} className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700">
       {title && (
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
           {title}

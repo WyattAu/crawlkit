@@ -8,8 +8,8 @@ class WebSocketService {
   private reconnectDelay = 1000;
 
   connect(url: string, token?: string) {
-    const wsUrl = token ? `${url}?token=${token}` : url;
-    this.ws = new WebSocket(wsUrl);
+    const protocols = token ? ['authorization', token] : undefined;
+    this.ws = new WebSocket(url, protocols);
 
     this.ws.onmessage = (event) => {
       try {

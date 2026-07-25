@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/use_auth';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
-import { Plus, Trash2, Loader, Server } from 'lucide-react';
+import { Plus, Loader, Server } from 'lucide-react';
 
 interface Tenant {
   id: string;
@@ -22,6 +22,7 @@ export default function SettingsPage() {
   const [tenantName, setTenantName] = useState('');
   const [tenantSlug, setTenantSlug] = useState('');
   const [healthStatus, setHealthStatus] = useState<'ok' | 'error' | 'loading'>('loading');
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (token) {
@@ -48,14 +49,17 @@ export default function SettingsPage() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setFormLoading(true);
+    setFormError('');
     try {
       await apiClient.createTenant({ name: tenantName, slug: tenantSlug });
       setShowForm(false);
       setTenantName('');
       setTenantSlug('');
       loadData();
-    } catch (error) {
-      console.error('Failed to create tenant:', error);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to create tenant';
+      setFormError(message);
+      console.error('Failed to create tenant:', err);
     } finally {
       setFormLoading(false);
     }
@@ -95,7 +99,7 @@ export default function SettingsPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-8">
+            <div role="status" className="flex items-center justify-center py-8">
               <Loader className="w-6 h-6 text-blue-500 animate-spin" />
             </div>
           ) : tenants.length === 0 ? (
@@ -120,6 +124,11 @@ export default function SettingsPage() {
 
       <Modal open={showForm} onOpenChange={setShowForm} title="Add Tenant">
         <form onSubmit={handleCreate} className="space-y-4">
+          {formError && (
+            <div role="alert" className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
+              {formError}
+            </div>
+          )}
           <Input
             label="Name"
             value={tenantName}

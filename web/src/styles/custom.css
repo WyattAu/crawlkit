@@ -45,7 +45,7 @@
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    animation-duration: 0s !important;
     transition-duration: 0.01ms !important;
   }
 }
@@ -57,9 +57,11 @@ sl-card {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
-sl-card:hover {
-  box-shadow: var(--sl-shadow-md);
-  transform: translateY(-1px);
+@media (hover: hover) {
+  sl-card:hover {
+    box-shadow: var(--sl-shadow-md);
+    transform: translateY(-1px);
+  }
 }
 
 /* Fluid navigation transitions */
@@ -78,6 +80,8 @@ pre {
 table {
   border-collapse: separate;
   border-spacing: 0;
+  border-radius: var(--sl-radius-md);
+  box-shadow: var(--sl-shadow-sm);
 }
 
 th,

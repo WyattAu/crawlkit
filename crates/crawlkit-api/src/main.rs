@@ -1999,3 +1999,437 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ---------------------------------------------------------------
+    // Default value helpers
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_default_rpm() {
+        assert_eq!(default_rpm(), 60);
+    }
+
+    #[test]
+    fn test_default_max_pages() {
+        assert_eq!(default_max_pages(), 50);
+    }
+
+    #[test]
+    fn test_default_delay() {
+        assert_eq!(default_delay(), 500);
+    }
+
+    #[test]
+    fn test_default_concurrency() {
+        assert_eq!(default_concurrency(), 4);
+    }
+
+    #[test]
+    fn test_default_webhook_events() {
+        let events = default_webhook_events();
+        assert_eq!(events.len(), 2);
+        assert!(events.contains(&"crawl.completed".to_string()));
+        assert!(events.contains(&"crawl.failed".to_string()));
+    }
+
+    #[test]
+    fn test_default_user_tenant() {
+        assert_eq!(default_user_tenant(), "default");
+    }
+
+    #[test]
+    fn test_default_user_roles() {
+        let roles = default_user_roles();
+        assert_eq!(roles, vec!["viewer".to_string()]);
+    }
+
+    #[test]
+    fn test_default_schedule_interval() {
+        assert_eq!(default_schedule_interval(), 3600);
+    }
+
+    // ---------------------------------------------------------------
+    // RateLimitBucket
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_rate_limit_bucket_new() {
+        let bucket = RateLimitBucket::new(120);
+        assert_eq!(bucket.tokens, 120.0);
+        assert_eq!(bucket.max_tokens, 120.0);
+        assert!((bucket.refill_rate - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_new_single_rpm() {
+        let bucket = RateLimitBucket::new(1);
+        assert_eq!(bucket.tokens, 1.0);
+        assert_eq!(bucket.max_tokens, 1.0);
+        assert!((bucket.refill_rate - 1.0 / 60.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_try_consume_success() {
+        let mut bucket = RateLimitBucket::new(60);
+        assert!(bucket.try_consume());
+        assert!((bucket.tokens - 59.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_try_consume_exhaustion() {
+        let mut bucket = RateLimitBucket::new(1);
+        assert!(bucket.try_consume());
+        // After consuming the 1 token, there should be <1 left
+        // (depending on exact refill timing, but likely ~0)
+        let second = bucket.try_consume();
+        // It may succeed if a tiny bit of refill happened, but the bucket is basically empty
+        // Just verify the logic: after consuming 1 from a 1-token bucket, tokens < 1
+        assert!(bucket.tokens < 1.0 || !second);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_refill_capped_at_max() {
+        let mut bucket = RateLimitBucket::new(10);
+        // Drain all tokens
+        for _ in 0..10 {
+            bucket.try_consume();
+        }
+        assert!(bucket.tokens < 1.0);
+        // Manually set last_refill to the past to simulate time passing
+        bucket.last_refill = std::time::Instant::now() - std::time::Duration::from_secs(120);
+        bucket.refill();
+        // Tokens should be capped at max_tokens
+        assert!((bucket.tokens - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_refill_partial() {
+        let mut bucket = RateLimitBucket::new(60);
+        bucket.try_consume(); // 59 tokens
+        let before = bucket.tokens;
+        // Simulate 1 second passing
+        bucket.last_refill = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        bucket.refill();
+        // Should have gained ~1 token (60/60 = 1 per second)
+        assert!(bucket.tokens > before);
+        assert!(bucket.tokens <= bucket.max_tokens);
+    }
+
+    // ---------------------------------------------------------------
+    // validate_url
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_validate_url_valid_https() {
+        assert!(validate_url("https://example.com").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_valid_http() {
+        assert!(validate_url("http://example.com").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_valid_with_path() {
+        assert!(validate_url("https://example.com/some/path?q=1").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_rejects_ftp() {
+        let err = validate_url("ftp://example.com").unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("http or https")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_url_rejects_file_scheme() {
+        let err = validate_url("file:///etc/passwd").unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("http or https")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_url_rejects_invalid_url() {
+        let err = validate_url("not a url").unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("Invalid URL")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_url_rejects_too_long() {
+        let long_url = format!("https://example.com/{}", "a".repeat(2049));
+        let err = validate_url(&long_url).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("2048")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_url_accepts_max_length() {
+        let prefix = "https://example.com/";
+        let url = format!("{}{}", prefix, "a".repeat(2048 - prefix.len()));
+        assert!(validate_url(&url).is_ok());
+    }
+
+    // ---------------------------------------------------------------
+    // validate_max_pages
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_validate_max_pages_valid() {
+        assert!(validate_max_pages(1).is_ok());
+        assert!(validate_max_pages(50).is_ok());
+        assert!(validate_max_pages(10000).is_ok());
+    }
+
+    #[test]
+    fn test_validate_max_pages_zero() {
+        let err = validate_max_pages(0).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("1 and 10000")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_max_pages_over_max() {
+        let err = validate_max_pages(10001).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("1 and 10000")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // validate_concurrency
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_validate_concurrency_valid() {
+        assert!(validate_concurrency(1).is_ok());
+        assert!(validate_concurrency(64).is_ok());
+        assert!(validate_concurrency(128).is_ok());
+    }
+
+    #[test]
+    fn test_validate_concurrency_zero() {
+        let err = validate_concurrency(0).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("1 and 128")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    #[test]
+    fn test_validate_concurrency_over_max() {
+        let err = validate_concurrency(129).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("1 and 128")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // validate_delay
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_validate_delay_valid() {
+        assert!(validate_delay(0).is_ok());
+        assert!(validate_delay(500).is_ok());
+        assert!(validate_delay(60000).is_ok());
+    }
+
+    #[test]
+    fn test_validate_delay_over_max() {
+        let err = validate_delay(60001).unwrap_err();
+        match err {
+            ApiError::BadRequest(msg) => assert!(msg.contains("60000")),
+            _ => panic!("Expected BadRequest"),
+        }
+    }
+
+    // ---------------------------------------------------------------
+    // ApiError IntoResponse
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_api_error_unauthorized_status() {
+        let err = ApiError::Unauthorized("test".to_string());
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[test]
+    fn test_api_error_bad_request_status() {
+        let err = ApiError::BadRequest("test".to_string());
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[test]
+    fn test_api_error_not_found_status() {
+        let err = ApiError::NotFound("test".to_string());
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_api_error_rate_limited_status() {
+        let err = ApiError::RateLimited;
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::TOO_MANY_REQUESTS);
+    }
+
+    #[test]
+    fn test_api_error_internal_status() {
+        let err = ApiError::Internal("test".to_string());
+        let resp = err.into_response();
+        assert_eq!(resp.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    // ---------------------------------------------------------------
+    // MarketplaceState
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_marketplace_state_new() {
+        let state = MarketplaceState::new();
+        let plugins = state.plugins.read();
+        assert!(plugins.is_empty());
+    }
+
+    #[test]
+    fn test_marketplace_state_default() {
+        let state = MarketplaceState::default();
+        let plugins = state.plugins.read();
+        assert!(plugins.is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // Metrics
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_metrics_new() {
+        let metrics = Metrics::new();
+        // Verify counters start at zero
+        assert_eq!(metrics.crawls_total.get(), 0);
+        assert_eq!(metrics.pages_crawled_total.get(), 0);
+        assert_eq!(metrics.issues_total.get(), 0);
+        assert_eq!(metrics.errors_total.get(), 0);
+    }
+
+    // ---------------------------------------------------------------
+    // ApiKey serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_api_key_serialization_roundtrip() {
+        let key = ApiKey {
+            key: "ck_test123".to_string(),
+            name: "test-key".to_string(),
+            created_at: Utc::now(),
+            requests_per_minute: 120,
+        };
+        let json = serde_json::to_string(&key).unwrap();
+        let deserialized: ApiKey = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.key, "ck_test123");
+        assert_eq!(deserialized.name, "test-key");
+        assert_eq!(deserialized.requests_per_minute, 120);
+    }
+
+    // ---------------------------------------------------------------
+    // CrawlResult serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_crawl_result_serialization_roundtrip() {
+        let result = CrawlResult {
+            crawl_id: "abc-123".to_string(),
+            start_url: "https://example.com".to_string(),
+            status: "running".to_string(),
+            pages_crawled: 5,
+            issues_found: 2,
+            created_at: Utc::now(),
+            completed_at: None,
+        };
+        let json = serde_json::to_string(&result).unwrap();
+        let deserialized: CrawlResult = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.crawl_id, "abc-123");
+        assert_eq!(deserialized.status, "running");
+        assert!(deserialized.completed_at.is_none());
+    }
+
+    // ---------------------------------------------------------------
+    // WebhookConfig serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_webhook_config_serialization_roundtrip() {
+        let config = WebhookConfig {
+            id: "wh-1".to_string(),
+            url: "https://hooks.example.com".to_string(),
+            events: vec!["crawl.completed".to_string()],
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: WebhookConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "wh-1");
+        assert_eq!(deserialized.events.len(), 1);
+    }
+
+    // ---------------------------------------------------------------
+    // Tenant serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_tenant_serialization_roundtrip() {
+        let tenant = Tenant {
+            id: "t-1".to_string(),
+            name: "Acme Corp".to_string(),
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&tenant).unwrap();
+        let deserialized: Tenant = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "t-1");
+        assert_eq!(deserialized.name, "Acme Corp");
+    }
+
+    // ---------------------------------------------------------------
+    // MarketplacePlugin serialization
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_marketplace_plugin_serialization_roundtrip() {
+        let plugin = MarketplacePlugin {
+            name: "test-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            author: "tester".to_string(),
+            description: "A test plugin".to_string(),
+            license: "MIT".to_string(),
+            categories: vec!["seo".to_string()],
+            tags: vec!["test".to_string()],
+            downloads: 100,
+            rating: 4.5,
+            created_at: "2025-01-01T00:00:00Z".to_string(),
+            updated_at: "2025-01-02T00:00:00Z".to_string(),
+        };
+        let json = serde_json::to_string(&plugin).unwrap();
+        let deserialized: MarketplacePlugin = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.name, "test-plugin");
+        assert_eq!(deserialized.downloads, 100);
+        assert!((deserialized.rating - 4.5).abs() < f64::EPSILON);
+    }
+}

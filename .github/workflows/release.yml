@@ -27,7 +27,7 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Security audit
         run: |
-          cargo install cargo-audit
+          cargo install cargo-audit --locked
           cargo audit
 
   build:

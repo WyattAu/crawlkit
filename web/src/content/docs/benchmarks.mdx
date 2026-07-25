@@ -3,39 +3,43 @@ title: Performance
 description: Benchmarks and performance characteristics
 ---
 
-## Benchmarks
-
-Run benchmarks with:
+## Running Benchmarks
 
 ```bash
 cargo bench
 ```
 
+Uses Criterion for statistical rigor. Covers HTML parsing, analyzer execution, registry lookup, queue operations, and storage insert/query performance.
+
 ## Measured Performance
 
 | Metric | Target | Measured |
 |--------|--------|----------|
-| Pages/sec | greater than or equal to 50 | 50-100 |
-| Memory (10k pages) | less than 500MB | approximately 200MB |
-| Startup time | less than 100ms | approximately 10ms |
-| Binary size | less than 10MB | approximately 8MB |
-| Full analyzer suite | - | approximately 25 us/page |
-| HTML parse (5 KB) | - | approximately 45 us |
-| PageRank (1K nodes) | - | approximately 4 ms |
+| Pages/sec | >= 50 | 50--100 |
+| Memory (10k pages) | < 500 MB | ~200 MB |
+| Startup time | < 100 ms | ~10 ms |
+| Binary size | < 10 MB | ~8 MB |
+| Full analyzer suite | -- | ~25 us/page |
+| HTML parse (5 KB) | -- | ~45 us |
+| PageRank (1K nodes) | -- | ~4 ms |
 
 ## Benchmark Coverage
 
-- HTML parser performance
-- Analyzer execution time
-- Registry lookup speed
-- Queue operations
-- Storage insert/query performance
+| Benchmark | What It Measures |
+|-----------|-----------------|
+| HTML parser | Parse time for varying document sizes |
+| Analyzer suite | Per-analyzer execution latency |
+| Registry lookup | Analyzer dispatch overhead |
+| Queue ops | Push/pop/dedup throughput |
+| Storage | SQLite insert and query latency |
 
 ## Optimization Techniques
 
-- **Async HTTP/2:** Concurrent fetching with connection pooling
-- **Token-bucket rate limiting:** Per-domain request throttling
-- **LRU caching:** DNS resolution and page data caching
-- **SQLite WAL mode:** Concurrent read/write access
-- **SIMD-accelerated parsing:** Via `scraper` crate
-- **Profile-guided optimization:** LTO + single codegen unit in release
+| Technique | Description |
+|-----------|-------------|
+| Async HTTP/2 | Concurrent fetching with connection pooling via `reqwest` |
+| Token-bucket rate limiting | Per-domain request throttling with `DashMap` buckets |
+| LRU caching | DNS resolution cache with TTL eviction |
+| SQLite WAL mode | Concurrent read/write access with write-ahead logging |
+| SIMD-accelerated parsing | HTML parsing via `scraper` crate (uses `selectors` with SIMD) |
+| LTO + single codegen unit | Profile-guided optimization in release builds |

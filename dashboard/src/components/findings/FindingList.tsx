@@ -20,7 +20,7 @@ interface FindingListProps {
 export default function FindingList({ findings, loading }: FindingListProps) {
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div role="status" className="flex items-center justify-center py-12">
         <Loader className="w-8 h-8 text-blue-500 animate-spin" />
       </div>
     );

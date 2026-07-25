@@ -1,4 +1,4 @@
-const BASE_URL = 'http://localhost:4000';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 class ApiClient {
   private token: string | null = null;
@@ -26,7 +26,14 @@ class ApiClient {
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
+      let message = `HTTP ${response.status}`;
+      try {
+        const errorBody = await response.json();
+        if (errorBody.message) message = errorBody.message;
+      } catch {
+        // response body wasn't JSON
+      }
+      throw new Error(message);
     }
 
     return response.json();

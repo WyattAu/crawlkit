@@ -1,5 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 40" fill="none" role="img" aria-label="crawlkit">
   <title>crawlkit</title>
+  <desc>crawlkit logo: a web crawling toolkit for structured data extraction</desc>
   <rect width="120" height="40" rx="8" fill="#2563eb"/>
   <text x="12" y="28" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="700" fill="white">crawlkit</text>
 </svg>

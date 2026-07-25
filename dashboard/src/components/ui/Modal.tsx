@@ -1,4 +1,4 @@
-import { ReactNode, useEffect } from 'react';
+import { ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 
@@ -10,16 +10,6 @@ interface ModalProps {
 }
 
 export default function Modal({ open, onOpenChange, title, children }: ModalProps) {
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onOpenChange(false);
-    };
-    if (open) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [open, onOpenChange]);
-
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -29,7 +19,7 @@ export default function Modal({ open, onOpenChange, title, children }: ModalProp
             <Dialog.Title className="text-lg font-semibold text-gray-900 dark:text-white">
               {title}
             </Dialog.Title>
-            <Dialog.Close className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
+            <Dialog.Close aria-label="Close dialog" className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700">
               <X className="w-5 h-5 text-gray-500" />
             </Dialog.Close>
           </div>

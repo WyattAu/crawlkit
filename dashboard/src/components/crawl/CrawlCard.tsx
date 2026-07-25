@@ -23,8 +23,8 @@ export default function CrawlCard({ id, name, url, status, created_at }: CrawlCa
   const StatusIcon = config.icon;
 
   return (
-    <div
-      className="bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
+    <button
+      className="w-full text-left bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
       onClick={() => navigate(`/results/${id}`)}
     >
       <div className="flex items-start justify-between">
@@ -43,6 +43,6 @@ export default function CrawlCard({ id, name, url, status, created_at }: CrawlCa
       <div className="mt-3 text-xs text-gray-400 dark:text-gray-500">
         {format(new Date(created_at), 'MMM d, yyyy HH:mm')}
       </div>
-    </div>
+    </button>
   );
 }

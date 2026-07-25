@@ -130,7 +130,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@1b3313b849df1bb048b694ad5408de234833c4e7 # 1.82.0
+      - uses: dtolnay/rust-toolchain@1.94.0
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
         with:
           key: msrv

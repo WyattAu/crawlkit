@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use axum::{
     extract::{Request, State},
     http::StatusCode,
@@ -5,7 +7,7 @@ use axum::{
     response::Response,
 };
 
-use crate::auth::Claims;
+use crate::auth::{AuthManager, Claims};
 
 /// Authorization middleware that checks JWT and permissions.
 pub async fn auth_middleware(
@@ -37,6 +39,7 @@ pub async fn auth_middleware(
 /// Permission check middleware.
 #[allow(dead_code)]
 pub fn require_permission(
+    auth: Arc<AuthManager>,
     permission: &'static str,
 ) -> impl Fn(
     Request,
@@ -44,13 +47,14 @@ pub fn require_permission(
 )
     -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Response, StatusCode>> + Send>> {
     move |request: Request, next: Next| {
+        let auth = auth.clone();
         Box::pin(async move {
             let claims = request
                 .extensions()
                 .get::<Claims>()
                 .ok_or(StatusCode::UNAUTHORIZED)?;
 
-            if !claims.permissions.contains(&permission.to_string()) {
+            if !auth.has_permission(claims, permission) {
                 return Err(StatusCode::FORBIDDEN);
             }
 
@@ -79,7 +83,8 @@ mod tests {
 
     #[test]
     fn test_require_permission_returns_closure() {
-        let _checker = require_permission("crawl:read");
+        let auth = Arc::new(crate::auth::AuthManager::new("test-secret".to_string()));
+        let _checker = require_permission(auth, "crawl:read");
     }
 
     #[test]

@@ -25,6 +25,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let ctx = crawlkit_engine::analyzers::AnalysisContext {
         page: &parsed,
+        body: Some(&result.body),
         status_code: Some(result.status_code),
         headers: &result.headers,
         response_time: Some(result.response_time),

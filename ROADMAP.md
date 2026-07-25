@@ -19,7 +19,7 @@ Last Updated: 2026-07-25
 - Multi-language client libraries (Go, Node.js, Python)
 - React dashboard with Zustand state management, code splitting, WCAG 2.1 AA compliance
 - Astro Starlight documentation site: 13 pages
-- CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.82.0)
+- CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.94.0)
 - Pre-commit hook: 11 checks (fmt, clippy, build, unit tests, doc tests, integration tests, security audit, secret scan, unsafe code, MSRV, dead code)
 - Lean4 formal verification scaffolding for circuit breaker, PageRank, and audit chain
 

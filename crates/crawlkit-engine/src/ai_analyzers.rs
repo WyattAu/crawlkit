@@ -444,6 +444,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
@@ -463,6 +464,7 @@ mod tests {
 
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_millis(100)),
@@ -487,6 +489,7 @@ mod tests {
 
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_millis(100)),

@@ -391,6 +391,7 @@ mod tests {
     fn make_ctx<'a>(page: &'a ParsedPage) -> AnalysisContext<'a> {
         AnalysisContext {
             page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_millis(100)),

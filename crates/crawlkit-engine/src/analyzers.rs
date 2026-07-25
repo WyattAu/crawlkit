@@ -142,6 +142,8 @@ pub struct SslCertificateInfo {
 pub struct AnalysisContext<'a> {
     /// The parsed page content.
     pub page: &'a ParsedPage,
+    /// Raw response body text (if available).
+    pub body: Option<&'a str>,
     /// HTTP status code (if fetched).
     pub status_code: Option<u16>,
     /// Response headers.
@@ -217,7 +219,6 @@ impl HttpStatusAnalyzer {
     }
 
     /// Check if a 200 response looks like an error page (soft 404).
-    #[allow(dead_code)]
     pub(crate) fn is_soft_404(body: &str) -> bool {
         let lower = body.to_lowercase();
         let indicators = [
@@ -298,9 +299,27 @@ impl Analyzer for HttpStatusAnalyzer {
 
         match status {
             200 => {
-                // Check for soft 404
+                // Check for soft 404 using body content
+                if let Some(body) = ctx.body {
+                    if Self::is_soft_404(body) {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Http,
+                            code: "HTTP007".to_string(),
+                            title: "Possible soft 404 — error page content detected".to_string(),
+                            description: "Page returned 200 but contains text typically found \
+                                         on error pages (e.g., \"page not found\"). This may \
+                                         indicate a soft 404."
+                                .to_string(),
+                            url: url.clone(),
+                            recommendation: "Verify the page renders correctly. Fix server-side \
+                                             rendering issues or return a proper 404 status code."
+                                .to_string(),
+                        });
+                    }
+                }
+                // Also check for empty body
                 let body_lower = ctx.page.word_count;
-                // Soft 404 heuristic: very low word count on a 200 page can indicate error page
                 if body_lower == 0 {
                     findings.push(Finding {
                         severity: Severity::Warning,
@@ -1541,7 +1560,6 @@ impl ImageAnalyzer {
         Self
     }
 
-    #[allow(dead_code)]
     pub(crate) fn detect_format(src: &str) -> Option<String> {
         let path = src.split('?').next()?;
         let ext = path.rsplit('.').next()?;
@@ -1581,6 +1599,7 @@ impl Analyzer for ImageAnalyzer {
 
         let mut total_lazy = 0u32;
         let mut total_with_dimensions = 0u32;
+        let mut non_modern_formats = Vec::new();
 
         for img in &ctx.page.images {
             // 2.4 — Missing alt text
@@ -1597,9 +1616,13 @@ impl Analyzer for ImageAnalyzer {
                 });
             }
 
-            // Image file size check: file_size is not available from HTML parsing alone.
-            // This requires HTTP response headers or HEAD request to determine actual file size.
-            // Documented limitation: oversized image detection is not implemented.
+            // Detect image format and flag non-modern formats
+            if let Some(format) = Self::detect_format(&img.src) {
+                let is_modern = matches!(format.as_str(), "webp" | "avif" | "svg");
+                if !is_modern {
+                    non_modern_formats.push(format);
+                }
+            }
 
             if img.is_lazy_loaded {
                 total_lazy += 1;
@@ -1608,6 +1631,27 @@ impl Analyzer for ImageAnalyzer {
             if img.width.is_some() && img.height.is_some() {
                 total_with_dimensions += 1;
             }
+        }
+
+        // Report non-modern image formats
+        if !non_modern_formats.is_empty() {
+            let format_list = non_modern_formats.join(", ");
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "IMG005".to_string(),
+                title: "Non-modern image formats detected".to_string(),
+                description: format!(
+                    "{} image(s) use non-modern formats: {}. Consider using WebP or AVIF for \
+                     better compression.",
+                    non_modern_formats.len(),
+                    format_list
+                ),
+                url: url.clone(),
+                recommendation: "Convert images to WebP or AVIF format for smaller file sizes \
+                                 and faster page loads."
+                    .to_string(),
+            });
         }
 
         // Lazy loading summary
@@ -5127,6 +5171,7 @@ mod tests {
     fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a> {
         AnalysisContext {
             page,
+            body: None,
             status_code: status,
             headers: &[],
             response_time: None,
@@ -5185,6 +5230,7 @@ mod tests {
         let page = make_page("https://example.com/slow");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_secs(10)),
@@ -5217,6 +5263,7 @@ mod tests {
         let page = make_page("https://example.com/page0");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: None,
@@ -5244,6 +5291,7 @@ mod tests {
         let page = make_page("https://example.com/a");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: None,
@@ -5264,6 +5312,7 @@ mod tests {
         let page = make_page("http://example.com/page");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: None,
@@ -5284,6 +5333,7 @@ mod tests {
         let page = make_page("https://example.com/old");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: None,
@@ -6740,6 +6790,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6766,6 +6817,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6782,6 +6834,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6798,6 +6851,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6819,6 +6873,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6838,6 +6893,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6857,6 +6913,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6876,6 +6933,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,
@@ -6903,6 +6961,7 @@ mod tests {
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
             page: &page,
+            body: None,
             status_code: Some(200),
             headers: &headers,
             response_time: None,

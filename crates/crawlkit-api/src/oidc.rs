@@ -13,10 +13,6 @@ pub enum OidcError {
     #[error("Token exchange failed: {0}")]
     TokenExchange(String),
 
-    #[error("Token validation failed: {0}")]
-    #[allow(dead_code)]
-    TokenValidation(String),
-
     #[error("User info fetch failed: {0}")]
     UserInfo(String),
 }
@@ -394,9 +390,6 @@ mod tests {
 
         let err = OidcError::TokenExchange("token fail".to_string());
         assert!(err.to_string().contains("token fail"));
-
-        let err = OidcError::TokenValidation("validation fail".to_string());
-        assert!(err.to_string().contains("validation fail"));
 
         let err = OidcError::UserInfo("userinfo fail".to_string());
         assert!(err.to_string().contains("userinfo fail"));

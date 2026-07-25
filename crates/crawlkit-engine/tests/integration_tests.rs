@@ -118,6 +118,7 @@ fn test_analyzer_registry_full_pipeline() {
 
     let ctx = AnalysisContext {
         page: &page,
+        body: None,
         status_code: Some(200),
         headers: &[],
         response_time: Some(Duration::from_millis(150)),
@@ -355,6 +356,7 @@ fn test_wasm_pattern_analyzer_integration() {
 
     let ctx = AnalysisContext {
         page: &page,
+        body: None,
         status_code: Some(200),
         headers: &[],
         response_time: Some(Duration::from_millis(100)),
@@ -375,6 +377,7 @@ fn test_ai_analyzer_integration() {
     let page = make_test_page("https://example.com");
     let ctx = AnalysisContext {
         page: &page,
+        body: None,
         status_code: Some(200),
         headers: &[],
         response_time: Some(Duration::from_millis(100)),
@@ -437,6 +440,7 @@ fn test_full_crawl_pipeline() {
 
         let ctx = AnalysisContext {
             page: &parsed_page,
+            body: None,
             status_code: Some(200),
             headers: &[],
             response_time: Some(Duration::from_millis(100)),

@@ -210,6 +210,7 @@ fn main() -> Result<()> {
     // Manually run each custom analyzer for demonstration
     let ctx = AnalysisContext {
         page: &parsed,
+        body: Some(html),
         status_code: Some(200),
         headers: &[],
         response_time: Some(Duration::from_millis(850)),

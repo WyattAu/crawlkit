@@ -73,7 +73,6 @@ pub enum AdapterError {
 /// Ahrefs backlink adapter.
 pub struct AhrefsAdapter {
     api_key: Option<String>,
-    #[allow(dead_code)]
     base_url: String,
 }
 
@@ -112,7 +111,8 @@ impl BacklinkAdapter for AhrefsAdapter {
 
         let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let url = format!(
-            "https://api.ahrefs.com/v3/backlinks?target={}&mode=live&output=json&token={}&limit={}",
+            "{}/v3/backlinks?target={}&mode=live&output=json&token={}&limit={}",
+            self.base_url,
             urlencoding::encode(domain),
             api_key,
             limit
@@ -161,7 +161,8 @@ impl BacklinkAdapter for AhrefsAdapter {
 
         let api_key = self.api_key.as_deref().ok_or(AdapterError::ApiKeyMissing)?;
         let url = format!(
-            "https://api.ahrefs.com/v3/domain-rating?target={}&output=json&token={}",
+            "{}/v3/domain-rating?target={}&output=json&token={}",
+            self.base_url,
             urlencoding::encode(domain),
             api_key
         );

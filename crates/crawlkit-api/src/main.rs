@@ -1635,6 +1635,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         };
         let ctx = crawlkit_engine::analyzers::AnalysisContext {
             page: &parsed,
+            body: Some(&result.body),
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetch_time),

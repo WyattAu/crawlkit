@@ -184,7 +184,6 @@ impl AuthManager {
     }
 
     /// Check if user has a specific permission.
-    #[allow(dead_code)]
     pub fn has_permission(&self, claims: &Claims, permission: &str) -> bool {
         claims.permissions.contains(&permission.to_string())
     }

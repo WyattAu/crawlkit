@@ -159,6 +159,7 @@ async fn main() -> Result<()> {
         let headers_vec: Vec<(String, String)> = result.headers.clone();
         let ctx = AnalysisContext {
             page: &parsed,
+            body: Some(&result.body),
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetch_time),

@@ -267,6 +267,7 @@ fn bench_analyzer_registry(c: &mut Criterion) {
         b.iter(|| {
             let ctx = crawlkit_engine::AnalysisContext {
                 page: black_box(&page),
+                body: None,
                 status_code: Some(200),
                 headers: &[],
                 response_time: Some(Duration::from_millis(100)),

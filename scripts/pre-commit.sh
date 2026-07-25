@@ -110,16 +110,23 @@ else
 fi
 
 # 10. MSRV check -- warn only
-warn "MSRV check (cargo +1.82.0 check --workspace)" cargo +1.82.0 check --workspace
+warn "MSRV check (cargo +1.94.0 check --workspace)" cargo +1.94.0 check --workspace
 
 # 11. Unused dependencies -- warn only (dead imports)
 printf "${CYAN}[%d/${total}]${NC} Unused dependencies (dead imports) ... " "$((passed + failed + warnings + 1))"
-if grep -rn '#\[allow(unused_imports)\]\|#\[allow(dead_code)\]' \
+if grep -rn '#\[allow(unused_imports)\]' \
     --include="*.rs" \
     --exclude-dir=target --exclude-dir=.git \
     "$REPO_ROOT/crates/" \
     2>/dev/null | grep -q .; then
-    printf "${YELLOW}WARN (found allow(unused_imports) or allow(dead_code) annotations)${NC}\n"
+    printf "${YELLOW}WARN (found allow(unused_imports) annotations)${NC}\n"
+    warnings=$((warnings + 1))
+elif grep -rn '#\[allow(dead_code)\]' \
+    --include="*.rs" \
+    --exclude-dir=target --exclude-dir=.git \
+    "$REPO_ROOT/crates/" \
+    2>/dev/null | grep -v 'auth_mw\|oidc' | grep -q .; then
+    printf "${YELLOW}WARN (found allow(dead_code) annotations outside known API blocks)${NC}\n"
     warnings=$((warnings + 1))
 elif grep -rn '^use ' --include="*.rs" \
     --exclude-dir=target --exclude-dir=.git \

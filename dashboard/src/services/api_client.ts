@@ -1,3 +1,16 @@
+import type {
+  CrawlResult,
+  CrawlResponse,
+  CrawlStats,
+  UserResponse,
+  CreateUserRequest,
+  Tenant,
+  CreateTenantRequest,
+  HealthResponse,
+  LoginResponse,
+  Finding,
+} from '../models/types';
+
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 class ApiClient {
@@ -39,55 +52,60 @@ class ApiClient {
     return response.json();
   }
 
-  async health() {
-    return this.request<Record<string, unknown>>('GET', '/health');
+  async health(): Promise<HealthResponse> {
+    return this.request<HealthResponse>('GET', '/health');
   }
 
-  async startCrawl(body: Record<string, unknown>) {
-    return this.request<Record<string, unknown>>('POST', '/api/v1/crawls', body);
+  async startCrawl(body: {
+    start_url: string;
+    max_pages?: number;
+    request_delay_ms?: number;
+    concurrency?: number;
+  }): Promise<CrawlResponse> {
+    return this.request<CrawlResponse>('POST', '/api/v1/crawls', body);
   }
 
-  async getCrawl(crawlId: string) {
-    return this.request<Record<string, unknown>>('GET', `/api/v1/crawls/${crawlId}`);
+  async getCrawl(crawlId: string): Promise<CrawlResult> {
+    return this.request<CrawlResult>('GET', `/api/v1/crawls/${crawlId}`);
   }
 
-  async getCrawlStats(crawlId: string) {
-    return this.request<Record<string, unknown>>('GET', `/api/v1/crawls/${crawlId}/stats`);
+  async getCrawlStats(crawlId: string): Promise<CrawlStats> {
+    return this.request<CrawlStats>('GET', `/api/v1/crawls/${crawlId}/stats`);
   }
 
-  async getFindings(crawlId: string) {
-    return this.request<Record<string, unknown>[]>('GET', `/api/v1/crawls/${crawlId}/findings`);
+  async getFindings(crawlId: string): Promise<Finding[]> {
+    return this.request<Finding[]>('GET', `/api/v1/crawls/${crawlId}/findings`);
   }
 
-  async listCrawls() {
-    return this.request<Record<string, unknown>[]>('GET', '/api/v1/crawls');
+  async listCrawls(): Promise<CrawlResult[]> {
+    return this.request<CrawlResult[]>('GET', '/api/v1/crawls');
   }
 
-  async listUsers() {
-    return this.request<Record<string, unknown>[]>('GET', '/api/v1/users');
+  async listUsers(): Promise<UserResponse[]> {
+    return this.request<UserResponse[]>('GET', '/api/v1/users');
   }
 
-  async createUser(body: Record<string, unknown>) {
-    return this.request<Record<string, unknown>>('POST', '/api/v1/users', body);
+  async createUser(body: CreateUserRequest): Promise<UserResponse> {
+    return this.request<UserResponse>('POST', '/api/v1/users', body);
   }
 
-  async deleteUser(userId: string) {
+  async deleteUser(userId: string): Promise<void> {
     return this.request<void>('DELETE', `/api/v1/users/${userId}`);
   }
 
-  async listTenants() {
-    return this.request<Record<string, unknown>[]>('GET', '/api/v1/tenants');
+  async listTenants(): Promise<Tenant[]> {
+    return this.request<Tenant[]>('GET', '/api/v1/tenants');
   }
 
-  async createTenant(body: Record<string, unknown>) {
-    return this.request<Record<string, unknown>>('POST', '/api/v1/tenants', body);
+  async createTenant(body: CreateTenantRequest): Promise<Tenant> {
+    return this.request<Tenant>('POST', '/api/v1/tenants', body);
   }
 
-  async login(email: string, password: string) {
-    return this.request<Record<string, unknown>>('POST', '/api/v1/auth/login', { email, password });
+  async login(email: string, password: string): Promise<LoginResponse> {
+    return this.request<LoginResponse>('POST', '/api/v1/auth/login', { email, password });
   }
 
-  async getMetrics() {
+  async getMetrics(): Promise<string> {
     const response = await fetch(`${BASE_URL}/metrics`, {
       headers: this.token ? { Authorization: `Bearer ${this.token}` } : {},
     });

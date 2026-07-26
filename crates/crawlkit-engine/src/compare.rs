@@ -542,6 +542,8 @@ mod tests {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         }
     }
 

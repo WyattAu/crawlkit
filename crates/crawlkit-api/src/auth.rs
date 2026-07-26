@@ -121,6 +121,24 @@ impl AuthManager {
         users.len() < len_before
     }
 
+    /// Validate password complexity.
+    /// Returns Ok(()) if valid, Err(String) with reason if invalid.
+    pub fn validate_password(password: &str) -> Result<(), String> {
+        if password.len() < 8 {
+            return Err("Password must be at least 8 characters".into());
+        }
+        if !password.chars().any(|c| c.is_uppercase()) {
+            return Err("Password must contain at least one uppercase letter".into());
+        }
+        if !password.chars().any(|c| c.is_lowercase()) {
+            return Err("Password must contain at least one lowercase letter".into());
+        }
+        if !password.chars().any(|c| c.is_ascii_digit()) {
+            return Err("Password must contain at least one digit".into());
+        }
+        Ok(())
+    }
+
     /// Verify password.
     pub fn verify_password(&self, password: &str, hash: &str) -> bool {
         let parsed_hash = match PasswordHash::new(hash) {
@@ -419,6 +437,39 @@ mod tests {
         let claims = am.validate_token(&token).unwrap();
         assert!(!am.has_permission(&claims, "user:write"));
         assert!(!am.has_permission(&claims, "apikey:read"));
+    }
+
+    // ---------------------------------------------------------------
+    // validate_password
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_validate_password_valid() {
+        assert!(AuthManager::validate_password("Strong1Pass").is_ok());
+    }
+
+    #[test]
+    fn test_validate_password_too_short() {
+        let err = AuthManager::validate_password("Sh0rt").unwrap_err();
+        assert!(err.contains("at least 8 characters"));
+    }
+
+    #[test]
+    fn test_validate_password_no_uppercase() {
+        let err = AuthManager::validate_password("nouppercase1").unwrap_err();
+        assert!(err.contains("uppercase"));
+    }
+
+    #[test]
+    fn test_validate_password_no_lowercase() {
+        let err = AuthManager::validate_password("NOLOWERCASE1").unwrap_err();
+        assert!(err.contains("lowercase"));
+    }
+
+    #[test]
+    fn test_validate_password_no_digit() {
+        let err = AuthManager::validate_password("NoDigitHere").unwrap_err();
+        assert!(err.contains("digit"));
     }
 
     // ---------------------------------------------------------------

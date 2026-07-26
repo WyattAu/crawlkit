@@ -10,7 +10,6 @@ keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 homepage.workspace = true
-documentation.workspace = true
 
 [lints]
 workspace = true

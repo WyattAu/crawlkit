@@ -37,6 +37,8 @@ fn main() -> Result<()> {
             fetched_at: Utc::now(),
             links: vec![Url::parse("https://example.com/about")?],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         },
         PageData {
             id: "p2".into(),
@@ -52,6 +54,8 @@ fn main() -> Result<()> {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         },
         PageData {
             id: "p3".into(),
@@ -67,6 +71,8 @@ fn main() -> Result<()> {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         },
     ];
     storage.insert_pages(&crawl_id, &pages)?;
@@ -197,6 +203,8 @@ fn main() -> Result<()> {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         },
         // p2 unchanged, p3 removed, p4 new
         PageData {
@@ -213,6 +221,8 @@ fn main() -> Result<()> {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         },
     ];
     storage2.insert_pages(&crawl_id2, &pages2)?;

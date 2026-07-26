@@ -179,6 +179,10 @@ enum Commands {
         /// Tenant ID for multi-tenant operations
         #[arg(long)]
         tenant: Option<String>,
+
+        /// Enable incremental crawling using ETag / If-Modified-Since
+        #[arg(long)]
+        incremental: bool,
     },
 
     /// Compare two crawl results
@@ -352,6 +356,7 @@ async fn main() -> Result<()> {
             encrypt,
             metrics_json,
             tenant,
+            incremental,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -384,6 +389,7 @@ async fn main() -> Result<()> {
                 encrypt,
                 metrics_json,
                 tenant,
+                incremental,
                 feature_flags,
             };
             run_crawl(&params).await
@@ -452,6 +458,7 @@ struct CrawlParams {
     encrypt: bool,
     metrics_json: Option<PathBuf>,
     tenant: Option<String>,
+    incremental: bool,
     feature_flags: crawlkit_engine::FeatureFlags,
 }
 
@@ -477,14 +484,15 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     .entered();
 
     tracing::info!(
-        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={}, allow_external={})",
+        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={}, js={}, allow_external={}, incremental={})",
         params.url,
         max_pages,
         params.delay.unwrap_or(100),
         concurrency,
-        params.depth,
+        params.depth.map_or("none".to_string(), |d| d.to_string()),
         params.javascript,
         params.allow_external,
+        params.incremental,
     );
 
     let pb = ProgressBar::new(max_pages as u64);
@@ -596,6 +604,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         timeout_secs: Some(params.timeout.unwrap_or(30)),
         delay_ms: Some(params.delay.unwrap_or(100)),
         concurrency: Some(concurrency),
+        incremental: params.incremental,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);
@@ -612,8 +621,8 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         .await?;
 
     pb.finish_with_message(format!(
-        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt, {} duplicate content",
-        result.pages_crawled, result.pages_stored, result.issues_found, result.skipped_external, result.skipped_robots, result.skipped_duplicate
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt, {} duplicate content, {} unchanged, {} modified, {} new",
+        result.pages_crawled, result.pages_stored, result.issues_found, result.skipped_external, result.skipped_robots, result.skipped_duplicate, result.pages_unchanged, result.pages_modified, result.pages_new
     ));
 
     if audit_enabled {

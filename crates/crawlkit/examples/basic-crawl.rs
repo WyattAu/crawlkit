@@ -188,6 +188,8 @@ async fn main() -> Result<()> {
                 .filter_map(|l| Url::parse(&l.href).ok())
                 .collect(),
             tenant_id: None,
+            etag: result.etag.clone(),
+            last_modified: result.last_modified.clone(),
         };
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
             eprintln!("  Storage error: {e}");

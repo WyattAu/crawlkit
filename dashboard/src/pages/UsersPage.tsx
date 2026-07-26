@@ -5,19 +5,11 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import { Plus, Trash2, Loader } from 'lucide-react';
-
-interface User {
-  id: string;
-  email: string;
-  name: string;
-  tenant_id: string;
-  roles: string[];
-  created_at: string;
-}
+import type { UserResponse } from '../models/types';
 
 export default function UsersPage() {
   const { token } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
+  const [users, setUsers] = useState<UserResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
@@ -37,7 +29,7 @@ export default function UsersPage() {
     try {
       setLoading(true);
       const data = await apiClient.listUsers();
-      setUsers(data as unknown as User[]);
+      setUsers(data);
     } catch (error) {
       console.error('Failed to load users:', error);
     } finally {

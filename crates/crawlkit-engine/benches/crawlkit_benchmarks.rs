@@ -367,6 +367,8 @@ fn bench_storage_operations(c: &mut Criterion) {
                         fetched_at: chrono::Utc::now(),
                         links: vec![],
                         tenant_id: None,
+                        etag: None,
+                        last_modified: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -395,6 +397,8 @@ fn bench_storage_operations(c: &mut Criterion) {
                         fetched_at: chrono::Utc::now(),
                         links: vec![],
                         tenant_id: None,
+                        etag: None,
+                        last_modified: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -427,6 +431,8 @@ fn bench_storage_operations(c: &mut Criterion) {
                     fetched_at: chrono::Utc::now(),
                     links: vec![],
                     tenant_id: None,
+                    etag: None,
+                    last_modified: None,
                 };
                 storage.insert_page(&crawl_id, &page).unwrap();
                 (storage, crawl_id)

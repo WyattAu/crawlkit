@@ -176,6 +176,10 @@ pub struct PageData {
     pub links: Vec<Url>,
     /// Tenant ID for multi-tenancy.
     pub tenant_id: Option<String>,
+    /// ETag header value from the last fetch.
+    pub etag: Option<String>,
+    /// Last-Modified header value from the last fetch.
+    pub last_modified: Option<String>,
 }
 
 /// An issue/finding detected during analysis.
@@ -434,6 +438,8 @@ impl Storage {
                 body_size     INTEGER,
                 fetched_at    DATETIME NOT NULL,
                 tenant_id     TEXT,
+                etag          TEXT,
+                last_modified TEXT,
                 UNIQUE(crawl_id, url)
             );
 
@@ -549,8 +555,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 page.id,
                 crawl_id,
@@ -565,6 +571,8 @@ impl Storage {
                 page.body_size.map(|v| v as i64),
                 page.fetched_at.to_rfc3339(),
                 page.tenant_id,
+                page.etag,
+                page.last_modified,
             ],
         )?;
 
@@ -599,8 +607,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -621,6 +629,8 @@ impl Storage {
                 page.body_size.map(|v| v as i64),
                 page.fetched_at.to_rfc3339(),
                 page.tenant_id,
+                page.etag,
+                page.last_modified,
             ])?;
 
             for link in &page.links {
@@ -695,7 +705,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -728,6 +738,8 @@ impl Storage {
                         .unwrap_or_else(|_| Utc::now()),
                     links: Vec::new(),
                     tenant_id: row.get(11)?,
+                    etag: row.get(12)?,
+                    last_modified: row.get(13)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -811,7 +823,7 @@ impl Storage {
     ) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
              FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
              ORDER BY fetched_at ASC LIMIT ?3",
         )?;
@@ -845,6 +857,8 @@ impl Storage {
                         .unwrap_or_else(|_| Utc::now()),
                     links: Vec::new(),
                     tenant_id: row.get(11)?,
+                    etag: row.get(12)?,
+                    last_modified: row.get(13)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -1087,6 +1101,33 @@ impl Storage {
         Ok(urls)
     }
 
+    /// Get the conditional request data (page_id, etag, last_modified) for a URL
+    /// within a crawl. Returns `None` if the URL was not previously crawled.
+    pub fn get_page_conditional(
+        &self,
+        crawl_id: &str,
+        url: &str,
+    ) -> Result<Option<(String, Option<String>, Option<String>)>, StorageError> {
+        let conn = self.conn.lock();
+        let result = conn.query_row(
+            "SELECT id, etag, last_modified FROM pages WHERE crawl_id = ?1 AND url = ?2",
+            params![crawl_id, url],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                    row.get::<_, Option<String>>(2)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
+
     /// Store CrUX metrics for a page.
     pub fn insert_crux_metrics(
         &self,
@@ -1206,6 +1247,8 @@ mod tests {
             fetched_at: Utc::now(),
             links: vec![],
             tenant_id: None,
+            etag: None,
+            last_modified: None,
         }
     }
 
@@ -1408,5 +1451,52 @@ mod tests {
         let retrieved = storage.get_issues(&crawl_id, &filter).unwrap();
         assert_eq!(retrieved.len(), 1);
         assert_eq!(retrieved[0].page_id, "p1");
+    }
+
+    #[test]
+    fn test_page_conditional_etag_and_last_modified() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let mut page = test_page("p1", "https://example.com/", 200);
+        page.etag = Some("\"abc123\"".to_string());
+        page.last_modified = Some("Wed, 21 Oct 2024 07:28:00 GMT".to_string());
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        // Retrieve conditional data
+        let result = storage.get_page_conditional(&crawl_id, "https://example.com/").unwrap();
+        assert!(result.is_some());
+        let (page_id, etag, last_modified) = result.unwrap();
+        assert_eq!(page_id, "p1");
+        assert_eq!(etag.as_deref(), Some("\"abc123\""));
+        assert_eq!(
+            last_modified.as_deref(),
+            Some("Wed, 21 Oct 2024 07:28:00 GMT")
+        );
+
+        // Non-existent URL returns None
+        let result = storage
+            .get_page_conditional(&crawl_id, "https://example.com/nonexistent")
+            .unwrap();
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_page_etag_and_last_modified_roundtrip() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let mut page = test_page("p1", "https://example.com/", 200);
+        page.etag = Some("\"strong-etag\"".to_string());
+        page.last_modified = Some("Thu, 01 Jan 2025 00:00:00 GMT".to_string());
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let pages = storage.get_pages(&crawl_id, 10).unwrap();
+        assert_eq!(pages.len(), 1);
+        assert_eq!(pages[0].etag.as_deref(), Some("\"strong-etag\""));
+        assert_eq!(
+            pages[0].last_modified.as_deref(),
+            Some("Thu, 01 Jan 2025 00:00:00 GMT")
+        );
     }
 }

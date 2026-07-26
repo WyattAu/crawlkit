@@ -246,7 +246,7 @@ struct CreateCrawlRequest {
 }
 
 fn default_max_pages() -> usize {
-    50
+    100
 }
 fn default_delay() -> u64 {
     500
@@ -1171,6 +1171,10 @@ async fn create_user(
     State(state): State<AppState>,
     Json(req): Json<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
+    if let Err(reason) = auth::AuthManager::validate_password(&req.password) {
+        return Err(ApiError::BadRequest(reason));
+    }
+
     if state.auth.find_user(&req.email).is_some() {
         return Err(ApiError::BadRequest(
             "User with this email already exists".to_string(),
@@ -1960,7 +1964,7 @@ mod tests {
 
     #[test]
     fn test_default_max_pages() {
-        assert_eq!(default_max_pages(), 50);
+        assert_eq!(default_max_pages(), 100);
     }
 
     #[test]

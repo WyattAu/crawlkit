@@ -1,16 +1,9 @@
 import CrawlCard from './CrawlCard';
 import { Loader } from 'lucide-react';
-
-interface Crawl {
-  id: string;
-  name: string;
-  url: string;
-  status: string;
-  created_at: string;
-}
+import type { CrawlResult } from '../../models/types';
 
 interface CrawlListProps {
-  crawls: Crawl[];
+  crawls: CrawlResult[];
   loading: boolean;
 }
 
@@ -35,7 +28,7 @@ export default function CrawlList({ crawls, loading }: CrawlListProps) {
   return (
     <div className="grid gap-4">
       {crawls.map((crawl) => (
-        <CrawlCard key={crawl.id} {...crawl} />
+        <CrawlCard key={crawl.crawl_id} {...crawl} />
       ))}
     </div>
   );

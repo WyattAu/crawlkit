@@ -5,13 +5,7 @@ import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import Modal from '../components/ui/Modal';
 import { Plus, Loader, Server } from 'lucide-react';
-
-interface Tenant {
-  id: string;
-  name: string;
-  slug: string;
-  created_at: string;
-}
+import type { Tenant } from '../models/types';
 
 export default function SettingsPage() {
   const { token } = useAuth();
@@ -20,7 +14,6 @@ export default function SettingsPage() {
   const [showForm, setShowForm] = useState(false);
   const [formLoading, setFormLoading] = useState(false);
   const [tenantName, setTenantName] = useState('');
-  const [tenantSlug, setTenantSlug] = useState('');
   const [healthStatus, setHealthStatus] = useState<'ok' | 'error' | 'loading'>('loading');
   const [formError, setFormError] = useState('');
 
@@ -38,7 +31,7 @@ export default function SettingsPage() {
         apiClient.listTenants().catch(() => []),
         apiClient.health().then(() => setHealthStatus('ok')).catch(() => setHealthStatus('error')),
       ]);
-      setTenants(tenantsData as Tenant[]);
+      setTenants(tenantsData);
     } catch (error) {
       console.error('Failed to load settings:', error);
     } finally {
@@ -51,10 +44,9 @@ export default function SettingsPage() {
     setFormLoading(true);
     setFormError('');
     try {
-      await apiClient.createTenant({ name: tenantName, slug: tenantSlug });
+      await apiClient.createTenant({ name: tenantName });
       setShowForm(false);
       setTenantName('');
-      setTenantSlug('');
       loadData();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create tenant';
@@ -114,7 +106,7 @@ export default function SettingsPage() {
                 >
                   <div>
                     <p className="font-medium text-gray-900 dark:text-white">{tenant.name}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{tenant.slug}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{tenant.id}</p>
                   </div>
                 </div>
               ))}
@@ -135,13 +127,6 @@ export default function SettingsPage() {
             value={tenantName}
             onChange={(e) => setTenantName(e.target.value)}
             placeholder="My Organization"
-            required
-          />
-          <Input
-            label="Slug"
-            value={tenantSlug}
-            onChange={(e) => setTenantSlug(e.target.value)}
-            placeholder="my-org"
             required
           />
           <div className="flex justify-end gap-3 pt-4">

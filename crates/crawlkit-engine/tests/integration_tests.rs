@@ -99,6 +99,8 @@ fn make_page_data(url: &str) -> PageData {
         fetched_at: Utc::now(),
         links: Vec::new(),
         tenant_id: None,
+        etag: None,
+        last_modified: None,
     }
 }
 

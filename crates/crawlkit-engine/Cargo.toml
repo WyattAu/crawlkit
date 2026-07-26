@@ -10,7 +10,7 @@ keywords.workspace = true
 categories.workspace = true
 readme.workspace = true
 homepage.workspace = true
-documentation.workspace = true
+documentation = "https://docs.rs/crawlkit-engine"
 
 [lints]
 workspace = true

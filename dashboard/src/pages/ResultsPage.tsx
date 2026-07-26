@@ -5,30 +5,10 @@ import { useAuth } from '../hooks/use_auth';
 import FindingList from '../components/findings/FindingList';
 import Button from '../components/ui/Button';
 import { ArrowLeft, Loader } from 'lucide-react';
+import type { CrawlResult, CrawlStats, Finding } from '../models/types';
 
-interface CrawlDetail {
-  id: string;
-  name: string;
-  url: string;
-  status: string;
-  created_at: string;
-  stats?: {
-    pages_crawled: number;
-    pages_failed: number;
-    links_found: number;
-    duration_ms: number;
-  };
-}
-
-interface Finding {
-  id: string;
-  type: string;
-  severity: string;
-  title: string;
-  description: string;
-  url: string;
-  evidence?: string;
-  created_at: string;
+interface CrawlDetail extends CrawlResult {
+  stats?: CrawlStats;
 }
 
 export default function ResultsPage() {
@@ -50,8 +30,8 @@ export default function ResultsPage() {
           apiClient.getCrawlStats(id!).catch(() => null),
           apiClient.getFindings(id!).catch(() => []),
         ]);
-        setCrawl({ ...crawlData, stats: statsData } as CrawlDetail);
-        setFindings(findingsData as Finding[]);
+        setCrawl({ ...crawlData, stats: statsData ?? undefined });
+        setFindings(findingsData);
       } catch (error) {
         console.error('Failed to load crawl:', error);
       } finally {
@@ -87,30 +67,28 @@ export default function ResultsPage() {
           Back
         </Button>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.name}</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{crawl.url}</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.crawl_id}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{crawl.start_url}</p>
         </div>
       </div>
 
       {crawl.stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Pages</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.stats.total_pages}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total Issues</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.stats.total_issues}</p>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
             <p className="text-sm text-gray-500 dark:text-gray-400">Pages Crawled</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.stats.pages_crawled}</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.pages_crawled}</p>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Pages Failed</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.stats.pages_failed}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Links Found</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.stats.links_found}</p>
-          </div>
-          <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-200 dark:border-gray-700">
-            <p className="text-sm text-gray-500 dark:text-gray-400">Duration</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-white">
-              {(crawl.stats.duration_ms / 1000).toFixed(1)}s
-            </p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Issues Found</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-white">{crawl.issues_found}</p>
           </div>
         </div>
       )}

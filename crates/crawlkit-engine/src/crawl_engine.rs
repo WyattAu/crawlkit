@@ -6,6 +6,7 @@ use crate::ratelimit::RateLimiter;
 use crate::robots::RobotsTxtCache;
 use crate::sitemap::SitemapCache;
 use crate::storage::{Issue, PageData, Storage};
+use rusqlite::params;
 use crate::{
     BackpressureController, CircuitBreakerRegistry, CrawlConfig, DeterminismController,
     FeatureFlags, Metrics, RedirectHop, ResourceMonitor,
@@ -76,6 +77,9 @@ pub struct CrawlEngineConfig {
 
     /// Number of concurrent fetchers.
     pub concurrency: Option<usize>,
+
+    /// Whether to enable incremental crawling (ETag / If-Modified-Since).
+    pub incremental: bool,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -95,6 +99,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("timeout_secs", &self.timeout_secs)
             .field("delay_ms", &self.delay_ms)
             .field("concurrency", &self.concurrency)
+            .field("incremental", &self.incremental)
             .finish()
     }
 }
@@ -117,6 +122,7 @@ impl Default for CrawlEngineConfig {
             timeout_secs: None,
             delay_ms: None,
             concurrency: None,
+            incremental: false,
         }
     }
 }
@@ -138,6 +144,12 @@ pub struct CrawlOutput {
     pub skipped_robots: usize,
     /// Pages skipped due to duplicate content.
     pub skipped_duplicate: usize,
+    /// Pages that returned 304 Not Modified during incremental crawl.
+    pub pages_unchanged: usize,
+    /// Pages that were modified (fetched fresh) during incremental crawl.
+    pub pages_modified: usize,
+    /// Pages that are new (not previously seen) during incremental crawl.
+    pub pages_new: usize,
     /// The seed domain used for internal/external link classification.
     pub seed_domain: String,
     /// The metrics snapshot at crawl end.
@@ -309,6 +321,9 @@ impl CrawlEngine {
         let mut skipped_external: usize = 0;
         let mut skipped_robots: usize = 0;
         let mut skipped_duplicate: usize = 0;
+        let mut pages_unchanged: usize = 0;
+        let mut pages_modified: usize = 0;
+        let mut pages_new: usize = 0;
         let mut visited: HashSet<String> = HashSet::new();
         let mut content_hashes_string: HashSet<String> = HashSet::new();
         let mut content_hashes_u64: HashSet<u64> = HashSet::new();
@@ -423,20 +438,72 @@ impl CrawlEngine {
 
             // Fetch
             let start = std::time::Instant::now();
-            let result = match http_client.fetch(&entry.url).await {
-                Ok(r) => {
-                    breaker.record_success();
-                    r
-                }
-                Err(e) => {
-                    tracing::warn!("Failed to fetch {}: {}", entry.url, e);
-                    let was_allowed = breaker.is_allowed();
-                    breaker.record_failure();
-                    if was_allowed && !breaker.is_allowed() {
-                        metrics.record_circuit_breaker_trip();
+            let result = if cfg.incremental {
+                // Check for existing ETag/Last-Modified from a previous crawl
+                let previous = self
+                    .storage
+                    .get_page_conditional(&crawl_id, entry.url.as_str())
+                    .unwrap_or(None);
+
+                let (existing_etag, existing_lm) = match &previous {
+                    Some((_, etag, lm)) => (etag.as_deref(), lm.as_deref()),
+                    None => (None, None),
+                };
+
+                match http_client
+                    .fetch_conditional(&entry.url, existing_etag, existing_lm)
+                    .await
+                {
+                    Ok(r) if r.status_code == 304 => {
+                        // Not Modified — skip analysis but update access timestamp
+                        pages_unchanged += 1;
+                        if let Some((page_id, _, _)) = previous {
+                            // Update the fetched_at timestamp for the existing page
+                            let conn = self.storage.conn();
+                            let _ = conn.execute(
+                                "UPDATE pages SET fetched_at = ?1 WHERE id = ?2",
+                                params![Utc::now().to_rfc3339(), page_id],
+                            );
+                        }
+                        tracing::debug!("304 Not Modified: {}", entry.url);
+                        continue;
                     }
-                    metrics.record_page_failure();
-                    continue;
+                    Ok(r) => {
+                        if previous.is_some() {
+                            pages_modified += 1;
+                        } else {
+                            pages_new += 1;
+                        }
+                        breaker.record_success();
+                        r
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to fetch {}: {}", entry.url, e);
+                        let was_allowed = breaker.is_allowed();
+                        breaker.record_failure();
+                        if was_allowed && !breaker.is_allowed() {
+                            metrics.record_circuit_breaker_trip();
+                        }
+                        metrics.record_page_failure();
+                        continue;
+                    }
+                }
+            } else {
+                match http_client.fetch(&entry.url).await {
+                    Ok(r) => {
+                        breaker.record_success();
+                        r
+                    }
+                    Err(e) => {
+                        tracing::warn!("Failed to fetch {}: {}", entry.url, e);
+                        let was_allowed = breaker.is_allowed();
+                        breaker.record_failure();
+                        if was_allowed && !breaker.is_allowed() {
+                            metrics.record_circuit_breaker_trip();
+                        }
+                        metrics.record_page_failure();
+                        continue;
+                    }
                 }
             };
             let fetch_time = start.elapsed();
@@ -566,6 +633,8 @@ impl CrawlEngine {
                     .filter_map(|l| Url::parse(&l.href).ok())
                     .collect(),
                 tenant_id: cfg.tenant_id.clone(),
+                etag: result.etag.clone(),
+                last_modified: result.last_modified.clone(),
             };
 
             // Encrypt sensitive fields if encryption is enabled
@@ -689,13 +758,16 @@ impl CrawlEngine {
         let snapshot = metrics.snapshot();
 
         tracing::info!(
-            "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} robots blocked, {} duplicates",
+            "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
             pages_crawled,
             pages_stored,
             issues_found,
             skipped_external,
             skipped_robots,
             skipped_duplicate,
+            pages_unchanged,
+            pages_modified,
+            pages_new,
         );
 
         Ok(CrawlOutput {
@@ -706,6 +778,9 @@ impl CrawlEngine {
             skipped_external,
             skipped_robots,
             skipped_duplicate,
+            pages_unchanged,
+            pages_modified,
+            pages_new,
             seed_domain,
             metrics: snapshot,
             elapsed,
@@ -810,6 +885,9 @@ mod tests {
             skipped_external: 2,
             skipped_robots: 1,
             skipped_duplicate: 3,
+            pages_unchanged: 4,
+            pages_modified: 3,
+            pages_new: 3,
             seed_domain: "example.com".to_string(),
             metrics: crate::Metrics::new().snapshot(),
             elapsed: Duration::from_secs(1),
@@ -834,5 +912,95 @@ mod tests {
                 .total_pages,
             0
         );
+    }
+
+    struct MockJsRenderer {
+        available: bool,
+        rendered_url: std::sync::Mutex<Option<String>>,
+    }
+
+    impl MockJsRenderer {
+        fn new(available: bool) -> Self {
+            Self {
+                available,
+                rendered_url: std::sync::Mutex::new(None),
+            }
+        }
+
+        fn rendered_url(&self) -> Option<String> {
+            self.rendered_url.lock().unwrap().clone()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl JsRenderer for MockJsRenderer {
+        fn is_available(&self) -> bool {
+            self.available
+        }
+
+        async fn render(&self, url: &str) -> Result<String, String> {
+            *self.rendered_url.lock().unwrap() = Some(url.to_string());
+            Ok(format!(
+                r#"<html><head><title>Rendered</title></head><body><div id="app">JS content for {url}</div></body></html>"#
+            ))
+        }
+    }
+
+    #[test]
+    fn test_mock_renderer_implements_js_renderer_trait() {
+        let renderer = MockJsRenderer::new(true);
+        assert!(renderer.is_available());
+        assert!(renderer.rendered_url().is_none());
+
+        let renderer_unavailable = MockJsRenderer::new(false);
+        assert!(!renderer_unavailable.is_available());
+    }
+
+    #[test]
+    fn test_crawl_engine_config_with_js_renderer() {
+        let renderer: std::sync::Arc<dyn JsRenderer> =
+            std::sync::Arc::new(MockJsRenderer::new(true));
+        let config = CrawlEngineConfig {
+            enable_js_rendering: true,
+            js_renderer: Some(renderer),
+            ..Default::default()
+        };
+        assert!(config.enable_js_rendering);
+        assert!(config.js_renderer.is_some());
+        assert!(config.js_renderer.as_ref().unwrap().is_available());
+    }
+
+    #[test]
+    fn test_crawl_engine_config_without_js_renderer() {
+        let config = CrawlEngineConfig {
+            enable_js_rendering: false,
+            js_renderer: None,
+            ..Default::default()
+        };
+        assert!(!config.enable_js_rendering);
+        assert!(config.js_renderer.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_mock_renderer_render() {
+        let renderer = MockJsRenderer::new(true);
+        let result = renderer.render("https://example.com/page").await;
+        assert!(result.is_ok());
+        let html = result.unwrap();
+        assert!(html.contains("Rendered"));
+        assert!(html.contains("https://example.com/page"));
+        assert_eq!(
+            renderer.rendered_url(),
+            Some("https://example.com/page".to_string())
+        );
+    }
+
+    #[test]
+    fn test_js_render_decision_engine_with_renderer_config() {
+        let decision_engine = crate::JsRenderDecisionEngine::new();
+        let html = r#"<div id="__next">Hello</div>"#;
+        let decision =
+            decision_engine.should_render_js("https://example.com/page", Some(html));
+        assert!(matches!(decision, crate::JsRenderDecision::Render { .. }));
     }
 }

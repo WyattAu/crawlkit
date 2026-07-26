@@ -1,21 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../services/api_client';
 import { useAuth } from './use_auth';
-
-export interface Crawl {
-  id: string;
-  tenant_id: string;
-  name: string;
-  url: string;
-  status: string;
-  created_at: string;
-  updated_at: string;
-  config: Record<string, unknown>;
-}
+import type { CrawlResult } from '../models/types';
 
 export function useCrawls() {
   const { token } = useAuth();
-  const [crawls, setCrawls] = useState<Crawl[]>([]);
+  const [crawls, setCrawls] = useState<CrawlResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +15,7 @@ export function useCrawls() {
     try {
       setLoading(true);
       const data = await apiClient.listCrawls();
-      setCrawls(data as unknown as Crawl[]);
+      setCrawls(data);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load crawls');
@@ -39,12 +29,24 @@ export function useCrawls() {
   }, [loadCrawls]);
 
   const startCrawl = useCallback(
-    async (config: Record<string, unknown>) => {
+    async (config: { url: string; max_pages?: number }) => {
       if (!token) return;
       apiClient.setToken(token);
-      const crawl = await apiClient.startCrawl(config);
-      setCrawls((prev) => [crawl as unknown as Crawl, ...prev]);
-      return crawl;
+      const response = await apiClient.startCrawl({
+        start_url: config.url,
+        max_pages: config.max_pages,
+      });
+      const pending: CrawlResult = {
+        crawl_id: response.crawl_id,
+        start_url: config.url,
+        status: response.status,
+        pages_crawled: 0,
+        issues_found: 0,
+        created_at: new Date().toISOString(),
+        completed_at: null,
+      };
+      setCrawls((prev) => [pending, ...prev]);
+      return pending;
     },
     [token]
   );

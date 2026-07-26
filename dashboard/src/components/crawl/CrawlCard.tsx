@@ -1,14 +1,7 @@
 import { format } from 'date-fns';
 import { ExternalLink, Clock, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-
-interface CrawlCardProps {
-  id: string;
-  name: string;
-  url: string;
-  status: string;
-  created_at: string;
-}
+import type { CrawlResult } from '../../models/types';
 
 const statusConfig: Record<string, { icon: typeof Clock; color: string; label: string }> = {
   pending: { icon: Clock, color: 'text-yellow-500', label: 'Pending' },
@@ -17,7 +10,7 @@ const statusConfig: Record<string, { icon: typeof Clock; color: string; label: s
   failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
 };
 
-export default function CrawlCard({ id, name, url, status, created_at }: CrawlCardProps) {
+export default function CrawlCard({ crawl_id, start_url, status, created_at }: CrawlResult) {
   const navigate = useNavigate();
   const config = statusConfig[status] || statusConfig.pending;
   const StatusIcon = config.icon;
@@ -25,14 +18,14 @@ export default function CrawlCard({ id, name, url, status, created_at }: CrawlCa
   return (
     <button
       className="w-full text-left bg-white dark:bg-gray-800 rounded-xl p-4 shadow-sm border border-gray-200 dark:border-gray-700 hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => navigate(`/results/${id}`)}
+      onClick={() => navigate(`/results/${crawl_id}`)}
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <h3 className="font-medium text-gray-900 dark:text-white truncate">{name}</h3>
+          <h3 className="font-medium text-gray-900 dark:text-white truncate">{crawl_id}</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-1 flex items-center gap-1">
             <ExternalLink className="w-3 h-3" />
-            {url}
+            {start_url}
           </p>
         </div>
         <div className={`flex items-center gap-1 ${config.color}`}>

@@ -989,6 +989,8 @@ mod tests {
                 fetched_at: Utc::now(),
                 links: vec![Url::parse("https://example.com/about").unwrap()],
                 tenant_id: None,
+                etag: None,
+                last_modified: None,
             },
             PageData {
                 id: "p2".into(),
@@ -1004,6 +1006,8 @@ mod tests {
                 fetched_at: Utc::now(),
                 links: vec![],
                 tenant_id: None,
+                etag: None,
+                last_modified: None,
             },
             PageData {
                 id: "p3".into(),
@@ -1022,6 +1026,8 @@ mod tests {
                     Url::parse("https://external.com/other").unwrap(),
                 ],
                 tenant_id: None,
+                etag: None,
+                last_modified: None,
             },
         ];
         storage.insert_pages(crawl_id, &pages).unwrap();

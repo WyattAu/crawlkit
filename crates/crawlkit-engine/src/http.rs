@@ -13,6 +13,19 @@ use url::Url;
 
 use crate::{CrawlConfig, CrawlError, FetchResult, RedirectHop};
 
+/// Extract conditional request headers (ETag, Last-Modified) from response headers.
+fn extract_conditional_headers(headers: &[(String, String)]) -> (Option<String>, Option<String>) {
+    let etag = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("etag"))
+        .map(|(_, v)| v.clone());
+    let last_modified = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("last-modified"))
+        .map(|(_, v)| v.clone());
+    (etag, last_modified)
+}
+
 /// Retry policy for failed requests.
 ///
 /// Controls exponential backoff behavior for retryable HTTP status codes
@@ -303,6 +316,89 @@ impl HttpClient {
             .await
     }
 
+    /// Fetches a URL with conditional request headers (ETag / If-Modified-Since).
+    ///
+    /// Sends `If-None-Match` and/or `If-Modified-Since` headers when the
+    /// corresponding values are `Some`. Returns a `FetchResult` with
+    /// `status_code: 304` and an empty body when the server responds with
+    /// Not Modified.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`CrawlError::RequestFailed`] on network errors.
+    pub async fn fetch_conditional(
+        &self,
+        url: &Url,
+        etag: Option<&str>,
+        last_modified: Option<&str>,
+    ) -> Result<FetchResult, CrawlError> {
+        let start = Instant::now();
+        let user_agent = self.config.user_agent.next();
+
+        let mut request = self.client.get(url.as_str()).header(USER_AGENT, user_agent);
+
+        if let Some(etag_val) = etag {
+            request = request.header("If-None-Match", etag_val);
+        }
+        if let Some(lm_val) = last_modified {
+            request = request.header("If-Modified-Since", lm_val);
+        }
+
+        let response = request.send().await.map_err(CrawlError::RequestFailed)?;
+
+        let status = response.status();
+        let elapsed = start.elapsed();
+        let headers: Vec<(String, String)> = response
+            .headers()
+            .iter()
+            .map(|(k, v)| {
+                (
+                    k.as_str().to_string(),
+                    String::from_utf8_lossy(v.as_bytes()).to_string(),
+                )
+            })
+            .collect();
+
+        let final_url = response.url().clone();
+
+        if status == StatusCode::NOT_MODIFIED {
+            let (resp_etag, resp_lm) = extract_conditional_headers(&headers);
+            return Ok(FetchResult {
+                final_url,
+                status_code: 304,
+                headers,
+                body: String::new(),
+                response_time: elapsed,
+                body_size: 0,
+                fetched_at: chrono::Utc::now(),
+                etag: resp_etag,
+                last_modified: resp_lm,
+            });
+        }
+
+        let body = if self.config.max_body_size > 0 {
+            let bytes = response.bytes().await.map_err(CrawlError::RequestFailed)?;
+            let limited = &bytes[..bytes.len().min(self.config.max_body_size)];
+            String::from_utf8_lossy(limited).to_string()
+        } else {
+            response.text().await.map_err(CrawlError::RequestFailed)?
+        };
+
+        let (resp_etag, resp_lm) = extract_conditional_headers(&headers);
+        let body_size = body.len();
+        Ok(FetchResult {
+            final_url,
+            status_code: status.as_u16(),
+            headers,
+            body,
+            response_time: elapsed,
+            body_size,
+            fetched_at: chrono::Utc::now(),
+            etag: resp_etag,
+            last_modified: resp_lm,
+        })
+    }
+
     /// Fetches a URL, following up to `max_hops` redirects manually.
     ///
     /// Each redirect hop is recorded. If the hop limit is exceeded,
@@ -342,6 +438,7 @@ impl HttpClient {
                             None => {
                                 // No Location header — return the redirect response as-is
                                 let body_size = body.len();
+                                let (etag, last_modified) = extract_conditional_headers(&headers);
                                 return Ok(FetchResult {
                                     final_url,
                                     status_code: status.as_u16(),
@@ -350,12 +447,15 @@ impl HttpClient {
                                     response_time: elapsed,
                                     body_size,
                                     fetched_at: chrono::Utc::now(),
+                                    etag,
+                                    last_modified,
                                 });
                             }
                         }
                     }
 
                     let body_size = body.len();
+                    let (etag, last_modified) = extract_conditional_headers(&headers);
                     return Ok(FetchResult {
                         final_url,
                         status_code: status.as_u16(),
@@ -364,6 +464,8 @@ impl HttpClient {
                         response_time: elapsed,
                         body_size,
                         fetched_at: chrono::Utc::now(),
+                        etag,
+                        last_modified,
                     });
                 }
                 Err(CrawlError::RequestFailed(e)) => {
@@ -564,6 +666,8 @@ impl HttpClient {
                             response_time: elapsed,
                             body_size: 0,
                             fetched_at: chrono::Utc::now(),
+                            etag: None,
+                            last_modified: None,
                         });
                     }
                 }
@@ -587,6 +691,7 @@ impl HttpClient {
                 body.push_str(&chunk_str);
             }
 
+            let (etag, last_modified) = extract_conditional_headers(&headers);
             return Ok(FetchResult {
                 final_url,
                 status_code: status.as_u16(),
@@ -595,6 +700,8 @@ impl HttpClient {
                 response_time: elapsed,
                 body_size: total_size,
                 fetched_at: chrono::Utc::now(),
+                etag,
+                last_modified,
             });
         }
 
@@ -751,6 +858,7 @@ impl FetchStreamReader {
     pub async fn into_fetch_result(mut self) -> Result<FetchResult, CrawlError> {
         let body = self.read_body().await?;
         let body_size = self.body_size;
+        let (etag, last_modified) = extract_conditional_headers(&self.headers);
         Ok(FetchResult {
             final_url: self.final_url,
             status_code: self.status_code,
@@ -759,6 +867,8 @@ impl FetchStreamReader {
             response_time: self.response_time,
             body_size,
             fetched_at: chrono::Utc::now(),
+            etag,
+            last_modified,
         })
     }
 }
@@ -836,5 +946,32 @@ mod tests {
         let config = HttpClientConfig::from(&CrawlConfig::default());
         let client = HttpClient::new(config);
         assert!(client.is_ok());
+    }
+
+    #[test]
+    fn test_extract_conditional_headers() {
+        let headers = vec![
+            ("content-type".to_string(), "text/html".to_string()),
+            ("etag".to_string(), "\"abc123\"".to_string()),
+            ("last-modified".to_string(), "Wed, 21 Oct 2024 07:28:00 GMT".to_string()),
+        ];
+        let (etag, last_modified) = extract_conditional_headers(&headers);
+        assert_eq!(etag.as_deref(), Some("\"abc123\""));
+        assert_eq!(last_modified.as_deref(), Some("Wed, 21 Oct 2024 07:28:00 GMT"));
+
+        // Case-insensitive matching
+        let headers = vec![
+            ("ETag".to_string(), "\"xyz\"".to_string()),
+            ("Last-Modified".to_string(), "Thu, 01 Jan 2025 00:00:00 GMT".to_string()),
+        ];
+        let (etag, last_modified) = extract_conditional_headers(&headers);
+        assert_eq!(etag.as_deref(), Some("\"xyz\""));
+        assert_eq!(last_modified.as_deref(), Some("Thu, 01 Jan 2025 00:00:00 GMT"));
+
+        // Missing headers
+        let headers = vec![("content-type".to_string(), "text/html".to_string())];
+        let (etag, last_modified) = extract_conditional_headers(&headers);
+        assert!(etag.is_none());
+        assert!(last_modified.is_none());
     }
 }

@@ -478,6 +478,12 @@ pub struct FetchResult {
 
     /// When the request was made.
     pub fetched_at: DateTime<Utc>,
+
+    /// The ETag header value, if present.
+    pub etag: Option<String>,
+
+    /// The Last-Modified header value, if present.
+    pub last_modified: Option<String>,
 }
 
 /// A single hop in a redirect chain.
@@ -567,6 +573,8 @@ mod tests {
             response_time: Duration::from_millis(123),
             body_size: 14,
             fetched_at: Utc::now(),
+            etag: Some("\"abc123\"".into()),
+            last_modified: None,
         };
 
         let json = serde_json::to_string(&result).unwrap();

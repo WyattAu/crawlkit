@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../services/api_client';
 import { useAuth } from './use_auth';
+import type { CrawlResult, UserResponse, Tenant } from '../models/types';
 
 export interface Metrics {
   totalCrawls: number;
@@ -28,7 +29,7 @@ export function useMetrics() {
     apiClient.setToken(token);
     try {
       setLoading(true);
-      const [crawls, users, tenants] = await Promise.all([
+      const [crawls, users, tenants]: [CrawlResult[], UserResponse[], Tenant[]] = await Promise.all([
         apiClient.listCrawls(),
         apiClient.listUsers().catch(() => []),
         apiClient.listTenants().catch(() => []),
@@ -36,9 +37,9 @@ export function useMetrics() {
 
       setMetrics({
         totalCrawls: crawls.length,
-        activeCrawls: crawls.filter((c: Record<string, unknown>) => c.status === 'running').length,
-        completedCrawls: crawls.filter((c: Record<string, unknown>) => c.status === 'completed').length,
-        failedCrawls: crawls.filter((c: Record<string, unknown>) => c.status === 'failed').length,
+        activeCrawls: crawls.filter((c) => c.status === 'running').length,
+        completedCrawls: crawls.filter((c) => c.status === 'completed').length,
+        failedCrawls: crawls.filter((c) => c.status === 'failed').length,
         totalUsers: users.length,
         totalTenants: tenants.length,
       });

@@ -1,15 +1,6 @@
 import { format } from 'date-fns';
 import { AlertTriangle, Info, AlertCircle, Shield, ShieldAlert } from 'lucide-react';
-
-interface FindingCardProps {
-  type: string;
-  severity: string;
-  title: string;
-  description: string;
-  url: string;
-  evidence?: string;
-  created_at: string;
-}
+import type { Finding } from '../../models/types';
 
 const severityConfig: Record<string, { icon: typeof Info; color: string; bg: string }> = {
   info: { icon: Info, color: 'text-blue-700', bg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -27,7 +18,7 @@ export default function FindingCard({
   url,
   evidence,
   created_at,
-}: FindingCardProps) {
+}: Finding) {
   const config = severityConfig[severity] || severityConfig.info;
   const SeverityIcon = config.icon;
 

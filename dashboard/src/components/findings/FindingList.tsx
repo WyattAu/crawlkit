@@ -1,16 +1,6 @@
 import FindingCard from './FindingCard';
 import { Loader } from 'lucide-react';
-
-interface Finding {
-  id: string;
-  type: string;
-  severity: string;
-  title: string;
-  description: string;
-  url: string;
-  evidence?: string;
-  created_at: string;
-}
+import type { Finding } from '../../models/types';
 
 interface FindingListProps {
   findings: Finding[];

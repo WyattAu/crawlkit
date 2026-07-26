@@ -301,6 +301,17 @@ struct ApiKeyResponse {
     requests_per_minute: u32,
 }
 
+impl ApiKeyResponse {
+    /// Redact the API key for safe display. Shows only last 4 characters.
+    fn redacted(key: &str) -> String {
+        if key.len() <= 4 {
+            "****".to_string()
+        } else {
+            format!("{}****", &key[key.len() - 4..])
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 struct HealthResponse {
     status: String,
@@ -721,7 +732,7 @@ async fn list_api_keys(State(state): State<AppState>) -> Json<Vec<ApiKeyResponse
         .api_keys
         .iter()
         .map(|entry| ApiKeyResponse {
-            key: entry.value().key.clone(),
+            key: ApiKeyResponse::redacted(&entry.value().key),
             name: entry.value().name.clone(),
             requests_per_minute: entry.value().requests_per_minute,
         })
@@ -1211,7 +1222,10 @@ async fn create_user(
         ));
     }
 
-    let password_hash = state.auth.hash_password(&req.password);
+    let password_hash = state
+        .auth
+        .hash_password(&req.password)
+        .map_err(|e| ApiError::Internal(format!("Failed to hash password: {e}")))?;
     let user_id = uuid::Uuid::new_v4().to_string();
     let response = UserResponse {
         id: user_id.clone(),
@@ -1799,16 +1813,33 @@ async fn main() -> anyhow::Result<()> {
     let auth = Arc::new(AuthManager::new(jwt_secret));
 
     if std::env::var("CREATE_ADMIN").unwrap_or_default() == "true" {
-        let admin_password = auth.hash_password("admin123");
+        let admin_password: String = (0..24)
+            .map(|_| {
+                let idx = rand::random::<u8>() % 62;
+                match idx {
+                    0..=9 => (b'0' + idx) as char,
+                    10..=35 => (b'a' + idx - 10) as char,
+                    36..=61 => (b'A' + idx - 36) as char,
+                    _ => unreachable!(),
+                }
+            })
+            .collect();
+        let admin_password_hash = auth
+            .hash_password(&admin_password)
+            .map_err(|e| anyhow::anyhow!("Failed to hash admin password: {e}"))?;
         auth.add_user(User {
             id: uuid::Uuid::new_v4().to_string(),
             email: "admin@crawlkit.local".to_string(),
             name: "Admin".to_string(),
-            password_hash: admin_password,
+            password_hash: admin_password_hash,
             tenant_id: "default".to_string(),
             roles: vec!["admin".to_string()],
             enabled: true,
         });
+        tracing::warn!(
+            "Admin account created. Email: admin@crawlkit.local, Password: {}. CHANGE THIS PASSWORD IMMEDIATELY.",
+            admin_password
+        );
     }
 
     // Initialize OIDC if configured via environment variables

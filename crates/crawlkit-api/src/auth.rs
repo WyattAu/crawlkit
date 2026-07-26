@@ -6,6 +6,23 @@ use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation}
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
+/// Errors that can occur during authentication operations.
+#[derive(Debug)]
+pub enum Argon2Error {
+    /// Password hashing failed.
+    HashFailed(String),
+}
+
+impl std::fmt::Display for Argon2Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Argon2Error::HashFailed(msg) => write!(f, "Password hashing failed: {msg}"),
+        }
+    }
+}
+
+impl std::error::Error for Argon2Error {}
+
 /// JWT claims.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Claims {
@@ -155,15 +172,14 @@ impl AuthManager {
     }
 
     /// Hash a password.
-    #[allow(clippy::expect_used)]
-    pub fn hash_password(&self, password: &str) -> String {
+    pub fn hash_password(&self, password: &str) -> Result<String, Argon2Error> {
         use rand::rngs::OsRng;
 
         let salt = SaltString::generate(&mut OsRng);
         let hash = Argon2::default()
             .hash_password(password.as_bytes(), &salt)
-            .expect("argon2 hashing should not fail");
-        hash.to_string()
+            .map_err(|e| Argon2Error::HashFailed(e.to_string()))?;
+        Ok(hash.to_string())
     }
 
     /// Generate JWT token.
@@ -339,14 +355,14 @@ mod tests {
     #[test]
     fn test_hash_and_verify_password_correct() {
         let am = AuthManager::new("secret".to_string());
-        let hash = am.hash_password("my_secure_password");
+        let hash = am.hash_password("my_secure_password").unwrap();
         assert!(am.verify_password("my_secure_password", &hash));
     }
 
     #[test]
     fn test_hash_and_verify_password_wrong() {
         let am = AuthManager::new("secret".to_string());
-        let hash = am.hash_password("correct_password");
+        let hash = am.hash_password("correct_password").unwrap();
         assert!(!am.verify_password("wrong_password", &hash));
     }
 
@@ -359,8 +375,8 @@ mod tests {
     #[test]
     fn test_hash_password_different_each_time() {
         let am = AuthManager::new("secret".to_string());
-        let h1 = am.hash_password("password");
-        let h2 = am.hash_password("password");
+        let h1 = am.hash_password("password").unwrap();
+        let h2 = am.hash_password("password").unwrap();
         assert_ne!(h1, h2, "Argon2 hashes should use different salts");
     }
 

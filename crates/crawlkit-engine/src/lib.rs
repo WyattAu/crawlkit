@@ -62,7 +62,7 @@ pub mod ai_analyzers;
 pub mod ai_bots;
 /// SEO analysis engine with pluggable analyzers (title, meta, links, etc.).
 ///
-/// Defines the [`Analyzer`](analyzers::Analyzer) trait and provides 28+ built-in analyzers
+/// Defines the Analyzer trait and provides 31 built-in analyzers
 /// covering HTTP status, redirects, canonical URLs, meta tags, headings, links,
 /// images, structured data, security, accessibility, and more.
 pub mod analyzers;
@@ -73,7 +73,7 @@ pub mod analyzers;
 pub mod audit;
 /// Adapters for third-party backlink data sources (Ahrefs, GSC, Majestic).
 ///
-/// Defines the [`BacklinkAdapter`](backlink_adapters::BacklinkAdapter) trait for
+/// Defines the BacklinkAdapter trait for
 /// integrating external backlink data into crawl analysis.
 pub mod backlink_adapters;
 /// Backlink analysis, scoring, and reporting.
@@ -123,11 +123,11 @@ pub mod export;
 /// Feature flag system for toggling capabilities at runtime.
 ///
 /// Flags are immutable per-crawl session once set. Supports TOML
-/// configuration and programmatic access via [`SharedFeatureFlags`](feature_flags::SharedFeatureFlags).
+/// configuration and programmatic access via SharedFeatureFlags.
 pub mod feature_flags;
 /// HTTP client with retry, redirect following, and rate limiting.
 ///
-/// Provides [`HttpClient`](http::HttpClient) with exponential backoff retry,
+/// Provides HttpClient with exponential backoff retry,
 /// manual redirect tracking, user-agent rotation, and streaming responses.
 pub mod http;
 /// Decision engine for determining whether a page requires JavaScript rendering.
@@ -139,7 +139,7 @@ pub mod post_crawl;
 
 /// Metrics collection and observability hooks.
 ///
-/// Provides atomic [`Metrics`](observability::Metrics) for tracking pages crawled,
+/// Provides atomic Metrics for tracking pages crawled,
 /// bytes fetched, timing, and circuit breaker events with zero-allocation hot paths.
 pub mod observability;
 /// Playwright-based headless browser integration for JS-rendered pages.
@@ -245,7 +245,7 @@ pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRunti
 
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 ///
-/// Provides [`MetaTags`](meta::MetaTags) with helper methods for checking
+/// Provides MetaTags with helper methods for checking
 /// `noindex`/`nofollow` directives and measuring tag lengths.
 pub mod meta;
 /// HTML parser that extracts links, headings, images, forms, and structured data.
@@ -490,7 +490,7 @@ pub struct FetchResult {
 ///
 /// Records the source and destination URLs along with the HTTP status code
 /// (301, 302, 307, 308) for each redirect. Multiple hops form a
-/// [`RedirectChainAnalyzer`](analyzers::RedirectChainAnalyzer) input.
+/// RedirectChainAnalyzer input.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RedirectHop {
     /// The URL that redirected.

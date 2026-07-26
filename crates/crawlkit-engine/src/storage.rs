@@ -724,11 +724,11 @@ impl Storage {
                     id: row.get(0)?,
                     url: Url::parse(&url_str).unwrap_or_else(|_| {
                         Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
                     }),
                     final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
                         Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
                     }),
                     status_code: row.get(3)?,
                     title: row.get(4)?,
@@ -843,11 +843,11 @@ impl Storage {
                     id: row.get(0)?,
                     url: Url::parse(&url_str).unwrap_or_else(|_| {
                         Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
                     }),
                     final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
                         Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always a valid URL"))
+                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
                     }),
                     status_code: row.get(3)?,
                     title: row.get(4)?,

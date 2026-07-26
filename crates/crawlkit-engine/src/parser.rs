@@ -215,7 +215,7 @@ pub struct StyleInfo {
 /// schema validation and analysis.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StructuredData {
-    /// The `@context` value (e.g., "https://schema.org").
+    /// The `@context` value (e.g., `<https://schema.org>`).
     pub context: Option<String>,
     /// The `@type` value (e.g., "Article", "Product").
     pub r#type: Option<String>,

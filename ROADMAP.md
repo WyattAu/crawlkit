@@ -2,13 +2,13 @@
 
 Status: Living document. Updated after each audit cycle.
 
-Last Updated: 2026-07-25
+Last Updated: 2026-07-26
 
 ---
 
 ## Current State (v2.0.0)
 
-- 584 tests passing (412 engine + 83 API + 31 plugin SDK + 25 doc tests + 21 integration + 3 backlink + 3 playwright + 3 RUM + 2 SDK doc tests), zero clippy warnings, zero rustfmt diffs
+- 608 tests passing (428 engine + 90 API + 31 plugin SDK + 26 doc tests + 31 integration + 3 RUM), zero clippy warnings, zero rustfmt diffs
 - 31 analyzers (23 core + 4 AI + 1 WASM + 3 advanced canonical) with Rayon parallel execution
 - CLI + REST API + HTML/JSON/CSV/Markdown export
 - 12 modules wired into production (observability, resource_monitor, circuit_breaker, backpressure, determinism, feature_flags, js_render_decision, playwright, advanced_features, encryption, alert_manager, metrics)
@@ -19,14 +19,17 @@ Last Updated: 2026-07-25
 - Multi-language client libraries (Go, Node.js, Python)
 - React dashboard with Zustand state management, code splitting, WCAG 2.1 AA compliance
 - Astro Starlight documentation site: 13 pages
-- CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.94.0)
+- CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.85.0)
 - Pre-commit hook: 11 checks (fmt, clippy, build, unit tests, doc tests, integration tests, security audit, secret scan, unsafe code, MSRV, dead code)
 - Lean4 formal verification scaffolding for circuit breaker, PageRank, and audit chain
 
-### Audit Fixes Applied (2026-07-25)
+### Audit Fixes Applied (2026-07-26)
 
 | Category | Fix | Severity |
 |----------|-----|----------|
+| Security | Replace hardcoded admin password with cryptographically random generation | Critical |
+| Security | Redact API key secrets in list endpoints (show last 4 chars only) | Critical |
+| Security | Convert hash_password from panic-on-failure to Result return type | High |
 | Security | WASM plugin sandbox: fuel limits (10B instructions), memory bounds (64MB), pointer validation | Critical |
 | Security | Circuit breaker race condition: removed side-effecting state(), use CAS for atomic transitions | High |
 | Security | DNS cache deadlock: drop DashMap read guard before insert | High |
@@ -35,22 +38,32 @@ Last Updated: 2026-07-25
 | Security | Storage: replace unreachable!() panics with about:invalid fallback on corrupted URLs | High |
 | Security | All GitHub Actions SHA-pinned to prevent supply-chain attacks | High |
 | Security | CI workflows: least-privilege permissions blocks on all workflows | High |
-| Correctness | Backpressure: remove unused channel allocation from with_channel() | High |
-| Correctness | Resource monitor: enforce disk and open file limits in exceeded_limits() | High |
-| Correctness | Wire tenant parameter to page_data.tenant_id in crawl loop | Medium |
-| Correctness | Remove duplicate OG/Twitter checks from MetaTagAnalyzer (SOCIAL006/007 cover these) | Medium |
-| Accessibility | Dashboard: aria-describedby on Input errors, skip-to-content link, aria-current on NavLinks | High |
-| Accessibility | Dashboard: Escape key handler and focus return for mobile sidebar | High |
-| Accessibility | Dashboard: sr-only loading text on all spinner elements | Medium |
-| Accessibility | Dashboard: fix color contrast on severity badges (green-500->green-700, etc.) | Medium |
-| Performance | Dashboard: React.lazy() code splitting for route components | Medium |
-| Correctness | Dashboard: fix findings never loading in ResultsPage | High |
-| Deduplication | Remove 5 dead dashboard files (websocket_service, auth_service, models) | Medium |
-| Deduplication | Remove redundant enable_ai/enable_wasm fields from CrawlParams | Low |
-| Infrastructure | Pre-commit hook: upgraded from 7 to 11 checks | Medium |
-| Infrastructure | GUI snapshot testing script for dashboard DOM/screenshot capture | Low |
-| Documentation | All 5 documentation files rewritten to technical standard (no emojis) | Medium |
-| Formal Verification | Lean4 proof scaffolding for circuit breaker, PageRank, audit chain | Low |
+| CI/CD | Migrate deny.toml to cargo-deny 0.19+ format (removed deprecated keys) | High |
+| CI/CD | Replace cargo-deny/tarpaulin/fuzz install-from-source with SHA-pinned actions | High |
+| CI/CD | Add test-integration to build job dependencies | High |
+| CI/CD | Unify MSRV to 1.85.0 across Cargo.toml, CI, justfile, pre-commit | High |
+| Correctness | Deduplicate storage.rs: extract row_to_page_data/row_to_issue helpers | High |
+| Correctness | Deduplicate issues query: extract build_issues_query/execute_issues_query | High |
+| Correctness | Replace .unwrap_or(None) with match + tracing::warn for DB errors | High |
+| Correctness | Replace let _ = with proper error logging on finish_crawl | Medium |
+| Correctness | Remove unnecessary .clone() on page_data.title/description | Medium |
+| Correctness | Fix missing BingWebmasterAdapter in backlink registry | Medium |
+| Correctness | Add from_env() to BingWebmasterAdapter | Medium |
+| Correctness | Fix query_tracker GscSearchResult field name (key vs query) | Medium |
+| Correctness | Add missing ctr field to QueryWithPosition | Medium |
+| Correctness | Remove duplicate URL001 check between AdvancedCanonicalAnalyzer and UrlFormatValidator | Medium |
+| Correctness | Remove hardcoded domain from article_generator meta description | Medium |
+| Correctness | Remove unused async from query_tracker methods | Low |
+| Correctness | Fix pre-commit regex and MSRV version | Low |
+| Correctness | Fix gui_snapshot_test.sh r.route -> r.path bug | Low |
+| UI/UX | Wire elevation/transition/spacing design tokens into Tailwind config | Medium |
+| UI/UX | Add prefers-reduced-motion media query for vestibular accessibility | Medium |
+| UI/UX | Replace inline style in Card.tsx with Tailwind shadow-elevation1 classes | Medium |
+| UI/UX | Add focus-visible ring to ErrorBoundary button | Low |
+| UI/UX | Update use_crawls hook to accept full CrawlConfig shape | Low |
+| UI/UX | Remove unused @radix-ui deps (dropdown-menu, select, tabs, tailwind-merge) | Low |
+| Documentation | README rewritten: updated test count (608), MSRV (1.85.0), added quality gates section | Medium |
+| Documentation | VERSION.md updated with completed phases | Low |
 
 ---
 
@@ -58,32 +71,37 @@ Last Updated: 2026-07-25
 
 ### Critical Path
 
-| Item | Priority | Effort | Notes |
-|------|----------|--------|-------|
-| Split analyzers.rs (8,400+ lines) into sub-modules | P0 | 16h | analyzers/http.rs, seo.rs, content.rs, security.rs, a11y.rs |
-| Extract shared crawl loop into crawlkit-engine | P0 | 16h | CLI and API both implement crawl loops independently |
-| Unify Plugin SDK types with Engine types | P0 | 8h | Finding, Severity, Analyzer trait duplicated with incompatible signatures |
-| Implement compare subcommand completion | P1 | 16h | Currently returns stub in CLI |
-| Normalize default max_pages (CLI=100, API=50) | P1 | 2h | Behavioral inconsistency |
-| Complete client library parity (Go, Node.js) | P1 | 16h | Python is most complete |
+| Item | Priority | Effort | Notes | Status |
+|------|----------|--------|-------|--------|
+| Split analyzers.rs (8,400+ lines) into sub-modules | P0 | 16h | analyzers/http.rs, seo.rs, content.rs, security.rs, a11y.rs | DONE |
+| Extract shared crawl loop into crawlkit-engine | P0 | 16h | CLI and API both implement crawl loops independently | DONE |
+| Unify Plugin SDK types with Engine types | P0 | 8h | Finding, Severity, Analyzer trait duplicated with incompatible signatures | DONE |
+| Deduplicate storage.rs (get_pages/get_issues) | P0 | 8h | Extracted row_to_page_data and build_issues_query helpers | DONE |
+| Implement compare subcommand completion | P1 | 16h | Currently returns stub in CLI | TODO |
+| Normalize default max_pages (CLI=100, API=50) | P1 | 2h | Behavioral inconsistency | TODO |
+| Complete client library parity (Go, Node.js) | P1 | 16h | Python is most complete | TODO |
 
 ### Security
 
-| Item | Priority | Effort | Notes |
-|------|----------|--------|-------|
-| Add CSRF protection to dashboard API calls | P0 | 8h | JWT tokens exfiltrable via any XSS |
-| Add CORS configuration to API | P1 | 2h | Currently no CORS headers |
-| Add password complexity validation | P1 | 4h | No minimum requirements enforced |
-| Implement CSP headers for dashboard | P1 | 4h | No Content Security Policy |
+| Item | Priority | Effort | Notes | Status |
+|------|----------|--------|-------|--------|
+| Replace hardcoded admin password with random generation | P0 | 4h | Was 'admin123' | DONE |
+| Redact API keys in list endpoints | P0 | 4h | Shows full secret keys | DONE |
+| Add CSRF protection to dashboard API calls | P0 | 8h | JWT tokens exfiltrable via any XSS | TODO |
+| Add CORS configuration to API | P1 | 2h | Currently no CORS headers | TODO |
+| Add password complexity validation | P1 | 4h | No minimum requirements enforced | TODO |
+| Implement CSP headers for dashboard | P1 | 4h | No Content Security Policy | TODO |
 
 ### Quality
 
-| Item | Priority | Effort | Notes |
-|------|----------|--------|-------|
-| Type the API client (eliminate `as unknown as` casts) | P0 | 8h | All methods return Record<string, unknown> |
-| Add React error boundaries | P1 | 4h | Component crashes white-screen the entire app |
-| Define shadow/elevation tokens in dashboard globals.css | P1 | 4h | Spatial Materialism design system |
-| Add transition system for page/state changes | P2 | 8h | Amoebic UI fluid transitions |
+| Item | Priority | Effort | Notes | Status |
+|------|----------|--------|-------|--------|
+| Wire design tokens into Tailwind config | P0 | 4h | Spatial Materialism design system | DONE |
+| Add prefers-reduced-motion support | P1 | 2h | WCAG accessibility | DONE |
+| Remove unused dashboard dependencies | P1 | 2h | 4 unused @radix-ui packages | DONE |
+| Type the API client (eliminate `as unknown as` casts) | P0 | 8h | All methods return Record<string, unknown> | TODO |
+| Add React error boundaries | P1 | 4h | Component crashes white-screen the entire app | DONE |
+| Add transition system for page/state changes | P2 | 8h | Amoebic UI fluid transitions | TODO |
 
 ---
 
@@ -183,7 +201,7 @@ Last Updated: 2026-07-25
 
 | Module | Status | Notes |
 |--------|--------|-------|
-| `analyzers.rs` | 8,400+ lines, needs split | 23 analyzers + registry in single file |
+| `analyzers/` | SPLIT | 23 analyzers in sub-modules |
 | `plugin.rs` | HARDENED | Fuel limits, memory bounds, pointer validation |
 | `enterprise.rs` | Operational | RBAC/tenant/SLA management in API |
 | `encryption.rs` | WIRED | AES-256-GCM at rest |
@@ -199,6 +217,7 @@ Last Updated: 2026-07-25
 | `feature_flags.rs` | WIRED | Runtime toggles via TOML |
 | `advanced_canonical.rs` | WIRED | 3 analyzers for Ahrefs-level coverage |
 | `post_crawl.rs` | WIRED | Cross-page canonical/sitemap analysis |
+| `storage.rs` | DEDUPLICATED | Shared row mappers and query builders |
 
 ### Remaining Issues
 
@@ -207,6 +226,7 @@ Last Updated: 2026-07-25
 | CLI and API duplicate crawl loops | High | main.rs / api main.rs | Extract shared function into engine |
 | Plugin SDK types diverge from Engine types | Medium | plugin-sdk / engine | Finding, Severity, Analyzer trait duplicated |
 | API client uses `Record<string, unknown>` | Medium | dashboard/services/ | Forces `as unknown as` casts everywhere |
-| analyzer.rs 8,400+ lines | Medium | analyzers.rs | Needs decomposition into sub-modules |
 | rate_limit domain_buckets unbounded | Low | ratelimit.rs | Add LRU eviction for long crawls |
 | Error type erasure in CrawlError | Low | storage/export/compare | Add distinct CrawlError variants |
+| BingWebmasterAdapter trait stubs | Low | backlink_adapters.rs | fetch_backlinks/get_domain_rating return empty |
+| query_tracker trend always Stable | Low | query_tracker.rs | No actual trend calculation over time |

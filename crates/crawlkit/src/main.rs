@@ -458,22 +458,14 @@ struct CrawlParams {
 /// Execute a crawl with the given parameters.
 async fn run_crawl(params: &CrawlParams) -> Result<()> {
     use crawlkit_engine::advanced_features::{AlertManager, AlertOperator};
-    use crawlkit_engine::http::HttpClient;
-    use crawlkit_engine::js_render_decision::{JsRenderDecision, JsRenderDecisionEngine};
+    use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
     use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
-    use crawlkit_engine::queue::{Priority, UrlQueue};
-    use crawlkit_engine::ratelimit::RateLimiter;
     use crawlkit_engine::storage::Severity;
-    use crawlkit_engine::HtmlParser;
     use std::collections::HashMap;
     use std::sync::Arc;
-    use std::time::Duration;
-    use tokio::sync::Mutex;
 
     let max_pages = params.max_pages.unwrap_or(100);
-    let delay = params.delay.unwrap_or(100); // Reduced from 500ms to 100ms
-    let concurrency = params.concurrency.unwrap_or(8); // Increased from 4 to 8
-    let timeout_secs = params.timeout.unwrap_or(30);
+    let concurrency = params.concurrency.unwrap_or(8);
 
     let _root_span = tracing::info_span!(
         "crawl",
@@ -488,7 +480,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={:?}, js={}, allow_external={})",
         params.url,
         max_pages,
-        delay,
+        params.delay.unwrap_or(100),
         concurrency,
         params.depth,
         params.javascript,
@@ -527,47 +519,6 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         tracing::info!("Encryption at rest enabled");
     }
 
-    let crawl_id = storage.start_crawl(&params.url, None)?;
-    tracing::info!("Crawl ID: {}", crawl_id);
-
-    // Initialize observability, resource monitoring, circuit breaker, backpressure
-    let metrics = crawlkit_engine::Metrics::new();
-    let resource_monitor = crawlkit_engine::ResourceMonitor::with_default_limits();
-    let circuit_breaker_registry = crawlkit_engine::CircuitBreakerRegistry::with_default_config();
-    let backpressure = crawlkit_engine::BackpressureController::new(concurrency);
-
-    // Determinism controller (if seed provided)
-    let determinism = params.seed.map(crawlkit_engine::DeterminismController::new);
-    if let Some(ref det) = determinism {
-        tracing::info!("Deterministic mode enabled with seed: {}", det.seed());
-    }
-
-    // Initialize Playwright renderer if --javascript is enabled
-    let playwright_detector = PlaywrightDetector::detect();
-    let js_renderer = if params.javascript {
-        if playwright_detector.is_available() {
-            tracing::info!("Playwright detected: JS rendering enabled");
-            let renderer = PlaywrightRenderer::new(PlaywrightConfig {
-                enabled: true,
-                timeout: std::time::Duration::from_secs(30),
-                max_memory_per_context: 512 * 1024 * 1024, // 512 MB
-                max_cpu_seconds: 30,
-                max_concurrent: 5,
-                headless: true,
-                ..Default::default()
-            });
-            Some(renderer)
-        } else {
-            tracing::warn!("Playwright not found: JS rendering disabled. Install with: npm install -g playwright");
-            None
-        }
-    } else {
-        None
-    };
-
-    // Initialize JS render decision engine
-    let js_decision_engine = JsRenderDecisionEngine::new();
-
     // Initialize audit trail if enabled
     let audit_trail = crawlkit_engine::AuditTrail::new();
     let audit_enabled = params
@@ -593,537 +544,76 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         params.feature_flags.get(crawlkit_engine::feature_flags::FLAG_BACKLINK_ANALYSIS),
     );
 
-    // Initialize components
-    let pool_max_idle_per_host = concurrency * 8; // Increased from 4x to 8x
-    let pool_max_idle = concurrency * 16; // Increased from 8x to 16x
-    let http_config = crawlkit_engine::http::HttpClientConfig {
-        timeout: std::time::Duration::from_secs(timeout_secs),
-        max_redirects: 20,
-        retry_policy: crawlkit_engine::http::RetryPolicy::default(),
-        user_agent: std::sync::Arc::new(crawlkit_engine::http::UserAgentRotator::new(vec![params
-            .user_agent
-            .clone()
-            .unwrap_or_else(|| format!("crawlkit/{}", env!("CARGO_PKG_VERSION")))])),
-        max_body_size: 10 * 1024 * 1024,
-        pool_max_idle_per_host,
-        pool_max_idle,
-        tcp_keepalive: Some(std::time::Duration::from_secs(60)),
-    };
-    let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
-    let client = Arc::new(client);
-    let scope = crawlkit_engine::queue::ScopeConfig {
-        max_depth: params.depth,
-        ..Default::default()
-    };
-    let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
-    let rate_limiter = RateLimiter::new(concurrency as f64, 1.0 / (delay as f64 / 1000.0));
-    let crawl_config = crawlkit_engine::CrawlConfig {
-        respect_robots_txt: params.respect_robots.unwrap_or(true),
-        max_time: params.max_time_secs.map(Duration::from_secs),
-        max_depth: params.depth,
-        ..Default::default()
-    };
-
-    // Build analyzer registry conditionally based on feature flags
-    let mut analyzers: Vec<Box<dyn crawlkit_engine::analyzers::Analyzer>> = vec![
-        Box::new(crawlkit_engine::HttpStatusAnalyzer::new()),
-        Box::new(crawlkit_engine::RedirectChainAnalyzer::new()),
-        Box::new(crawlkit_engine::CanonicalUrlValidator::new()),
-        Box::new(crawlkit_engine::HreflangValidator::new()),
-        Box::new(crawlkit_engine::SitemapAnalyzer::empty()),
-        Box::new(crawlkit_engine::RobotsTxtAnalyzer::empty()),
-        Box::new(crawlkit_engine::MetaTagAnalyzer::new()),
-        Box::new(crawlkit_engine::HeadingHierarchyAnalyzer::new()),
-        Box::new(crawlkit_engine::LinkAnalyzer::new()),
-        Box::new(crawlkit_engine::ImageAnalyzer::new()),
-        Box::new(crawlkit_engine::StructuredDataValidator::new()),
-        Box::new(crawlkit_engine::ContentQualityAnalyzer::new()),
-        Box::new(crawlkit_engine::WordCountAnalyzer::new()),
-        Box::new(crawlkit_engine::SecurityHeaderAnalyzer::new()),
-        Box::new(crawlkit_engine::SslCertificateValidator::empty()),
-        Box::new(crawlkit_engine::MobileFriendlinessChecker::new()),
-        Box::new(crawlkit_engine::AccessibilityAnalyzer::new()),
-        Box::new(crawlkit_engine::SocialMediaAnalyzer::new()),
-        Box::new(crawlkit_engine::EntityAnalyzer::new()),
-        Box::new(crawlkit_engine::EnhancedReadabilityAnalyzer::new()),
-        Box::new(crawlkit_engine::KeywordAnalyzer::new()),
-        Box::new(crawlkit_engine::EcommerceSignalsAnalyzer::new()),
-        Box::new(crawlkit_engine::InternationalSeoAnalyzer::new()),
-    ];
-    if params.feature_flags.get(crawlkit_engine::FLAG_AI_ANALYZERS) {
-        analyzers.push(Box::new(
-            crawlkit_engine::AiCrawlerAccessibilityAnalyzer::new(),
-        ));
-        analyzers.push(Box::new(crawlkit_engine::AiContentStructureAnalyzer::new()));
-        analyzers.push(Box::new(
-            crawlkit_engine::AiCitationEligibilityAnalyzer::new(),
-        ));
-        analyzers.push(Box::new(crawlkit_engine::AiAnswerBoxAnalyzer::new()));
-    }
-    if params
-        .feature_flags
-        .get(crawlkit_engine::FLAG_WASM_ANALYZERS)
+    // Initialize Playwright renderer if --javascript is enabled
+    let playwright_detector = PlaywrightDetector::detect();
+    let js_renderer: Option<Arc<dyn crawlkit_engine::crawl_engine::JsRenderer>> = if params
+        .javascript
     {
-        analyzers.push(Box::new(crawlkit_engine::WasmPatternAnalyzer::new()));
-    }
-    let analyzer_registry = crawlkit_engine::analyzers::AnalyzerRegistry::with_analyzers(analyzers);
-    let robots_cache = Arc::new(crawlkit_engine::RobotsTxtCache::new(
-        client.clone(),
-        &crawl_config,
-    ));
-    let sitemap_cache = Arc::new(crawlkit_engine::SitemapCache::new(client.clone()));
-
-    // Seed the queue
-    let seed_url =
-        url::Url::parse(&params.url).with_context(|| format!("Invalid URL: {}", params.url))?;
-    {
-        let q = queue.lock().await;
-        q.push(seed_url.clone(), 0, Priority::HIGH);
-    }
-
-    // Discover and queue sitemap URLs for the seed domain
-    let mut known_sitemap_urls: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-    {
-        let sitemap_urls = robots_cache
-            .sitemaps(seed_url.scheme(), seed_url.host_str().unwrap_or(""))
-            .await;
-        if !sitemap_urls.is_empty() {
-            tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
-            let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
-            tracing::info!("Parsed {} URLs from sitemaps", entries.len());
-            let q = queue.lock().await;
-            for entry in &entries {
-                if known_sitemap_urls.insert(entry.url.clone()) {
-                    if let Ok(url) = url::Url::parse(&entry.url) {
-                        q.push(url, 0, Priority::HIGHEST);
-                    }
-                }
-            }
-        }
-    }
-
-    let mut pages_crawled = 0;
-    let mut pages_stored = 0;
-    let mut issues_found: usize = 0;
-    let mut skipped_external: usize = 0;
-    let mut skipped_robots: usize = 0;
-    let mut skipped_duplicate: usize = 0;
-    let mut visited = std::collections::HashSet::new();
-    let mut content_hashes_string: std::collections::HashSet<String> =
-        std::collections::HashSet::new();
-    let mut content_hashes_u64: std::collections::HashSet<u64> = std::collections::HashSet::new();
-    let use_deterministic_hash = determinism.is_some();
-    let crawl_start = std::time::Instant::now();
-    let seed_domain = seed_url.host_str().unwrap_or("").to_string();
-
-    // Crawl loop
-    while pages_crawled < max_pages {
-        // Check time budget
-        if let Some(max_time) = crawl_config.max_time {
-            if crawl_start.elapsed() >= max_time {
-                tracing::info!("Crawl time limit reached: {max_time:?}");
-                break;
-            }
-        }
-
-        // Check resource limits (every 100 pages)
-        if pages_crawled % 100 == 0 && pages_crawled > 0 {
-            if let Ok(rss_bytes) = get_process_rss_bytes() {
-                let usage = crawlkit_engine::ResourceUsage {
-                    memory_bytes: rss_bytes,
-                    pages_processed: pages_crawled,
-                    elapsed: crawl_start.elapsed(),
-                    ..Default::default()
-                };
-                resource_monitor.update(usage);
-                let exceeded = resource_monitor.exceeded_limits();
-                if !exceeded.is_empty() {
-                    tracing::warn!("Resource limits exceeded: {:?}", exceeded);
-                    metrics.record_resource_limit_hit();
-                    break;
-                }
-            }
-        }
-
-        let entry = {
-            let q = queue.lock().await;
-            q.pop()
-        };
-
-        let entry = match entry {
-            Some(e) => e,
-            None => break, // Queue empty
-        };
-
-        // Skip if already visited
-        if visited.contains(&entry.url.to_string()) {
-            continue;
-        }
-        visited.insert(entry.url.to_string());
-
-        let _page_span =
-            tracing::info_span!("crawl_page", url = %entry.url, depth = entry.depth).entered();
-
-        // Robots.txt check
-        let robots_raw;
-        if crawl_config.respect_robots_txt {
-            let domain = entry.url.host_str().unwrap_or("");
-            let scheme = entry.url.scheme();
-            if robots_cache
-                .is_disallowed(scheme, domain, entry.url.path())
-                .await
-            {
-                tracing::debug!("Blocked by robots.txt: {}", entry.url);
-                skipped_robots += 1;
-                continue;
-            }
-            // Apply crawl-delay from robots.txt
-            if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
-                rate_limiter.set_crawl_delay(domain, Duration::from_secs_f64(delay_secs));
-            }
-            robots_raw = robots_cache.raw_content(scheme, domain).await;
-
-            // Discover sitemaps for this domain (first visit only)
-            if !domain.is_empty() && !known_sitemap_urls.contains(&format!("{scheme}://{domain}")) {
-                known_sitemap_urls.insert(format!("{scheme}://{domain}"));
-                let sitemap_urls = robots_cache.sitemaps(scheme, domain).await;
-                if !sitemap_urls.is_empty() {
-                    let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
-                    let q = queue.lock().await;
-                    for sm_entry in &entries {
-                        if let Ok(url) = url::Url::parse(&sm_entry.url) {
-                            q.push(url, 0, Priority::HIGHEST);
-                        }
-                    }
-                }
-            }
+        if playwright_detector.is_available() {
+            tracing::info!("Playwright detected: JS rendering enabled");
+            let renderer = PlaywrightRenderer::new(PlaywrightConfig {
+                enabled: true,
+                timeout: std::time::Duration::from_secs(30),
+                max_memory_per_context: 512 * 1024 * 1024,
+                max_cpu_seconds: 30,
+                max_concurrent: 5,
+                headless: true,
+                ..Default::default()
+            });
+            Some(Arc::new(PlaywrightJsRenderer(renderer)))
         } else {
-            robots_raw = String::new();
-        }
-
-        // Rate limit
-        let _ = rate_limiter
-            .acquire(entry.url.host_str().unwrap_or(""))
-            .await;
-
-        // Update progress with queue size
-        let queue_len = {
-            let q = queue.lock().await;
-            q.len()
-        };
-        pb.set_message(format!("[q={queue_len}] Crawling: {}", entry.url));
-
-        // Circuit breaker check
-        let domain = entry.url.host_str().unwrap_or("");
-        let breaker = circuit_breaker_registry.get_or_create(domain);
-        if !breaker.is_allowed() {
-            tracing::debug!("Circuit breaker open for domain: {}", domain);
-            metrics.record_page_skipped_circuit_breaker();
-            continue;
-        }
-
-        // Acquire backpressure permit
-        let _permit = match backpressure.acquire().await {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Backpressure acquire failed: {}", e);
-                continue;
-            }
-        };
-
-        // Fetch
-        let start = std::time::Instant::now();
-        let result = match client.fetch(&entry.url).await {
-            Ok(r) => {
-                breaker.record_success();
-                r
-            }
-            Err(e) => {
-                tracing::warn!("Failed to fetch {}: {}", entry.url, e);
-                let was_allowed = breaker.is_allowed();
-                breaker.record_failure();
-                if was_allowed && !breaker.is_allowed() {
-                    metrics.record_circuit_breaker_trip();
-                }
-                metrics.record_page_failure();
-                continue;
-            }
-        };
-        let fetch_time = start.elapsed();
-
-        // Content-hash deduplication: skip pages with identical body content
-        {
-            let is_duplicate = if use_deterministic_hash {
-                let hash = crawlkit_engine::DeterminismController::content_hash(&result.body);
-                !content_hashes_u64.insert(hash)
-            } else {
-                use sha2::{Digest, Sha256};
-                let mut hasher = Sha256::new();
-                hasher.update(result.body.as_bytes());
-                let result = hasher.finalize();
-                let hash: String = result.iter().map(|b| format!("{b:02x}")).collect();
-                !content_hashes_string.insert(hash)
-            };
-            if is_duplicate {
-                tracing::debug!("Skipping duplicate content: {}", entry.url);
-                skipped_duplicate += 1;
-                continue;
-            }
-        }
-
-        pages_crawled += 1;
-        pb.set_position(pages_crawled as u64);
-        pb.set_message(format!(
-            "[q={queue_len}] Fetched: {} (issues: {issues_found})",
-            entry.url
-        ));
-
-        // Parse HTML
-        let mut body_text = result.body.clone();
-        let _parser = HtmlParser;
-        let mut parsed = match HtmlParser::parse(&body_text, &entry.url) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Failed to parse {}: {}", entry.url, e);
-                continue;
-            }
-        };
-
-        // JS rendering: consult decision engine and render if needed
-        if params.javascript {
-            let decision =
-                js_decision_engine.should_render_js(entry.url.as_ref(), Some(&body_text));
-            match decision {
-                JsRenderDecision::Render { reason } => {
-                    tracing::info!("JS render decision for {}: {}", entry.url, reason);
-                    if let Some(ref renderer) = js_renderer {
-                        if renderer.is_available() {
-                            let render_result = tokio::time::timeout(
-                                std::time::Duration::from_secs(30),
-                                renderer.render(entry.url.as_str()),
-                            )
-                            .await;
-
-                            match render_result {
-                                Ok(Ok(rendered)) => {
-                                    if rendered.memory_used > 0 {
-                                        tracing::debug!(
-                                            "Playwright used {}MB for {}",
-                                            rendered.memory_used / (1024 * 1024),
-                                            entry.url
-                                        );
-                                    }
-                                    body_text = rendered.html;
-                                    tracing::debug!(
-                                        "JS rendered {} in {:?}",
-                                        entry.url,
-                                        rendered.render_time
-                                    );
-                                    match HtmlParser::parse(&body_text, &entry.url) {
-                                        Ok(re_parsed) => parsed = re_parsed,
-                                        Err(e) => {
-                                            tracing::warn!(
-                                                "Failed to re-parse rendered {}: {}",
-                                                entry.url,
-                                                e
-                                            );
-                                        }
-                                    }
-                                }
-                                Ok(Err(e)) => {
-                                    tracing::warn!(
-                                        "Playwright render failed for {}: {}",
-                                        entry.url,
-                                        e
-                                    );
-                                }
-                                Err(_) => {
-                                    tracing::warn!("Playwright render timed out for {}", entry.url);
-                                }
-                            }
-                        } else {
-                            tracing::warn!(
-                                "Playwright not available for rendering, using static HTML: {}",
-                                entry.url
-                            );
-                        }
-                    }
-                }
-                JsRenderDecision::Skip { reason } => {
-                    tracing::debug!("JS skip for {}: {}", entry.url, reason);
-                }
-            }
-        }
-
-        // Run analyzers
-        let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
-        let robots_ref = if robots_raw.is_empty() {
+            tracing::warn!("Playwright not found: JS rendering disabled. Install with: npm install -g playwright");
             None
+        }
+    } else {
+        None
+    };
+
+    // Build CrawlEngineConfig
+    let engine_config = CrawlEngineConfig {
+        crawl_config: crawlkit_engine::CrawlConfig {
+            respect_robots_txt: params.respect_robots.unwrap_or(true),
+            max_time: params.max_time_secs.map(std::time::Duration::from_secs),
+            max_depth: params.depth,
+            request_delay: std::time::Duration::from_millis(params.delay.unwrap_or(100)),
+            concurrency,
+            ..Default::default()
+        },
+        feature_flags: params.feature_flags.clone(),
+        enable_js_rendering: params.javascript,
+        js_renderer,
+        allow_external: params.allow_external,
+        include_patterns: params.include.clone(),
+        exclude_patterns: params.exclude.clone(),
+        seed: params.seed,
+        tenant_id: params.tenant.clone(),
+        user_agent: params.user_agent.clone(),
+        encryption: if params.encrypt {
+            Some(encryption.clone())
         } else {
-            Some(robots_raw.as_str())
-        };
-        let ctx = crawlkit_engine::analyzers::AnalysisContext {
-            page: &parsed,
-            body: Some(&body_text),
-            status_code: Some(result.status_code),
-            headers: &headers_vec,
-            response_time: Some(fetch_time),
-            redirect_chain: &empty_chain,
-            robots_txt: robots_ref,
-        };
-        let analysis_start = std::time::Instant::now();
-        let findings = analyzer_registry.analyze(&ctx, &crawl_config);
-        let analysis_time = analysis_start.elapsed();
+            None
+        },
+        timeout_secs: Some(params.timeout.unwrap_or(30)),
+        delay_ms: Some(params.delay.unwrap_or(100)),
+        concurrency: Some(concurrency),
+    };
 
-        // Store page
-        let mut page_data = crawlkit_engine::storage::PageData {
-            id: uuid::Uuid::new_v4().to_string(),
-            url: entry.url.clone(),
-            final_url: result.final_url.clone(),
-            status_code: result.status_code,
-            title: parsed.meta.title.clone(),
-            description: parsed.meta.description.clone(),
-            canonical_url: parsed.meta.canonical.clone(),
-            word_count: Some(parsed.word_count),
-            load_time_ms: Some(fetch_time.as_millis() as u64),
-            body_size: Some(result.body.len()),
-            fetched_at: chrono::Utc::now(),
-            links: parsed
-                .links
-                .iter()
-                .filter_map(|l| url::Url::parse(&l.href).ok())
-                .collect(),
-            tenant_id: None,
-        };
+    let engine = CrawlEngine::new(engine_config, storage);
 
-        // Encrypt sensitive fields if encryption is enabled
-        if encryption.is_enabled() {
-            if let Some(ref title) = page_data.title.clone() {
-                if let Ok(encrypted) = encryption.encrypt(title.as_bytes()) {
-                    page_data.title = Some(format!(
-                        "enc:{}",
-                        encrypted
-                            .iter()
-                            .map(|b| format!("{b:02x}"))
-                            .collect::<String>()
-                    ));
-                }
-            }
-            if let Some(ref desc) = page_data.description.clone() {
-                if let Ok(encrypted) = encryption.encrypt(desc.as_bytes()) {
-                    page_data.description = Some(format!(
-                        "enc:{}",
-                        encrypted
-                            .iter()
-                            .map(|b| format!("{b:02x}"))
-                            .collect::<String>()
-                    ));
-                }
-            }
-        }
-
-        let storage_start = std::time::Instant::now();
-        if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
-            tracing::warn!("Failed to store page {}: {}", entry.url, e);
-        } else {
-            pages_stored += 1;
-            if audit_enabled {
-                audit_trail.record(
-                    crawlkit_engine::AuditEventType::PageFetched,
-                    "cli",
-                    &format!("Fetched: {} (status {})", entry.url, result.status_code),
-                );
-            }
-        }
-
-        // Store findings
-        issues_found += findings.len();
-        for finding in &findings {
-            let issue = crawlkit_engine::storage::Issue {
-                id: uuid::Uuid::new_v4().to_string(),
-                page_id: page_data.id.clone(),
-                category: finding.category.clone(),
-                severity: finding.severity.clone(),
-                code: finding.code.clone(),
-                title: finding.title.clone(),
-                description: finding.description.clone(),
-                element: None,
-                recommendation: finding.recommendation.clone(),
-                tenant_id: params.tenant.clone(),
-            };
-            if let Err(e) = storage.insert_issue(&issue) {
-                tracing::warn!("Failed to store issue: {}", e);
-            }
-        }
-        let storage_time = storage_start.elapsed();
-
-        // Record metrics and resource monitor
-        if params
-            .feature_flags
-            .get(crawlkit_engine::feature_flags::FLAG_OBSERVABILITY)
-        {
-            metrics.record_page_success(
-                result.body.len() as u64,
-                fetch_time.as_micros() as u64,
-                analysis_time.as_micros() as u64,
-                storage_time.as_micros() as u64,
-                findings.len() as u64,
-            );
-        }
-        resource_monitor.record_page();
-
-        // Extract and queue new links
-        for link in &parsed.links {
-            let link_url = match url::Url::parse(&link.href) {
-                Ok(u) => u,
-                Err(_) => continue, // Skip invalid URLs
-            };
-            if visited.contains(&link_url.to_string()) {
-                continue;
-            }
-            let is_internal = link_url.host_str() == Some(&seed_domain);
-
-            // Enforce domain filtering
-            if !is_internal && !params.allow_external {
-                skipped_external += 1;
-                tracing::debug!(
-                    "Skipping external link: {} (host={})",
-                    link_url,
-                    link_url.host_str().unwrap_or("<none>")
-                );
-                continue;
-            }
-
-            if !params.include.is_empty() && !params.include.iter().any(|p| link.href.contains(p)) {
-                continue;
-            }
-            if params.exclude.iter().any(|p| link.href.contains(p)) {
-                continue;
-            }
-
-            let priority = if is_internal {
-                Priority::NORMAL
-            } else {
-                Priority::LOW
-            };
-
-            // Enforce depth budget
-            if let Some(max_depth) = crawl_config.max_depth {
-                if entry.depth + 1 > max_depth {
-                    continue;
-                }
-            }
-
-            let q = queue.lock().await;
-            q.push(link_url, entry.depth + 1, priority);
-        }
-    }
+    // Run the crawl with progress callback
+    let pb_clone = pb.clone();
+    let result = engine
+        .run_with_callback(
+            &params.url,
+            Some(Arc::new(move |_url, _page_id, _findings| {
+                pb_clone.inc(1);
+            })),
+        )
+        .await?;
 
     pb.finish_with_message(format!(
         "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt, {} duplicate content",
-        pages_crawled, pages_stored, issues_found, skipped_external, skipped_robots, skipped_duplicate
+        result.pages_crawled, result.pages_stored, result.issues_found, result.skipped_external, result.skipped_robots, result.skipped_duplicate
     ));
 
     if audit_enabled {
@@ -1132,29 +622,34 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
             "cli",
             &format!(
                 "Crawl completed: {} pages crawled, {} stored, {} issues",
-                pages_crawled, pages_stored, issues_found
+                result.pages_crawled, result.pages_stored, result.issues_found
             ),
         );
     }
 
-    storage.finish_crawl(&crawl_id, pages_crawled, 0)?;
-
     // Log metrics snapshot
-    let elapsed = crawl_start.elapsed();
-    let snapshot = metrics.snapshot();
+    let avg_fetch_ms = if result.metrics.pages_crawled > 0 {
+        result.metrics.fetch_time_us as f64 / result.metrics.pages_crawled as f64 / 1000.0
+    } else {
+        0.0
+    };
+    let avg_analysis_ms = if result.metrics.pages_crawled > 0 {
+        result.metrics.analysis_time_us as f64 / result.metrics.pages_crawled as f64 / 1000.0
+    } else {
+        0.0
+    };
     tracing::info!(
         "Metrics: {:.2} pages/sec, avg fetch {:.2}ms, avg analysis {:.2}ms, {} bytes fetched, {} failures",
-        metrics.pages_per_second(elapsed),
-        metrics.avg_fetch_time_ms(),
-        metrics.avg_analysis_time_ms(),
-        snapshot.bytes_fetched,
-        snapshot.pages_failed,
+        result.metrics.pages_crawled as f64 / result.elapsed.as_secs_f64().max(0.001),
+        avg_fetch_ms,
+        avg_analysis_ms,
+        result.metrics.bytes_fetched,
+        result.metrics.pages_failed,
     );
 
     // Export metrics JSON if requested
     if let Some(metrics_path) = &params.metrics_json {
-        let snapshot = metrics.snapshot();
-        std::fs::write(metrics_path, serde_json::to_string_pretty(&snapshot)?)?;
+        std::fs::write(metrics_path, serde_json::to_string_pretty(&result.metrics)?)?;
         tracing::info!("Wrote metrics to {}", metrics_path.display());
     }
 
@@ -1171,13 +666,16 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         enabled: true,
     });
     let mut metrics_map = HashMap::new();
-    metrics_map.insert("pages_crawled".to_string(), pages_crawled as f64);
-    metrics_map.insert("pages_failed".to_string(), snapshot.pages_failed as f64);
+    metrics_map.insert("pages_crawled".to_string(), result.pages_crawled as f64);
+    metrics_map.insert(
+        "pages_failed".to_string(),
+        result.metrics.pages_failed as f64,
+    );
     metrics_map.insert(
         "error_rate".to_string(),
-        snapshot.pages_failed as f64 / (pages_crawled.max(1) as f64),
+        result.metrics.pages_failed as f64 / (result.pages_crawled.max(1) as f64),
     );
-    metrics_map.insert("avg_fetch_time_ms".to_string(), metrics.avg_fetch_time_ms());
+    metrics_map.insert("avg_fetch_time_ms".to_string(), avg_fetch_ms);
     let triggered_alerts = alert_manager.check_alerts(&metrics_map);
     if !triggered_alerts.is_empty() {
         for alert in &triggered_alerts {
@@ -1194,13 +692,13 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     // Write output
     if params.format == "json" || params.format == "all" {
         let json_path = output_dir.join("crawl-results.json");
-        let stats = storage.get_stats(&crawl_id)?;
+        let stats = engine.storage().get_stats(&result.crawl_id)?;
         let sample = serde_json::json!({
-            "crawl_id": crawl_id,
+            "crawl_id": result.crawl_id,
             "target_url": params.url,
             "max_pages": max_pages,
-            "pages_crawled": pages_crawled,
-            "pages_stored": pages_stored,
+            "pages_crawled": result.pages_crawled,
+            "pages_stored": result.pages_stored,
             "total_issues": stats.total_issues,
             "status": "completed",
             "seed": params.seed,
@@ -1209,13 +707,18 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         tracing::info!("Wrote results to {}", json_path.display());
 
         let metrics_path = output_dir.join("metrics.json");
-        std::fs::write(&metrics_path, serde_json::to_string_pretty(&snapshot)?)?;
+        std::fs::write(
+            &metrics_path,
+            serde_json::to_string_pretty(&result.metrics)?,
+        )?;
         tracing::info!("Wrote metrics to {}", metrics_path.display());
 
         // Run post-crawl analysis for cross-page checks
         tracing::info!("Running post-crawl analysis...");
-        let post_analysis =
-            crawlkit_engine::post_crawl::run_post_crawl_analysis(&storage, &crawl_id);
+        let post_analysis = crawlkit_engine::post_crawl::run_post_crawl_analysis(
+            engine.storage(),
+            &result.crawl_id,
+        );
         tracing::info!(
             "Post-crawl analysis: {} pages analyzed, {} canonical issues, {} sitemap issues",
             post_analysis.stats.pages_analyzed,
@@ -1254,14 +757,32 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
 
     tracing::info!(
         "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt. Database: {}",
-        pages_crawled,
-        pages_stored,
-        issues_found,
-        skipped_external,
-        skipped_robots,
+        result.pages_crawled,
+        result.pages_stored,
+        result.issues_found,
+        result.skipped_external,
+        result.skipped_robots,
         db_path.display()
     );
     Ok(())
+}
+
+/// Wrapper to adapt `PlaywrightRenderer` to the `JsRenderer` trait.
+struct PlaywrightJsRenderer(crawlkit_engine::PlaywrightRenderer);
+
+#[async_trait::async_trait]
+impl crawlkit_engine::crawl_engine::JsRenderer for PlaywrightJsRenderer {
+    fn is_available(&self) -> bool {
+        self.0.is_available()
+    }
+
+    async fn render(&self, url: &str) -> Result<String, String> {
+        self.0
+            .render(url)
+            .await
+            .map(|r| r.html)
+            .map_err(|e| e.to_string())
+    }
 }
 
 /// Compare two crawl results.
@@ -1983,21 +1504,4 @@ fn hex_decode(hex: &str) -> Result<Vec<u8>, anyhow::Error> {
         .step_by(2)
         .map(|i| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|e| anyhow::anyhow!(e)))
         .collect()
-}
-
-/// Get the current process RSS (Resident Set Size) in bytes.
-///
-/// Uses `/proc/self/statm` on Linux, returns `Err` on unsupported platforms.
-fn get_process_rss_bytes() -> Result<u64> {
-    #[cfg(target_os = "linux")]
-    {
-        let statm = std::fs::read_to_string("/proc/self/statm")?;
-        let fields: Vec<&str> = statm.split_whitespace().collect();
-        if fields.len() >= 2 {
-            let pages: u64 = fields[1].parse()?;
-            let page_size = 4096u64; // standard page size
-            return Ok(pages * page_size);
-        }
-    }
-    Err(anyhow::anyhow!("RSS not available on this platform"))
 }

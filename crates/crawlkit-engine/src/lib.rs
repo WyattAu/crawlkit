@@ -96,6 +96,8 @@ pub mod circuit_breaker;
 /// Detects added/removed pages, status changes, title changes, content
 /// changes, and Core Web Vitals regressions between crawls.
 pub mod compare;
+/// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
+pub mod crawl_engine;
 /// Deterministic replay controller for reproducible crawl runs.
 ///
 /// Seed-based PRNG ensures that given the same input and configuration,

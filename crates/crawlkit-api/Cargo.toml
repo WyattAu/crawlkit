@@ -24,6 +24,7 @@ crawlkit-engine = { path = "../crawlkit-engine" }
 tokio.workspace = true
 axum = { version = "0.8", features = ["macros"] }
 tower = { version = "0.5", features = ["full"] }
+http = "1"
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 serde.workspace = true
 serde_json.workspace = true

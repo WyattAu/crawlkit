@@ -14,13 +14,14 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 
 use axum::extract::{Json, Path, State};
-use axum::http::{HeaderMap, StatusCode};
+use axum::http::{HeaderMap, Method, StatusCode};
 use axum::middleware::{self, Next};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
 use chrono::{DateTime, Utc};
 use dashmap::DashMap;
+use http::HeaderValue;
 use parking_lot::RwLock;
 use prometheus_client::encoding::text::encode;
 use prometheus_client::metrics::counter::Counter;
@@ -29,7 +30,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::{AllowHeaders, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
@@ -558,6 +559,75 @@ async fn request_metrics_middleware(
     state.metrics.request_duration_seconds.observe(duration);
 
     response
+}
+
+// ---------------------------------------------------------------------------
+// Middleware: Content Security Policy headers
+// ---------------------------------------------------------------------------
+
+async fn csp_headers(request: axum::extract::Request, next: Next) -> Response {
+    let mut response = next.run(request).await;
+    let headers = response.headers_mut();
+    headers.insert(
+        "Content-Security-Policy",
+        HeaderValue::from_static(
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' \
+             'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'",
+        ),
+    );
+    headers.insert(
+        "X-Content-Type-Options",
+        HeaderValue::from_static("nosniff"),
+    );
+    headers.insert("X-Frame-Options", HeaderValue::from_static("DENY"));
+    headers.insert(
+        "Referrer-Policy",
+        HeaderValue::from_static("strict-origin-when-cross-origin"),
+    );
+    response
+}
+
+// ---------------------------------------------------------------------------
+// Middleware: CSRF origin validation
+// ---------------------------------------------------------------------------
+
+async fn csrf_origin_validation(
+    State(allowed_origins): State<Vec<String>>,
+    headers: HeaderMap,
+    request: axum::extract::Request,
+    next: Next,
+) -> Result<Response, StatusCode> {
+    let method = request.method().clone();
+
+    if method == Method::GET || method == Method::HEAD || method == Method::OPTIONS {
+        return Ok(next.run(request).await);
+    }
+
+    let has_api_key = headers
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+        .is_some();
+
+    if has_api_key {
+        return Ok(next.run(request).await);
+    }
+
+    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+
+    match origin {
+        Some(origin_str) => {
+            if allowed_origins.iter().any(|o| o == origin_str) {
+                Ok(next.run(request).await)
+            } else {
+                tracing::warn!("CSRF origin rejected: {origin_str}");
+                Err(StatusCode::FORBIDDEN)
+            }
+        }
+        None => {
+            tracing::warn!("CSRF check: missing Origin header on {method}");
+            Err(StatusCode::FORBIDDEN)
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1499,241 +1569,84 @@ fn fire_webhooks(
 // ---------------------------------------------------------------------------
 
 async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) {
-    use crawlkit_engine::analyzers::AnalyzerRegistry;
-    use crawlkit_engine::http::HttpClient;
-    use crawlkit_engine::queue::{Priority, UrlQueue};
-    use crawlkit_engine::HtmlParser;
+    use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 
-    let max_pages = config.max_pages;
-    let http_client = match HttpClient::from_crawl_config(&config) {
-        Ok(c) => c,
+    let engine_config = CrawlEngineConfig {
+        crawl_config: config.clone(),
+        ..Default::default()
+    };
+
+    let engine = CrawlEngine::new_shared(engine_config, state.storage.clone());
+
+    // Note: we use the engine's storage which is a separate instance,
+    // but the crawl_id is shared. The engine stores to its own DB.
+    // For the API, we need to use the state's storage.
+    // Since CrawlEngine takes ownership of storage, we use a callback approach.
+    let state_clone = state.clone();
+    let result = engine
+        .run_with_callback(
+            config.start_url.as_ref(),
+            Some(Arc::new(move |_url, _page_id, _findings| {
+                state_clone.metrics.pages_crawled_total.inc();
+            })),
+        )
+        .await;
+
+    match result {
+        Ok(output) => {
+            let _ =
+                engine
+                    .storage()
+                    .finish_crawl(&crawl_id, output.pages_crawled, output.issues_found);
+
+            if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
+                result.status = "completed".to_string();
+                result.pages_crawled = output.pages_crawled;
+                result.issues_found = output.issues_found;
+                result.completed_at = Some(Utc::now());
+            }
+
+            state.metrics.active_crawls.dec();
+            state
+                .metrics
+                .pages_crawled_total
+                .inc_by(output.pages_crawled as u64);
+            state
+                .metrics
+                .issues_total
+                .inc_by(output.issues_found as u64);
+            state
+                .metrics
+                .fetch_duration_seconds
+                .observe(output.elapsed.as_secs_f64());
+            state
+                .metrics
+                .analysis_duration_seconds
+                .observe(output.elapsed.as_secs_f64());
+            fire_webhooks(
+                &state,
+                "crawl.completed",
+                &crawl_id,
+                output.pages_crawled,
+                output.issues_found,
+            );
+            tracing::info!(
+                "Crawl {crawl_id} completed: {} pages, {} issues",
+                output.pages_crawled,
+                output.issues_found
+            );
+        }
         Err(e) => {
-            tracing::error!("Failed to create HTTP client: {e}");
+            tracing::error!("Crawl {crawl_id} failed: {e}");
             state.metrics.errors_total.inc();
             if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
                 result.status = "failed".to_string();
                 result.completed_at = Some(Utc::now());
             }
+            state.metrics.active_crawls.dec();
             fire_webhooks(&state, "crawl.failed", &crawl_id, 0, 0);
-            return;
-        }
-    };
-
-    let http_client = Arc::new(http_client);
-    let robots_cache = Arc::new(crawlkit_engine::RobotsTxtCache::new(
-        http_client.clone(),
-        &config,
-    ));
-
-    let queue = Arc::new(tokio::sync::Mutex::new(UrlQueue::from_crawl_config(
-        &config,
-    )));
-    let analyzer_registry = AnalyzerRegistry::new(&config);
-
-    // Seed the queue
-    {
-        let q = queue.lock().await;
-        q.push(config.start_url.clone(), 0, Priority::HIGH);
-    }
-
-    let mut pages_crawled = 0usize;
-    let mut total_issues = 0usize;
-    let mut visited = std::collections::HashSet::new();
-    let mut content_hashes = std::collections::HashSet::new();
-    let crawl_start = std::time::Instant::now();
-
-    while pages_crawled < max_pages {
-        // Check time budget
-        if let Some(max_time) = config.max_time {
-            if crawl_start.elapsed() >= max_time {
-                tracing::info!("Crawl time limit reached: {max_time:?}");
-                break;
-            }
-        }
-
-        let entry = {
-            let q = queue.lock().await;
-            q.pop()
-        };
-
-        let entry = match entry {
-            Some(e) => e,
-            None => break,
-        };
-
-        if visited.contains(&entry.url.to_string()) {
-            continue;
-        }
-        visited.insert(entry.url.to_string());
-
-        // Robots.txt check
-        let robots_raw;
-        if config.respect_robots_txt {
-            let domain = entry.url.host_str().unwrap_or("");
-            let scheme = entry.url.scheme();
-            if robots_cache
-                .is_disallowed(scheme, domain, entry.url.path())
-                .await
-            {
-                tracing::debug!("Blocked by robots.txt: {}", entry.url);
-                continue;
-            }
-            robots_raw = robots_cache.raw_content(scheme, domain).await;
-        } else {
-            robots_raw = String::new();
-        }
-
-        // Respect delay between requests
-        tokio::time::sleep(config.request_delay).await;
-
-        let start = std::time::Instant::now();
-        let result = match http_client.fetch(&entry.url).await {
-            Ok(r) => r,
-            Err(e) => {
-                tracing::warn!("Failed to fetch {}: {e}", entry.url);
-                state.metrics.errors_total.inc();
-                continue;
-            }
-        };
-        let fetch_time = start.elapsed();
-        state
-            .metrics
-            .fetch_duration_seconds
-            .observe(fetch_time.as_secs_f64());
-
-        // Content-hash deduplication
-        {
-            use sha2::{Digest, Sha256};
-            let mut hasher = Sha256::new();
-            hasher.update(result.body.as_bytes());
-            let result = hasher.finalize();
-            let hash: String = result.iter().map(|b| format!("{b:02x}")).collect();
-            if !content_hashes.insert(hash) {
-                tracing::debug!("Skipping duplicate content: {}", entry.url);
-                continue;
-            }
-        }
-
-        pages_crawled += 1;
-        state.metrics.pages_crawled_total.inc();
-
-        let parsed = match HtmlParser::parse(&result.body, &entry.url) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Failed to parse {}: {e}", entry.url);
-                state.metrics.errors_total.inc();
-                continue;
-            }
-        };
-
-        let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
-        let robots_ref = if robots_raw.is_empty() {
-            None
-        } else {
-            Some(robots_raw.as_str())
-        };
-        let ctx = crawlkit_engine::analyzers::AnalysisContext {
-            page: &parsed,
-            body: Some(&result.body),
-            status_code: Some(result.status_code),
-            headers: &headers_vec,
-            response_time: Some(fetch_time),
-            redirect_chain: &empty_chain,
-            robots_txt: robots_ref,
-        };
-        let analysis_start = std::time::Instant::now();
-        let findings = analyzer_registry.analyze(&ctx, &config);
-        let analysis_time = analysis_start.elapsed();
-        state
-            .metrics
-            .analysis_duration_seconds
-            .observe(analysis_time.as_secs_f64());
-        total_issues += findings.len();
-        state.metrics.issues_total.inc_by(findings.len() as u64);
-
-        let page_data = crawlkit_engine::storage::PageData {
-            id: Uuid::new_v4().to_string(),
-            url: entry.url.clone(),
-            final_url: result.final_url.clone(),
-            status_code: result.status_code,
-            title: parsed.meta.title.clone(),
-            description: parsed.meta.description.clone(),
-            canonical_url: parsed.meta.canonical.clone(),
-            word_count: Some(parsed.word_count),
-            load_time_ms: Some({
-                #[allow(clippy::cast_possible_truncation)]
-                let v = fetch_time.as_millis() as u64;
-                v
-            }),
-            body_size: Some(result.body.len()),
-            fetched_at: Utc::now(),
-            links: parsed
-                .links
-                .iter()
-                .filter_map(|l| url::Url::parse(&l.href).ok())
-                .collect(),
-            tenant_id: None,
-        };
-
-        let _ = state.storage.insert_page(&crawl_id, &page_data);
-
-        for finding in &findings {
-            let issue = crawlkit_engine::storage::Issue {
-                id: Uuid::new_v4().to_string(),
-                page_id: page_data.id.clone(),
-                category: finding.category.clone(),
-                severity: finding.severity.clone(),
-                code: finding.code.clone(),
-                title: finding.title.clone(),
-                description: finding.description.clone(),
-                element: None,
-                recommendation: finding.recommendation.clone(),
-                tenant_id: None,
-            };
-            let _ = state.storage.insert_issue(&issue);
-        }
-
-        // Queue new links
-        for link in &parsed.links {
-            let link_url = match url::Url::parse(&link.href) {
-                Ok(u) => u,
-                Err(_) => continue,
-            };
-            if visited.contains(&link_url.to_string()) {
-                continue;
-            }
-            let is_internal = link_url.host_str() == entry.url.host_str();
-            let priority = if is_internal {
-                Priority::NORMAL
-            } else {
-                Priority::LOW
-            };
-            let q = queue.lock().await;
-            q.push(link_url, entry.depth + 1, priority);
         }
     }
-
-    let _ = state
-        .storage
-        .finish_crawl(&crawl_id, pages_crawled, total_issues);
-
-    if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
-        result.status = "completed".to_string();
-        result.pages_crawled = pages_crawled;
-        result.issues_found = total_issues;
-        result.completed_at = Some(Utc::now());
-    }
-
-    state.metrics.active_crawls.dec();
-    fire_webhooks(
-        &state,
-        "crawl.completed",
-        &crawl_id,
-        pages_crawled,
-        total_issues,
-    );
-    tracing::info!("Crawl {crawl_id} completed: {pages_crawled} pages, {total_issues} issues");
 }
 
 // ---------------------------------------------------------------------------
@@ -1912,10 +1825,36 @@ async fn main() -> anyhow::Result<()> {
         marketplace,
     };
 
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_methods(Any)
-        .allow_headers(Any);
+    let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
+        .unwrap_or_else(|_| "http://localhost:5173".to_string())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let cors = if allowed_origins.iter().all(|o| o == "*") {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(Any)
+            .allow_headers(Any)
+    } else {
+        let origins: Vec<HeaderValue> = allowed_origins
+            .iter()
+            .filter_map(|o| HeaderValue::from_str(o).ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(origins)
+            .allow_methods([
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::OPTIONS,
+            ])
+            .allow_headers(AllowHeaders::any())
+    };
+
+    let csrf_origins = allowed_origins.clone();
 
     let protected = Router::new()
         .route("/api/v1/auth/refresh", post(refresh_token))
@@ -1976,6 +1915,11 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/v1/auth/oidc/callback", get(oidc_callback))
         .merge(protected)
         .layer(cors)
+        .layer(middleware::from_fn(csp_headers))
+        .layer(middleware::from_fn_with_state(
+            csrf_origins,
+            csrf_origin_validation,
+        ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             request_metrics_middleware,

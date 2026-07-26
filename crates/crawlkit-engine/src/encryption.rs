@@ -63,6 +63,7 @@ impl Default for EncryptionConfig {
 /// let data = b"hello";
 /// assert_eq!(manager.encrypt(data).unwrap(), data);
 /// ```
+#[derive(Debug, Clone)]
 pub struct EncryptionManager {
     config: EncryptionConfig,
     initialized: Arc<RwLock<bool>>,

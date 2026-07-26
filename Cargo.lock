@@ -670,6 +670,7 @@ name = "crawlkit"
 version = "2.0.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "chrono",
  "clap",
  "crawlkit-engine",
@@ -699,6 +700,7 @@ dependencies = [
  "chrono",
  "crawlkit-engine",
  "dashmap",
+ "http",
  "jsonwebtoken",
  "opentelemetry",
  "opentelemetry-stdout",

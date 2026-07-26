@@ -1,4 +1,3 @@
-import { format } from 'date-fns';
 import { AlertTriangle, Info, AlertCircle, Shield, ShieldAlert } from 'lucide-react';
 import type { Finding } from '../../models/types';
 
@@ -11,13 +10,13 @@ const severityConfig: Record<string, { icon: typeof Info; color: string; bg: str
 };
 
 export default function FindingCard({
-  type,
+  category,
   severity,
   title,
   description,
-  url,
-  evidence,
-  created_at,
+  code,
+  element,
+  recommendation,
 }: Finding) {
   const config = severityConfig[severity] || severityConfig.info;
   const SeverityIcon = config.icon;
@@ -37,16 +36,18 @@ export default function FindingCard({
             </span>
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{description}</p>
-          {evidence && (
+          {element && (
             <pre className="mt-2 p-2 bg-gray-50 dark:bg-gray-900 rounded text-xs text-gray-700 dark:text-gray-300 overflow-x-auto">
-              {evidence}
+              {element}
             </pre>
           )}
           <div className="mt-2 flex items-center gap-4 text-xs text-gray-400 dark:text-gray-500">
-            <span>{type}</span>
-            <span>{url}</span>
-            <span>{format(new Date(created_at), 'MMM d, yyyy HH:mm')}</span>
+            <span>{category}</span>
+            <span>{code}</span>
           </div>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {recommendation}
+          </p>
         </div>
       </div>
     </div>

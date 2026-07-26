@@ -100,7 +100,7 @@ if grep -rn 'unsafe\s*{' --include="*.rs" \
     "$REPO_ROOT/crates/crawlkit/src/" \
     "$REPO_ROOT/crates/crawlkit-api/src/" \
     2>/dev/null | \
-    grep -v '// SAFETY\|#\[cfg(test\]\|///\s*# Safety\|mod tests' | \
+    grep -v '// SAFETY\|#\[cfg(test)\]\|///\s*# Safety\|mod tests' | \
     grep -q .; then
     printf "${RED}FAIL (unsafe code without SAFETY comment)${NC}\n"
     failed=$((failed + 1))
@@ -110,7 +110,7 @@ else
 fi
 
 # 10. MSRV check -- warn only
-warn "MSRV check (cargo +1.94.0 check --workspace)" cargo +1.94.0 check --workspace
+warn "MSRV check (cargo +1.85.0 check --workspace)" cargo +1.85.0 check --workspace
 
 # 11. Unused dependencies -- warn only (dead imports)
 printf "${CYAN}[%d/${total}]${NC} Unused dependencies (dead imports) ... " "$((passed + failed + warnings + 1))"

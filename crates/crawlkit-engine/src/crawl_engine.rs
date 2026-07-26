@@ -440,15 +440,24 @@ impl CrawlEngine {
             let start = std::time::Instant::now();
             let result = if cfg.incremental {
                 // Check for existing ETag/Last-Modified from a previous crawl
-                let previous = self
+                let previous = match self
                     .storage
                     .get_page_conditional(&crawl_id, entry.url.as_str())
-                    .unwrap_or(None);
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!(error = %e, url = %entry.url, "Failed to get page conditional");
+                        None
+                    }
+                };
 
-                let cross_previous = self
-                    .storage
-                    .get_latest_conditional(entry.url.as_str())
-                    .unwrap_or(None);
+                let cross_previous = match self.storage.get_latest_conditional(entry.url.as_str()) {
+                    Ok(v) => v,
+                    Err(e) => {
+                        tracing::warn!(error = %e, url = %entry.url, "Failed to get latest conditional");
+                        None
+                    }
+                };
 
                 // Prefer same-crawl result (has page_id for 304 updates),
                 // fall back to cross-crawl for conditional headers only.
@@ -650,7 +659,7 @@ impl CrawlEngine {
             // Encrypt sensitive fields if encryption is enabled
             if let Some(ref encryption) = cfg.encryption {
                 if encryption.is_enabled() {
-                    if let Some(ref title) = page_data.title.clone() {
+                    if let Some(title) = page_data.title.take() {
                         if let Ok(encrypted) = encryption.encrypt(title.as_bytes()) {
                             page_data.title = Some(format!(
                                 "enc:{}",
@@ -659,9 +668,11 @@ impl CrawlEngine {
                                     .map(|b| format!("{b:02x}"))
                                     .collect::<String>()
                             ));
+                        } else {
+                            page_data.title = Some(title);
                         }
                     }
-                    if let Some(ref desc) = page_data.description.clone() {
+                    if let Some(desc) = page_data.description.take() {
                         if let Ok(encrypted) = encryption.encrypt(desc.as_bytes()) {
                             page_data.description = Some(format!(
                                 "enc:{}",
@@ -670,6 +681,8 @@ impl CrawlEngine {
                                     .map(|b| format!("{b:02x}"))
                                     .collect::<String>()
                             ));
+                        } else {
+                            page_data.description = Some(desc);
                         }
                     }
                 }
@@ -760,9 +773,12 @@ impl CrawlEngine {
         }
 
         // Finish crawl in storage
-        let _ = self
+        if let Err(e) = self
             .storage
-            .finish_crawl(&crawl_id, pages_crawled, issues_found);
+            .finish_crawl(&crawl_id, pages_crawled, issues_found)
+        {
+            tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
+        }
 
         let elapsed = crawl_start.elapsed();
         let snapshot = metrics.snapshot();

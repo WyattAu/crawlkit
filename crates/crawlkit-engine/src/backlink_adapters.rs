@@ -662,6 +662,7 @@ impl BacklinkAdapterRegistry {
                 Box::new(AhrefsAdapter::from_env()),
                 Box::new(MajesticAdapter::from_env()),
                 Box::new(GscAdapter::from_env()),
+                Box::new(BingWebmasterAdapter::from_env()),
             ],
         }
     }
@@ -687,6 +688,175 @@ impl BacklinkAdapterRegistry {
 }
 
 // ---------------------------------------------------------------------------
+// Bing Webmaster Adapter
+// ---------------------------------------------------------------------------
+
+/// Bing Webmaster adapter for search analytics.
+pub struct BingWebmasterAdapter {
+    api_key: Option<String>,
+    site_url: String,
+}
+
+impl BingWebmasterAdapter {
+    /// Create new Bing Webmaster adapter.
+    #[must_use]
+    pub fn new(api_key: Option<String>, site_url: String) -> Self {
+        Self { api_key, site_url }
+    }
+
+    /// Create from environment variables.
+    #[must_use]
+    pub fn from_env() -> Self {
+        let api_key = std::env::var("BING_WEBMASTER_API_KEY").ok();
+        let site_url = std::env::var("BING_WEBMASTER_SITE_URL")
+            .unwrap_or_else(|_| "https://example.com".to_string());
+        Self::new(api_key, site_url)
+    }
+}
+
+#[async_trait::async_trait]
+impl BacklinkAdapter for BingWebmasterAdapter {
+    fn name(&self) -> &str {
+        "bing_webmaster"
+    }
+
+    async fn fetch_backlinks(
+        &self,
+        _domain: &str,
+        _limit: usize,
+    ) -> Result<Vec<ExternalBacklink>, AdapterError> {
+        // Bing Webmaster doesn't provide backlink data directly
+        // Use search analytics for query/page data instead
+        Ok(vec![])
+    }
+
+    async fn get_domain_rating(&self, _domain: &str) -> Result<f64, AdapterError> {
+        // Bing doesn't expose domain authority like Ahrefs
+        Ok(0.0)
+    }
+
+    fn is_available(&self) -> bool {
+        self.api_key.is_some() && !self.site_url.is_empty()
+    }
+}
+
+impl BingWebmasterAdapter {
+    /// Fetch search analytics data from Bing Webmaster.
+    pub async fn search_analytics(
+        &self,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<Vec<BingQueryData>, AdapterError> {
+        let api_key = self.api_key.as_ref().ok_or(AdapterError::ApiKeyMissing)?;
+
+        let client = reqwest::Client::new();
+        let url = format!(
+            "https://api.bing.com/webmaster/v2.0/site/{}/queryanalytics?startDate={}&endDate={}",
+            self.site_url, start_date, end_date
+        );
+
+        let resp = client
+            .get(&url)
+            .header("Ocp-Apim-Subscription-Key", api_key)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "Bing API error: {}",
+                resp.status()
+            )));
+        }
+
+        let data: BingSearchResponse = resp
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        Ok(data.d.query_results)
+    }
+
+    /// Fetch page traffic data from Bing Webmaster.
+    pub async fn page_traffic(
+        &self,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<Vec<BingPageData>, AdapterError> {
+        let api_key = self.api_key.as_ref().ok_or(AdapterError::ApiKeyMissing)?;
+
+        let client = reqwest::Client::new();
+        let url = format!(
+            "https://api.bing.com/webmaster/v2.0/site/{}/pagestats?startDate={}&endDate={}",
+            self.site_url, start_date, end_date
+        );
+
+        let resp = client
+            .get(&url)
+            .header("Ocp-Apim-Subscription-Key", api_key)
+            .send()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        if !resp.status().is_success() {
+            return Err(AdapterError::RequestFailed(format!(
+                "Bing API error: {}",
+                resp.status()
+            )));
+        }
+
+        let data: BingPageResponse = resp
+            .json()
+            .await
+            .map_err(|e| AdapterError::RequestFailed(e.to_string()))?;
+
+        Ok(data.d.page_results)
+    }
+}
+
+/// Bing search analytics query data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BingQueryData {
+    pub query: String,
+    pub clicks: u64,
+    pub impressions: u64,
+    pub avg_position: f64,
+    pub ctr: f64,
+}
+
+/// Bing page traffic data.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BingPageData {
+    pub url: String,
+    pub impressions: u64,
+    pub clicks: u64,
+    pub avg_ctr: f64,
+    pub avg_position: f64,
+}
+
+/// Bing API response wrapper.
+#[derive(Debug, Deserialize)]
+struct BingSearchResponse {
+    d: BingSearchData,
+}
+
+#[derive(Debug, Deserialize)]
+struct BingSearchData {
+    query_results: Vec<BingQueryData>,
+}
+
+/// Bing page stats response wrapper.
+#[derive(Debug, Deserialize)]
+struct BingPageResponse {
+    d: BingPageDataWrapper,
+}
+
+#[derive(Debug, Deserialize)]
+struct BingPageDataWrapper {
+    page_results: Vec<BingPageData>,
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -707,11 +877,27 @@ mod tests {
     }
 
     #[test]
+    fn test_bing_adapter_not_available() {
+        let adapter = BingWebmasterAdapter::new(None, "https://example.com".to_string());
+        assert!(!adapter.is_available());
+    }
+
+    #[test]
+    fn test_bing_adapter_available() {
+        let adapter = BingWebmasterAdapter::new(
+            Some("test_key".to_string()),
+            "https://example.com".to_string(),
+        );
+        assert!(adapter.is_available());
+    }
+
+    #[test]
     fn test_backlink_registry() {
         let registry = BacklinkAdapterRegistry::with_defaults();
         assert!(registry.get("ahrefs").is_some());
         assert!(registry.get("majestic").is_some());
         assert!(registry.get("google_search_console").is_some());
+        assert!(registry.get("bing_webmaster").is_some());
         assert!(registry.get("nonexistent").is_none());
     }
 }

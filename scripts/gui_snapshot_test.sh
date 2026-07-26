@@ -157,7 +157,7 @@ console.log('');
 let ok = 0, warn = 0, fail = 0;
 for (const r of results) {
   const icon = r.status === 'OK' ? '[OK]' : r.status === 'WARN' ? '[WARN]' : '[FAIL]';
-  console.log(\`\${icon} \${r.route} (\${r.name})\`);
+  console.log(\`\${icon} \${r.path} (\${r.name})\`);
   console.log(\`     Screenshot: \${SNAPSHOT_DIR}/\${r.name}.png\`);
   console.log(\`     HTML:       \${SNAPSHOT_DIR}/\${r.name}.html\`);
   if (r.errors.length) r.errors.forEach(e => console.log(\`     Error: \${e}\`));

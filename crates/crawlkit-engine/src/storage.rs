@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use lru::LruCache;
 use parking_lot::Mutex;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Row};
 use std::num::NonZeroUsize;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -702,6 +702,42 @@ impl Storage {
         Ok(())
     }
 
+    /// Parse a URL string with a fallback to "about:invalid".
+    fn parse_url_safe(s: &str) -> Url {
+        Url::parse(s).unwrap_or_else(|_| {
+            Url::parse("about:invalid")
+                .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
+        })
+    }
+
+    /// Extract a `PageData` from a database row.
+    fn row_to_page_data(row: &Row<'_>) -> Result<PageData, rusqlite::Error> {
+        let url_str: String = row.get(1)?;
+        let final_url_str: String = row.get(2)?;
+        let canonical_str: Option<String> = row.get(6)?;
+        let fetched_at_str: String = row.get(10)?;
+
+        Ok(PageData {
+            id: row.get(0)?,
+            url: Self::parse_url_safe(&url_str),
+            final_url: Self::parse_url_safe(&final_url_str),
+            status_code: row.get(3)?,
+            title: row.get(4)?,
+            description: row.get(5)?,
+            canonical_url: canonical_str.and_then(|s| Url::parse(&s).ok()),
+            word_count: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
+            load_time_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
+            body_size: row.get::<_, Option<i64>>(9)?.map(|v| v as usize),
+            fetched_at: DateTime::parse_from_rfc3339(&fetched_at_str)
+                .map(|dt| dt.with_timezone(&Utc))
+                .unwrap_or_else(|_| Utc::now()),
+            links: Vec::new(),
+            tenant_id: row.get(11)?,
+            etag: row.get(12)?,
+            last_modified: row.get(13)?,
+        })
+    }
+
     /// Retrieve pages with a limit.
     ///
     /// Results are not cached because the cache type (`LruCache<String, PageData>`)
@@ -715,58 +751,58 @@ impl Storage {
 
         let pages = stmt
             .query_map(params![crawl_id, limit as i64], |row| {
-                let url_str: String = row.get(1)?;
-                let final_url_str: String = row.get(2)?;
-                let canonical_str: Option<String> = row.get(6)?;
-                let fetched_at_str: String = row.get(10)?;
-
-                Ok(PageData {
-                    id: row.get(0)?,
-                    url: Url::parse(&url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
-                    }),
-                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
-                    }),
-                    status_code: row.get(3)?,
-                    title: row.get(4)?,
-                    description: row.get(5)?,
-                    canonical_url: canonical_str.and_then(|s| Url::parse(&s).ok()),
-                    word_count: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
-                    load_time_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
-                    body_size: row.get::<_, Option<i64>>(9)?.map(|v| v as usize),
-                    fetched_at: DateTime::parse_from_rfc3339(&fetched_at_str)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    links: Vec::new(),
-                    tenant_id: row.get(11)?,
-                    etag: row.get(12)?,
-                    last_modified: row.get(13)?,
-                })
+                Self::row_to_page_data(row)
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(pages)
     }
 
-    /// Retrieve issues/finding with optional filters.
-    pub fn get_issues(
-        &self,
-        crawl_id: &str,
-        filters: &IssueFilter,
-    ) -> Result<Vec<Issue>, StorageError> {
-        let conn = self.conn.lock();
+    /// Extract an `Issue` from a database row.
+    fn row_to_issue(row: &Row<'_>) -> Result<Issue, rusqlite::Error> {
+        let category_str: String = row.get(2)?;
+        let severity_str: String = row.get(3)?;
 
-        let mut query = String::from(
-            "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
-             FROM findings f
-             JOIN pages p ON f.page_id = p.id
-             WHERE p.crawl_id = ?1",
-        );
+        Ok(Issue {
+            id: row.get(0)?,
+            page_id: row.get(1)?,
+            category: IssueCategory::parse_category(&category_str),
+            severity: Severity::parse_severity(&severity_str).unwrap_or(Severity::Info),
+            code: row.get(4)?,
+            title: row.get(5)?,
+            description: row.get(6)?,
+            element: row.get(7)?,
+            recommendation: row.get(8)?,
+            tenant_id: row.get(9)?,
+        })
+    }
+
+    /// Build an issues query with optional tenant filter.
+    fn build_issues_query(
+        crawl_id: &str,
+        tenant_id: Option<&str>,
+        filters: &IssueFilter,
+    ) -> (String, Vec<Box<dyn rusqlite::types::ToSql>>) {
+        let mut query = if tenant_id.is_some() {
+            String::from(
+                "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
+                 FROM findings f
+                 JOIN pages p ON f.page_id = p.id
+                 WHERE p.crawl_id = ?1 AND (f.tenant_id = ?2 OR f.tenant_id IS NULL)",
+            )
+        } else {
+            String::from(
+                "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
+                 FROM findings f
+                 JOIN pages p ON f.page_id = p.id
+                 WHERE p.crawl_id = ?1",
+            )
+        };
         let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
         param_values.push(Box::new(crawl_id.to_string()));
+        if let Some(tid) = tenant_id {
+            param_values.push(Box::new(tid.to_string()));
+        }
 
         if let Some(ref severity) = filters.severity {
             query.push_str(&format!(" AND f.severity = ?{}", param_values.len() + 1));
@@ -786,32 +822,35 @@ impl Storage {
         }
 
         query.push_str(" ORDER BY f.id ASC");
+        (query, param_values)
+    }
 
-        let mut stmt = conn.prepare(&query)?;
+    /// Execute an issues query and return results.
+    fn execute_issues_query(
+        conn: &Connection,
+        query: &str,
+        param_values: &[Box<dyn rusqlite::types::ToSql>],
+    ) -> Result<Vec<Issue>, StorageError> {
+        let mut stmt = conn.prepare(query)?;
         let params_refs: Vec<&dyn rusqlite::types::ToSql> =
             param_values.iter().map(|p| p.as_ref()).collect();
 
         let issues = stmt
-            .query_map(params_refs.as_slice(), |row| {
-                let category_str: String = row.get(2)?;
-                let severity_str: String = row.get(3)?;
-
-                Ok(Issue {
-                    id: row.get(0)?,
-                    page_id: row.get(1)?,
-                    category: IssueCategory::parse_category(&category_str),
-                    severity: Severity::parse_severity(&severity_str).unwrap_or(Severity::Info),
-                    code: row.get(4)?,
-                    title: row.get(5)?,
-                    description: row.get(6)?,
-                    element: row.get(7)?,
-                    recommendation: row.get(8)?,
-                    tenant_id: row.get(9)?,
-                })
-            })?
+            .query_map(params_refs.as_slice(), Self::row_to_issue)?
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(issues)
+    }
+
+    /// Retrieve issues/finding with optional filters.
+    pub fn get_issues(
+        &self,
+        crawl_id: &str,
+        filters: &IssueFilter,
+    ) -> Result<Vec<Issue>, StorageError> {
+        let conn = self.conn.lock();
+        let (query, param_values) = Self::build_issues_query(crawl_id, None, filters);
+        Self::execute_issues_query(&conn, &query, &param_values)
     }
 
     /// Get pages for a specific tenant.
@@ -834,36 +873,7 @@ impl Storage {
 
         let pages = stmt
             .query_map(params![crawl_id, tenant_id, limit as i64], |row| {
-                let url_str: String = row.get(1)?;
-                let final_url_str: String = row.get(2)?;
-                let canonical_str: Option<String> = row.get(6)?;
-                let fetched_at_str: String = row.get(10)?;
-
-                Ok(PageData {
-                    id: row.get(0)?,
-                    url: Url::parse(&url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
-                    }),
-                    final_url: Url::parse(&final_url_str).unwrap_or_else(|_| {
-                        Url::parse("about:invalid")
-                            .unwrap_or_else(|_| unreachable!("about:invalid is always valid"))
-                    }),
-                    status_code: row.get(3)?,
-                    title: row.get(4)?,
-                    description: row.get(5)?,
-                    canonical_url: canonical_str.and_then(|s| Url::parse(&s).ok()),
-                    word_count: row.get::<_, Option<i64>>(7)?.map(|v| v as usize),
-                    load_time_ms: row.get::<_, Option<i64>>(8)?.map(|v| v as u64),
-                    body_size: row.get::<_, Option<i64>>(9)?.map(|v| v as usize),
-                    fetched_at: DateTime::parse_from_rfc3339(&fetched_at_str)
-                        .map(|dt| dt.with_timezone(&Utc))
-                        .unwrap_or_else(|_| Utc::now()),
-                    links: Vec::new(),
-                    tenant_id: row.get(11)?,
-                    etag: row.get(12)?,
-                    last_modified: row.get(13)?,
-                })
+                Self::row_to_page_data(row)
             })?
             .collect::<Result<Vec<_>, _>>()?;
 
@@ -882,61 +892,8 @@ impl Storage {
         filters: &IssueFilter,
     ) -> Result<Vec<Issue>, StorageError> {
         let conn = self.conn.lock();
-
-        let mut query = String::from(
-            "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
-             FROM findings f
-             JOIN pages p ON f.page_id = p.id
-             WHERE p.crawl_id = ?1 AND (f.tenant_id = ?2 OR f.tenant_id IS NULL)",
-        );
-        let mut param_values: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
-        param_values.push(Box::new(crawl_id.to_string()));
-        param_values.push(Box::new(tenant_id.to_string()));
-
-        if let Some(ref severity) = filters.severity {
-            query.push_str(&format!(" AND f.severity = ?{}", param_values.len() + 1));
-            param_values.push(Box::new(severity.as_str().to_string()));
-        }
-        if let Some(ref category) = filters.category {
-            query.push_str(&format!(" AND f.category = ?{}", param_values.len() + 1));
-            param_values.push(Box::new(category.as_str()));
-        }
-        if let Some(ref page_id) = filters.page_id {
-            query.push_str(&format!(" AND f.page_id = ?{}", param_values.len() + 1));
-            param_values.push(Box::new(page_id.clone()));
-        }
-        if let Some(ref code_prefix) = filters.code_prefix {
-            query.push_str(&format!(" AND f.code LIKE ?{}", param_values.len() + 1));
-            param_values.push(Box::new(format!("{code_prefix}%")));
-        }
-
-        query.push_str(" ORDER BY f.id ASC");
-
-        let mut stmt = conn.prepare(&query)?;
-        let params_refs: Vec<&dyn rusqlite::types::ToSql> =
-            param_values.iter().map(|p| p.as_ref()).collect();
-
-        let issues = stmt
-            .query_map(params_refs.as_slice(), |row| {
-                let category_str: String = row.get(2)?;
-                let severity_str: String = row.get(3)?;
-
-                Ok(Issue {
-                    id: row.get(0)?,
-                    page_id: row.get(1)?,
-                    category: IssueCategory::parse_category(&category_str),
-                    severity: Severity::parse_severity(&severity_str).unwrap_or(Severity::Info),
-                    code: row.get(4)?,
-                    title: row.get(5)?,
-                    description: row.get(6)?,
-                    element: row.get(7)?,
-                    recommendation: row.get(8)?,
-                    tenant_id: row.get(9)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(issues)
+        let (query, param_values) = Self::build_issues_query(crawl_id, Some(tenant_id), filters);
+        Self::execute_issues_query(&conn, &query, &param_values)
     }
 
     /// Get aggregate statistics for a crawl.

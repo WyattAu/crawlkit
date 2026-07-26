@@ -1,4 +1,4 @@
-//! # crawlkit-core
+//! # crawlkit-engine
 //!
 //! Core library for crawlkit — a high-performance Rust web crawler for SEO analysis.
 //!
@@ -66,6 +66,7 @@ pub mod ai_bots;
 /// covering HTTP status, redirects, canonical URLs, meta tags, headings, links,
 /// images, structured data, security, accessibility, and more.
 pub mod analyzers;
+pub mod article_generator;
 /// Audit trail logging for crawl operations and configuration changes.
 ///
 /// Provides a tamper-evident append-only log with SHA-256 chaining for
@@ -96,6 +97,7 @@ pub mod circuit_breaker;
 /// Detects added/removed pages, status changes, title changes, content
 /// changes, and Core Web Vitals regressions between crawls.
 pub mod compare;
+pub mod content_gap;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
 pub mod crawl_engine;
 /// Deterministic replay controller for reproducible crawl runs.
@@ -136,6 +138,7 @@ pub mod http;
 /// and URL patterns to decide when to invoke Playwright.
 pub mod js_render_decision;
 pub mod post_crawl;
+pub mod query_tracker;
 
 /// Metrics collection and observability hooks.
 ///

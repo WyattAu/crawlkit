@@ -13,6 +13,7 @@ pub struct AiCrawlerAccessibilityAnalyzer {
 }
 
 impl AiCrawlerAccessibilityAnalyzer {
+    /// Create a new AI crawler accessibility analyzer.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -89,6 +90,7 @@ impl Analyzer for AiCrawlerAccessibilityAnalyzer {
 pub struct AiContentStructureAnalyzer;
 
 impl AiContentStructureAnalyzer {
+    /// Create a new AI content structure analyzer.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -198,6 +200,7 @@ impl Analyzer for AiContentStructureAnalyzer {
 pub struct AiCitationEligibilityAnalyzer;
 
 impl AiCitationEligibilityAnalyzer {
+    /// Create a new AI citation eligibility analyzer.
     #[must_use]
     pub fn new() -> Self {
         Self
@@ -281,6 +284,7 @@ impl Analyzer for AiCitationEligibilityAnalyzer {
 pub struct AiAnswerBoxAnalyzer;
 
 impl AiAnswerBoxAnalyzer {
+    /// Create a new AI answer box analyzer.
     #[must_use]
     pub fn new() -> Self {
         Self

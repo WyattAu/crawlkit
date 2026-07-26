@@ -5,9 +5,13 @@ use serde::{Deserialize, Serialize};
 /// Severity of a finding.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Severity {
+    /// Critical issue requiring immediate attention.
     Critical,
+    /// Error that should be fixed promptly.
     Error,
+    /// Warning that may affect SEO performance.
     Warning,
+    /// Informational finding with no immediate action required.
     Info,
 }
 

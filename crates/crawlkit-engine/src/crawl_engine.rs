@@ -80,6 +80,9 @@ pub struct CrawlEngineConfig {
 
     /// Whether to enable incremental crawling (ETag / If-Modified-Since).
     pub incremental: bool,
+
+    /// Whether to force a full re-crawl, ignoring cached ETag/Last-Modified conditions.
+    pub force: bool,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -100,6 +103,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("delay_ms", &self.delay_ms)
             .field("concurrency", &self.concurrency)
             .field("incremental", &self.incremental)
+            .field("force", &self.force)
             .finish()
     }
 }
@@ -123,6 +127,7 @@ impl Default for CrawlEngineConfig {
             delay_ms: None,
             concurrency: None,
             incremental: false,
+            force: false,
         }
     }
 }
@@ -438,7 +443,7 @@ impl CrawlEngine {
 
             // Fetch
             let start = std::time::Instant::now();
-            let result = if cfg.incremental {
+            let result = if cfg.incremental && !cfg.force {
                 // Check for existing ETag/Last-Modified from a previous crawl
                 let previous = match self
                     .storage

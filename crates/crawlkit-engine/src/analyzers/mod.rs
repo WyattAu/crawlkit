@@ -4,11 +4,17 @@ use crate::parser::ParsedPage;
 use crate::storage::{IssueCategory, Severity};
 use crate::{CrawlConfig, RedirectHop};
 
+/// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
+/// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
+/// Media and e-commerce analyzers for images, products, and shopping signals.
 pub mod media_analyzers;
+/// Security and accessibility analyzers for headers, mobile-friendliness, and WCAG compliance.
 pub mod security_analyzers;
+/// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
 pub mod seo_analyzers;
+/// Social media analyzers for Open Graph, Twitter Cards, and social sharing metadata.
 pub mod social_analyzers;
 
 pub use content_analyzers::{

@@ -43,11 +43,12 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
-/// Advanced crawl features such as JavaScript rendering and WASM analysis.
+/// Advanced canonical URL analysis and validation.
 ///
-/// Provides [`AlertManager`](advanced_features::AlertManager) for monitoring
-/// crawl metrics and triggering notifications on threshold breaches.
+/// Detects canonical conflicts, duplicate content, and
+/// provides recommendations for canonical URL best practices.
 pub mod advanced_canonical;
+/// Advanced crawl features such as JavaScript rendering and WASM analysis.
 pub mod advanced_features;
 /// AI-powered page content analyzers for answer boxes, citations, and crawler accessibility.
 ///
@@ -66,6 +67,10 @@ pub mod ai_bots;
 /// covering HTTP status, redirects, canonical URLs, meta tags, headings, links,
 /// images, structured data, security, accessibility, and more.
 pub mod analyzers;
+/// Article content generation from crawled page data.
+///
+/// Extracts and formats article content from web pages for
+/// SEO-optimized content creation.
 pub mod article_generator;
 /// Audit trail logging for crawl operations and configuration changes.
 ///
@@ -97,6 +102,10 @@ pub mod circuit_breaker;
 /// Detects added/removed pages, status changes, title changes, content
 /// changes, and Core Web Vitals regressions between crawls.
 pub mod compare;
+/// Content gap analysis for identifying missing topics and keywords.
+///
+/// Compares crawled content against target keywords to find
+/// opportunities for new content creation.
 pub mod content_gap;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
 pub mod crawl_engine;
@@ -137,7 +146,15 @@ pub mod http;
 /// Detects SPA frameworks (Next.js, Nuxt, SvelteKit, Angular) via HTML hints
 /// and URL patterns to decide when to invoke Playwright.
 pub mod js_render_decision;
+/// Post-crawl analysis for cross-page SEO checks.
+///
+/// Runs after a crawl completes to detect site-wide issues like
+/// canonical conflicts, redirect chains, and orphan pages.
 pub mod post_crawl;
+/// Search query tracking and SERP analysis.
+///
+/// Tracks search engine result pages (SERPs) for target keywords
+/// and analyzes ranking positions and changes.
 pub mod query_tracker;
 
 /// Metrics collection and observability hooks.

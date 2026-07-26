@@ -183,6 +183,10 @@ enum Commands {
         /// Enable incremental crawling using ETag / If-Modified-Since
         #[arg(long)]
         incremental: bool,
+
+        /// Force a full re-crawl, ignoring cached ETag/Last-Modified conditions
+        #[arg(long)]
+        force: bool,
     },
 
     /// Compare two crawl results
@@ -357,6 +361,7 @@ async fn main() -> Result<()> {
             metrics_json,
             tenant,
             incremental,
+            force,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -390,6 +395,7 @@ async fn main() -> Result<()> {
                 metrics_json,
                 tenant,
                 incremental,
+                force,
                 feature_flags,
             };
             run_crawl(&params).await
@@ -459,6 +465,7 @@ struct CrawlParams {
     metrics_json: Option<PathBuf>,
     tenant: Option<String>,
     incremental: bool,
+    force: bool,
     feature_flags: crawlkit_engine::FeatureFlags,
 }
 
@@ -484,7 +491,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
     .entered();
 
     tracing::info!(
-        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={}, js={}, allow_external={}, incremental={})",
+        "Starting crawl of {} (max_pages={}, delay={}ms, concurrency={}, depth={}, js={}, allow_external={}, incremental={}, force={})",
         params.url,
         max_pages,
         params.delay.unwrap_or(100),
@@ -493,6 +500,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         params.javascript,
         params.allow_external,
         params.incremental,
+        params.force,
     );
 
     let pb = ProgressBar::new(max_pages as u64);
@@ -605,6 +613,7 @@ async fn run_crawl(params: &CrawlParams) -> Result<()> {
         delay_ms: Some(params.delay.unwrap_or(100)),
         concurrency: Some(concurrency),
         incremental: params.incremental,
+        force: params.force,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);
@@ -1275,6 +1284,8 @@ async fn run_inspect(
         pool_max_idle_per_host: 32,
         pool_max_idle: 64,
         tcp_keepalive: Some(std::time::Duration::from_secs(30)),
+        pool_idle_timeout: std::time::Duration::from_secs(90),
+        connect_timeout: std::time::Duration::from_secs(10),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let config = crawlkit_engine::CrawlConfig::default();

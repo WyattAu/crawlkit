@@ -1,0 +1,44 @@
+import { CrawlRequest, CrawlResponse, CrawlResult, CrawlStats, Finding, BacklinksResponse, User, CreateUserRequest, Tenant, CreateTenantRequest, ApiKeyInfo, CreateApiKeyRequest, WebhookConfig, CreateWebhookRequest, ScheduleResponse, CreateScheduleRequest, AuditEvent, HealthResponse, LoginResponse, MarketplacePlugin, SubmitPluginRequest } from "./models";
+export declare class CrawlkitClient {
+    private baseURL;
+    private apiKey;
+    private jwtToken;
+    constructor(baseURL: string, apiKey?: string, jwtToken?: string);
+    health(): Promise<HealthResponse>;
+    getMetrics(): Promise<string>;
+    login(email: string, password: string): Promise<LoginResponse>;
+    refreshToken(): Promise<LoginResponse>;
+    getCurrentUser(): Promise<User>;
+    startCrawl(req: CrawlRequest): Promise<CrawlResponse>;
+    getCrawl(crawlId: string): Promise<CrawlResult>;
+    getCrawlStats(crawlId: string): Promise<CrawlStats>;
+    getCrawlFindings(crawlId: string): Promise<Finding[]>;
+    getCrawlBacklinks(crawlId: string): Promise<BacklinksResponse>;
+    listCrawls(): Promise<CrawlResult[]>;
+    listUsers(): Promise<User[]>;
+    createUser(req: CreateUserRequest): Promise<User>;
+    deleteUser(userId: string): Promise<void>;
+    listTenants(): Promise<Tenant[]>;
+    createTenant(req: CreateTenantRequest): Promise<Tenant>;
+    getTenant(tenantId: string): Promise<Tenant>;
+    deleteTenant(tenantId: string): Promise<void>;
+    listApiKeys(): Promise<ApiKeyInfo[]>;
+    createApiKey(req: CreateApiKeyRequest): Promise<ApiKeyInfo>;
+    deleteApiKey(key: string): Promise<void>;
+    listWebhooks(): Promise<WebhookConfig[]>;
+    createWebhook(req: CreateWebhookRequest): Promise<WebhookConfig>;
+    deleteWebhook(webhookId: string): Promise<void>;
+    listSchedules(): Promise<ScheduleResponse[]>;
+    createSchedule(req: CreateScheduleRequest): Promise<ScheduleResponse>;
+    deleteSchedule(scheduleId: string): Promise<void>;
+    listAuditEvents(): Promise<AuditEvent[]>;
+    listMarketplacePlugins(): Promise<MarketplacePlugin[]>;
+    getMarketplacePlugin(name: string): Promise<MarketplacePlugin>;
+    submitPlugin(req: SubmitPluginRequest): Promise<MarketplacePlugin>;
+    deleteMarketplacePlugin(name: string): Promise<void>;
+    private get;
+    private post;
+    private delete;
+    private parseError;
+}
+//# sourceMappingURL=client.d.ts.map

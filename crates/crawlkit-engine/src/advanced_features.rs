@@ -30,9 +30,13 @@ pub struct Alert {
 /// Alert comparison operator.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum AlertOperator {
+    /// Value must be greater than threshold.
     GreaterThan,
+    /// Value must be less than threshold.
     LessThan,
+    /// Value must equal threshold.
     Equals,
+    /// Value must not equal threshold.
     NotEquals,
 }
 

@@ -24,6 +24,7 @@ impl Default for AdvancedCanonicalAnalyzer {
 }
 
 impl AdvancedCanonicalAnalyzer {
+    /// Create a new advanced canonical analyzer.
     pub fn new() -> Self {
         Self
     }
@@ -121,6 +122,7 @@ impl Default for SitemapCanonicalValidator {
 }
 
 impl SitemapCanonicalValidator {
+    /// Create a new sitemap canonical validator.
     pub fn new() -> Self {
         Self
     }
@@ -171,6 +173,7 @@ impl Default for UrlFormatValidator {
 }
 
 impl UrlFormatValidator {
+    /// Create a new URL format validator.
     pub fn new() -> Self {
         Self
     }

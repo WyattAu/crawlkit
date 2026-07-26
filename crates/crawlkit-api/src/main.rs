@@ -225,9 +225,33 @@ struct AppState {
     http_client: reqwest::Client,
     auth: Arc<AuthManager>,
     oidc: Option<Arc<OidcManager>>,
-    oidc_states: Arc<DashMap<String, ()>>,
+    oidc_states: Arc<DashMap<String, DateTime<Utc>>>,
     tenants: Arc<dashmap::DashMap<String, Tenant>>,
     marketplace: MarketplaceState,
+    sessions: Arc<DashMap<String, SessionInfo>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SessionInfo {
+    jti: String,
+    user_id: String,
+    created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
+    revoked: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct RevokeSessionRequest {
+    jti: String,
+}
+
+#[derive(Serialize)]
+struct SessionResponse {
+    jti: String,
+    user_id: String,
+    created_at: DateTime<Utc>,
+    expires_at: DateTime<Utc>,
+    revoked: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -282,6 +306,34 @@ fn extract_tenant(claims: &auth::Claims) -> &str {
 /// Check if the current user is an admin.
 fn is_admin(claims: &auth::Claims) -> bool {
     claims.roles.contains(&"admin".to_string())
+}
+
+/// Map OIDC roles/groups to crawlkit roles.
+fn map_oidc_roles(oidc_roles: &[String], oidc_groups: &[String]) -> Vec<String> {
+    let mut roles = Vec::new();
+    let all_claims: Vec<&str> = oidc_roles
+        .iter()
+        .chain(oidc_groups.iter())
+        .map(|s| s.as_str())
+        .collect();
+
+    if all_claims.iter().any(|c| {
+        c.eq_ignore_ascii_case("admin")
+            || c.eq_ignore_ascii_case("crawlkit-admin")
+            || c.ends_with("/admin")
+    }) {
+        roles.push("admin".to_string());
+    } else if all_claims.iter().any(|c| {
+        c.eq_ignore_ascii_case("editor")
+            || c.eq_ignore_ascii_case("crawlkit-editor")
+            || c.ends_with("/editor")
+    }) {
+        roles.push("editor".to_string());
+    } else {
+        roles.push("viewer".to_string());
+    }
+
+    roles
 }
 
 #[derive(Debug, Serialize)]
@@ -339,6 +391,19 @@ struct WebhookConfig {
     tenant_id: String,
     url: String,
     events: Vec<String>,
+    #[serde(skip_serializing, default)]
+    secret: String,
+    created_at: DateTime<Utc>,
+}
+
+/// Response returned once when a webhook is created, containing the secret.
+#[derive(Debug, Serialize)]
+struct WebhookCreatedResponse {
+    id: String,
+    tenant_id: String,
+    url: String,
+    events: Vec<String>,
+    secret: String,
     created_at: DateTime<Utc>,
 }
 
@@ -374,6 +439,7 @@ struct ScheduleConfig {
     interval_secs: u64,
     enabled: bool,
     next_run: DateTime<Utc>,
+    last_run_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
 }
 
@@ -401,7 +467,20 @@ struct ScheduleResponse {
     interval_secs: u64,
     enabled: bool,
     next_run: DateTime<Utc>,
+    last_run_at: Option<DateTime<Utc>>,
     created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Deserialize)]
+struct UpdateScheduleRequest {
+    #[serde(default)]
+    start_url: Option<String>,
+    max_pages: Option<usize>,
+    request_delay_ms: Option<u64>,
+    concurrency: Option<usize>,
+    interval_secs: Option<u64>,
+    #[serde(default)]
+    enabled: Option<bool>,
 }
 
 // ---------------------------------------------------------------------------
@@ -1087,6 +1166,21 @@ async fn login(
         .generate_token(&user)
         .map_err(|e| ApiError::Internal(format!("Failed to generate token: {e}")))?;
 
+    let claims = state
+        .auth
+        .validate_token(&token)
+        .map_err(|e| ApiError::Internal(format!("Failed to validate token: {e}")))?;
+
+    let now = Utc::now();
+    let session = SessionInfo {
+        jti: claims.jti.clone(),
+        user_id: user.id.clone(),
+        created_at: now,
+        expires_at: now + chrono::Duration::hours(1),
+        revoked: false,
+    };
+    state.sessions.insert(claims.jti, session);
+
     Ok(Json(LoginResponse {
         token,
         user: UserResponse {
@@ -1161,7 +1255,7 @@ async fn oidc_authorize(State(state): State<AppState>) -> Result<Response, ApiEr
         .ok_or_else(|| ApiError::Internal("OIDC not configured".to_string()))?;
 
     let state_token = uuid::Uuid::new_v4().to_string();
-    state.oidc_states.insert(state_token.clone(), ());
+    state.oidc_states.insert(state_token.clone(), Utc::now());
 
     let url = oidc.authorization_url(&state_token);
     let parsed_url = url::Url::parse(&url)
@@ -1201,8 +1295,17 @@ async fn oidc_callback(
         .as_deref()
         .ok_or_else(|| ApiError::BadRequest("Missing state parameter".to_string()))?;
 
-    if !state.oidc_states.contains_key(state_token) {
-        return Err(ApiError::BadRequest("Invalid state parameter".to_string()));
+    let created_at = state
+        .oidc_states
+        .get(state_token)
+        .ok_or_else(|| ApiError::BadRequest("Invalid state parameter".to_string()))?;
+
+    let state_ttl = chrono::Duration::minutes(10);
+    if Utc::now() - *created_at.value() > state_ttl {
+        state.oidc_states.remove(state_token);
+        return Err(ApiError::BadRequest(
+            "State parameter expired, please try again".to_string(),
+        ));
     }
     state.oidc_states.remove(state_token);
 
@@ -1225,16 +1328,18 @@ async fn oidc_callback(
         .auth
         .find_user_by_id(&user_info.sub)
         .unwrap_or_else(|| {
+            let roles = map_oidc_roles(&user_info.roles, &user_info.groups);
             let new_user = User {
                 id: user_info.sub.clone(),
                 email: user_info.email.unwrap_or_default(),
                 name: user_info.name.unwrap_or_default(),
                 password_hash: String::new(),
                 tenant_id: "default".to_string(),
-                roles: vec!["viewer".to_string()],
+                roles,
                 enabled: true,
             };
             state.auth.add_user(new_user.clone());
+            tracing::info!("Provisioned new OIDC user: {}", new_user.id);
             new_user
         });
 
@@ -1254,6 +1359,52 @@ async fn oidc_callback(
             enabled: user.enabled,
         },
     }))
+}
+
+// ---------------------------------------------------------------------------
+// Session management handlers
+// ---------------------------------------------------------------------------
+
+async fn list_sessions(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+) -> Json<Vec<SessionResponse>> {
+    let user_id = &claims.sub;
+    let sessions: Vec<SessionResponse> = state
+        .sessions
+        .iter()
+        .filter(|entry| entry.value().user_id == *user_id)
+        .map(|entry| {
+            let s = entry.value();
+            SessionResponse {
+                jti: s.jti.clone(),
+                user_id: s.user_id.clone(),
+                created_at: s.created_at,
+                expires_at: s.expires_at,
+                revoked: s.revoked,
+            }
+        })
+        .collect();
+    Json(sessions)
+}
+
+async fn revoke_session(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+    Json(req): Json<RevokeSessionRequest>,
+) -> Result<StatusCode, ApiError> {
+    let user_id = &claims.sub;
+    let mut session = state
+        .sessions
+        .get_mut(&req.jti)
+        .ok_or_else(|| ApiError::NotFound(format!("Session {} not found", req.jti)))?;
+
+    if session.user_id != *user_id && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Session {} not found", req.jti)));
+    }
+
+    session.revoked = true;
+    Ok(StatusCode::NO_CONTENT)
 }
 
 // ---------------------------------------------------------------------------
@@ -1445,7 +1596,7 @@ async fn create_webhook(
     State(state): State<AppState>,
     axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     Json(req): Json<CreateWebhookRequest>,
-) -> Result<(StatusCode, Json<WebhookConfig>), ApiError> {
+) -> Result<(StatusCode, Json<WebhookCreatedResponse>), ApiError> {
     url::Url::parse(&req.url)
         .map_err(|e| ApiError::BadRequest(format!("Invalid webhook URL: {e}")))?;
 
@@ -1458,16 +1609,33 @@ async fn create_webhook(
     }
 
     let id = Uuid::new_v4().to_string();
+    let secret = generate_webhook_secret();
+    let tenant_id = extract_tenant(&claims).to_string();
+    let created_at = Utc::now();
+    let url = req.url.clone();
+    let events = req.events.clone();
+
     let config = WebhookConfig {
         id: id.clone(),
-        tenant_id: extract_tenant(&claims).to_string(),
+        tenant_id: tenant_id.clone(),
         url: req.url,
         events: req.events,
-        created_at: Utc::now(),
+        secret: secret.clone(),
+        created_at,
     };
 
-    state.webhooks.insert(id, config.clone());
-    Ok((StatusCode::CREATED, Json(config)))
+    state.webhooks.insert(id.clone(), config);
+    Ok((
+        StatusCode::CREATED,
+        Json(WebhookCreatedResponse {
+            id,
+            tenant_id,
+            url,
+            events,
+            secret,
+            created_at,
+        }),
+    ))
 }
 
 async fn list_webhooks(
@@ -1548,6 +1716,7 @@ async fn create_schedule(
         interval_secs: req.interval_secs,
         enabled: true,
         next_run: now + chrono::Duration::seconds(req.interval_secs as i64),
+        last_run_at: None,
         created_at: now,
     };
 
@@ -1557,6 +1726,7 @@ async fn create_schedule(
         interval_secs: schedule.interval_secs,
         enabled: schedule.enabled,
         next_run: schedule.next_run,
+        last_run_at: schedule.last_run_at,
         created_at: schedule.created_at,
     };
 
@@ -1583,6 +1753,7 @@ async fn list_schedules(
                     interval_secs: s.interval_secs,
                     enabled: s.enabled,
                     next_run: s.next_run,
+                    last_run_at: s.last_run_at,
                     created_at: s.created_at,
                 }
             })
@@ -1610,6 +1781,82 @@ async fn delete_schedule(
         .remove(&id)
         .map(|_| StatusCode::NO_CONTENT)
         .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))
+}
+
+async fn update_schedule(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+    axum::extract::Path(id): axum::extract::Path<String>,
+    Json(req): Json<UpdateScheduleRequest>,
+) -> Result<Json<ScheduleResponse>, ApiError> {
+    let entry = state
+        .schedules
+        .get(&id)
+        .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))?;
+
+    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Schedule {id} not found")));
+    }
+    drop(entry);
+
+    if let Some(ref url) = req.start_url {
+        validate_url(url)?;
+    }
+    if let Some(pages) = req.max_pages {
+        validate_max_pages(pages)?;
+    }
+    if let Some(conc) = req.concurrency {
+        validate_concurrency(conc)?;
+    }
+    if let Some(delay) = req.request_delay_ms {
+        validate_delay(delay)?;
+    }
+    if let Some(interval) = req.interval_secs {
+        if interval < 60 {
+            return Err(ApiError::BadRequest(
+                "interval_secs must be at least 60".to_string(),
+            ));
+        }
+    }
+
+    let mut entry = state
+        .schedules
+        .get_mut(&id)
+        .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))?;
+
+    if let Some(ref url) = req.start_url {
+        let parsed =
+            url::Url::parse(url).map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
+        entry.crawl_config.start_url = parsed;
+    }
+    if let Some(pages) = req.max_pages {
+        entry.crawl_config.max_pages = pages;
+    }
+    if let Some(delay) = req.request_delay_ms {
+        entry.crawl_config.request_delay = std::time::Duration::from_millis(delay);
+    }
+    if let Some(conc) = req.concurrency {
+        entry.crawl_config.concurrency = conc;
+    }
+    if let Some(interval) = req.interval_secs {
+        entry.interval_secs = interval;
+        entry.next_run = Utc::now() + chrono::Duration::seconds(interval as i64);
+    }
+    if let Some(enabled) = req.enabled {
+        entry.enabled = enabled;
+    }
+
+    let response = ScheduleResponse {
+        id: entry.id.clone(),
+        start_url: entry.crawl_config.start_url.to_string(),
+        interval_secs: entry.interval_secs,
+        enabled: entry.enabled,
+        next_run: entry.next_run,
+        last_run_at: entry.last_run_at,
+        created_at: entry.created_at,
+    };
+
+    Ok(Json(response))
 }
 
 // ---------------------------------------------------------------------------
@@ -1682,6 +1929,7 @@ async fn delete_marketplace_plugin(
     }
 }
 
+#[allow(dead_code, clippy::unused_async)]
 async fn download_plugin(
     State(state): State<AppState>,
     Path(name): Path<String>,
@@ -1710,6 +1958,128 @@ async fn test_plugin(
     } else {
         Err(ApiError::NotFound(format!("Plugin '{name}' not found")))
     }
+}
+
+// ---------------------------------------------------------------------------
+// Webhook delivery
+// ---------------------------------------------------------------------------
+
+/// Generate a random webhook secret (hex-encoded 32 bytes).
+fn generate_webhook_secret() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+}
+
+/// Compute HMAC-SHA256 signature of a payload using the given secret.
+///
+/// # Panics
+///
+/// Panics if HMAC key creation fails (only happens with zero-length keys,
+/// which cannot occur since secrets are 64-char hex strings).
+#[allow(clippy::expect_used)]
+fn sign_webhook_payload(secret: &str, payload: &[u8]) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .expect("HMAC key creation cannot fail for non-empty keys");
+    mac.update(payload);
+    let result = mac.finalize();
+    hex::encode(result.into_bytes())
+}
+
+/// Deliver a webhook payload with HMAC-SHA256 signing, retries, and tracing.
+///
+/// Sends a POST request to the webhook URL with:
+/// - `Content-Type: application/json`
+/// - `X-Webhook-Event: <event>`
+/// - `X-Webhook-Signature: sha256=<hex_signature>`
+///
+/// Retries up to 3 times with exponential backoff on failure.
+async fn deliver_webhook(
+    client: &reqwest::Client,
+    webhook: &WebhookConfig,
+    payload: &WebhookPayload,
+) -> Result<(), String> {
+    let body = serde_json::to_vec(payload)
+        .map_err(|e| format!("Failed to serialize webhook payload: {e}"))?;
+    let signature = sign_webhook_payload(&webhook.secret, &body);
+
+    let max_retries = 3;
+    let mut last_error = String::new();
+
+    for attempt in 0..max_retries {
+        if attempt > 0 {
+            let delay_ms = 1000 * 2u64.pow(attempt - 1);
+            tracing::info!(
+                "Retrying webhook to {} in {}ms (attempt {}/{})",
+                webhook.url,
+                delay_ms,
+                attempt + 1,
+                max_retries
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        }
+
+        tracing::debug!(
+            "Delivering webhook to {} (event={}, attempt={}/{})",
+            webhook.url,
+            payload.event,
+            attempt + 1,
+            max_retries
+        );
+
+        match client
+            .post(&webhook.url)
+            .header("Content-Type", "application/json")
+            .header("X-Webhook-Event", &payload.event)
+            .header("X-Webhook-Signature", format!("sha256={signature}"))
+            .body(body.clone())
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    tracing::info!(
+                        "Webhook delivered successfully to {} (status={})",
+                        webhook.url,
+                        resp.status()
+                    );
+                    return Ok(());
+                }
+                let status = resp.status();
+                last_error = format!("HTTP {status}");
+                tracing::warn!(
+                    "Webhook to {} returned non-success status {status} (attempt {}/{})",
+                    webhook.url,
+                    attempt + 1,
+                    max_retries
+                );
+            }
+            Err(e) => {
+                last_error = e.to_string();
+                tracing::warn!(
+                    "Failed to send webhook to {} (attempt {}/{}): {e}",
+                    webhook.url,
+                    attempt + 1,
+                    max_retries
+                );
+            }
+        }
+    }
+
+    tracing::error!(
+        "Webhook delivery to {} failed after {max_retries} attempts: {last_error}",
+        webhook.url
+    );
+    Err(format!(
+        "Webhook delivery failed after {max_retries} attempts: {last_error}"
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -1749,23 +2119,9 @@ fn fire_webhooks(
         for webhook in matching {
             let client = client.clone();
             let payload = payload.clone();
-            let url = webhook.url.clone();
             tokio::spawn(async move {
-                match client
-                    .post(&url)
-                    .json(&payload)
-                    .timeout(std::time::Duration::from_secs(10))
-                    .send()
-                    .await
-                {
-                    Ok(resp) => {
-                        if !resp.status().is_success() {
-                            tracing::warn!("Webhook to {url} returned status {}", resp.status());
-                        }
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to send webhook to {url}: {e}");
-                    }
+                if let Err(e) = deliver_webhook(&client, &webhook, &payload).await {
+                    tracing::error!("Webhook delivery failed: {e}");
                 }
             });
         }
@@ -1892,6 +2248,7 @@ async fn run_scheduler(state: AppState) {
 
         for (schedule_id, config, tenant_id) in due {
             if let Some(mut schedule) = state.schedules.get_mut(&schedule_id) {
+                schedule.last_run_at = Some(now);
                 schedule.next_run = now + chrono::Duration::seconds(schedule.interval_secs as i64);
             }
 
@@ -2074,6 +2431,7 @@ async fn main() -> anyhow::Result<()> {
         oidc_states: Arc::new(DashMap::new()),
         tenants: Arc::new(DashMap::new()),
         marketplace,
+        sessions: Arc::new(DashMap::new()),
     };
 
     let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
@@ -2158,7 +2516,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "/api/v1/schedules/{id}",
-            axum::routing::delete(delete_schedule),
+            axum::routing::delete(delete_schedule).patch(update_schedule),
         )
         .route("/api/v1/audit", get(get_audit_events))
         .route("/api/v1/tenants", post(create_tenant).get(list_tenants))
@@ -2176,10 +2534,9 @@ async fn main() -> anyhow::Result<()> {
             "/api/v1/marketplace/plugins/{name}",
             get(get_marketplace_plugin).delete(delete_marketplace_plugin),
         )
-        .route(
-            "/api/v1/marketplace/plugins/{name}/download",
-            get(download_plugin),
-        )
+        .route("/api/v1/marketplace/plugins/{name}/test", post(test_plugin))
+        .route("/api/v1/sessions", get(list_sessions))
+        .route("/api/v1/sessions/revoke", post(revoke_session))
         .route("/api/v1/marketplace/plugins/{name}/test", post(test_plugin))
         .layer(middleware::from_fn_with_state(
             state.clone(),
@@ -2606,12 +2963,15 @@ mod tests {
             tenant_id: "test-tenant".to_string(),
             url: "https://hooks.example.com".to_string(),
             events: vec!["crawl.completed".to_string()],
+            secret: "my-secret".to_string(),
             created_at: Utc::now(),
         };
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: WebhookConfig = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.id, "wh-1");
         assert_eq!(deserialized.events.len(), 1);
+        // Secret should not be present in serialized JSON
+        assert!(!json.contains("my-secret"));
     }
 
     // ---------------------------------------------------------------
@@ -2975,6 +3335,7 @@ mod tests {
             oidc_states: Arc::new(DashMap::new()),
             tenants: Arc::new(DashMap::new()),
             marketplace: MarketplaceState::new(),
+            sessions: Arc::new(DashMap::new()),
         };
 
         state.crawl_results.insert(
@@ -3042,6 +3403,7 @@ mod tests {
             oidc_states: Arc::new(DashMap::new()),
             tenants: Arc::new(DashMap::new()),
             marketplace: MarketplaceState::new(),
+            sessions: Arc::new(DashMap::new()),
         };
 
         state.crawl_results.insert(
@@ -3120,5 +3482,341 @@ mod tests {
         };
 
         assert_eq!(result.tenant_id, "jwt-tenant");
+    }
+
+    // ---------------------------------------------------------------
+    // Webhook delivery tests
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_generate_webhook_secret_length() {
+        let secret = super::generate_webhook_secret();
+        // 32 bytes hex-encoded = 64 characters
+        assert_eq!(secret.len(), 64);
+        assert!(secret.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_generate_webhook_secret_uniqueness() {
+        let s1 = super::generate_webhook_secret();
+        let s2 = super::generate_webhook_secret();
+        assert_ne!(s1, s2);
+    }
+
+    #[test]
+    fn test_sign_webhook_payload_deterministic() {
+        let secret = "test-secret-key";
+        let payload = b"hello world";
+        let sig1 = super::sign_webhook_payload(secret, payload);
+        let sig2 = super::sign_webhook_payload(secret, payload);
+        assert_eq!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sign_webhook_payload_different_secrets() {
+        let payload = b"hello world";
+        let sig1 = super::sign_webhook_payload("secret-1", payload);
+        let sig2 = super::sign_webhook_payload("secret-2", payload);
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sign_webhook_payload_different_payloads() {
+        let secret = "test-secret";
+        let sig1 = super::sign_webhook_payload(secret, b"payload-1");
+        let sig2 = super::sign_webhook_payload(secret, b"payload-2");
+        assert_ne!(sig1, sig2);
+    }
+
+    #[test]
+    fn test_sign_webhook_payload_is_valid_hex() {
+        let sig = super::sign_webhook_payload("secret", b"test");
+        assert_eq!(sig.len(), 64); // SHA-256 = 32 bytes = 64 hex chars
+        assert!(sig.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_sign_webhook_payload_verifiable() {
+        use hmac::{Hmac, Mac};
+        use sha2::Sha256;
+
+        type HmacSha256 = Hmac<Sha256>;
+
+        let test_secret = "test_webhook_secret_1234";
+        let payload = b"test payload data";
+
+        let sig = super::sign_webhook_payload(test_secret, payload);
+
+        // Verify the signature is correct
+        let mut mac = HmacSha256::new_from_slice(test_secret.as_bytes()).unwrap();
+        mac.update(payload);
+        let expected = hex::encode(mac.finalize().into_bytes());
+
+        assert_eq!(sig, expected);
+    }
+
+    #[tokio::test]
+    async fn test_deliver_webhook_success() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use axum::routing::post;
+        use axum::Router;
+        use tower::ServiceExt;
+
+        let received = Arc::new(tokio::sync::Mutex::new(
+            Vec::<(String, String, Vec<u8>)>::new(),
+        ));
+        let received_clone = received.clone();
+
+        let app = Router::new().route(
+            "/webhook",
+            post(move |headers: HeaderMap, body: axum::body::Bytes| {
+                let received = received_clone.clone();
+                async move {
+                    let event = headers
+                        .get("X-Webhook-Event")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or_default()
+                        .to_string();
+                    let signature = headers
+                        .get("X-Webhook-Signature")
+                        .and_then(|v| v.to_str().ok())
+                        .unwrap_or_default()
+                        .to_string();
+                    let body_bytes = body.to_vec();
+                    let mut r = received.lock().await;
+                    r.push((event, signature, body_bytes));
+                    "ok"
+                }
+            }),
+        );
+
+        let request = Request::builder()
+            .uri("/webhook")
+            .method("POST")
+            .header("Content-Type", "application/json")
+            .body(Body::empty())
+            .unwrap();
+
+        let response = app.oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn test_webhook_config_secret_not_serialized() {
+        let config = WebhookConfig {
+            id: "wh-1".to_string(),
+            tenant_id: "t-1".to_string(),
+            url: "https://hooks.example.com".to_string(),
+            events: vec!["crawl.completed".to_string()],
+            secret: "super-secret-value".to_string(),
+            created_at: Utc::now(),
+        };
+
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(!json.contains("super-secret-value"));
+        assert!(!json.contains("secret"));
+    }
+
+    #[test]
+    fn test_webhook_created_response_includes_secret() {
+        let response = super::WebhookCreatedResponse {
+            id: "wh-1".to_string(),
+            tenant_id: "t-1".to_string(),
+            url: "https://hooks.example.com".to_string(),
+            events: vec!["crawl.completed".to_string()],
+            secret: "whsec_abc123".to_string(),
+            created_at: Utc::now(),
+        };
+
+        let json = serde_json::to_string(&response).unwrap();
+        assert!(json.contains("whsec_abc123"));
+    }
+
+    // ---------------------------------------------------------------
+    // Schedule tests
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_schedule_config_serialization_roundtrip() {
+        let config = ScheduleConfig {
+            id: "sch-1".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            crawl_config: crawlkit_engine::CrawlConfig::default(),
+            interval_secs: 3600,
+            enabled: true,
+            next_run: Utc::now(),
+            last_run_at: Some(Utc::now()),
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ScheduleConfig = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.id, "sch-1");
+        assert_eq!(deserialized.interval_secs, 3600);
+        assert!(deserialized.enabled);
+        assert!(deserialized.last_run_at.is_some());
+    }
+
+    #[test]
+    fn test_schedule_config_last_run_at_none() {
+        let config = ScheduleConfig {
+            id: "sch-2".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            crawl_config: crawlkit_engine::CrawlConfig::default(),
+            interval_secs: 7200,
+            enabled: false,
+            next_run: Utc::now(),
+            last_run_at: None,
+            created_at: Utc::now(),
+        };
+        let json = serde_json::to_string(&config).unwrap();
+        let deserialized: ScheduleConfig = serde_json::from_str(&json).unwrap();
+        assert!(deserialized.last_run_at.is_none());
+        assert!(!deserialized.enabled);
+    }
+
+    #[test]
+    fn test_map_oidc_roles_admin() {
+        let roles = super::map_oidc_roles(&["admin".to_string()], &[]);
+        assert!(roles.contains(&"admin".to_string()));
+    }
+
+    #[test]
+    fn test_map_oidc_roles_editor() {
+        let roles = super::map_oidc_roles(&["editor".to_string()], &[]);
+        assert!(roles.contains(&"editor".to_string()));
+    }
+
+    #[test]
+    fn test_map_oidc_roles_default_viewer() {
+        let roles = super::map_oidc_roles(&["user".to_string()], &[]);
+        assert!(roles.contains(&"viewer".to_string()));
+    }
+
+    #[test]
+    fn test_map_oidc_roles_from_groups() {
+        let roles = super::map_oidc_roles(&[], &["engineering/admin".to_string()]);
+        assert!(roles.contains(&"admin".to_string()));
+    }
+
+    #[test]
+    fn test_map_oidc_roles_group_editor() {
+        let roles = super::map_oidc_roles(&[], &["crawlkit-editor".to_string()]);
+        assert!(roles.contains(&"editor".to_string()));
+    }
+
+    #[test]
+    fn test_oidc_state_token_expiry() {
+        let state = AppState {
+            storage: Arc::new(crawlkit_engine::storage::Storage::new_in_memory().unwrap()),
+            api_keys: Arc::new(DashMap::new()),
+            rate_limits: Arc::new(DashMap::new()),
+            crawl_results: Arc::new(DashMap::new()),
+            audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+            metrics: Arc::new(Metrics::new()),
+            webhooks: Arc::new(DashMap::new()),
+            schedules: Arc::new(DashMap::new()),
+            http_client: reqwest::Client::new(),
+            auth: Arc::new(auth::AuthManager::new("test".to_string())),
+            oidc: None,
+            oidc_states: Arc::new(DashMap::new()),
+            tenants: Arc::new(DashMap::new()),
+            marketplace: MarketplaceState::new(),
+            sessions: Arc::new(DashMap::new()),
+        };
+
+        let state_token = "test-state-token".to_string();
+        let created = Utc::now() - chrono::Duration::minutes(15);
+        state.oidc_states.insert(state_token.clone(), created);
+
+        let ttl = chrono::Duration::minutes(10);
+        let entry = state.oidc_states.get(&state_token).unwrap();
+        let is_expired = Utc::now() - *entry.value() > ttl;
+        assert!(
+            is_expired,
+            "State token older than 10 min should be expired"
+        );
+    }
+
+    #[test]
+    fn test_oidc_state_token_valid() {
+        let state = AppState {
+            storage: Arc::new(crawlkit_engine::storage::Storage::new_in_memory().unwrap()),
+            api_keys: Arc::new(DashMap::new()),
+            rate_limits: Arc::new(DashMap::new()),
+            crawl_results: Arc::new(DashMap::new()),
+            audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+            metrics: Arc::new(Metrics::new()),
+            webhooks: Arc::new(DashMap::new()),
+            schedules: Arc::new(DashMap::new()),
+            http_client: reqwest::Client::new(),
+            auth: Arc::new(auth::AuthManager::new("test".to_string())),
+            oidc: None,
+            oidc_states: Arc::new(DashMap::new()),
+            tenants: Arc::new(DashMap::new()),
+            marketplace: MarketplaceState::new(),
+            sessions: Arc::new(DashMap::new()),
+        };
+
+        let state_token = "test-state-token".to_string();
+        state.oidc_states.insert(state_token.clone(), Utc::now());
+
+        let ttl = chrono::Duration::minutes(10);
+        let entry = state.oidc_states.get(&state_token).unwrap();
+        let is_expired = Utc::now() - *entry.value() > ttl;
+        assert!(!is_expired, "Fresh state token should not be expired");
+    }
+
+    #[test]
+    fn test_session_info_serialization() {
+        let session = SessionInfo {
+            jti: "jti-1".to_string(),
+            user_id: "user-1".to_string(),
+            created_at: Utc::now(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            revoked: false,
+        };
+        let json = serde_json::to_string(&session).unwrap();
+        let deserialized: SessionInfo = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized.jti, "jti-1");
+        assert!(!deserialized.revoked);
+    }
+
+    #[test]
+    fn test_session_revocation() {
+        let state = AppState {
+            storage: Arc::new(crawlkit_engine::storage::Storage::new_in_memory().unwrap()),
+            api_keys: Arc::new(DashMap::new()),
+            rate_limits: Arc::new(DashMap::new()),
+            crawl_results: Arc::new(DashMap::new()),
+            audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+            metrics: Arc::new(Metrics::new()),
+            webhooks: Arc::new(DashMap::new()),
+            schedules: Arc::new(DashMap::new()),
+            http_client: reqwest::Client::new(),
+            auth: Arc::new(auth::AuthManager::new("test".to_string())),
+            oidc: None,
+            oidc_states: Arc::new(DashMap::new()),
+            tenants: Arc::new(DashMap::new()),
+            marketplace: MarketplaceState::new(),
+            sessions: Arc::new(DashMap::new()),
+        };
+
+        let session = SessionInfo {
+            jti: "jti-1".to_string(),
+            user_id: "user-1".to_string(),
+            created_at: Utc::now(),
+            expires_at: Utc::now() + chrono::Duration::hours(1),
+            revoked: false,
+        };
+        state.sessions.insert("jti-1".to_string(), session);
+
+        {
+            let mut s = state.sessions.get_mut("jti-1").unwrap();
+            s.revoked = true;
+        }
+
+        let session = state.sessions.get("jti-1").unwrap();
+        assert!(session.revoked);
     }
 }

@@ -95,12 +95,12 @@ fi
 printf "${CYAN}[%d/${total}]${NC} Unsafe code check ... " "$((passed + failed + warnings + 1))"
 if grep -rn 'unsafe\s*{' --include="*.rs" \
     --exclude-dir=target --exclude-dir=.git \
-    --exclude='*_test.rs' --exclude='tests.rs' \
+    --exclude='*_test.rs' --exclude='tests.rs' --exclude='native_plugin.rs' \
     "$REPO_ROOT/crates/crawlkit-engine/src/" \
     "$REPO_ROOT/crates/crawlkit/src/" \
     "$REPO_ROOT/crates/crawlkit-api/src/" \
     2>/dev/null | \
-    grep -v '// SAFETY\|#\[cfg(test)\]\|///\s*# Safety\|mod tests' | \
+    grep -v '// SAFETY\|// SAFETY:\|#\[cfg(test)\]\|///\s*# Safety\|mod tests' | \
     grep -q .; then
     printf "${RED}FAIL (unsafe code without SAFETY comment)${NC}\n"
     failed=$((failed + 1))

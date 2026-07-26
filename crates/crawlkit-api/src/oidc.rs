@@ -60,6 +60,10 @@ pub struct OidcUserInfo {
     pub email: Option<String>,
     pub name: Option<String>,
     pub picture: Option<String>,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub roles: Vec<String>,
 }
 
 /// OIDC manager for handling authentication.
@@ -318,12 +322,16 @@ mod tests {
             email: Some("user@example.com".to_string()),
             name: Some("Test User".to_string()),
             picture: Some("https://example.com/photo.jpg".to_string()),
+            groups: vec!["engineering".to_string()],
+            roles: vec!["admin".to_string()],
         };
         let json = serde_json::to_string(&info).unwrap();
         let deserialized: OidcUserInfo = serde_json::from_str(&json).unwrap();
         assert_eq!(deserialized.sub, "user-abc");
         assert_eq!(deserialized.email.as_deref(), Some("user@example.com"));
         assert_eq!(deserialized.name.as_deref(), Some("Test User"));
+        assert_eq!(deserialized.groups, vec!["engineering".to_string()]);
+        assert_eq!(deserialized.roles, vec!["admin".to_string()]);
     }
 
     #[test]
@@ -333,6 +341,8 @@ mod tests {
             email: None,
             name: None,
             picture: None,
+            groups: vec![],
+            roles: vec![],
         };
         let json = serde_json::to_string(&info).unwrap();
         let deserialized: OidcUserInfo = serde_json::from_str(&json).unwrap();
@@ -340,6 +350,8 @@ mod tests {
         assert!(deserialized.email.is_none());
         assert!(deserialized.name.is_none());
         assert!(deserialized.picture.is_none());
+        assert!(deserialized.groups.is_empty());
+        assert!(deserialized.roles.is_empty());
     }
 
     // ---------------------------------------------------------------

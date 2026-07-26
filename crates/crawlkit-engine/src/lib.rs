@@ -49,6 +49,7 @@ use url::Url;
 /// provides recommendations for canonical URL best practices.
 pub mod advanced_canonical;
 /// Advanced crawl features such as JavaScript rendering and WASM analysis.
+#[cfg(feature = "full")]
 pub mod advanced_features;
 /// AI-powered page content analyzers for answer boxes, citations, and crawler accessibility.
 ///
@@ -113,6 +114,7 @@ pub mod compare;
 ///
 /// Compares crawled content against target keywords to find
 /// opportunities for new content creation.
+#[cfg(feature = "full")]
 pub mod content_gap;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
 #[cfg(feature = "full")]
@@ -148,6 +150,7 @@ pub mod export;
 ///
 /// Flags are immutable per-crawl session once set. Supports TOML
 /// configuration and programmatic access via SharedFeatureFlags.
+#[cfg(feature = "full")]
 pub mod feature_flags;
 /// HTTP client with retry, redirect following, and rate limiting.
 ///
@@ -174,6 +177,12 @@ pub mod post_crawl;
 #[cfg(feature = "full")]
 pub mod query_tracker;
 
+/// Native plugin loading via dynamic linking (libloading).
+///
+/// Provides [`NativePlugin`](native_plugin::NativePlugin) for loading
+/// shared libraries that implement the crawlkit native plugin ABI.
+#[cfg(feature = "full")]
+pub mod native_plugin;
 /// Metrics collection and observability hooks.
 ///
 /// Provides atomic Metrics for tracking pages crawled,
@@ -247,6 +256,7 @@ pub mod types;
 ///
 /// Static pattern analysis, runtime performance analysis, and
 /// Playwright-powered rendering analysis for WebAssembly content.
+#[cfg(feature = "full")]
 pub mod wasm_analyzers;
 
 pub use ai_analyzers::{
@@ -284,6 +294,7 @@ pub use determinism::DeterminismController;
 pub use dns::{DnsCache, DnsError, DnsPrefetcher};
 #[cfg(feature = "full")]
 pub use encryption::{EncryptionConfig, EncryptionError, EncryptionManager};
+#[cfg(feature = "full")]
 pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
@@ -317,6 +328,7 @@ pub use storage::{
 };
 #[cfg(feature = "full")]
 pub use storage_trait::{new_in_memory_backend, StorageBackend};
+#[cfg(feature = "full")]
 pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
 
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
@@ -333,7 +345,7 @@ pub mod parser;
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{
     ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParseError,
-    ParsedPage, ScriptInfo, StreamingHtmlParser, StructuredData, StyleInfo,
+    ParsedPage, ParserEvent, ScriptInfo, StreamingHtmlParser, StructuredData, StyleInfo,
 };
 
 mod duration_ms {

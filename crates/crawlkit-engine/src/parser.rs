@@ -2,6 +2,9 @@ use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use url::Url;
 
+#[cfg(feature = "full")]
+use tokio::sync::mpsc;
+
 use crate::meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 
 /// Cached CSS selectors compiled once, reused on every parse call.
@@ -1142,6 +1145,205 @@ impl HtmlParser {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Streaming HTML parser (async channel-based)
+// ---------------------------------------------------------------------------
+
+/// Events emitted by the streaming HTML parser.
+///
+/// Each event represents a stage in the incremental parsing pipeline.
+/// Consumers can react to intermediate results (links, meta) as they become
+/// available, without waiting for the full document.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_engine::parser::ParserEvent;
+///
+/// let event = ParserEvent::Chunk(1024);
+/// assert!(matches!(event, ParserEvent::Chunk(1024)));
+/// ```
+#[derive(Debug, Clone)]
+#[allow(clippy::large_enum_variant)]
+pub enum ParserEvent {
+    /// A chunk of HTML has been received and appended to the buffer.
+    Chunk(usize),
+    /// Links extracted from the current partial document.
+    Links(Vec<ExtractedLink>),
+    /// Meta tags extracted from the current partial document.
+    Meta(MetaTags),
+    /// Parsing complete — full [`ParsedPage`] available.
+    Done(Box<ParsedPage>),
+    /// Error during parsing.
+    Error(String),
+}
+
+/// Extracts links from a partial or complete HTML document.
+///
+/// Used internally by [`HtmlParser::parse_stream`] to extract links from
+/// accumulated HTML chunks before the full document is available.
+struct LinkExtractor<'a> {
+    base_url: &'a Url,
+    page_domain: &'a str,
+    seen: std::collections::HashSet<String>,
+}
+
+impl<'a> LinkExtractor<'a> {
+    fn new(base_url: &'a Url) -> Self {
+        Self {
+            base_url,
+            page_domain: base_url.domain().unwrap_or(""),
+            seen: std::collections::HashSet::new(),
+        }
+    }
+
+    /// Extract links from the document, deduplicating by href.
+    fn extract_links(&mut self, document: &Html) -> Vec<ExtractedLink> {
+        let selector = match Selector::parse("a[href]") {
+            Ok(s) => s,
+            Err(_) => return Vec::new(),
+        };
+
+        document
+            .select(&selector)
+            .filter_map(|el| {
+                let raw_href = el.value().attr("href")?.to_string();
+
+                if raw_href.contains("/cdn-cgi/l/email-protection") {
+                    return None;
+                }
+
+                let resolved_url = self.base_url.join(&raw_href).ok()?;
+                let href = resolved_url.to_string();
+
+                if !self.seen.insert(href.clone()) {
+                    return None;
+                }
+
+                let text: String = el.text().collect::<Vec<_>>().join("").trim().to_string();
+
+                let rel: Vec<String> = el
+                    .value()
+                    .attr("rel")
+                    .map(|r| r.split_whitespace().map(String::from).collect())
+                    .unwrap_or_default();
+
+                let is_external = resolved_url.domain().unwrap_or("") != self.page_domain;
+
+                let aria_label = el.value().attr("aria-label").map(String::from);
+                let img_alt = el
+                    .select(&Selector::parse("img").ok()?)
+                    .next()
+                    .and_then(|img| img.value().attr("alt"))
+                    .map(String::from);
+
+                Some(ExtractedLink {
+                    href,
+                    text,
+                    rel,
+                    is_external,
+                    aria_label,
+                    img_alt,
+                })
+            })
+            .collect()
+    }
+}
+
+impl HtmlParser {
+    /// Parse an HTML document from a streaming source.
+    ///
+    /// Accepts a channel receiver that yields HTML chunks and returns a channel
+    /// receiver that yields [`ParserEvent`]s as parsing progresses. Links and
+    /// meta tags are extracted incrementally from the accumulated buffer, and
+    /// a full [`ParsedPage`] is produced when the stream ends.
+    ///
+    /// This is useful for processing large HTML responses without buffering
+    /// the entire body before parsing begins.
+    ///
+    /// # Arguments
+    ///
+    /// * `receiver` — Channel producing raw HTML byte chunks.
+    /// * `base_url` — Base URL for resolving relative links.
+    ///
+    /// # Returns
+    ///
+    /// A channel receiver that yields parser events. The channel closes when
+    /// parsing completes or an error occurs.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// use crawlkit_engine::HtmlParser;
+    /// use crawlkit_engine::parser::ParserEvent;
+    /// use tokio::sync::mpsc;
+    /// use url::Url;
+    ///
+    /// # async fn example() {
+    /// let (tx, rx) = mpsc::channel::<Vec<u8>>(16);
+    /// let base_url = Url::parse("https://example.com").unwrap();
+    /// let mut events = HtmlParser::parse_stream(rx, base_url);
+    ///
+    /// // Feed chunks from an HTTP response
+    /// tokio::spawn(async move {
+    ///     let _ = tx.send(b"<html><head><title>T</title></head>".to_vec()).await;
+    ///     let _ = tx.send(b"<body><a href=\"/link\">L</a></body></html>".to_vec()).await;
+    ///     // tx dropped → stream ends
+    /// });
+    ///
+    /// while let Some(event) = events.recv().await {
+    ///     match event {
+    ///         ParserEvent::Links(links) => println!("found {} links", links.len()),
+    ///         ParserEvent::Done(page) => println!("title: {:?}", page.meta.title),
+    ///         _ => {}
+    ///     }
+    /// }
+    /// # }
+    /// ```
+    #[cfg(feature = "full")]
+    pub fn parse_stream(
+        mut receiver: mpsc::Receiver<Vec<u8>>,
+        base_url: Url,
+    ) -> mpsc::Receiver<ParserEvent> {
+        let (tx, rx) = mpsc::channel(64);
+
+        tokio::spawn(async move {
+            let mut buffer = String::new();
+            let mut link_extractor = LinkExtractor::new(&base_url);
+
+            while let Some(chunk) = receiver.recv().await {
+                let chunk_str = String::from_utf8_lossy(&chunk);
+                buffer.push_str(&chunk_str);
+
+                let chunk_len = chunk.len();
+
+                // Extract links synchronously, drop Html before .await
+                let links = {
+                    let doc = scraper::Html::parse_document(&buffer);
+                    link_extractor.extract_links(&doc)
+                };
+
+                let _ = tx.send(ParserEvent::Chunk(chunk_len)).await;
+                if !links.is_empty() {
+                    let _ = tx.send(ParserEvent::Links(links)).await;
+                }
+            }
+
+            match HtmlParser::parse(&buffer, &base_url) {
+                Ok(page) => {
+                    let _ = tx.send(ParserEvent::Meta(page.meta.clone())).await;
+                    let _ = tx.send(ParserEvent::Done(Box::new(page))).await;
+                }
+                Err(e) => {
+                    let _ = tx.send(ParserEvent::Error(e.to_string())).await;
+                }
+            }
+        });
+
+        rx
+    }
+}
+
 /// Streaming HTML parser that processes content incrementally.
 ///
 /// Buffers HTML chunks as they arrive and parses when a complete document
@@ -1654,5 +1856,160 @@ mod lang_test {
             "should detect lang attribute from raw HTML fallback"
         );
         assert_eq!(page.html_lang.as_deref(), Some("en"));
+    }
+}
+
+#[cfg(all(test, feature = "full"))]
+#[allow(clippy::unwrap_used)]
+mod streaming_tests {
+    use super::*;
+
+    fn test_url() -> Url {
+        Url::parse("https://example.com/page").unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_parse_stream_basic() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let mut events = HtmlParser::parse_stream(rx, test_url());
+
+        tx.send(b"<!DOCTYPE html><html><head><title>Stream</title></head>".into())
+            .await
+            .unwrap();
+        tx.send(b"<body><a href=\"/link\">Link</a></body></html>".into())
+            .await
+            .unwrap();
+        drop(tx);
+
+        let mut chunks = 0usize;
+        let mut links_received = false;
+        let mut done_page = None;
+
+        while let Some(event) = events.recv().await {
+            match event {
+                ParserEvent::Chunk(n) => {
+                    chunks += n;
+                }
+                ParserEvent::Links(links) => {
+                    links_received = true;
+                    assert!(!links.is_empty());
+                }
+                ParserEvent::Done(page) => {
+                    done_page = Some(page);
+                }
+                ParserEvent::Error(e) => panic!("unexpected error: {e}"),
+                _ => {}
+            }
+        }
+
+        assert!(chunks > 0);
+        assert!(links_received);
+        let page = done_page.expect("should receive Done event");
+        assert_eq!(page.meta.title.as_deref(), Some("Stream"));
+        assert_eq!(page.links.len(), 1);
+        assert_eq!(page.links[0].href, "https://example.com/link");
+    }
+
+    #[tokio::test]
+    async fn test_parse_stream_meta_emitted() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let mut events = HtmlParser::parse_stream(rx, test_url());
+
+        tx.send(
+            r#"<!DOCTYPE html><html><head>
+            <meta name="description" content="A description">
+            <title>Meta Test</title>
+        </head><body></body></html>"#
+                .as_bytes()
+                .to_vec(),
+        )
+        .await
+        .unwrap();
+        drop(tx);
+
+        let mut meta_received = false;
+        while let Some(event) = events.recv().await {
+            if let ParserEvent::Meta(meta) = event {
+                meta_received = true;
+                assert_eq!(meta.title.as_deref(), Some("Meta Test"));
+                assert_eq!(meta.description.as_deref(), Some("A description"));
+            }
+        }
+        assert!(meta_received);
+    }
+
+    #[tokio::test]
+    async fn test_parse_stream_deduplicates_links() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let mut events = HtmlParser::parse_stream(rx, test_url());
+
+        // Send same chunk twice — links should appear only once
+        let chunk = br#"<!DOCTYPE html><html><body>
+            <a href="/dup">Dup</a>
+            <a href="/dup">Dup Again</a>
+        </body></html>"#;
+
+        tx.send(chunk.to_vec()).await.unwrap();
+        tx.send(chunk.to_vec()).await.unwrap();
+        drop(tx);
+
+        let mut all_links = Vec::new();
+        while let Some(event) = events.recv().await {
+            if let ParserEvent::Links(links) = event {
+                all_links.extend(links);
+            }
+        }
+
+        let dup_links: Vec<_> = all_links
+            .iter()
+            .filter(|l| l.href == "https://example.com/dup")
+            .collect();
+        assert_eq!(dup_links.len(), 1, "duplicate link should appear only once");
+    }
+
+    #[tokio::test]
+    async fn test_parse_stream_error_on_empty() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let mut events = HtmlParser::parse_stream(rx, test_url());
+        drop(tx);
+
+        let mut got_done = false;
+        while let Some(event) = events.recv().await {
+            if let ParserEvent::Done(page) = event {
+                got_done = true;
+                assert!(page.meta.title.is_none());
+                assert!(page.links.is_empty());
+            }
+        }
+        assert!(got_done);
+    }
+
+    #[tokio::test]
+    async fn test_parse_stream_external_links() {
+        let (tx, rx) = tokio::sync::mpsc::channel::<Vec<u8>>(16);
+        let mut events = HtmlParser::parse_stream(rx, test_url());
+
+        tx.send(
+            br#"<!DOCTYPE html><html><body>
+            <a href="https://other.com/ext">External</a>
+            <a href="/internal">Internal</a>
+        </body></html>"#
+                .to_vec(),
+        )
+        .await
+        .unwrap();
+        drop(tx);
+
+        let mut all_links = Vec::new();
+        while let Some(event) = events.recv().await {
+            if let ParserEvent::Links(links) = event {
+                all_links.extend(links);
+            }
+        }
+
+        let external: Vec<_> = all_links.iter().filter(|l| l.is_external).collect();
+        let internal: Vec<_> = all_links.iter().filter(|l| !l.is_external).collect();
+        assert_eq!(external.len(), 1);
+        assert_eq!(internal.len(), 1);
     }
 }

@@ -298,6 +298,7 @@ impl AnalyzerRegistry {
                 Box::new(crate::ai_analyzers::AiCitationEligibilityAnalyzer::new()),
                 Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()),
                 // Phase 8: WASM Error Detection Analyzers
+                #[cfg(feature = "full")]
                 Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()),
                 // Advanced canonical & hreflang analysis
                 Box::new(crate::advanced_canonical::AdvancedCanonicalAnalyzer::new()),
@@ -325,15 +326,25 @@ impl AnalyzerRegistry {
 
     /// Run all analyzers on a page and collect findings.
     ///
-    /// Analyzers run in parallel via rayon for performance. Returns a
-    /// flat list of all [`Finding`]s from all analyzers.
+    /// Analyzers run in parallel via rayon when the `full` feature is enabled,
+    /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
+    /// from all analyzers.
     pub fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding> {
-        use rayon::prelude::*;
-
-        self.analyzers
-            .par_iter()
-            .flat_map(|a| a.analyze(ctx, config))
-            .collect()
+        #[cfg(feature = "full")]
+        {
+            use rayon::prelude::*;
+            self.analyzers
+                .par_iter()
+                .flat_map(|a| a.analyze(ctx, config))
+                .collect()
+        }
+        #[cfg(not(feature = "full"))]
+        {
+            self.analyzers
+                .iter()
+                .flat_map(|a| a.analyze(ctx, config))
+                .collect()
+        }
     }
 
     /// Returns the number of registered analyzers.

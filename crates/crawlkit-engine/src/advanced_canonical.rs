@@ -10,7 +10,7 @@
 // - URL001: Double slash in URL
 
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 /// Advanced canonical and hreflang analyzer that catches issues

@@ -1,6 +1,6 @@
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::playwright::RenderedPage;
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 // NOTE: WASM pattern analysis requires raw HTML access. Currently uses

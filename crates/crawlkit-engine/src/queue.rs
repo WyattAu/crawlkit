@@ -179,6 +179,20 @@ impl UrlQueue {
     ///
     /// Returns `true` if the URL was added, `false` if it was a duplicate
     /// or rejected by scope control.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::queue::{UrlQueue, ScopeConfig, Priority};
+    /// use url::Url;
+    ///
+    /// let queue = UrlQueue::new(ScopeConfig::default());
+    /// let url = Url::parse("https://example.com/about").unwrap();
+    ///
+    /// assert!(queue.push(url, 0, Priority::NORMAL));
+    /// assert!(!queue.push(Url::parse("https://example.com/about").unwrap(), 1, Priority::HIGH));
+    /// assert_eq!(queue.len(), 1);
+    /// ```
     pub fn push(&self, url: Url, depth: usize, priority: Priority) -> bool {
         self.push_with_referrer(url, depth, priority, None)
     }
@@ -230,6 +244,23 @@ impl UrlQueue {
     }
 
     /// Pops the highest-priority entry from the queue.
+    ///
+    /// Returns `None` if the queue is empty.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::queue::{UrlQueue, ScopeConfig, Priority};
+    /// use url::Url;
+    ///
+    /// let queue = UrlQueue::new(ScopeConfig::default());
+    /// queue.push(Url::parse("https://example.com/a").unwrap(), 0, Priority::LOW);
+    /// queue.push(Url::parse("https://example.com/b").unwrap(), 0, Priority::HIGH);
+    ///
+    /// let entry = queue.pop().unwrap();
+    /// assert_eq!(entry.priority, Priority::HIGH);
+    /// assert_eq!(queue.len(), 1);
+    /// ```
     pub fn pop(&self) -> Option<QueueEntry> {
         self.heap.lock().pop()
     }

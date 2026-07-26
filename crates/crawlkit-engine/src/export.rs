@@ -265,6 +265,20 @@ pub struct JsonIssue {
 ///
 /// Issues and links are fetched in bulk (single query each) and grouped
 /// by page_id in memory, avoiding N+1 query patterns for large crawls.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_engine::storage::Storage;
+/// use crawlkit_engine::export::export_json;
+///
+/// let storage = Storage::new_in_memory().unwrap();
+/// let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+/// storage.finish_crawl(&crawl_id, 0, 0).unwrap();
+///
+/// let json = export_json(&storage, &crawl_id, false).unwrap();
+/// assert!(json.contains("schema_version"));
+/// ```
 pub fn export_json(storage: &Storage, crawl_id: &str, pretty: bool) -> Result<String, ExportError> {
     let stats = storage.get_stats(crawl_id)?;
     let conn = storage.conn();
@@ -412,6 +426,21 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
 ///
 /// Issues are fetched in bulk (single query) and counted per page in
 /// memory, avoiding N+1 query patterns for large crawls.
+///
+/// # Examples
+///
+/// ```rust
+/// use crawlkit_engine::storage::Storage;
+/// use crawlkit_engine::export::export_html;
+///
+/// let storage = Storage::new_in_memory().unwrap();
+/// let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+/// storage.finish_crawl(&crawl_id, 0, 0).unwrap();
+///
+/// let html = export_html(&storage, &crawl_id).unwrap();
+/// assert!(html.contains("<!DOCTYPE html>"));
+/// assert!(html.contains("Crawl Report"));
+/// ```
 pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportError> {
     let stats = storage.get_stats(crawl_id)?;
     let conn = storage.conn();

@@ -202,6 +202,16 @@ impl CrawlEngine {
     /// The engine takes ownership of the configuration and a reference-counted
     /// storage handle. All internal components (HTTP client, queue, caches)
     /// are created internally when [`run`](Self::run) is called.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
+    /// use crawlkit_engine::storage::Storage;
+    ///
+    /// let storage = Storage::new_in_memory().unwrap();
+    /// let engine = CrawlEngine::new(CrawlEngineConfig::default(), storage);
+    /// ```
     pub fn new(config: CrawlEngineConfig, storage: Storage) -> Self {
         Self {
             config,
@@ -233,6 +243,21 @@ impl CrawlEngine {
     ///
     /// A [`CrawlOutput`] with crawl statistics, or an error if the
     /// crawl could not be started.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # async fn example() -> Result<(), Box<dyn std::error::Error>> {
+    /// use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
+    /// use crawlkit_engine::storage::Storage;
+    ///
+    /// let storage = Storage::new_in_memory()?;
+    /// let engine = CrawlEngine::new(CrawlEngineConfig::default(), storage);
+    /// let result = engine.run("https://example.com").await?;
+    /// println!("Crawled {} pages, {} issues", result.pages_crawled, result.issues_found);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn run(&self, start_url: &str) -> Result<CrawlOutput, crate::CrawlError> {
         self.run_with_callback(start_url, None).await
     }

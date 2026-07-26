@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::storage::Severity;
+use crate::types::Severity;
 
 /// Represents an AI crawler/bot that may access web content.
 #[derive(Debug, Clone, Serialize, Deserialize)]

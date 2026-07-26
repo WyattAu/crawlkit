@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use crate::parser::ParsedPage;
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::{CrawlConfig, RedirectHop};
 
 /// Content quality analyzers for readability, entity extraction, and structured data.
@@ -352,7 +352,7 @@ mod tests {
     use super::*;
     use crate::meta::MetaTags;
     use crate::parser::{ExtractedImage, ExtractedLink, Heading, StructuredData};
-    use crate::storage::{IssueCategory, Severity};
+    use crate::types::{IssueCategory, Severity};
     use std::collections::{HashMap, HashSet};
     use url::Url;
 

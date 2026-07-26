@@ -4,7 +4,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
-use crate::storage::Severity;
+use crate::types::Severity;
 
 /// Alert definition.
 #[derive(Debug, Clone, Serialize, Deserialize)]

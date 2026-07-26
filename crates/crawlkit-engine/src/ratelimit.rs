@@ -43,6 +43,16 @@ pub struct RateLimiter {
 
 impl RateLimiter {
     /// Creates a new rate limiter with the given RPS settings.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::ratelimit::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(2.0, 10.0);
+    /// assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);
+    /// assert!((limiter.global_rps() - 10.0).abs() < f64::EPSILON);
+    /// ```
     pub fn new(per_domain_rps: f64, global_rps: f64) -> Self {
         Self::with_max_domains(per_domain_rps, global_rps, 10_000)
     }
@@ -92,6 +102,17 @@ impl RateLimiter {
     ///
     /// Blocks until tokens are available in both the domain and global
     /// buckets. Returns `Err` if the wait exceeds the timeout.
+    ///
+    /// # Examples
+    ///
+    /// ```rust,no_run
+    /// # #[tokio::main] async fn main() {
+    /// use crawlkit_engine::ratelimit::RateLimiter;
+    ///
+    /// let limiter = RateLimiter::new(100.0, 1000.0);
+    /// limiter.acquire("example.com").await.unwrap();
+    /// # }
+    /// ```
     pub async fn acquire(&self, domain: &str) -> Result<(), RateLimitError> {
         self.acquire_with_timeout(domain, Duration::from_secs(60))
             .await

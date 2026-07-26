@@ -1,6 +1,6 @@
 use crate::ai_bots::AiBotRegistry;
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 // ---------------------------------------------------------------------------

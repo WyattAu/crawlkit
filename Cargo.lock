@@ -682,7 +682,7 @@ checksum = "4155f8a1afdef96a0272c67804926eee4ef35f9708ab22ad6878d4c9543df596"
 
 [[package]]
 name = "crawlkit"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -707,7 +707,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-api"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "anyhow",
  "argon2",
@@ -741,7 +741,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-engine"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "aes-gcm",
  "async-trait",
@@ -780,7 +780,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-plugin-sdk"
-version = "2.0.0"
+version = "2.1.0"
 dependencies = [
  "serde",
  "serde_json",

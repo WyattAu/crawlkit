@@ -212,6 +212,8 @@ pub mod storage;
 /// Defines [`StorageBackend`](storage_trait::StorageBackend) for pluggable
 /// storage implementations (SQLite, in-memory, distributed, etc.).
 pub mod storage_trait;
+/// Common types re-exported for backward compatibility.
+pub mod types;
 /// WASM-based analyzers for advanced code and performance analysis.
 ///
 /// Static pattern analysis, runtime performance analysis, and
@@ -347,9 +349,15 @@ pub enum CrawlError {
     #[error("invalid URL: {0}")]
     InvalidUrl(#[from] url::ParseError),
 
-    /// The HTTP request failed.
+    /// The HTTP request failed (full mode — reqwest error).
+    #[cfg(feature = "full")]
     #[error("request failed: {0}")]
     RequestFailed(#[from] reqwest::Error),
+
+    /// The HTTP request failed (WASM mode — string error).
+    #[cfg(not(feature = "full"))]
+    #[error("request failed: {0}")]
+    RequestFailed(String),
 
     /// The URL exceeded the maximum redirect limit.
     #[error("too many redirects ({0})")]

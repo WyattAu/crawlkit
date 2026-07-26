@@ -679,9 +679,14 @@ impl Storage {
     }
 
     /// Insert a batch of issues for performance.
+    /// Wraps all inserts in a single SQLite transaction for O(n) vs O(n*fsync).
     pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
+        if issues.is_empty() {
+            return Ok(());
+        }
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
+        let tx = conn.unchecked_transaction()?;
+        let mut stmt = tx.prepare(
             "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         )?;
@@ -699,6 +704,8 @@ impl Storage {
                 issue.tenant_id,
             ])?;
         }
+        drop(stmt);
+        tx.commit()?;
         Ok(())
     }
 

@@ -1,7 +1,8 @@
+use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use dashmap::DashMap;
+use lru::LruCache;
 use parking_lot::Mutex;
 use tokio::sync::Semaphore;
 
@@ -9,10 +10,11 @@ use crate::CrawlConfig;
 
 /// Token-bucket rate limiter for per-domain and global request throttling.
 ///
-/// Each domain gets its own token bucket. A global bucket throttles
-/// all requests across all domains. A request proceeds only when both
-/// the domain and global buckets have tokens. Supports crawl-delay
-/// from robots.txt and optional concurrency limiting.
+/// Each domain gets its own token bucket stored in an LRU cache that
+/// evicts least-recently-used domains when the capacity is reached.
+/// A global bucket throttles all requests across all domains. A request
+/// proceeds only when both the domain and global buckets have tokens.
+/// Supports crawl-delay from robots.txt and optional concurrency limiting.
 ///
 /// # Examples
 ///
@@ -23,8 +25,8 @@ use crate::CrawlConfig;
 /// assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);
 /// ```
 pub struct RateLimiter {
-    /// Per-domain token buckets.
-    domain_buckets: DashMap<String, TokenBucket>,
+    /// Per-domain token buckets (LRU eviction when full).
+    domain_buckets: Mutex<LruCache<String, TokenBucket>>,
     /// Global token bucket.
     global_bucket: Mutex<TokenBucket>,
     /// Default per-domain RPS (requests per second).
@@ -42,11 +44,21 @@ pub struct RateLimiter {
 impl RateLimiter {
     /// Creates a new rate limiter with the given RPS settings.
     pub fn new(per_domain_rps: f64, global_rps: f64) -> Self {
+        Self::with_max_domains(per_domain_rps, global_rps, 10_000)
+    }
+
+    /// Creates a rate limiter with a custom maximum number of tracked domains.
+    ///
+    /// When the cache is full and a new domain is accessed, the
+    /// least-recently-used domain bucket is evicted.
+    pub fn with_max_domains(per_domain_rps: f64, global_rps: f64, max_domains: usize) -> Self {
         let per_domain_burst = (per_domain_rps * 2.0).ceil() as usize;
         let global_burst = (global_rps * 2.0).ceil() as usize;
 
         Self {
-            domain_buckets: DashMap::new(),
+            domain_buckets: Mutex::new(LruCache::new(
+                NonZeroUsize::new(max_domains).unwrap_or(NonZeroUsize::MIN),
+            )),
             global_bucket: Mutex::new(TokenBucket::new(global_rps, global_burst)),
             per_domain_rps,
             global_rps,
@@ -107,12 +119,11 @@ impl RateLimiter {
         // Wait for domain bucket token
         loop {
             {
-                let mut bucket = self
-                    .domain_buckets
-                    .entry(domain.to_string())
-                    .or_insert_with(|| {
-                        TokenBucket::new(self.per_domain_rps, self.per_domain_burst)
-                    });
+                let mut buckets = self.domain_buckets.lock();
+                let rps = self.per_domain_rps;
+                let burst = self.per_domain_burst;
+                let bucket =
+                    buckets.get_or_insert_mut(domain.to_string(), || TokenBucket::new(rps, burst));
                 bucket.refill();
 
                 if bucket.try_consume(1) {
@@ -125,11 +136,13 @@ impl RateLimiter {
             }
 
             // Sleep for the time until the next token is available
-            let wait = self
-                .domain_buckets
-                .get(domain)
-                .map(|b| b.time_until_next_token())
-                .unwrap_or(Duration::from_millis(10));
+            let wait = {
+                let buckets = self.domain_buckets.lock();
+                buckets
+                    .peek(domain)
+                    .map(|b| b.time_until_next_token())
+                    .unwrap_or(Duration::from_millis(10))
+            };
 
             let remaining = deadline.saturating_duration_since(Instant::now());
             let sleep_time = wait.min(remaining);
@@ -175,17 +188,18 @@ impl RateLimiter {
             1.0 / delay.as_secs_f64()
         };
         let burst = (rps * 2.0).ceil() as usize;
-        self.domain_buckets
-            .insert(domain.to_string(), TokenBucket::new(rps, burst));
+        let mut buckets = self.domain_buckets.lock();
+        buckets.put(domain.to_string(), TokenBucket::new(rps, burst));
     }
 
     /// Returns the current token count for a domain bucket.
     /// Creates the bucket if it doesn't exist.
     pub fn domain_tokens(&self, domain: &str) -> f64 {
-        self.domain_buckets
-            .entry(domain.to_string())
-            .or_insert_with(|| TokenBucket::new(self.per_domain_rps, self.per_domain_burst))
-            .tokens()
+        let mut buckets = self.domain_buckets.lock();
+        let rps = self.per_domain_rps;
+        let burst = self.per_domain_burst;
+        let bucket = buckets.get_or_insert_mut(domain.to_string(), || TokenBucket::new(rps, burst));
+        bucket.tokens()
     }
 
     /// Returns the current global token count.
@@ -393,5 +407,48 @@ mod tests {
             .acquire_with_timeout("example.com", Duration::from_millis(50))
             .await;
         assert!(matches!(result, Err(RateLimitError::Timeout)));
+    }
+
+    #[test]
+    fn test_lru_eviction() {
+        let limiter = RateLimiter::with_max_domains(10.0, 100.0, 3);
+
+        // Fill the cache with 3 domains
+        limiter.domain_tokens("a.com");
+        limiter.domain_tokens("b.com");
+        limiter.domain_tokens("c.com");
+
+        // All 3 should be present
+        {
+            let buckets = limiter.domain_buckets.lock();
+            assert_eq!(buckets.len(), 3);
+        }
+
+        // Access a.com to make it most recently used
+        limiter.domain_tokens("a.com");
+
+        // Insert d.com → evicts b.com (least recently used)
+        limiter.domain_tokens("d.com");
+
+        {
+            let buckets = limiter.domain_buckets.lock();
+            assert_eq!(buckets.len(), 3);
+            assert!(buckets.peek("a.com").is_some());
+            assert!(buckets.peek("b.com").is_none());
+            assert!(buckets.peek("c.com").is_some());
+            assert!(buckets.peek("d.com").is_some());
+        }
+    }
+
+    #[test]
+    fn test_max_domains_configurable() {
+        let limiter = RateLimiter::with_max_domains(10.0, 100.0, 1);
+        limiter.domain_tokens("first.com");
+        limiter.domain_tokens("second.com");
+
+        let buckets = limiter.domain_buckets.lock();
+        assert_eq!(buckets.len(), 1);
+        assert!(buckets.peek("second.com").is_some());
+        assert!(buckets.peek("first.com").is_none());
     }
 }

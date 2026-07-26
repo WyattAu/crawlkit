@@ -395,36 +395,65 @@ struct ScheduleResponse {
 // Plugin marketplace types
 // ---------------------------------------------------------------------------
 
+/// Plugin marketplace entry.
+///
+/// Represents a plugin available in the crawlkit marketplace with metadata
+/// for discovery and installation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MarketplacePlugin {
+    /// Plugin name (unique identifier).
     pub name: String,
+    /// Semantic version string.
     pub version: String,
+    /// Plugin author name.
     pub author: String,
+    /// Brief description of the plugin.
     pub description: String,
+    /// SPDX license identifier.
     pub license: String,
+    /// Plugin categories for marketplace browsing.
     pub categories: Vec<String>,
+    /// Searchable tags.
     pub tags: Vec<String>,
+    /// Total download count.
     pub downloads: u64,
+    /// Average user rating (0.0 - 5.0).
     pub rating: f64,
+    /// ISO 8601 creation timestamp.
     pub created_at: String,
+    /// ISO 8601 last update timestamp.
     pub updated_at: String,
 }
 
+/// Request body for submitting a new plugin to the marketplace.
 #[derive(Debug, Clone, Deserialize)]
 pub struct SubmitPluginRequest {
+    /// Plugin name (must be unique).
     pub name: String,
+    /// Semantic version string.
     pub version: String,
+    /// Plugin author name.
     pub author: String,
+    /// Brief description of the plugin.
     pub description: String,
+    /// SPDX license identifier.
     pub license: String,
+    /// Plugin categories.
     pub categories: Vec<String>,
+    /// Searchable tags.
     pub tags: Vec<String>,
+    /// Optional source repository URL.
     pub repository: Option<String>,
+    /// Optional project homepage URL.
     pub homepage: Option<String>,
 }
 
+/// Shared state for the plugin marketplace.
+///
+/// Thread-safe storage for marketplace plugins using `Arc<RwLock<HashMap>>`.
 #[derive(Clone)]
 pub struct MarketplaceState {
+    /// Map of plugin name to plugin metadata.
     pub plugins: Arc<RwLock<HashMap<String, MarketplacePlugin>>>,
 }
 
@@ -435,6 +464,7 @@ impl Default for MarketplaceState {
 }
 
 impl MarketplaceState {
+    /// Create a new empty marketplace state.
     pub fn new() -> Self {
         Self {
             plugins: Arc::new(RwLock::new(HashMap::new())),
@@ -581,10 +611,13 @@ async fn csp_headers(request: axum::extract::Request, next: Next) -> Response {
     let headers = response.headers_mut();
     headers.insert(
         "Content-Security-Policy",
-        HeaderValue::from_static(
-            "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' \
-             'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'",
-        ),
+        HeaderValue::from_str(&csp_policy()).unwrap_or_else(|_| {
+            HeaderValue::from_static(
+                "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+                 img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; \
+                 base-uri 'self'; form-action 'self'",
+            )
+        }),
     );
     headers.insert(
         "X-Content-Type-Options",
@@ -596,6 +629,15 @@ async fn csp_headers(request: axum::extract::Request, next: Next) -> Response {
         HeaderValue::from_static("strict-origin-when-cross-origin"),
     );
     response
+}
+
+fn csp_policy() -> String {
+    std::env::var("CSP_POLICY").unwrap_or_else(|_| {
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; \
+         img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; \
+         base-uri 'self'; form-action 'self'"
+            .to_string()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -1906,10 +1948,34 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
-        .unwrap_or_else(|_| "http://localhost:5173".to_string())
+        .unwrap_or_default()
         .split(',')
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+        .collect();
+
+    let cors_methods: Vec<Method> = std::env::var("CORS_METHODS")
+        .unwrap_or_else(|_| "GET,POST,PUT,DELETE,PATCH,OPTIONS".to_string())
+        .split(',')
+        .map(|s| s.trim().to_uppercase())
+        .filter_map(|m| match m.as_str() {
+            "GET" => Some(Method::GET),
+            "POST" => Some(Method::POST),
+            "PUT" => Some(Method::PUT),
+            "DELETE" => Some(Method::DELETE),
+            "PATCH" => Some(Method::PATCH),
+            "OPTIONS" => Some(Method::OPTIONS),
+            "HEAD" => Some(Method::HEAD),
+            _ => None,
+        })
+        .collect();
+
+    let cors_headers: Vec<http::header::HeaderName> = std::env::var("CORS_HEADERS")
+        .unwrap_or_else(|_| "Authorization,Content-Type,X-API-Key".to_string())
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .filter_map(|h| http::header::HeaderName::from_bytes(h.as_bytes()).ok())
         .collect();
 
     let csrf_allowed_origins: Vec<String> = std::env::var("ALLOWED_ORIGINS")
@@ -1919,11 +1985,11 @@ async fn main() -> anyhow::Result<()> {
         .filter(|s| !s.is_empty())
         .collect();
 
-    let cors = if allowed_origins.iter().all(|o| o == "*") {
+    let cors = if allowed_origins.is_empty() || allowed_origins.iter().all(|o| o == "*") {
         CorsLayer::new()
             .allow_origin(Any)
             .allow_methods(Any)
-            .allow_headers(Any)
+            .allow_headers(AllowHeaders::any())
     } else {
         let origins: Vec<HeaderValue> = allowed_origins
             .iter()
@@ -1931,14 +1997,9 @@ async fn main() -> anyhow::Result<()> {
             .collect();
         CorsLayer::new()
             .allow_origin(origins)
-            .allow_methods([
-                Method::GET,
-                Method::POST,
-                Method::PUT,
-                Method::DELETE,
-                Method::OPTIONS,
-            ])
-            .allow_headers(AllowHeaders::any())
+            .allow_methods(cors_methods)
+            .allow_headers(cors_headers)
+            .max_age(std::time::Duration::from_secs(86400))
     };
 
     let protected = Router::new()
@@ -2548,5 +2609,222 @@ mod tests {
         let filter = IssueFilter::default();
         let issues = storage.get_issues(&crawl_id, &filter).unwrap();
         assert!(issues.is_empty());
+    }
+
+    // ---------------------------------------------------------------
+    // CSP policy
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_csp_policy_default() {
+        std::env::remove_var("CSP_POLICY");
+        let policy = csp_policy();
+        assert!(policy.contains("default-src 'self'"));
+        assert!(policy.contains("script-src 'self'"));
+        assert!(policy.contains("style-src 'self' 'unsafe-inline'"));
+        assert!(policy.contains("img-src 'self' data: https:"));
+        assert!(policy.contains("connect-src 'self'"));
+        assert!(policy.contains("frame-ancestors 'none'"));
+        assert!(policy.contains("base-uri 'self'"));
+        assert!(policy.contains("form-action 'self'"));
+    }
+
+    #[test]
+    fn test_csp_policy_custom() {
+        std::env::set_var("CSP_POLICY", "default-src 'none'");
+        let policy = csp_policy();
+        assert_eq!(policy, "default-src 'none'");
+        std::env::remove_var("CSP_POLICY");
+    }
+
+    #[test]
+    fn test_csp_headers_middleware_sets_header() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        let app = axum::Router::new()
+            .route("/", axum::routing::get(|| async { "ok" }))
+            .layer(middleware::from_fn(super::csp_headers));
+
+        let request = Request::builder().uri("/").body(Body::empty()).unwrap();
+
+        let response = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(app.oneshot(request))
+            .unwrap();
+
+        let headers = response.headers();
+        assert!(headers.contains_key("Content-Security-Policy"));
+        assert!(headers.contains_key("X-Content-Type-Options"));
+        assert!(headers.contains_key("X-Frame-Options"));
+        assert!(headers.contains_key("Referrer-Policy"));
+
+        let csp = headers
+            .get("Content-Security-Policy")
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(csp.contains("default-src 'self'"));
+
+        assert_eq!(headers.get("X-Content-Type-Options").unwrap(), "nosniff");
+        assert_eq!(headers.get("X-Frame-Options").unwrap(), "DENY");
+        assert_eq!(
+            headers.get("Referrer-Policy").unwrap(),
+            "strict-origin-when-cross-origin"
+        );
+    }
+
+    #[test]
+    fn test_csp_headers_middleware_respects_custom_policy() {
+        use axum::body::Body;
+        use axum::http::Request;
+        use tower::ServiceExt;
+
+        std::env::set_var("CSP_POLICY", "default-src 'none'; script-src 'self'");
+
+        let app = axum::Router::new()
+            .route("/", axum::routing::get(|| async { "ok" }))
+            .layer(middleware::from_fn(super::csp_headers));
+
+        let request = Request::builder().uri("/").body(Body::empty()).unwrap();
+
+        let response = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(app.oneshot(request))
+            .unwrap();
+
+        let csp = response
+            .headers()
+            .get("Content-Security-Policy")
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(csp, "default-src 'none'; script-src 'self'");
+
+        std::env::remove_var("CSP_POLICY");
+    }
+
+    // ---------------------------------------------------------------
+    // CORS configuration
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_cors_origins_empty_denies_all() {
+        std::env::remove_var("CORS_ORIGINS");
+        let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert!(allowed_origins.is_empty());
+    }
+
+    #[test]
+    fn test_cors_methods_parsing() {
+        std::env::set_var("CORS_METHODS", "GET,POST,PATCH");
+        let cors_methods: Vec<Method> = std::env::var("CORS_METHODS")
+            .unwrap_or_else(|_| "GET,POST,PUT,DELETE,PATCH,OPTIONS".to_string())
+            .split(',')
+            .map(|s| s.trim().to_uppercase())
+            .filter_map(|m| match m.as_str() {
+                "GET" => Some(Method::GET),
+                "POST" => Some(Method::POST),
+                "PUT" => Some(Method::PUT),
+                "DELETE" => Some(Method::DELETE),
+                "PATCH" => Some(Method::PATCH),
+                "OPTIONS" => Some(Method::OPTIONS),
+                "HEAD" => Some(Method::HEAD),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cors_methods.len(), 3);
+        assert!(cors_methods.contains(&Method::GET));
+        assert!(cors_methods.contains(&Method::POST));
+        assert!(cors_methods.contains(&Method::PATCH));
+        std::env::remove_var("CORS_METHODS");
+    }
+
+    #[test]
+    fn test_cors_methods_default() {
+        std::env::remove_var("CORS_METHODS");
+        let cors_methods: Vec<Method> = std::env::var("CORS_METHODS")
+            .unwrap_or_else(|_| "GET,POST,PUT,DELETE,PATCH,OPTIONS".to_string())
+            .split(',')
+            .map(|s| s.trim().to_uppercase())
+            .filter_map(|m| match m.as_str() {
+                "GET" => Some(Method::GET),
+                "POST" => Some(Method::POST),
+                "PUT" => Some(Method::PUT),
+                "DELETE" => Some(Method::DELETE),
+                "PATCH" => Some(Method::PATCH),
+                "OPTIONS" => Some(Method::OPTIONS),
+                "HEAD" => Some(Method::HEAD),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(cors_methods.len(), 6);
+    }
+
+    #[test]
+    fn test_cors_headers_parsing() {
+        std::env::set_var("CORS_HEADERS", "Authorization,Content-Type,X-Custom");
+        let cors_headers: Vec<http::header::HeaderName> = std::env::var("CORS_HEADERS")
+            .unwrap_or_else(|_| "Authorization,Content-Type,X-API-Key".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .filter_map(|h| http::header::HeaderName::from_bytes(h.as_bytes()).ok())
+            .collect();
+        assert_eq!(cors_headers.len(), 3);
+        std::env::remove_var("CORS_HEADERS");
+    }
+
+    #[test]
+    fn test_cors_headers_invalid_value_filtered() {
+        std::env::set_var("CORS_HEADERS", "Authorization,,invalid header value!@#$");
+        let cors_headers: Vec<http::header::HeaderName> = std::env::var("CORS_HEADERS")
+            .unwrap_or_else(|_| "Authorization,Content-Type,X-API-Key".to_string())
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .filter_map(|h| http::header::HeaderName::from_bytes(h.as_bytes()).ok())
+            .collect();
+        assert_eq!(cors_headers.len(), 1);
+        std::env::remove_var("CORS_HEADERS");
+    }
+
+    #[test]
+    fn test_cors_origins_wildcard() {
+        std::env::set_var("CORS_ORIGINS", "*");
+        let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(allowed_origins.len(), 1);
+        assert_eq!(allowed_origins[0], "*");
+        std::env::remove_var("CORS_ORIGINS");
+    }
+
+    #[test]
+    fn test_cors_origins_multiple() {
+        std::env::set_var(
+            "CORS_ORIGINS",
+            "http://localhost:5173,http://localhost:3000",
+        );
+        let allowed_origins: Vec<String> = std::env::var("CORS_ORIGINS")
+            .unwrap_or_default()
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        assert_eq!(allowed_origins.len(), 2);
+        assert!(allowed_origins.contains(&"http://localhost:5173".to_string()));
+        assert!(allowed_origins.contains(&"http://localhost:3000".to_string()));
+        std::env::remove_var("CORS_ORIGINS");
     }
 }

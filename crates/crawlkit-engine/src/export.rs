@@ -133,6 +133,9 @@ impl CsvColumnSelector {
 /// Export crawl data to CSV.
 ///
 /// One row per page. Nested data (issues, links) is JSON-encoded.
+///
+/// Issues and links are fetched in bulk (single query each) and grouped
+/// by page_id in memory, avoiding N+1 query patterns for large crawls.
 pub fn export_csv(
     conn: &Connection,
     crawl_id: &str,
@@ -142,9 +145,12 @@ pub fn export_csv(
     wtr.write_record(selector.headers())?;
 
     let pages = read_pages(conn, crawl_id)?;
+    let issues_by_page = read_issues_grouped_by_page(conn, crawl_id)?;
+    let links_by_page = read_links_grouped_by_page(conn, crawl_id)?;
+
     for page in &pages {
-        let issues = read_issues_for_page(conn, &page.id)?;
-        let links = read_links_for_page(conn, &page.id)?;
+        let issues = issues_by_page.get(&page.id).cloned().unwrap_or_default();
+        let links = links_by_page.get(&page.id).cloned().unwrap_or_default();
         let issue_count = issues.len();
 
         let mut record: Vec<String> = Vec::new();
@@ -256,16 +262,23 @@ pub struct JsonIssue {
 }
 
 /// Export crawl data to a structured JSON value.
+///
+/// Issues and links are fetched in bulk (single query each) and grouped
+/// by page_id in memory, avoiding N+1 query patterns for large crawls.
 pub fn export_json(storage: &Storage, crawl_id: &str, pretty: bool) -> Result<String, ExportError> {
     let stats = storage.get_stats(crawl_id)?;
     let conn = storage.conn();
     let meta = read_crawl_meta(&conn, crawl_id)?;
     let pages = read_pages(&conn, crawl_id)?;
+    let issues_by_page = read_issues_grouped_by_page(&conn, crawl_id)?;
+    let links_by_page = read_links_grouped_by_page(&conn, crawl_id)?;
 
     let json_pages: Vec<JsonPage> = pages
         .iter()
         .map(|p| {
-            let issues = read_issues_for_page(&conn, &p.id)
+            let issues = issues_by_page
+                .get(&p.id)
+                .cloned()
                 .unwrap_or_default()
                 .into_iter()
                 .map(|i| JsonIssue {
@@ -279,7 +292,7 @@ pub fn export_json(storage: &Storage, crawl_id: &str, pretty: bool) -> Result<St
                     recommendation: i.recommendation,
                 })
                 .collect();
-            let links = read_links_for_page(&conn, &p.id).unwrap_or_default();
+            let links = links_by_page.get(&p.id).cloned().unwrap_or_default();
             JsonPage {
                 id: p.id.clone(),
                 url: p.url.clone(),
@@ -396,6 +409,9 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
 // ---------------------------------------------------------------------------
 
 /// Generate a self-contained HTML report.
+///
+/// Issues are fetched in bulk (single query) and counted per page in
+/// memory, avoiding N+1 query patterns for large crawls.
 pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportError> {
     let stats = storage.get_stats(crawl_id)?;
     let conn = storage.conn();
@@ -403,6 +419,7 @@ pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportEr
     let top_issues = read_top_issues(&conn, crawl_id, 20)?;
     let pages = read_pages(&conn, crawl_id)?;
     let crux_metrics = read_crux_metrics(&conn, crawl_id)?;
+    let issues_by_page = read_issues_grouped_by_page(&conn, crawl_id)?;
 
     let severity_color = |s: &str| -> &'static str {
         match s {
@@ -416,7 +433,7 @@ pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportEr
 
     let mut rows = String::new();
     for page in &pages {
-        let issue_count = count_issues_for_page(&conn, &page.id).unwrap_or(0);
+        let issue_count = issues_by_page.get(&page.id).map_or(0, |v| v.len());
         let status_class = if page.status_code >= 400 {
             "status-error"
         } else if page.status_code >= 300 {
@@ -632,9 +649,10 @@ struct PageRow {
     fetched_at: String,
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize)]
 struct IssueRow {
     id: String,
+    page_id: String,
     category: String,
     severity: String,
     code: String,
@@ -695,43 +713,69 @@ fn read_pages(conn: &Connection, crawl_id: &str) -> Result<Vec<PageRow>, ExportE
     Ok(rows)
 }
 
-fn read_issues_for_page(conn: &Connection, page_id: &str) -> Result<Vec<IssueRow>, ExportError> {
+/// Load all issues for a crawl in a single query, grouped by page_id.
+///
+/// This replaces per-page N+1 queries with a single bulk fetch,
+/// then groups the results in memory by page_id for O(1) lookup.
+fn read_issues_grouped_by_page(
+    conn: &Connection,
+    crawl_id: &str,
+) -> Result<std::collections::HashMap<String, Vec<IssueRow>>, ExportError> {
     let mut stmt = conn.prepare(
-        "SELECT id, category, severity, code, title, description, element, recommendation
-         FROM findings WHERE page_id = ?1",
+        "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation
+         FROM findings f
+         JOIN pages p ON f.page_id = p.id
+         WHERE p.crawl_id = ?1",
     )?;
     let rows = stmt
-        .query_map([page_id], |row| {
+        .query_map([crawl_id], |row| {
             Ok(IssueRow {
                 id: row.get(0)?,
-                category: row.get(1)?,
-                severity: row.get(2)?,
-                code: row.get(3)?,
-                title: row.get(4)?,
-                description: row.get(5)?,
-                element: row.get(6)?,
-                recommendation: row.get(7)?,
+                page_id: row.get(1)?,
+                category: row.get(2)?,
+                severity: row.get(3)?,
+                code: row.get(4)?,
+                title: row.get(5)?,
+                description: row.get(6)?,
+                element: row.get(7)?,
+                recommendation: row.get(8)?,
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+
+    let mut grouped: std::collections::HashMap<String, Vec<IssueRow>> =
+        std::collections::HashMap::new();
+    for row in rows {
+        grouped.entry(row.page_id.clone()).or_default().push(row);
+    }
+    Ok(grouped)
 }
 
-fn count_issues_for_page(conn: &Connection, page_id: &str) -> Result<usize, ExportError> {
-    let count: i64 = conn.query_row(
-        "SELECT COUNT(*) FROM findings WHERE page_id = ?1",
-        [page_id],
-        |row| row.get(0),
+/// Load all links for a crawl in a single query, grouped by page_id.
+///
+/// Replaces per-page N+1 queries with a single bulk fetch.
+fn read_links_grouped_by_page(
+    conn: &Connection,
+    crawl_id: &str,
+) -> Result<std::collections::HashMap<String, Vec<String>>, ExportError> {
+    let mut stmt = conn.prepare(
+        "SELECT l.page_id, l.target_url
+         FROM links l
+         JOIN pages p ON l.page_id = p.id
+         WHERE p.crawl_id = ?1",
     )?;
-    Ok(count as usize)
-}
-
-fn read_links_for_page(conn: &Connection, page_id: &str) -> Result<Vec<String>, ExportError> {
-    let mut stmt = conn.prepare("SELECT target_url FROM links WHERE page_id = ?1")?;
     let rows = stmt
-        .query_map([page_id], |row| row.get::<_, String>(0))?
+        .query_map([crawl_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(rows)
+
+    let mut grouped: std::collections::HashMap<String, Vec<String>> =
+        std::collections::HashMap::new();
+    for (page_id, target_url) in rows {
+        grouped.entry(page_id).or_default().push(target_url);
+    }
+    Ok(grouped)
 }
 
 #[derive(Debug, Clone)]

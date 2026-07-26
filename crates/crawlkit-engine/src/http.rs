@@ -175,6 +175,9 @@ impl Default for UserAgentRotator {
 /// Controls timeout, redirect policy, retry behavior, connection pooling,
 /// and HTTP/2 settings. Can be constructed from a [`CrawlConfig`].
 ///
+/// Pool sizes and timeouts scale with the configured concurrency level
+/// when constructed via `From<&CrawlConfig>`.
+///
 /// # Examples
 ///
 /// ```rust
@@ -182,6 +185,9 @@ impl Default for UserAgentRotator {
 ///
 /// let config = HttpClientConfig::from(&CrawlConfig::default());
 /// assert_eq!(config.max_body_size, 10 * 1024 * 1024);
+/// // Default concurrency=4 → pool_max_idle_per_host=8, pool_max_idle=16
+/// assert_eq!(config.pool_max_idle_per_host, 8);
+/// assert_eq!(config.pool_max_idle, 16);
 /// ```
 #[derive(Debug, Clone)]
 pub struct HttpClientConfig {
@@ -201,19 +207,26 @@ pub struct HttpClientConfig {
     pub pool_max_idle: usize,
     /// Whether to enable TCP keepalive.
     pub tcp_keepalive: Option<Duration>,
+    /// Timeout for idle connections in the pool.
+    pub pool_idle_timeout: Duration,
+    /// Timeout for establishing a new TCP connection.
+    pub connect_timeout: Duration,
 }
 
 impl From<&CrawlConfig> for HttpClientConfig {
     fn from(config: &CrawlConfig) -> Self {
+        let concurrency = config.concurrency.max(1);
         Self {
             timeout: config.request_timeout,
             max_redirects: config.max_redirects,
             retry_policy: RetryPolicy::default(),
             user_agent: Arc::new(UserAgentRotator::new(vec![config.user_agent.clone()])),
             max_body_size: 10 * 1024 * 1024, // 10MB default
-            pool_max_idle_per_host: 16,
-            pool_max_idle: 32,
+            pool_max_idle_per_host: concurrency * 2,
+            pool_max_idle: concurrency * 4,
             tcp_keepalive: Some(Duration::from_secs(60)),
+            pool_idle_timeout: Duration::from_secs(90),
+            connect_timeout: Duration::from_secs(10),
         }
     }
 }
@@ -262,9 +275,9 @@ impl HttpClient {
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
             .https_only(true)
-            .pool_max_idle_per_host(8)
-            .pool_idle_timeout(Duration::from_secs(30))
-            .connect_timeout(Duration::from_secs(10));
+            .pool_max_idle_per_host(config.pool_max_idle_per_host)
+            .pool_idle_timeout(config.pool_idle_timeout)
+            .connect_timeout(config.connect_timeout);
 
         if let Some(keepalive) = config.tcp_keepalive {
             builder = builder.tcp_keepalive(keepalive);
@@ -957,6 +970,12 @@ mod tests {
         assert_eq!(http_config.timeout, Duration::from_secs(30));
         assert_eq!(http_config.max_redirects, 20);
         assert_eq!(http_config.max_body_size, 10 * 1024 * 1024);
+        // concurrency=4 → pool_max_idle_per_host=8, pool_max_idle=16
+        assert_eq!(http_config.pool_max_idle_per_host, 8);
+        assert_eq!(http_config.pool_max_idle, 16);
+        assert_eq!(http_config.tcp_keepalive, Some(Duration::from_secs(60)));
+        assert_eq!(http_config.pool_idle_timeout, Duration::from_secs(90));
+        assert_eq!(http_config.connect_timeout, Duration::from_secs(10));
     }
 
     #[tokio::test]

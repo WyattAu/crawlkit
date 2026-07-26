@@ -1064,6 +1064,9 @@ mod tests {
                 tenant_id: None,
                 etag: None,
                 last_modified: None,
+                cwv_lcp: None,
+                cwv_cls: None,
+                cwv_inp: None,
             },
             PageData {
                 id: "p2".into(),
@@ -1081,6 +1084,9 @@ mod tests {
                 tenant_id: None,
                 etag: None,
                 last_modified: None,
+                cwv_lcp: None,
+                cwv_cls: None,
+                cwv_inp: None,
             },
             PageData {
                 id: "p3".into(),
@@ -1101,6 +1107,9 @@ mod tests {
                 tenant_id: None,
                 etag: None,
                 last_modified: None,
+                cwv_lcp: None,
+                cwv_cls: None,
+                cwv_inp: None,
             },
         ];
         storage.insert_pages(crawl_id, &pages).unwrap();

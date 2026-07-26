@@ -39,6 +39,9 @@ fn main() -> Result<()> {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         },
         PageData {
             id: "p2".into(),
@@ -56,6 +59,9 @@ fn main() -> Result<()> {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         },
         PageData {
             id: "p3".into(),
@@ -73,6 +79,9 @@ fn main() -> Result<()> {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         },
     ];
     storage.insert_pages(&crawl_id, &pages)?;
@@ -205,6 +214,9 @@ fn main() -> Result<()> {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         },
         // p2 unchanged, p3 removed, p4 new
         PageData {
@@ -223,6 +235,9 @@ fn main() -> Result<()> {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         },
     ];
     storage2.insert_pages(&crawl_id2, &pages2)?;

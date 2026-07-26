@@ -125,6 +125,13 @@ pub mod crawl_engine;
 /// the crawler produces identical output for testing and auditing.
 #[cfg(feature = "full")]
 pub mod determinism;
+/// Redis-backed distributed URL queue for multi-instance crawling.
+///
+/// Provides [`DistributedQueue`] for sharing crawl queues across multiple
+/// crawler instances via Redis sorted sets. Each queue is namespaced by
+/// a crawl ID to prevent collisions between different crawl sessions.
+#[cfg(feature = "full")]
+pub mod distributed_queue;
 /// DNS resolution cache and prefetching.
 ///
 /// Concurrent DNS cache with configurable TTL and background prefetching
@@ -207,6 +214,12 @@ pub use plugin::{
     ManifestError, PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig,
     WasmPlugin,
 };
+/// PostgreSQL-backed storage for crawl data.
+///
+/// Uses sqlx with connection pooling for async database access.
+/// Requires the `postgres` feature to be enabled.
+#[cfg(feature = "postgres")]
+pub mod pg_storage;
 /// Priority URL queue with depth and scope filtering.
 ///
 /// Binary heap-based priority queue with deduplication, domain tracking,
@@ -258,6 +271,12 @@ pub mod types;
 /// Playwright-powered rendering analysis for WebAssembly content.
 #[cfg(feature = "full")]
 pub mod wasm_analyzers;
+/// Core Web Vitals measurement via Chrome DevTools Protocol.
+///
+/// Injects [`PerformanceObserver`](web_vitals::CWV_OBSERVER_SCRIPT) scripts
+/// into Playwright-rendered pages to capture LCP, CLS, INP, FCP, and TTFB.
+#[cfg(feature = "full")]
+pub mod web_vitals;
 
 pub use ai_analyzers::{
     AiAnswerBoxAnalyzer, AiCitationEligibilityAnalyzer, AiContentStructureAnalyzer,
@@ -305,6 +324,8 @@ pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndica
 
 #[cfg(feature = "full")]
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
+#[cfg(feature = "postgres")]
+pub use pg_storage::PgStorage;
 #[cfg(feature = "full")]
 pub use playwright::{
     BrowserContext, BrowserType, ConsoleMessage, NetworkRequest, PlaywrightConfig,
@@ -330,6 +351,8 @@ pub use storage::{
 pub use storage_trait::{new_in_memory_backend, StorageBackend};
 #[cfg(feature = "full")]
 pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
+#[cfg(feature = "full")]
+pub use web_vitals::{WebVitals, WebVitalsError, WebVitalsMeasurer};
 
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 ///

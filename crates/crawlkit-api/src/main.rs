@@ -3040,6 +3040,9 @@ mod tests {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         };
         storage.insert_page(&crawl_id, &page).unwrap();
 

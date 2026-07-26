@@ -192,6 +192,9 @@ async fn main() -> Result<()> {
             tenant_id: None,
             etag: result.etag.clone(),
             last_modified: result.last_modified.clone(),
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         };
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
             eprintln!("  Storage error: {e}");

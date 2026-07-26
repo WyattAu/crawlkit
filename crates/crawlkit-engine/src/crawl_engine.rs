@@ -684,7 +684,32 @@ impl CrawlEngine {
                 tenant_id: cfg.tenant_id.clone(),
                 etag: result.etag.clone(),
                 last_modified: result.last_modified.clone(),
+                cwv_lcp: None,
+                cwv_cls: None,
+                cwv_inp: None,
             };
+
+            // Measure Core Web Vitals if JS rendering is enabled
+            if cfg.enable_js_rendering {
+                let measurer = crate::web_vitals::WebVitalsMeasurer::new();
+                match measurer.measure(entry.url.as_ref()).await {
+                    Ok(vitals) => {
+                        page_data.cwv_lcp = vitals.lcp;
+                        page_data.cwv_cls = vitals.cls;
+                        page_data.cwv_inp = vitals.inp;
+                        tracing::debug!(
+                            url = %entry.url,
+                            lcp = ?vitals.lcp,
+                            cls = ?vitals.cls,
+                            inp = ?vitals.inp,
+                            "CWV measured"
+                        );
+                    }
+                    Err(e) => {
+                        tracing::debug!("CWV measurement skipped for {}: {}", entry.url, e);
+                    }
+                }
+            }
 
             // Encrypt sensitive fields if encryption is enabled
             if let Some(ref encryption) = cfg.encryption {

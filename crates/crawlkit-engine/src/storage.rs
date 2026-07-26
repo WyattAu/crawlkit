@@ -23,6 +23,16 @@ pub enum StorageError {
     /// URL parsing error during retrieval.
     #[error("invalid URL in database: {0}")]
     InvalidUrl(#[from] url::ParseError),
+
+    /// PostgreSQL database error.
+    #[cfg(feature = "postgres")]
+    #[error("postgresql error: {0}")]
+    PgDatabase(#[from] sqlx::Error),
+
+    /// PostgreSQL migration error.
+    #[cfg(feature = "postgres")]
+    #[error("migration error: {0}")]
+    PgMigration(String),
 }
 
 impl From<StorageError> for CrawlError {
@@ -71,6 +81,12 @@ pub struct PageData {
     pub etag: Option<String>,
     /// Last-Modified header value from the last fetch.
     pub last_modified: Option<String>,
+    /// Largest Contentful Paint in milliseconds (lab measurement).
+    pub cwv_lcp: Option<f64>,
+    /// Cumulative Layout Shift (dimensionless, lab measurement).
+    pub cwv_cls: Option<f64>,
+    /// Interaction to Next Paint in milliseconds (lab measurement).
+    pub cwv_inp: Option<f64>,
 }
 
 /// An issue/finding detected during analysis.
@@ -337,6 +353,9 @@ impl Storage {
                 tenant_id     TEXT,
                 etag          TEXT,
                 last_modified TEXT,
+                cwv_lcp       REAL,
+                cwv_cls       REAL,
+                cwv_inp       REAL,
                 UNIQUE(crawl_id, url)
             );
 
@@ -474,6 +493,9 @@ impl Storage {
     ///     tenant_id: None,
     ///     etag: None,
     ///     last_modified: None,
+    ///     cwv_lcp: None,
+    ///     cwv_cls: None,
+    ///     cwv_inp: None,
     /// };
     ///
     /// storage.insert_page(&crawl_id, &page).unwrap();
@@ -485,8 +507,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
             params![
                 page.id,
                 crawl_id,
@@ -503,6 +525,9 @@ impl Storage {
                 page.tenant_id,
                 page.etag,
                 page.last_modified,
+                page.cwv_lcp,
+                page.cwv_cls,
+                page.cwv_inp,
             ],
         )?;
 
@@ -545,8 +570,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -569,6 +594,9 @@ impl Storage {
                 page.tenant_id,
                 page.etag,
                 page.last_modified,
+                page.cwv_lcp,
+                page.cwv_cls,
+                page.cwv_inp,
             ])?;
 
             for link in &page.links {
@@ -667,7 +695,7 @@ impl Storage {
 
         let conn = self.conn.lock();
         let result = conn.query_row(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
              FROM pages WHERE crawl_id = ?1 AND url = ?2",
             params![crawl_id, url],
             Self::row_to_page_data,
@@ -705,6 +733,9 @@ impl Storage {
             tenant_id: row.get(11)?,
             etag: row.get(12)?,
             last_modified: row.get(13)?,
+            cwv_lcp: row.get(14)?,
+            cwv_cls: row.get(15)?,
+            cwv_inp: row.get(16)?,
         })
     }
 
@@ -739,6 +770,9 @@ impl Storage {
     ///     tenant_id: None,
     ///     etag: None,
     ///     last_modified: None,
+    ///     cwv_lcp: None,
+    ///     cwv_cls: None,
+    ///     cwv_inp: None,
     /// };
     /// storage.insert_page(&crawl_id, &page).unwrap();
     ///
@@ -749,7 +783,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -870,7 +904,7 @@ impl Storage {
     ) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
              FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
              ORDER BY fetched_at ASC LIMIT ?3",
         )?;
@@ -1332,6 +1366,9 @@ mod tests {
             tenant_id: None,
             etag: None,
             last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
         }
     }
 

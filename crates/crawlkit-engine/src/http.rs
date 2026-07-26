@@ -953,20 +953,32 @@ mod tests {
         let headers = vec![
             ("content-type".to_string(), "text/html".to_string()),
             ("etag".to_string(), "\"abc123\"".to_string()),
-            ("last-modified".to_string(), "Wed, 21 Oct 2024 07:28:00 GMT".to_string()),
+            (
+                "last-modified".to_string(),
+                "Wed, 21 Oct 2024 07:28:00 GMT".to_string(),
+            ),
         ];
         let (etag, last_modified) = extract_conditional_headers(&headers);
         assert_eq!(etag.as_deref(), Some("\"abc123\""));
-        assert_eq!(last_modified.as_deref(), Some("Wed, 21 Oct 2024 07:28:00 GMT"));
+        assert_eq!(
+            last_modified.as_deref(),
+            Some("Wed, 21 Oct 2024 07:28:00 GMT")
+        );
 
         // Case-insensitive matching
         let headers = vec![
             ("ETag".to_string(), "\"xyz\"".to_string()),
-            ("Last-Modified".to_string(), "Thu, 01 Jan 2025 00:00:00 GMT".to_string()),
+            (
+                "Last-Modified".to_string(),
+                "Thu, 01 Jan 2025 00:00:00 GMT".to_string(),
+            ),
         ];
         let (etag, last_modified) = extract_conditional_headers(&headers);
         assert_eq!(etag.as_deref(), Some("\"xyz\""));
-        assert_eq!(last_modified.as_deref(), Some("Thu, 01 Jan 2025 00:00:00 GMT"));
+        assert_eq!(
+            last_modified.as_deref(),
+            Some("Thu, 01 Jan 2025 00:00:00 GMT")
+        );
 
         // Missing headers
         let headers = vec![("content-type".to_string(), "text/html".to_string())];

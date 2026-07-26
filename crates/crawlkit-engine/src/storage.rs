@@ -1464,7 +1464,9 @@ mod tests {
         storage.insert_page(&crawl_id, &page).unwrap();
 
         // Retrieve conditional data
-        let result = storage.get_page_conditional(&crawl_id, "https://example.com/").unwrap();
+        let result = storage
+            .get_page_conditional(&crawl_id, "https://example.com/")
+            .unwrap();
         assert!(result.is_some());
         let (page_id, etag, last_modified) = result.unwrap();
         assert_eq!(page_id, "p1");

@@ -6,12 +6,12 @@ use crate::ratelimit::RateLimiter;
 use crate::robots::RobotsTxtCache;
 use crate::sitemap::SitemapCache;
 use crate::storage::{Issue, PageData, Storage};
-use rusqlite::params;
 use crate::{
     BackpressureController, CircuitBreakerRegistry, CrawlConfig, DeterminismController,
     FeatureFlags, Metrics, RedirectHop, ResourceMonitor,
 };
 use chrono::Utc;
+use rusqlite::params;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -999,8 +999,7 @@ mod tests {
     fn test_js_render_decision_engine_with_renderer_config() {
         let decision_engine = crate::JsRenderDecisionEngine::new();
         let html = r#"<div id="__next">Hello</div>"#;
-        let decision =
-            decision_engine.should_render_js("https://example.com/page", Some(html));
+        let decision = decision_engine.should_render_js("https://example.com/page", Some(html));
         assert!(matches!(decision, crate::JsRenderDecision::Render { .. }));
     }
 }

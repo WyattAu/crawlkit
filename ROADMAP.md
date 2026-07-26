@@ -8,7 +8,7 @@ Last Updated: 2026-07-26
 
 ## Current State (v2.0.0)
 
-- 608 tests passing (428 engine + 90 API + 31 plugin SDK + 26 doc tests + 31 integration + 3 RUM), zero clippy warnings, zero rustfmt diffs
+- 642 tests passing (449 engine + 103 API + 31 plugin SDK + 26 doc tests + 31 integration + 3 RUM + 21 property-based), zero clippy warnings, zero rustfmt diffs
 - 31 analyzers (23 core + 4 AI + 1 WASM + 3 advanced canonical) with Rayon parallel execution
 - CLI + REST API + HTML/JSON/CSV/Markdown export
 - 12 modules wired into production (observability, resource_monitor, circuit_breaker, backpressure, determinism, feature_flags, js_render_decision, playwright, advanced_features, encryption, alert_manager, metrics)
@@ -22,6 +22,10 @@ Last Updated: 2026-07-26
 - CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.85.0)
 - Pre-commit hook: 11 checks (fmt, clippy, build, unit tests, doc tests, integration tests, security audit, secret scan, unsafe code, MSRV, dead code)
 - Lean4 formal verification scaffolding for circuit breaker, PageRank, and audit chain
+- Property-based testing with proptest (21 tests across parser, storage, queue, rate limiter, meta)
+- Typed TypeScript API client (zero `as unknown as` casts)
+- CSRF origin validation on state-changing API requests
+- Password complexity validation (12-char minimum, mixed case, digits, special chars)
 
 ### Audit Fixes Applied (2026-07-26)
 
@@ -29,7 +33,10 @@ Last Updated: 2026-07-26
 |----------|-----|----------|
 | Security | Replace hardcoded admin password with cryptographically random generation | Critical |
 | Security | Redact API key secrets in list endpoints (show last 4 chars only) | Critical |
-| Security | Convert hash_password from panic-on-failure to Result return type | High |
+| Security | Convert hash_password from panic-on-failure to Result return type | Critical |
+| Security | Add CSRF origin validation middleware on state-changing API requests | Critical |
+| Security | Split router into public/protected; health/metrics/login no longer require auth | High |
+| Security | Add password complexity validation (12-char minimum, mixed case, digits, special) | High |
 | Security | WASM plugin sandbox: fuel limits (10B instructions), memory bounds (64MB), pointer validation | Critical |
 | Security | Circuit breaker race condition: removed side-effecting state(), use CAS for atomic transitions | High |
 | Security | DNS cache deadlock: drop DashMap read guard before insert | High |
@@ -56,13 +63,18 @@ Last Updated: 2026-07-26
 | Correctness | Remove unused async from query_tracker methods | Low |
 | Correctness | Fix pre-commit regex and MSRV version | Low |
 | Correctness | Fix gui_snapshot_test.sh r.route -> r.path bug | Low |
+| Testing | Add 21 property-based tests (proptest) for parser, storage, queue, rate limiter, meta | High |
+| Testing | Add 13 password validation tests | Medium |
 | UI/UX | Wire elevation/transition/spacing design tokens into Tailwind config | Medium |
 | UI/UX | Add prefers-reduced-motion media query for vestibular accessibility | Medium |
 | UI/UX | Replace inline style in Card.tsx with Tailwind shadow-elevation1 classes | Medium |
 | UI/UX | Add focus-visible ring to ErrorBoundary button | Low |
 | UI/UX | Update use_crawls hook to accept full CrawlConfig shape | Low |
 | UI/UX | Remove unused @radix-ui deps (dropdown-menu, select, tabs, tailwind-merge) | Low |
-| Documentation | README rewritten: updated test count (608), MSRV (1.85.0), added quality gates section | Medium |
+| Dashboard | Type the API client: 15 new typed methods, zero `as unknown as` casts | High |
+| Dashboard | Add 9 new TypeScript interfaces for API request/response types | Medium |
+| Dashboard | Fix FindingCard to use corrected Finding fields (category, code, element, recommendation) | Medium |
+| Documentation | README rewritten: updated test count (642), MSRV (1.85.0), added quality gates section | Medium |
 | Documentation | VERSION.md updated with completed phases | Low |
 
 ---
@@ -77,8 +89,8 @@ Last Updated: 2026-07-26
 | Extract shared crawl loop into crawlkit-engine | P0 | 16h | CLI and API both implement crawl loops independently | DONE |
 | Unify Plugin SDK types with Engine types | P0 | 8h | Finding, Severity, Analyzer trait duplicated with incompatible signatures | DONE |
 | Deduplicate storage.rs (get_pages/get_issues) | P0 | 8h | Extracted row_to_page_data and build_issues_query helpers | DONE |
-| Implement compare subcommand completion | P1 | 16h | Currently returns stub in CLI | TODO |
-| Normalize default max_pages (CLI=100, API=50) | P1 | 2h | Behavioral inconsistency | TODO |
+| Implement compare subcommand completion | P1 | 16h | Currently returns stub in CLI | DONE |
+| Normalize default max_pages (CLI=100, API=50) | P1 | 2h | Behavioral inconsistency | DONE |
 | Complete client library parity (Go, Node.js) | P1 | 16h | Python is most complete | TODO |
 
 ### Security
@@ -87,9 +99,10 @@ Last Updated: 2026-07-26
 |------|----------|--------|-------|--------|
 | Replace hardcoded admin password with random generation | P0 | 4h | Was 'admin123' | DONE |
 | Redact API keys in list endpoints | P0 | 4h | Shows full secret keys | DONE |
-| Add CSRF protection to dashboard API calls | P0 | 8h | JWT tokens exfiltrable via any XSS | TODO |
+| Add CSRF protection to dashboard API calls | P0 | 8h | JWT tokens exfiltrable via any XSS | DONE |
+| Split router: public routes (health/metrics/login) skip auth | P0 | 4h | Auth middleware was on all routes | DONE |
+| Add password complexity validation | P0 | 4h | 12-char minimum, mixed case, digits, special | DONE |
 | Add CORS configuration to API | P1 | 2h | Currently no CORS headers | TODO |
-| Add password complexity validation | P1 | 4h | No minimum requirements enforced | TODO |
 | Implement CSP headers for dashboard | P1 | 4h | No Content Security Policy | TODO |
 
 ### Quality
@@ -99,8 +112,9 @@ Last Updated: 2026-07-26
 | Wire design tokens into Tailwind config | P0 | 4h | Spatial Materialism design system | DONE |
 | Add prefers-reduced-motion support | P1 | 2h | WCAG accessibility | DONE |
 | Remove unused dashboard dependencies | P1 | 2h | 4 unused @radix-ui packages | DONE |
-| Type the API client (eliminate `as unknown as` casts) | P0 | 8h | All methods return Record<string, unknown> | TODO |
+| Type the API client (eliminate `as unknown as` casts) | P0 | 8h | All methods return Record<string, unknown> | DONE |
 | Add React error boundaries | P1 | 4h | Component crashes white-screen the entire app | DONE |
+| Add property-based testing (proptest) | P0 | 8h | 21 tests: parser, storage, queue, rate limiter, meta | DONE |
 | Add transition system for page/state changes | P2 | 8h | Amoebic UI fluid transitions | TODO |
 
 ---
@@ -172,9 +186,10 @@ Last Updated: 2026-07-26
 |------|----------|--------|--------|-------|
 | Starlight doc site | P0 | 16h | DONE | 13 pages, builds clean |
 | Rustdoc coverage > 80% | P1 | 8h | TODO | cargo doc warnings cleanup |
-| crates.io publication | P0 | 4h | TODO | Version, description, keywords |
+| crates.io publication | P0 | 4h | DONE | v2.0.0 already published |
 | Example library expansion | P1 | 8h | TODO | CI integration, custom storage, plugins |
 | Benchmark regression CI | P1 | 4h | DONE | benchmarks.yml with regression detection |
+| Benchmark baseline establishment | P1 | 4h | DONE | Benchmarks compile, baseline on reference hardware |
 
 ---
 
@@ -192,6 +207,7 @@ Last Updated: 2026-07-26
 - Cross-platform releases: Linux, macOS, Windows (x86_64 + aarch64)
 - crates.io published with documentation
 - Client library parity across Go, Node.js, Python
+- Property-based test coverage for all core modules
 
 ---
 
@@ -218,15 +234,16 @@ Last Updated: 2026-07-26
 | `advanced_canonical.rs` | WIRED | 3 analyzers for Ahrefs-level coverage |
 | `post_crawl.rs` | WIRED | Cross-page canonical/sitemap analysis |
 | `storage.rs` | DEDUPLICATED | Shared row mappers and query builders |
+| `property_tests.rs` | NEW | 21 property-based tests with proptest |
 
 ### Remaining Issues
 
 | Item | Severity | Location | Notes |
 |------|----------|----------|-------|
-| CLI and API duplicate crawl loops | High | main.rs / api main.rs | Extract shared function into engine |
 | Plugin SDK types diverge from Engine types | Medium | plugin-sdk / engine | Finding, Severity, Analyzer trait duplicated |
-| API client uses `Record<string, unknown>` | Medium | dashboard/services/ | Forces `as unknown as` casts everywhere |
 | rate_limit domain_buckets unbounded | Low | ratelimit.rs | Add LRU eviction for long crawls |
 | Error type erasure in CrawlError | Low | storage/export/compare | Add distinct CrawlError variants |
 | BingWebmasterAdapter trait stubs | Low | backlink_adapters.rs | fetch_backlinks/get_domain_rating return empty |
 | query_tracker trend always Stable | Low | query_tracker.rs | No actual trend calculation over time |
+| CSP headers not implemented | Medium | API/dashboard | Content Security Policy missing |
+| CORS configuration missing | Medium | API | No CORS headers configured |

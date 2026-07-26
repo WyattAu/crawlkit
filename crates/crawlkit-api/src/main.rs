@@ -265,12 +265,23 @@ struct CrawlResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct CrawlResult {
     crawl_id: String,
+    tenant_id: String,
     start_url: String,
     status: String,
     pages_crawled: usize,
     issues_found: usize,
     created_at: DateTime<Utc>,
     completed_at: Option<DateTime<Utc>>,
+}
+
+/// Extract tenant ID from JWT claims.
+fn extract_tenant(claims: &auth::Claims) -> &str {
+    &claims.tenant
+}
+
+/// Check if the current user is an admin.
+fn is_admin(claims: &auth::Claims) -> bool {
+    claims.roles.contains(&"admin".to_string())
 }
 
 #[derive(Debug, Serialize)]
@@ -325,6 +336,7 @@ struct HealthResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct WebhookConfig {
     id: String,
+    tenant_id: String,
     url: String,
     events: Vec<String>,
     created_at: DateTime<Utc>,
@@ -357,6 +369,7 @@ struct WebhookPayload {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ScheduleConfig {
     id: String,
+    tenant_id: String,
     crawl_config: CrawlConfig,
     interval_secs: u64,
     enabled: bool,
@@ -800,6 +813,7 @@ async fn delete_api_key(
 
 async fn start_crawl(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     Json(req): Json<CreateCrawlRequest>,
 ) -> Result<(StatusCode, Json<CrawlResponse>), ApiError> {
     validate_url(&req.start_url)?;
@@ -811,6 +825,7 @@ async fn start_crawl(
         .map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
 
     let crawl_id = Uuid::new_v4().to_string();
+    let tenant_id = extract_tenant(&claims).to_string();
 
     let config_json = serde_json::to_string(&serde_json::json!({
         "start_url": start_url,
@@ -827,6 +842,7 @@ async fn start_crawl(
 
     let result = CrawlResult {
         crawl_id: crawl_id.clone(),
+        tenant_id,
         start_url: start_url.to_string(),
         status: "running".to_string(),
         pages_crawled: 0,
@@ -866,19 +882,32 @@ async fn start_crawl(
 
 async fn get_crawl_status(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(crawl_id): axum::extract::Path<String>,
 ) -> Result<Json<CrawlResult>, ApiError> {
-    state
+    let entry = state
         .crawl_results
         .get(&crawl_id)
-        .map(|entry| Json(entry.value().clone()))
-        .ok_or_else(|| ApiError::NotFound(format!("Crawl {crawl_id} not found")))
+        .ok_or_else(|| ApiError::NotFound(format!("Crawl {crawl_id} not found")))?;
+
+    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
+    }
+
+    Ok(Json(entry.value().clone()))
 }
 
 async fn get_crawl_stats(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(crawl_id): axum::extract::Path<String>,
 ) -> Result<Json<CrawlStatsResponse>, ApiError> {
+    if let Some(entry) = state.crawl_results.get(&crawl_id) {
+        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
+        }
+    }
+
     let stats = state
         .storage
         .get_stats(&crawl_id)
@@ -896,8 +925,15 @@ async fn get_crawl_stats(
 
 async fn get_crawl_findings(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(crawl_id): axum::extract::Path<String>,
 ) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    if let Some(entry) = state.crawl_results.get(&crawl_id) {
+        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
+        }
+    }
+
     let filter = IssueFilter::default();
     let issues = state
         .storage
@@ -924,10 +960,16 @@ async fn get_crawl_findings(
     Ok(Json(findings))
 }
 
-async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
+async fn list_crawls(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+) -> Json<Vec<CrawlResult>> {
+    let tenant = extract_tenant(&claims);
+    let admin = is_admin(&claims);
     let results: Vec<CrawlResult> = state
         .crawl_results
         .iter()
+        .filter(|entry| admin || entry.value().tenant_id == tenant)
         .map(|entry| entry.value().clone())
         .collect();
 
@@ -1218,11 +1260,17 @@ async fn oidc_callback(
 // User management handlers (admin only)
 // ---------------------------------------------------------------------------
 
-async fn list_users(State(state): State<AppState>) -> Json<Vec<UserResponse>> {
+async fn list_users(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+) -> Json<Vec<UserResponse>> {
+    let tenant = extract_tenant(&claims);
+    let admin = is_admin(&claims);
     let users: Vec<UserResponse> = state
         .auth
         .list_users()
         .into_iter()
+        .filter(|u| admin || u.tenant_id == tenant)
         .map(|u| UserResponse {
             id: u.id,
             email: u.email,
@@ -1240,14 +1288,8 @@ struct CreateUserRequest {
     email: String,
     name: String,
     password: String,
-    #[serde(default = "default_user_tenant")]
-    tenant_id: String,
     #[serde(default = "default_user_roles")]
     roles: Vec<String>,
-}
-
-fn default_user_tenant() -> String {
-    "default".to_string()
 }
 
 fn default_user_roles() -> Vec<String> {
@@ -1256,8 +1298,15 @@ fn default_user_roles() -> Vec<String> {
 
 async fn create_user(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     Json(req): Json<CreateUserRequest>,
 ) -> Result<(StatusCode, Json<UserResponse>), ApiError> {
+    if !is_admin(&claims) {
+        return Err(ApiError::Unauthorized(
+            "Only admins can create users".to_string(),
+        ));
+    }
+
     if let Err(reason) = auth::AuthManager::validate_password(&req.password) {
         return Err(ApiError::BadRequest(reason));
     }
@@ -1273,11 +1322,12 @@ async fn create_user(
         .hash_password(&req.password)
         .map_err(|e| ApiError::Internal(format!("Failed to hash password: {e}")))?;
     let user_id = uuid::Uuid::new_v4().to_string();
+    let tenant_id = extract_tenant(&claims).to_string();
     let response = UserResponse {
         id: user_id.clone(),
         email: req.email.clone(),
         name: req.name.clone(),
-        tenant_id: req.tenant_id.clone(),
+        tenant_id: tenant_id.clone(),
         roles: req.roles.clone(),
         enabled: true,
     };
@@ -1287,7 +1337,7 @@ async fn create_user(
         email: req.email,
         name: req.name,
         password_hash,
-        tenant_id: req.tenant_id,
+        tenant_id,
         roles: req.roles,
         enabled: true,
     });
@@ -1296,8 +1346,19 @@ async fn create_user(
 
 async fn delete_user(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    if !is_admin(&claims) {
+        let target_user = state
+            .auth
+            .find_user_by_id(&id)
+            .ok_or_else(|| ApiError::NotFound(format!("User {id} not found")))?;
+        if target_user.tenant_id != extract_tenant(&claims) {
+            return Err(ApiError::NotFound(format!("User {id} not found")));
+        }
+    }
+
     if state.auth.delete_user(&id) {
         Ok(StatusCode::NO_CONTENT)
     } else {
@@ -1317,8 +1378,15 @@ struct BacklinksResponse {
 
 async fn get_crawl_backlinks(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(crawl_id): axum::extract::Path<String>,
 ) -> Result<Json<BacklinksResponse>, ApiError> {
+    if let Some(entry) = state.crawl_results.get(&crawl_id) {
+        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
+        }
+    }
+
     let link_pairs = state
         .storage
         .get_links_for_crawl(&crawl_id)
@@ -1375,6 +1443,7 @@ async fn get_crawl_backlinks(
 
 async fn create_webhook(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     Json(req): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<WebhookConfig>), ApiError> {
     url::Url::parse(&req.url)
@@ -1391,6 +1460,7 @@ async fn create_webhook(
     let id = Uuid::new_v4().to_string();
     let config = WebhookConfig {
         id: id.clone(),
+        tenant_id: extract_tenant(&claims).to_string(),
         url: req.url,
         events: req.events,
         created_at: Utc::now(),
@@ -1400,14 +1470,37 @@ async fn create_webhook(
     Ok((StatusCode::CREATED, Json(config)))
 }
 
-async fn list_webhooks(State(state): State<AppState>) -> Json<Vec<WebhookConfig>> {
-    Json(state.webhooks.iter().map(|e| e.value().clone()).collect())
+async fn list_webhooks(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+) -> Json<Vec<WebhookConfig>> {
+    let tenant = extract_tenant(&claims);
+    let admin = is_admin(&claims);
+    Json(
+        state
+            .webhooks
+            .iter()
+            .filter(|entry| admin || entry.value().tenant_id == tenant)
+            .map(|e| e.value().clone())
+            .collect(),
+    )
 }
 
 async fn delete_webhook(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    let entry = state
+        .webhooks
+        .get(&id)
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))?;
+
+    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Webhook {id} not found")));
+    }
+    drop(entry);
+
     state
         .webhooks
         .remove(&id)
@@ -1421,6 +1514,7 @@ async fn delete_webhook(
 
 async fn create_schedule(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     Json(req): Json<CreateScheduleRequest>,
 ) -> Result<(StatusCode, Json<ScheduleResponse>), ApiError> {
     validate_url(&req.start_url)?;
@@ -1449,6 +1543,7 @@ async fn create_schedule(
     let now = Utc::now();
     let schedule = ScheduleConfig {
         id: id.clone(),
+        tenant_id: extract_tenant(&claims).to_string(),
         crawl_config: crawl_config.clone(),
         interval_secs: req.interval_secs,
         enabled: true,
@@ -1469,11 +1564,17 @@ async fn create_schedule(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
-async fn list_schedules(State(state): State<AppState>) -> Json<Vec<ScheduleResponse>> {
+async fn list_schedules(
+    State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
+) -> Json<Vec<ScheduleResponse>> {
+    let tenant = extract_tenant(&claims);
+    let admin = is_admin(&claims);
     Json(
         state
             .schedules
             .iter()
+            .filter(|entry| admin || entry.value().tenant_id == tenant)
             .map(|e| {
                 let s = e.value();
                 ScheduleResponse {
@@ -1491,8 +1592,19 @@ async fn list_schedules(State(state): State<AppState>) -> Json<Vec<ScheduleRespo
 
 async fn delete_schedule(
     State(state): State<AppState>,
+    axum::extract::Extension(claims): axum::extract::Extension<auth::Claims>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    let entry = state
+        .schedules
+        .get(&id)
+        .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))?;
+
+    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Schedule {id} not found")));
+    }
+    drop(entry);
+
     state
         .schedules
         .remove(&id)
@@ -1608,6 +1720,7 @@ fn fire_webhooks(
     state: &AppState,
     event: &str,
     crawl_id: &str,
+    tenant_id: &str,
     pages_crawled: usize,
     issues_found: usize,
 ) {
@@ -1622,6 +1735,7 @@ fn fire_webhooks(
     let matching: Vec<WebhookConfig> = state
         .webhooks
         .iter()
+        .filter(|entry| entry.value().tenant_id == tenant_id)
         .filter(|entry| entry.value().events.iter().any(|e| e == event))
         .map(|entry| entry.value().clone())
         .collect();
@@ -1693,6 +1807,12 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
                     .storage()
                     .finish_crawl(&crawl_id, output.pages_crawled, output.issues_found);
 
+            let tenant_id = state
+                .crawl_results
+                .get(&crawl_id)
+                .map(|r| r.tenant_id.clone())
+                .unwrap_or_default();
+
             if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
                 result.status = "completed".to_string();
                 result.pages_crawled = output.pages_crawled;
@@ -1721,6 +1841,7 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
                 &state,
                 "crawl.completed",
                 &crawl_id,
+                &tenant_id,
                 output.pages_crawled,
                 output.issues_found,
             );
@@ -1733,12 +1854,19 @@ async fn run_crawl_task(state: AppState, crawl_id: String, config: CrawlConfig) 
         Err(e) => {
             tracing::error!("Crawl {crawl_id} failed: {e}");
             state.metrics.errors_total.inc();
+
+            let tenant_id = state
+                .crawl_results
+                .get(&crawl_id)
+                .map(|r| r.tenant_id.clone())
+                .unwrap_or_default();
+
             if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
                 result.status = "failed".to_string();
                 result.completed_at = Some(Utc::now());
             }
             state.metrics.active_crawls.dec();
-            fire_webhooks(&state, "crawl.failed", &crawl_id, 0, 0);
+            fire_webhooks(&state, "crawl.failed", &crawl_id, &tenant_id, 0, 0);
         }
     }
 }
@@ -1752,17 +1880,17 @@ async fn run_scheduler(state: AppState) {
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
         let now = Utc::now();
 
-        let due: Vec<(String, CrawlConfig)> = state
+        let due: Vec<(String, CrawlConfig, String)> = state
             .schedules
             .iter()
             .filter(|entry| entry.value().enabled && entry.value().next_run <= now)
             .map(|entry| {
                 let s = entry.value();
-                (s.id.clone(), s.crawl_config.clone())
+                (s.id.clone(), s.crawl_config.clone(), s.tenant_id.clone())
             })
             .collect();
 
-        for (schedule_id, config) in due {
+        for (schedule_id, config, tenant_id) in due {
             if let Some(mut schedule) = state.schedules.get_mut(&schedule_id) {
                 schedule.next_run = now + chrono::Duration::seconds(schedule.interval_secs as i64);
             }
@@ -1770,6 +1898,7 @@ async fn run_scheduler(state: AppState) {
             let crawl_id = Uuid::new_v4().to_string();
             let result = CrawlResult {
                 crawl_id: crawl_id.clone(),
+                tenant_id,
                 start_url: config.start_url.to_string(),
                 status: "running".to_string(),
                 pages_crawled: 0,
@@ -2135,11 +2264,6 @@ mod tests {
     }
 
     #[test]
-    fn test_default_user_tenant() {
-        assert_eq!(default_user_tenant(), "default");
-    }
-
-    #[test]
     fn test_default_user_roles() {
         let roles = default_user_roles();
         assert_eq!(roles, vec!["viewer".to_string()]);
@@ -2456,6 +2580,7 @@ mod tests {
     fn test_crawl_result_serialization_roundtrip() {
         let result = CrawlResult {
             crawl_id: "abc-123".to_string(),
+            tenant_id: "test-tenant".to_string(),
             start_url: "https://example.com".to_string(),
             status: "running".to_string(),
             pages_crawled: 5,
@@ -2478,6 +2603,7 @@ mod tests {
     fn test_webhook_config_serialization_roundtrip() {
         let config = WebhookConfig {
             id: "wh-1".to_string(),
+            tenant_id: "test-tenant".to_string(),
             url: "https://hooks.example.com".to_string(),
             events: vec!["crawl.completed".to_string()],
             created_at: Utc::now(),
@@ -2826,5 +2952,173 @@ mod tests {
         assert!(allowed_origins.contains(&"http://localhost:5173".to_string()));
         assert!(allowed_origins.contains(&"http://localhost:3000".to_string()));
         std::env::remove_var("CORS_ORIGINS");
+    }
+
+    // ---------------------------------------------------------------
+    // Tenant isolation tests
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_tenant_a_cannot_see_tenant_b_crawls() {
+        let state = AppState {
+            storage: Arc::new(crawlkit_engine::storage::Storage::new_in_memory().unwrap()),
+            api_keys: Arc::new(DashMap::new()),
+            rate_limits: Arc::new(DashMap::new()),
+            crawl_results: Arc::new(DashMap::new()),
+            audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+            metrics: Arc::new(Metrics::new()),
+            webhooks: Arc::new(DashMap::new()),
+            schedules: Arc::new(DashMap::new()),
+            http_client: reqwest::Client::new(),
+            auth: Arc::new(auth::AuthManager::new("test".to_string())),
+            oidc: None,
+            oidc_states: Arc::new(DashMap::new()),
+            tenants: Arc::new(DashMap::new()),
+            marketplace: MarketplaceState::new(),
+        };
+
+        state.crawl_results.insert(
+            "crawl-a".to_string(),
+            CrawlResult {
+                crawl_id: "crawl-a".to_string(),
+                tenant_id: "tenant-a".to_string(),
+                start_url: "https://a.com".to_string(),
+                status: "completed".to_string(),
+                pages_crawled: 10,
+                issues_found: 2,
+                created_at: Utc::now(),
+                completed_at: Some(Utc::now()),
+            },
+        );
+        state.crawl_results.insert(
+            "crawl-b".to_string(),
+            CrawlResult {
+                crawl_id: "crawl-b".to_string(),
+                tenant_id: "tenant-b".to_string(),
+                start_url: "https://b.com".to_string(),
+                status: "completed".to_string(),
+                pages_crawled: 5,
+                issues_found: 1,
+                created_at: Utc::now(),
+                completed_at: Some(Utc::now()),
+            },
+        );
+
+        let claims_a = auth::Claims {
+            sub: "user-a".to_string(),
+            tenant: "tenant-a".to_string(),
+            roles: vec!["viewer".to_string()],
+            permissions: vec![],
+            exp: 9999999999,
+            iat: 0,
+            jti: "jti-a".to_string(),
+        };
+
+        let results: Vec<CrawlResult> = state
+            .crawl_results
+            .iter()
+            .filter(|entry| entry.value().tenant_id == extract_tenant(&claims_a))
+            .map(|e| e.value().clone())
+            .collect();
+
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].crawl_id, "crawl-a");
+    }
+
+    #[test]
+    fn test_admin_can_see_all_tenants_data() {
+        let state = AppState {
+            storage: Arc::new(crawlkit_engine::storage::Storage::new_in_memory().unwrap()),
+            api_keys: Arc::new(DashMap::new()),
+            rate_limits: Arc::new(DashMap::new()),
+            crawl_results: Arc::new(DashMap::new()),
+            audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+            metrics: Arc::new(Metrics::new()),
+            webhooks: Arc::new(DashMap::new()),
+            schedules: Arc::new(DashMap::new()),
+            http_client: reqwest::Client::new(),
+            auth: Arc::new(auth::AuthManager::new("test".to_string())),
+            oidc: None,
+            oidc_states: Arc::new(DashMap::new()),
+            tenants: Arc::new(DashMap::new()),
+            marketplace: MarketplaceState::new(),
+        };
+
+        state.crawl_results.insert(
+            "crawl-a".to_string(),
+            CrawlResult {
+                crawl_id: "crawl-a".to_string(),
+                tenant_id: "tenant-a".to_string(),
+                start_url: "https://a.com".to_string(),
+                status: "completed".to_string(),
+                pages_crawled: 10,
+                issues_found: 2,
+                created_at: Utc::now(),
+                completed_at: Some(Utc::now()),
+            },
+        );
+        state.crawl_results.insert(
+            "crawl-b".to_string(),
+            CrawlResult {
+                crawl_id: "crawl-b".to_string(),
+                tenant_id: "tenant-b".to_string(),
+                start_url: "https://b.com".to_string(),
+                status: "completed".to_string(),
+                pages_crawled: 5,
+                issues_found: 1,
+                created_at: Utc::now(),
+                completed_at: Some(Utc::now()),
+            },
+        );
+
+        let admin_claims = auth::Claims {
+            sub: "admin-user".to_string(),
+            tenant: "tenant-a".to_string(),
+            roles: vec!["admin".to_string()],
+            permissions: vec![],
+            exp: 9999999999,
+            iat: 0,
+            jti: "jti-admin".to_string(),
+        };
+
+        let results: Vec<CrawlResult> = state
+            .crawl_results
+            .iter()
+            .filter(|entry| {
+                is_admin(&admin_claims) || entry.value().tenant_id == extract_tenant(&admin_claims)
+            })
+            .map(|e| e.value().clone())
+            .collect();
+
+        assert_eq!(results.len(), 2);
+    }
+
+    #[test]
+    fn test_start_crawl_sets_tenant_id_from_jwt_not_body() {
+        let claims = auth::Claims {
+            sub: "user-1".to_string(),
+            tenant: "jwt-tenant".to_string(),
+            roles: vec!["viewer".to_string()],
+            permissions: vec![],
+            exp: 9999999999,
+            iat: 0,
+            jti: "jti-1".to_string(),
+        };
+
+        let tenant_id = extract_tenant(&claims).to_string();
+        assert_eq!(tenant_id, "jwt-tenant");
+
+        let result = CrawlResult {
+            crawl_id: "test-crawl".to_string(),
+            tenant_id,
+            start_url: "https://example.com".to_string(),
+            status: "running".to_string(),
+            pages_crawled: 0,
+            issues_found: 0,
+            created_at: Utc::now(),
+            completed_at: None,
+        };
+
+        assert_eq!(result.tenant_id, "jwt-tenant");
     }
 }

@@ -326,6 +326,16 @@ impl Storage {
     ///
     /// Returns [`StorageError::Database`] if the in-memory database
     /// cannot be created.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::storage::Storage;
+    ///
+    /// let storage = Storage::new_in_memory().unwrap();
+    /// let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+    /// assert!(!crawl_id.is_empty());
+    /// ```
     pub fn new_in_memory() -> Result<Self, StorageError> {
         let conn = Connection::open_in_memory()?;
         conn.execute_batch(
@@ -546,6 +556,39 @@ impl Storage {
     /// Insert a single page into the database under the given crawl.
     /// Uses a single SQLite transaction for the page row + all link rows
     /// to avoid per-statement fsync overhead.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::storage::{Storage, PageData};
+    /// use chrono::Utc;
+    /// use url::Url;
+    ///
+    /// let storage = Storage::new_in_memory().unwrap();
+    /// let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+    ///
+    /// let page = PageData {
+    ///     id: "page-1".to_string(),
+    ///     url: Url::parse("https://example.com/").unwrap(),
+    ///     final_url: Url::parse("https://example.com/").unwrap(),
+    ///     status_code: 200,
+    ///     title: Some("Home".to_string()),
+    ///     description: None,
+    ///     canonical_url: None,
+    ///     word_count: Some(500),
+    ///     load_time_ms: Some(150),
+    ///     body_size: Some(4096),
+    ///     fetched_at: Utc::now(),
+    ///     links: vec![],
+    ///     tenant_id: None,
+    ///     etag: None,
+    ///     last_modified: None,
+    /// };
+    ///
+    /// storage.insert_page(&crawl_id, &page).unwrap();
+    /// let pages = storage.get_pages(&crawl_id, 10).unwrap();
+    /// assert_eq!(pages.len(), 1);
+    /// ```
     pub fn insert_page(&self, crawl_id: &str, page: &PageData) -> Result<(), StorageError> {
         let conn = self.conn.lock();
         let tx = conn.unchecked_transaction()?;
@@ -717,6 +760,35 @@ impl Storage {
         })
     }
 
+    /// Retrieve a single page by crawl ID and URL.
+    ///
+    /// Returns `None` if no page matches the given URL within the crawl.
+    /// Checks the LRU cache first for recently accessed pages.
+    pub fn get_page(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+        {
+            let cache = self.page_cache.lock();
+            for (_, page) in cache.iter() {
+                if page.url.as_str() == url {
+                    return Ok(Some(page.clone()));
+                }
+            }
+        }
+
+        let conn = self.conn.lock();
+        let result = conn.query_row(
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified
+             FROM pages WHERE crawl_id = ?1 AND url = ?2",
+            params![crawl_id, url],
+            Self::row_to_page_data,
+        );
+
+        match result {
+            Ok(page) => Ok(Some(page)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
+
     /// Extract a `PageData` from a database row.
     fn row_to_page_data(row: &Row<'_>) -> Result<PageData, rusqlite::Error> {
         let url_str: String = row.get(1)?;
@@ -749,6 +821,40 @@ impl Storage {
     ///
     /// Results are not cached because the cache type (`LruCache<String, PageData>`)
     /// cannot store `Vec<PageData>`. The query is fast with proper indexing.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::storage::{Storage, PageData};
+    /// use chrono::Utc;
+    /// use url::Url;
+    ///
+    /// let storage = Storage::new_in_memory().unwrap();
+    /// let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+    ///
+    /// let page = PageData {
+    ///     id: "p1".to_string(),
+    ///     url: Url::parse("https://example.com/").unwrap(),
+    ///     final_url: Url::parse("https://example.com/").unwrap(),
+    ///     status_code: 200,
+    ///     title: Some("Home".to_string()),
+    ///     description: None,
+    ///     canonical_url: None,
+    ///     word_count: Some(500),
+    ///     load_time_ms: Some(150),
+    ///     body_size: Some(4096),
+    ///     fetched_at: Utc::now(),
+    ///     links: vec![],
+    ///     tenant_id: None,
+    ///     etag: None,
+    ///     last_modified: None,
+    /// };
+    /// storage.insert_page(&crawl_id, &page).unwrap();
+    ///
+    /// let pages = storage.get_pages(&crawl_id, 10).unwrap();
+    /// assert_eq!(pages.len(), 1);
+    /// assert_eq!(pages[0].url.as_str(), "https://example.com/");
+    /// ```
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
@@ -1218,6 +1324,99 @@ pub struct CruxMetrics {
     pub cls_p75: Option<f64>,
     pub fcp_p75: Option<f64>,
     pub ttfb_p75: Option<f64>,
+}
+
+impl crate::storage_trait::StorageBackend for Storage {
+    fn start_crawl(
+        &self,
+        seed_url: &str,
+        _tenant_id: Option<&str>,
+    ) -> Result<String, StorageError> {
+        self.start_crawl(seed_url, None)
+    }
+
+    fn finish_crawl(
+        &self,
+        crawl_id: &str,
+        pages: usize,
+        issues: usize,
+    ) -> Result<(), StorageError> {
+        self.finish_crawl(crawl_id, pages, issues)
+    }
+
+    fn insert_page(&self, crawl_id: &str, page: &PageData) -> Result<(), StorageError> {
+        self.insert_page(crawl_id, page)
+    }
+
+    fn insert_pages_batch(&self, crawl_id: &str, pages: &[PageData]) -> Result<(), StorageError> {
+        self.insert_pages(crawl_id, pages)
+    }
+
+    fn get_page(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+        self.get_page(crawl_id, url)
+    }
+
+    fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
+        self.get_pages(crawl_id, limit)
+    }
+
+    fn get_pages_for_tenant(
+        &self,
+        crawl_id: &str,
+        tenant_id: &str,
+        limit: usize,
+    ) -> Result<Vec<PageData>, StorageError> {
+        self.get_pages_for_tenant(crawl_id, tenant_id, limit)
+    }
+
+    fn insert_issue(&self, issue: &Issue) -> Result<(), StorageError> {
+        self.insert_issue(issue)
+    }
+
+    fn insert_issues_batch(&self, issues: &[Issue]) -> Result<(), StorageError> {
+        self.insert_issues(issues)
+    }
+
+    fn get_issues(
+        &self,
+        crawl_id: &str,
+        filters: &IssueFilter,
+    ) -> Result<Vec<Issue>, StorageError> {
+        self.get_issues(crawl_id, filters)
+    }
+
+    fn get_issues_for_tenant(
+        &self,
+        crawl_id: &str,
+        tenant_id: &str,
+        filters: &IssueFilter,
+    ) -> Result<Vec<Issue>, StorageError> {
+        self.get_issues_for_tenant(crawl_id, tenant_id, filters)
+    }
+
+    fn get_stats(&self, crawl_id: &str) -> Result<CrawlStats, StorageError> {
+        self.get_stats(crawl_id)
+    }
+
+    fn get_page_conditional(
+        &self,
+        crawl_id: &str,
+        url: &str,
+    ) -> Result<Option<(String, Option<String>, Option<String>)>, StorageError> {
+        self.get_page_conditional(crawl_id, url)
+    }
+
+    fn get_latest_conditional(
+        &self,
+        url: &str,
+    ) -> Result<Option<(Option<String>, Option<String>)>, StorageError> {
+        self.get_latest_conditional(url)
+    }
+
+    fn finish(&self) -> Result<(), StorageError> {
+        self.clear_cache();
+        Ok(())
+    }
 }
 
 #[cfg(test)]

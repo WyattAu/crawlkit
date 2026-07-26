@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 15 (v2.0.0 Release)
-**Version:** 2.0.0
+**Current Phase:** Phase 16 (v2.1.0 Release)
+**Version:** 2.1.0
 **Status:** Release Candidate
 **Last Updated:** 2026-07-26
 **MSRV:** 1.85.0
@@ -39,7 +39,8 @@
 | 0.1.1 | 2026-07-23 | Phase -1 complete |
 | 0.4.0 | 2026-07-23 | Major release: 28 analyzers, AI/WASM, REST API, cross-platform |
 | 2.0.0 | 2026-07-25 | Full rewrite: 31 analyzers, security hardening, quality gates |
+| 2.1.0 | 2026-07-26 | Production hardening: rustdoc examples, bug fixes |
 
 ---
 
-*Generated: 2026-07-26 | Version: 2.0.0*
+*Generated: 2026-07-26 | Version: 2.1.0*

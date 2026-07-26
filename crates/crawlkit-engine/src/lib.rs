@@ -174,7 +174,8 @@ pub mod playwright;
 pub mod plugin;
 
 pub use plugin::{
-    PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig, WasmPlugin,
+    ManifestError, PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig,
+    WasmPlugin,
 };
 /// Priority URL queue with depth and scope filtering.
 ///
@@ -206,6 +207,11 @@ pub mod sitemap;
 /// and memory usage tracking. Supports pages, links, issues, images,
 /// structured data, and CrUX metrics.
 pub mod storage;
+/// Trait-based abstraction for storage backends.
+///
+/// Defines [`StorageBackend`](storage_trait::StorageBackend) for pluggable
+/// storage implementations (SQLite, in-memory, distributed, etc.).
+pub mod storage_trait;
 /// WASM-based analyzers for advanced code and performance analysis.
 ///
 /// Static pattern analysis, runtime performance analysis, and
@@ -261,6 +267,7 @@ pub use sitemap::SitemapCache;
 pub use storage::{
     CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
+pub use storage_trait::{new_in_memory_backend, StorageBackend};
 pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
 
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).

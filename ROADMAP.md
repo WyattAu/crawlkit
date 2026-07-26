@@ -6,7 +6,7 @@ Last Updated: 2026-07-26
 
 ---
 
-## Current State (v2.0.0)
+## Current State (v2.1.0)
 
 - 642 tests passing (449 engine + 103 API + 31 plugin SDK + 26 doc tests + 31 integration + 3 RUM + 21 property-based), zero clippy warnings, zero rustfmt diffs
 - 31 analyzers (23 core + 4 AI + 1 WASM + 3 advanced canonical) with Rayon parallel execution

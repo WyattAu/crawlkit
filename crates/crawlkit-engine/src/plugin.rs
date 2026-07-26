@@ -56,6 +56,46 @@ pub enum PluginError {
 
     #[error("WASM execution error: {0}")]
     WasmExecution(String),
+
+    #[error("invalid manifest: {0}")]
+    InvalidManifest(String),
+}
+
+/// Errors specific to plugin manifest validation.
+#[derive(Debug, Error, PartialEq)]
+pub enum ManifestError {
+    #[error("name is required and must be non-empty")]
+    NameRequired,
+
+    #[error("name must contain only alphanumeric characters and hyphens")]
+    NameInvalid,
+
+    #[error("version is required and must be non-empty")]
+    VersionRequired,
+
+    #[error("version must be valid semver (X.Y.Z)")]
+    VersionInvalid,
+
+    #[error("description is required and must be non-empty")]
+    DescriptionRequired,
+
+    #[error("description exceeds maximum length of 500 characters")]
+    DescriptionTooLong,
+
+    #[error("author is required and must be non-empty")]
+    AuthorRequired,
+
+    #[error("license is required and must be non-empty")]
+    LicenseRequired,
+
+    #[error("license must be a valid SPDX identifier")]
+    LicenseInvalid,
+
+    #[error("entry_point (wasm) is required and must be non-empty")]
+    EntryPointRequired,
+
+    #[error("entry_point must end with .wasm")]
+    EntryPointNotWasm,
 }
 
 /// Plugin manifest (crawlkit-plugin.toml).
@@ -103,6 +143,147 @@ pub struct PluginAnalyzerInfo {
     pub severity: Option<String>,
 }
 
+/// Validate a version string against semver format (X.Y.Z).
+///
+/// Accepts major.minor.patch where each component is a non-negative integer
+/// with no leading zeros (except "0" itself).
+pub fn validate_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() != 3 {
+        return false;
+    }
+    for part in &parts {
+        if part.is_empty() || !part.chars().all(|c| c.is_ascii_digit()) {
+            return false;
+        }
+        // Reject leading zeros (except "0" itself)
+        if part.len() > 1 && part.starts_with('0') {
+            return false;
+        }
+    }
+    true
+}
+
+/// Validate a license string against common SPDX identifiers.
+///
+/// Checks a curated list of widely-used open-source licenses. Returns `true`
+/// if the identifier matches one of the known licenses (case-sensitive).
+pub fn validate_license(license: &str) -> bool {
+    matches!(
+        license,
+        "MIT"
+            | "Apache-2.0"
+            | "Apache-2.0 OR MIT"
+            | "BSD-2-Clause"
+            | "BSD-3-Clause"
+            | "GPL-2.0"
+            | "GPL-2.0-only"
+            | "GPL-2.0-or-later"
+            | "GPL-3.0"
+            | "GPL-3.0-only"
+            | "GPL-3.0-or-later"
+            | "LGPL-2.0"
+            | "LGPL-2.0-only"
+            | "LGPL-2.0-or-later"
+            | "LGPL-2.1"
+            | "LGPL-2.1-only"
+            | "LGPL-2.1-or-later"
+            | "LGPL-3.0"
+            | "LGPL-3.0-only"
+            | "LGPL-3.0-or-later"
+            | "MPL-2.0"
+            | "ISC"
+            | "Unlicense"
+            | "0BSD"
+            | "CC0-1.0"
+            | "CC-BY-4.0"
+            | "CC-BY-SA-4.0"
+            | "WTFPL"
+            | "Zlib"
+            | "BSL-1.0"
+            | "PostgreSQL"
+            | "Python-2.0"
+            | "PSF-2.0"
+            | "AGPL-3.0"
+            | "AGPL-3.0-only"
+            | "AGPL-3.0-or-later"
+            | "EUPL-1.1"
+            | "EUPL-1.2"
+            | "CECILL-2.0"
+            | "Artistic-2.0"
+            | "EPL-1.0"
+            | "EPL-2.0"
+            | "CDDL-1.0"
+            | "CDDL-1.1"
+            | "CPL-1.0"
+            | "IPL-1.0"
+            | "OFL-1.1"
+            | "RSA-MD"
+            | "curl"
+            | "libpng"
+            | "boost"
+            | "FPL"
+    )
+}
+
+/// Validate a plugin manifest against all required field rules.
+///
+/// Checks that all mandatory fields are present, non-empty, and conform
+/// to their format constraints. Returns `Ok(())` on success or
+/// `Err(ManifestError)` describing the first validation failure.
+pub fn validate_manifest(manifest: &PluginMetadata) -> Result<(), ManifestError> {
+    // Name validation
+    if manifest.name.is_empty() {
+        return Err(ManifestError::NameRequired);
+    }
+    if !manifest
+        .name
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || c == '-')
+    {
+        return Err(ManifestError::NameInvalid);
+    }
+
+    // Version validation
+    if manifest.version.is_empty() {
+        return Err(ManifestError::VersionRequired);
+    }
+    if !validate_version(&manifest.version) {
+        return Err(ManifestError::VersionInvalid);
+    }
+
+    // Description validation
+    if manifest.description.is_empty() {
+        return Err(ManifestError::DescriptionRequired);
+    }
+    if manifest.description.len() > 500 {
+        return Err(ManifestError::DescriptionTooLong);
+    }
+
+    // Author validation
+    if manifest.author.is_empty() {
+        return Err(ManifestError::AuthorRequired);
+    }
+
+    // License validation
+    if manifest.license.is_empty() {
+        return Err(ManifestError::LicenseRequired);
+    }
+    if !validate_license(&manifest.license) {
+        return Err(ManifestError::LicenseInvalid);
+    }
+
+    // Entry point validation
+    match manifest.entry.wasm.as_deref() {
+        None => return Err(ManifestError::EntryPointRequired),
+        Some("") => return Err(ManifestError::EntryPointRequired),
+        Some(entry) if !entry.ends_with(".wasm") => return Err(ManifestError::EntryPointNotWasm),
+        _ => {}
+    }
+
+    Ok(())
+}
+
 /// Loaded WASM plugin instance.
 pub struct WasmPlugin {
     pub manifest: PluginMetadata,
@@ -131,6 +312,16 @@ impl WasmPlugin {
                 manifest.plugin.api_version,
             ));
         }
+
+        // Validate manifest fields before loading WASM
+        validate_manifest(&manifest.plugin).map_err(|e| {
+            tracing::warn!(
+                "Plugin manifest validation failed for {}: {}",
+                manifest.plugin.name,
+                e
+            );
+            PluginError::InvalidManifest(e.to_string())
+        })?;
 
         let wasm_file =
             manifest.plugin.entry.wasm.as_ref().ok_or_else(|| {
@@ -431,5 +622,222 @@ mod tests {
         registry.add_search_path(PathBuf::from("/nonexistent/path"));
         let errors = registry.load_all();
         assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_validate_version_valid() {
+        assert!(validate_version("1.0.0"));
+        assert!(validate_version("0.1.0"));
+        assert!(validate_version("10.20.30"));
+        assert!(validate_version("0.0.1"));
+    }
+
+    #[test]
+    fn test_validate_version_invalid() {
+        assert!(!validate_version("1.0"));
+        assert!(!validate_version("1.0.0.0"));
+        assert!(!validate_version("1.0.beta"));
+        assert!(!validate_version(""));
+        assert!(!validate_version("01.0.0"));
+        assert!(!validate_version("1.00.0"));
+    }
+
+    #[test]
+    fn test_validate_license_valid() {
+        assert!(validate_license("MIT"));
+        assert!(validate_license("Apache-2.0"));
+        assert!(validate_license("GPL-3.0-or-later"));
+        assert!(validate_license("BSD-3-Clause"));
+        assert!(validate_license("ISC"));
+        assert!(validate_license("MPL-2.0"));
+    }
+
+    #[test]
+    fn test_validate_license_invalid() {
+        assert!(!validate_license("MIT-style"));
+        assert!(!validate_license("Proprietary"));
+        assert!(!validate_license(""));
+        assert!(!validate_license("Custom-1.0"));
+    }
+
+    #[test]
+    fn test_validate_manifest_valid() {
+        let metadata = PluginMetadata {
+            name: "test-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Test Author".to_string(),
+            description: "A test plugin".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert!(validate_manifest(&metadata).is_ok());
+    }
+
+    #[test]
+    fn test_validate_manifest_empty_name() {
+        let metadata = PluginMetadata {
+            name: "".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::NameRequired
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_invalid_name() {
+        let metadata = PluginMetadata {
+            name: "test plugin!".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::NameInvalid
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_invalid_version() {
+        let metadata = PluginMetadata {
+            name: "my-plugin".to_string(),
+            version: "1.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::VersionInvalid
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_description_too_long() {
+        let metadata = PluginMetadata {
+            name: "my-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "a".repeat(501),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::DescriptionTooLong
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_invalid_license() {
+        let metadata = PluginMetadata {
+            name: "my-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "Proprietary".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.wasm".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::LicenseInvalid
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_no_wasm_entry() {
+        let metadata = PluginMetadata {
+            name: "my-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: None,
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::EntryPointRequired
+        );
+    }
+
+    #[test]
+    fn test_validate_manifest_non_wasm_entry() {
+        let metadata = PluginMetadata {
+            name: "my-plugin".to_string(),
+            version: "1.0.0".to_string(),
+            api_version: "1.0".to_string(),
+            author: "Author".to_string(),
+            description: "Desc".to_string(),
+            license: "MIT".to_string(),
+            trust_level: None,
+            entry: PluginEntry {
+                wasm: Some("plugin.js".to_string()),
+                native: None,
+            },
+            permissions: None,
+            analyzer: None,
+        };
+        assert_eq!(
+            validate_manifest(&metadata).unwrap_err(),
+            ManifestError::EntryPointNotWasm
+        );
     }
 }

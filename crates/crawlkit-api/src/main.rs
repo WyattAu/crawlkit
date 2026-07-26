@@ -34,7 +34,7 @@ use tower_http::cors::{AllowHeaders, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use uuid::Uuid;
 
-use crawlkit_engine::storage::Storage;
+use crawlkit_engine::storage::{IssueFilter, Storage};
 use crawlkit_engine::AuditTrail;
 use crawlkit_engine::CrawlConfig;
 
@@ -835,6 +835,36 @@ async fn get_crawl_stats(
         issues_by_category: stats.issues_by_category,
         avg_response_time_ms: stats.avg_response_time_ms,
     }))
+}
+
+async fn get_crawl_findings(
+    State(state): State<AppState>,
+    axum::extract::Path(crawl_id): axum::extract::Path<String>,
+) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
+    let filter = IssueFilter::default();
+    let issues = state
+        .storage
+        .get_issues(&crawl_id, &filter)
+        .map_err(|e| ApiError::Internal(format!("Failed to get findings: {e}")))?;
+
+    let findings: Vec<serde_json::Value> = issues
+        .iter()
+        .map(|issue| {
+            serde_json::json!({
+                "id": issue.id,
+                "page_id": issue.page_id,
+                "category": issue.category.as_str(),
+                "severity": issue.severity.as_str(),
+                "code": issue.code,
+                "title": issue.title,
+                "description": issue.description,
+                "element": issue.element,
+                "recommendation": issue.recommendation,
+            })
+        })
+        .collect();
+
+    Ok(Json(findings))
 }
 
 async fn list_crawls(State(state): State<AppState>) -> Json<Vec<CrawlResult>> {
@@ -1755,20 +1785,31 @@ async fn main() -> anyhow::Result<()> {
         },
     );
 
-    let jwt_secret = std::env::var("JWT_SECRET")
-        .unwrap_or_else(|_| "default-secret-change-in-production".to_string());
+    let jwt_secret = std::env::var("JWT_SECRET").unwrap_or_else(|_| {
+        use rand::Rng;
+        let mut rng = rand::thread_rng();
+        let secret: String = (0..32)
+            .map(|_| format!("{:02x}", rng.gen::<u8>()))
+            .collect();
+        tracing::warn!(
+            "JWT_SECRET not set. Generated random secret. Set JWT_SECRET env var for production."
+        );
+        secret
+    });
     let auth = Arc::new(AuthManager::new(jwt_secret));
 
-    let admin_password = auth.hash_password("admin123");
-    auth.add_user(User {
-        id: uuid::Uuid::new_v4().to_string(),
-        email: "admin@crawlkit.local".to_string(),
-        name: "Admin".to_string(),
-        password_hash: admin_password,
-        tenant_id: "default".to_string(),
-        roles: vec!["admin".to_string()],
-        enabled: true,
-    });
+    if std::env::var("CREATE_ADMIN").unwrap_or_default() == "true" {
+        let admin_password = auth.hash_password("admin123");
+        auth.add_user(User {
+            id: uuid::Uuid::new_v4().to_string(),
+            email: "admin@crawlkit.local".to_string(),
+            name: "Admin".to_string(),
+            password_hash: admin_password,
+            tenant_id: "default".to_string(),
+            roles: vec!["admin".to_string()],
+            enabled: true,
+        });
+    }
 
     // Initialize OIDC if configured via environment variables
     let oidc = match (
@@ -1869,6 +1910,10 @@ async fn main() -> anyhow::Result<()> {
         .route(
             "/api/v1/crawls/{crawl_id}/backlinks",
             get(get_crawl_backlinks),
+        )
+        .route(
+            "/api/v1/crawls/{crawl_id}/findings",
+            get(get_crawl_findings),
         )
         .route("/api/v1/keys", post(create_api_key).get(list_api_keys))
         .route("/api/v1/keys/{key}", axum::routing::delete(delete_api_key))
@@ -2380,5 +2425,85 @@ mod tests {
         assert_eq!(deserialized.name, "test-plugin");
         assert_eq!(deserialized.downloads, 100);
         assert!((deserialized.rating - 4.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_get_crawl_findings_returns_issues_as_json() {
+        use crawlkit_engine::storage::{IssueCategory, IssueFilter, Severity, Storage};
+
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let page = crawlkit_engine::storage::PageData {
+            id: "p1".to_string(),
+            url: url::Url::parse("https://example.com/").unwrap(),
+            final_url: url::Url::parse("https://example.com/").unwrap(),
+            status_code: 200,
+            title: Some("Test".to_string()),
+            description: None,
+            canonical_url: None,
+            word_count: Some(100),
+            load_time_ms: Some(200),
+            body_size: Some(1024),
+            fetched_at: chrono::Utc::now(),
+            links: vec![],
+            tenant_id: None,
+            etag: None,
+            last_modified: None,
+        };
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let issue = crawlkit_engine::storage::Issue {
+            id: "i1".to_string(),
+            page_id: "p1".to_string(),
+            category: IssueCategory::Seo,
+            severity: Severity::Error,
+            code: "SEO001".to_string(),
+            title: "Missing title".to_string(),
+            description: "Page has no title".to_string(),
+            element: None,
+            recommendation: "Add a title tag".to_string(),
+            tenant_id: None,
+        };
+        storage.insert_issue(&issue).unwrap();
+
+        let filter = IssueFilter::default();
+        let issues = storage.get_issues(&crawl_id, &filter).unwrap();
+        assert_eq!(issues.len(), 1);
+
+        let findings: Vec<serde_json::Value> = issues
+            .iter()
+            .map(|issue| {
+                serde_json::json!({
+                    "id": issue.id,
+                    "page_id": issue.page_id,
+                    "category": issue.category.as_str(),
+                    "severity": issue.severity.as_str(),
+                    "code": issue.code,
+                    "title": issue.title,
+                    "description": issue.description,
+                    "element": issue.element,
+                    "recommendation": issue.recommendation,
+                })
+            })
+            .collect();
+
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0]["id"], "i1");
+        assert_eq!(findings[0]["category"], "seo");
+        assert_eq!(findings[0]["severity"], "error");
+        assert_eq!(findings[0]["code"], "SEO001");
+    }
+
+    #[test]
+    fn test_get_crawl_findings_empty_crawl() {
+        use crawlkit_engine::storage::{IssueFilter, Storage};
+
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let filter = IssueFilter::default();
+        let issues = storage.get_issues(&crawl_id, &filter).unwrap();
+        assert!(issues.is_empty());
     }
 }

@@ -445,9 +445,19 @@ impl CrawlEngine {
                     .get_page_conditional(&crawl_id, entry.url.as_str())
                     .unwrap_or(None);
 
-                let (existing_etag, existing_lm) = match &previous {
-                    Some((_, etag, lm)) => (etag.as_deref(), lm.as_deref()),
-                    None => (None, None),
+                let cross_previous = self
+                    .storage
+                    .get_latest_conditional(entry.url.as_str())
+                    .unwrap_or(None);
+
+                // Prefer same-crawl result (has page_id for 304 updates),
+                // fall back to cross-crawl for conditional headers only.
+                let (existing_etag, existing_lm) = if let Some((_, ref etag, ref lm)) = previous {
+                    (etag.as_deref(), lm.as_deref())
+                } else if let Some((ref etag, ref lm)) = cross_previous {
+                    (etag.as_deref(), lm.as_deref())
+                } else {
+                    (None, None)
                 };
 
                 match http_client

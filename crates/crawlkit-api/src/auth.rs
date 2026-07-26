@@ -124,6 +124,10 @@ impl AuthManager {
     /// Validate password complexity.
     /// Returns Ok(()) if valid, Err(String) with reason if invalid.
     pub fn validate_password(password: &str) -> Result<(), String> {
+        const COMMON_PASSWORDS: &[&str] = &["admin123", "password", "12345678", "qwerty"];
+        if COMMON_PASSWORDS.contains(&password) {
+            return Err("Password is too common".into());
+        }
         if password.len() < 8 {
             return Err("Password must be at least 8 characters".into());
         }

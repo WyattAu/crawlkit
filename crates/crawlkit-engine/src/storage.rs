@@ -401,12 +401,8 @@ impl Storage {
     /// Clears the page cache.
     pub fn clear_cache(&self) {
         let mut cache = self.page_cache.lock();
-        let evicted = cache.len();
         cache.clear();
-        if evicted > 0 {
-            self.memory_usage
-                .fetch_sub(evicted * std::mem::size_of::<PageData>(), Ordering::Relaxed);
-        }
+        self.memory_usage.store(0, Ordering::Relaxed);
     }
 
     /// Create the database schema if it doesn't already exist.
@@ -594,6 +590,14 @@ impl Storage {
         drop(stmt);
 
         tx.commit()?;
+
+        let mut cache = self.page_cache.lock();
+        let page_size = std::mem::size_of::<PageData>()
+            + page.url.as_str().len()
+            + page.title.as_deref().unwrap_or("").len();
+        cache.put(page.id.clone(), page.clone());
+        self.memory_usage.fetch_add(page_size, Ordering::Relaxed);
+
         Ok(())
     }
 
@@ -1128,6 +1132,31 @@ impl Storage {
         }
     }
 
+    /// Get the most recent ETag and Last-Modified for a URL across all crawls.
+    /// Used for cross-crawl incremental support.
+    pub fn get_latest_conditional(
+        &self,
+        url: &str,
+    ) -> Result<Option<(Option<String>, Option<String>)>, StorageError> {
+        let conn = self.conn.lock();
+        let result = conn.query_row(
+            "SELECT etag, last_modified FROM pages WHERE url = ?1 ORDER BY fetched_at DESC LIMIT 1",
+            params![url],
+            |row| {
+                Ok((
+                    row.get::<_, Option<String>>(0)?,
+                    row.get::<_, Option<String>>(1)?,
+                ))
+            },
+        );
+
+        match result {
+            Ok(row) => Ok(Some(row)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
+
     /// Store CrUX metrics for a page.
     pub fn insert_crux_metrics(
         &self,
@@ -1500,5 +1529,48 @@ mod tests {
             pages[0].last_modified.as_deref(),
             Some("Thu, 01 Jan 2025 00:00:00 GMT")
         );
+    }
+
+    #[test]
+    fn test_get_latest_conditional_cross_crawl() {
+        let storage = Storage::new_in_memory().unwrap();
+
+        // First crawl: insert a page with ETag and Last-Modified
+        let crawl_id1 = storage.start_crawl("https://example.com", None).unwrap();
+        let mut page1 = test_page("p1", "https://example.com/", 200);
+        page1.etag = Some("\"v1-etag\"".to_string());
+        page1.last_modified = Some("Mon, 01 Jan 2024 00:00:00 GMT".to_string());
+        storage.insert_page(&crawl_id1, &page1).unwrap();
+
+        // Second crawl: insert same URL with updated ETag
+        let crawl_id2 = storage.start_crawl("https://example.com", None).unwrap();
+        let mut page2 = test_page("p2", "https://example.com/", 200);
+        page2.etag = Some("\"v2-etag\"".to_string());
+        page2.last_modified = Some("Tue, 01 Jul 2025 00:00:00 GMT".to_string());
+        storage.insert_page(&crawl_id2, &page2).unwrap();
+
+        // get_page_conditional on a NEW crawl (different crawl_id) returns None
+        let crawl_id3 = storage.start_crawl("https://example.com", None).unwrap();
+        let result = storage
+            .get_page_conditional(&crawl_id3, "https://example.com/")
+            .unwrap();
+        assert!(result.is_none());
+
+        // get_latest_conditional finds the most recent entry across all crawls
+        let result = storage
+            .get_latest_conditional("https://example.com/")
+            .unwrap();
+        let (etag, last_modified) = result.unwrap();
+        assert_eq!(etag.as_deref(), Some("\"v2-etag\""));
+        assert_eq!(
+            last_modified.as_deref(),
+            Some("Tue, 01 Jul 2025 00:00:00 GMT")
+        );
+
+        // Returns None for unknown URL
+        let result = storage
+            .get_latest_conditional("https://example.com/unknown")
+            .unwrap();
+        assert!(result.is_none());
     }
 }

@@ -230,6 +230,7 @@ pub fn validate_password_strength(password: &str) -> Result<(), PasswordError> {
     const COMMON_PASSWORDS: &[&str] = &[
         "password",
         "password123",
+        "password1234",
         "admin123",
         "12345678",
         "qwerty",
@@ -255,18 +256,18 @@ pub fn validate_password_strength(password: &str) -> Result<(), PasswordError> {
         "hello",
     ];
 
-    if password.len() < MIN_LENGTH {
-        return Err(PasswordError::TooShort {
-            min: MIN_LENGTH,
-            got: password.len(),
-        });
-    }
-
     if COMMON_PASSWORDS
         .iter()
         .any(|&p| p.eq_ignore_ascii_case(password))
     {
         return Err(PasswordError::CommonPassword);
+    }
+
+    if password.len() < MIN_LENGTH {
+        return Err(PasswordError::TooShort {
+            min: MIN_LENGTH,
+            got: password.len(),
+        });
     }
 
     if !password.chars().any(|c| c.is_uppercase()) {

@@ -334,7 +334,7 @@ impl HtmlParser {
         let structured_data = Self::extract_structured_data(&document);
         let word_count = Self::count_words(&document);
 
-        let accessibility = Self::extract_accessibility(&document);
+        let accessibility = Self::extract_accessibility(&document, Some(html));
         let social = Self::extract_social(&document);
 
         Ok(ParsedPage {
@@ -875,6 +875,7 @@ impl HtmlParser {
     /// has_aria_hidden, tables_with_headers, tables_total, tables_with_captions).
     fn extract_accessibility(
         document: &Html,
+        html_raw: Option<&str>,
     ) -> (
         Vec<String>,
         bool,
@@ -904,21 +905,20 @@ impl HtmlParser {
         let mut tables_total = 0usize;
         let mut tables_with_captions = 0usize;
 
-        // Check html lang — try selector first, fall back to root element scan
-        let has_lang;
-        let html_lang;
+        // Check html lang — try selector first, fall back to root element scan, then regex
+        let mut has_lang;
+        let mut html_lang;
         if let Some(html_el) = document.select(selectors::html()).next() {
             html_lang = html_el.value().attr("lang").map(String::from);
             has_lang = html_lang.is_some();
         } else {
-            // Fallback: scan root element for html tag with lang attribute
+            // Fallback: scan root element descendants
             let root = document.root_element();
             let root_value = root.value();
             if root_value.name() == "html" {
                 html_lang = root_value.attr("lang").map(String::from);
                 has_lang = html_lang.is_some();
             } else {
-                // Check children of root for html element
                 let found = root.descendants().find_map(|node| {
                     if let scraper::Node::Element(el) = node.value() {
                         if el.name() == "html" {
@@ -929,6 +929,36 @@ impl HtmlParser {
                 });
                 html_lang = found;
                 has_lang = html_lang.is_some();
+            }
+            // Final fallback: scan the raw HTML for lang attribute
+            if !has_lang {
+                tracing::debug!(
+                    "lang not found via selector or DOM, html_raw exists={}",
+                    html_raw.is_some()
+                );
+                if let Some(raw) = html_raw {
+                    tracing::debug!(
+                        "Raw HTML len={}, first 100 chars: {}",
+                        raw.len(),
+                        &raw[..100.min(raw.len())]
+                    );
+                    if raw.contains("lang=\"") || raw.contains("lang='") {
+                        tracing::debug!("Found lang= in raw HTML, attempting regex");
+                        static LANG_RE: std::sync::OnceLock<regex::Regex> =
+                            std::sync::OnceLock::new();
+                        // SAFETY: regex pattern is a compile-time constant literal, always valid
+                        #[allow(clippy::expect_used)]
+                        let re = LANG_RE.get_or_init(|| {
+                            regex::Regex::new(r#"lang="([^"]*)""#)
+                                .expect("lang regex is a valid compile-time constant")
+                        });
+                        if let Some(caps) = re.captures(raw) {
+                            tracing::debug!("Regex match: lang={}", &caps[1]);
+                            html_lang = Some(caps[1].to_string());
+                            has_lang = true;
+                        }
+                    }
+                }
             }
         }
 
@@ -1642,5 +1672,24 @@ mod tests {
         let page = parser.parse().unwrap();
         assert_eq!(page.meta.title.as_deref(), Some("Multi Chunk"));
         assert_eq!(page.word_count, 1);
+    }
+}
+
+#[cfg(test)]
+mod lang_test {
+    use super::*;
+    use url::Url;
+
+    #[test]
+    fn test_lang_attribute_from_html() {
+        let html = r#"<!DOCTYPE html><html lang="en" data-theme="midnight-navy"><head><title>Test</title></head><body></body></html>"#;
+        let url = Url::parse("https://example.com").unwrap();
+        let page = HtmlParser::parse(html, &url).unwrap();
+        // Check the accessibility section
+        assert!(
+            page.has_lang_attribute,
+            "should detect lang attribute from raw HTML fallback"
+        );
+        assert_eq!(page.html_lang.as_deref(), Some("en"));
     }
 }

@@ -21,9 +21,6 @@ concurrency:
 permissions:
   contents: read
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   deny:
     name: License & Advisory Audit
@@ -31,14 +28,9 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: EmbarkStudios/cargo-deny-action@2818626c36430864e8e2af44e079e5da87756194 # v2
         with:
-          key: cargo-deny
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked
-      - name: Run cargo-deny
-        run: cargo deny check
+          command: check
 
   audit:
     name: Vulnerability Audit

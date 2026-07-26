@@ -20,6 +20,7 @@ if_not_else = "warn"
 [workspace.package]
 version = "2.0.0"
 edition = "2021"
+rust-version = "1.85.0"
 authors = ["Wyatt Au"]
 license = "Apache-2.0"
 description = "High-performance Rust web crawler and SEO analysis toolkit with 28 analyzers, WASM plugin system, and enterprise features"

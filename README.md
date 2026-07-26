@@ -2,12 +2,12 @@
 
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.75+-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-560--passing-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org/)
+[![Tests](https://img.shields.io/badge/tests-608--passing-green.svg)](https://github.com/WyattAu/crawlkit)
 [![Analyzers](https://img.shields.io/badge/analyzers-31-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
 
-High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings.
+High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings, zero unsafe code.
 
 ## Architecture
 
@@ -32,6 +32,9 @@ crawlkit/
     crawlkit-api/      # REST API server (axum)
     crawlkit-engine/   # Core types, analyzers, storage, export
     crawlkit-plugin-sdk/ # Plugin development kit
+  dashboard/           # React + Tailwind web dashboard
+  web/                 # Astro + Starlight documentation site
+  clients/             # Go, Node.js, Python client libraries
   docs/                # Architecture, roadmap, competitive analysis
   .github/workflows/   # CI/CD (format, clippy, test, audit, release)
   Cargo.toml           # Workspace root
@@ -72,17 +75,17 @@ crawlkit report crawl1/ --format html --output report.html
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `-u, --url <URL>` | — | Target URL |
+| `-u, --url <URL>` | -- | Target URL |
 | `-m, --max-pages <N>` | 100 | Maximum pages |
-| `-d, --delay <MS>` | 500 | Delay between requests |
+| `-d, --delay <MS>` | 500 | Delay between requests (ms) |
 | `-c, --concurrency <N>` | 4 | Concurrent fetchers |
 | `-o, --output <DIR>` | `.` | Output directory |
 | `-f, --format <FMT>` | `all` | Output: json, csv, sqlite, html, all |
-| `--max-depth <N>` | — | Maximum crawl depth |
-| `--user-agent <STR>` | — | Custom user agent |
-| `--timeout <SECS>` | 30 | Request timeout |
-| `--no-robots` | — | Ignore robots.txt |
-| `--javascript` | — | Enable JS rendering |
+| `--max-depth <N>` | -- | Maximum crawl depth |
+| `--user-agent <STR>` | -- | Custom user agent |
+| `--timeout <SECS>` | 30 | Request timeout (seconds) |
+| `--no-robots` | -- | Ignore robots.txt |
+| `--javascript` | -- | Enable JS rendering |
 
 ## Configuration
 
@@ -153,11 +156,31 @@ Covers: HTML parser, analyzer execution, registry lookup, queue operations, stor
 ## Security Model
 
 - HTTP/2 with TLS via rustls (no OpenSSL dependency)
+- `unsafe_code = "forbid"` at workspace level
 - robots.txt compliance by default
 - Rate limiting with configurable delay
 - SSL certificate chain validation
 - Content Security Policy header scoring
-- Supply chain audit via `cargo audit`
+- Supply chain audit via `cargo audit` and `cargo deny`
+- API key redaction in list endpoints
+- Argon2 password hashing with per-user salt
+- OIDC support for SSO integration
+
+## Quality Gates
+
+Pre-commit hooks enforce:
+
+1. `cargo fmt --check` -- formatting
+2. `cargo clippy --workspace --all-targets -- -D warnings` -- lint
+3. `cargo check --workspace` -- compilation
+4. `cargo test --lib --workspace` -- unit tests
+5. `cargo test --doc --workspace` -- doc tests
+6. Integration tests (excl. playwright)
+7. `cargo audit` -- security advisories
+8. Hardcoded secret scan
+9. Unsafe code without SAFETY comment
+10. MSRV check (Rust 1.85.0)
+11. Dead code detection
 
 ## Documentation
 
@@ -180,4 +203,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 2.0.0 | Last updated: 2026-07-25*
+*Version: 2.0.0 | Last updated: 2026-07-26*

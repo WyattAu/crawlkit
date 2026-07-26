@@ -64,7 +64,7 @@ pre-commit:
 # Full quality gate (all checks)
 qa: fmt-check clippy test test-integration deny audit
     @cargo test --doc --workspace
-    @cargo +1.82.0 check --workspace
+    @cargo +1.85.0 check --workspace
     @bash scripts/pre-commit.sh
     @echo "All quality gates passed."
 

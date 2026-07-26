@@ -614,19 +614,23 @@ async fn csrf_origin_validation(
         return Ok(next.run(request).await);
     }
 
-    let has_api_key = headers
-        .get("x-api-key")
+    let origin = headers
+        .get("origin")
         .and_then(|v| v.to_str().ok())
-        .is_some();
-
-    if has_api_key {
-        return Ok(next.run(request).await);
-    }
-
-    let origin = headers.get("origin").and_then(|v| v.to_str().ok());
+        .map(str::to_string)
+        .or_else(|| {
+            headers
+                .get("referer")
+                .and_then(|v| v.to_str().ok())
+                .and_then(|referer| {
+                    url::Url::parse(referer)
+                        .ok()
+                        .map(|u| format!("{}://{}", u.scheme(), u.authority()))
+                })
+        });
 
     match origin {
-        Some(origin_str) => {
+        Some(ref origin_str) => {
             if allowed_origins.iter().any(|o| o == origin_str) {
                 Ok(next.run(request).await)
             } else {
@@ -635,7 +639,7 @@ async fn csrf_origin_validation(
             }
         }
         None => {
-            tracing::warn!("CSRF check: missing Origin header on {method}");
+            tracing::warn!("CSRF check: missing Origin/Referer header on {method}");
             Err(StatusCode::FORBIDDEN)
         }
     }
@@ -1908,6 +1912,13 @@ async fn main() -> anyhow::Result<()> {
         .filter(|s| !s.is_empty())
         .collect();
 
+    let csrf_allowed_origins: Vec<String> = std::env::var("ALLOWED_ORIGINS")
+        .unwrap_or_else(|_| allowed_origins.join(","))
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
     let cors = if allowed_origins.iter().all(|o| o == "*") {
         CorsLayer::new()
             .allow_origin(Any)
@@ -1929,8 +1940,6 @@ async fn main() -> anyhow::Result<()> {
             ])
             .allow_headers(AllowHeaders::any())
     };
-
-    let csrf_origins = allowed_origins.clone();
 
     let protected = Router::new()
         .route("/api/v1/auth/refresh", post(refresh_token))
@@ -1982,31 +1991,34 @@ async fn main() -> anyhow::Result<()> {
             get(download_plugin),
         )
         .route("/api/v1/marketplace/plugins/{name}/test", post(test_plugin))
-        .route_layer(middleware::from_fn_with_state(
+        .layer(middleware::from_fn_with_state(
             state.clone(),
             jwt_auth_middleware,
-        ));
-
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/metrics", get(metrics_endpoint))
-        .route("/api/v1/auth/login", post(login))
-        .route("/api/v1/auth/oidc/authorize", get(oidc_authorize))
-        .route("/api/v1/auth/oidc/callback", get(oidc_callback))
-        .merge(protected)
-        .layer(cors)
-        .layer(middleware::from_fn(csp_headers))
+        ))
         .layer(middleware::from_fn_with_state(
-            csrf_origins,
+            csrf_allowed_origins,
             csrf_origin_validation,
         ))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            request_metrics_middleware,
-        ))
+            api_key_auth_middleware,
+        ));
+
+    let public = Router::new()
+        .route("/health", get(health))
+        .route("/metrics", get(metrics_endpoint))
+        .route("/api/v1/auth/login", post(login))
+        .route("/api/v1/auth/oidc/authorize", get(oidc_authorize))
+        .route("/api/v1/auth/oidc/callback", get(oidc_callback));
+
+    let app = Router::new()
+        .merge(public)
+        .merge(protected)
+        .layer(cors)
+        .layer(middleware::from_fn(csp_headers))
         .layer(middleware::from_fn_with_state(
             state.clone(),
-            api_key_auth_middleware,
+            request_metrics_middleware,
         ))
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());

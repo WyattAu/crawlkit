@@ -743,6 +743,7 @@ dependencies = [
  "parking_lot",
  "quick-xml",
  "rayon",
+ "regex",
  "reqwest",
  "rusqlite",
  "scraper",

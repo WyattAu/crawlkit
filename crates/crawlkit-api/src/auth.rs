@@ -7,21 +7,34 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 
 /// Errors that can occur during authentication operations.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Argon2Error {
     /// Password hashing failed.
+    #[error("Password hashing failed: {0}")]
     HashFailed(String),
 }
 
-impl std::fmt::Display for Argon2Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Argon2Error::HashFailed(msg) => write!(f, "Password hashing failed: {msg}"),
-        }
-    }
-}
+/// Errors from password strength validation.
+#[derive(Debug, thiserror::Error)]
+pub enum PasswordError {
+    #[error("Password must be at least {min} characters (got {got})")]
+    TooShort { min: usize, got: usize },
 
-impl std::error::Error for Argon2Error {}
+    #[error("Password must contain at least one uppercase letter")]
+    MissingUppercase,
+
+    #[error("Password must contain at least one lowercase letter")]
+    MissingLowercase,
+
+    #[error("Password must contain at least one digit")]
+    MissingDigit,
+
+    #[error("Password must contain at least one special character (!@#$%^&*...)")]
+    MissingSpecialChar,
+
+    #[error("Password is too common and easily guessed")]
+    CommonPassword,
+}
 
 /// JWT claims.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -138,26 +151,10 @@ impl AuthManager {
         users.len() < len_before
     }
 
-    /// Validate password complexity.
+    /// Validate password complexity (delegates to `validate_password_strength`).
     /// Returns Ok(()) if valid, Err(String) with reason if invalid.
     pub fn validate_password(password: &str) -> Result<(), String> {
-        const COMMON_PASSWORDS: &[&str] = &["admin123", "password", "12345678", "qwerty"];
-        if COMMON_PASSWORDS.contains(&password) {
-            return Err("Password is too common".into());
-        }
-        if password.len() < 8 {
-            return Err("Password must be at least 8 characters".into());
-        }
-        if !password.chars().any(|c| c.is_uppercase()) {
-            return Err("Password must contain at least one uppercase letter".into());
-        }
-        if !password.chars().any(|c| c.is_lowercase()) {
-            return Err("Password must contain at least one lowercase letter".into());
-        }
-        if !password.chars().any(|c| c.is_ascii_digit()) {
-            return Err("Password must contain at least one digit".into());
-        }
-        Ok(())
+        validate_password_strength(password).map_err(|e| e.to_string())
     }
 
     /// Verify password.
@@ -225,6 +222,70 @@ impl AuthManager {
     pub fn has_permission(&self, claims: &Claims, permission: &str) -> bool {
         claims.permissions.contains(&permission.to_string())
     }
+}
+
+/// Validate password strength against defense-sector standards.
+pub fn validate_password_strength(password: &str) -> Result<(), PasswordError> {
+    const MIN_LENGTH: usize = 12;
+    const COMMON_PASSWORDS: &[&str] = &[
+        "password",
+        "password123",
+        "admin123",
+        "12345678",
+        "qwerty",
+        "letmein",
+        "welcome",
+        "monkey",
+        "dragon",
+        "master",
+        "login",
+        "abc123",
+        "iloveyou",
+        "1234567",
+        "12345",
+        "sunshine",
+        "princess",
+        "football",
+        "shadow",
+        "trustno1",
+        "superman",
+        "michael",
+        "batman",
+        "access",
+        "hello",
+    ];
+
+    if password.len() < MIN_LENGTH {
+        return Err(PasswordError::TooShort {
+            min: MIN_LENGTH,
+            got: password.len(),
+        });
+    }
+
+    if COMMON_PASSWORDS
+        .iter()
+        .any(|&p| p.eq_ignore_ascii_case(password))
+    {
+        return Err(PasswordError::CommonPassword);
+    }
+
+    if !password.chars().any(|c| c.is_uppercase()) {
+        return Err(PasswordError::MissingUppercase);
+    }
+    if !password.chars().any(|c| c.is_lowercase()) {
+        return Err(PasswordError::MissingLowercase);
+    }
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return Err(PasswordError::MissingDigit);
+    }
+    if !password
+        .chars()
+        .any(|c| "!@#$%^&*()-_+=[]{}|;':\",./<>?~`".contains(c))
+    {
+        return Err(PasswordError::MissingSpecialChar);
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]
@@ -460,36 +521,127 @@ mod tests {
     }
 
     // ---------------------------------------------------------------
-    // validate_password
+    // validate_password / validate_password_strength
     // ---------------------------------------------------------------
 
     #[test]
     fn test_validate_password_valid() {
-        assert!(AuthManager::validate_password("Strong1Pass").is_ok());
+        assert!(AuthManager::validate_password("Str0ng!Pass#12").is_ok());
     }
 
     #[test]
     fn test_validate_password_too_short() {
-        let err = AuthManager::validate_password("Sh0rt").unwrap_err();
-        assert!(err.contains("at least 8 characters"));
+        let err = AuthManager::validate_password("Sh0rt!xY").unwrap_err();
+        assert!(err.contains("12 characters"));
     }
 
     #[test]
     fn test_validate_password_no_uppercase() {
-        let err = AuthManager::validate_password("nouppercase1").unwrap_err();
+        let err = AuthManager::validate_password("nouppercase12!x").unwrap_err();
         assert!(err.contains("uppercase"));
     }
 
     #[test]
     fn test_validate_password_no_lowercase() {
-        let err = AuthManager::validate_password("NOLOWERCASE1").unwrap_err();
+        let err = AuthManager::validate_password("NOLOWERCASE12!X").unwrap_err();
         assert!(err.contains("lowercase"));
     }
 
     #[test]
     fn test_validate_password_no_digit() {
-        let err = AuthManager::validate_password("NoDigitHere").unwrap_err();
+        let err = AuthManager::validate_password("NoDigitHere!xY").unwrap_err();
         assert!(err.contains("digit"));
+    }
+
+    #[test]
+    fn test_validate_password_no_special_char() {
+        let err = AuthManager::validate_password("NoSpecialChar12X").unwrap_err();
+        assert!(err.contains("special character"));
+    }
+
+    #[test]
+    fn test_validate_password_common() {
+        let err = AuthManager::validate_password("password").unwrap_err();
+        assert!(err.contains("common"));
+    }
+
+    #[test]
+    fn test_validate_password_common_case_insensitive() {
+        let err = AuthManager::validate_password("PASSWORD").unwrap_err();
+        assert!(err.contains("common"));
+    }
+
+    // ---------------------------------------------------------------
+    // validate_password_strength (standalone function)
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_password_strength_valid() {
+        assert!(validate_password_strength("MyS3cure!Pass").is_ok());
+    }
+
+    #[test]
+    fn test_password_strength_too_short() {
+        let err = validate_password_strength("Ab1!cdefgh").unwrap_err();
+        assert!(matches!(err, PasswordError::TooShort { min: 12, got: 10 }));
+    }
+
+    #[test]
+    fn test_password_strength_missing_uppercase() {
+        assert!(matches!(
+            validate_password_strength("nospecial!1x"),
+            Err(PasswordError::MissingUppercase)
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_missing_lowercase() {
+        assert!(matches!(
+            validate_password_strength("NOSPECIAL!1X"),
+            Err(PasswordError::MissingLowercase)
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_missing_digit() {
+        assert!(matches!(
+            validate_password_strength("NoDigit!abcX"),
+            Err(PasswordError::MissingDigit)
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_missing_special() {
+        assert!(matches!(
+            validate_password_strength("NoSpecial123X"),
+            Err(PasswordError::MissingSpecialChar)
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_common_password() {
+        assert!(matches!(
+            validate_password_strength("password1234"),
+            Err(PasswordError::CommonPassword)
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_exactly_12_chars_valid() {
+        assert!(validate_password_strength("Abcdef1!xyz0").is_ok());
+    }
+
+    #[test]
+    fn test_password_strength_all_special_chars() {
+        assert!(validate_password_strength("!@Abcdef1234").is_ok());
+        assert!(validate_password_strength("#$Abcdef1234").is_ok());
+        assert!(validate_password_strength("^&Abcdef1234").is_ok());
+    }
+
+    #[test]
+    fn test_password_strength_11_chars_rejected() {
+        let err = validate_password_strength("Abc1!efghij").unwrap_err();
+        assert!(matches!(err, PasswordError::TooShort { min: 12, got: 11 }));
     }
 
     // ---------------------------------------------------------------

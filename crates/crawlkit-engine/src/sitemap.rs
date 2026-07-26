@@ -105,7 +105,8 @@ enum SitemapContent {
 /// Parse sitemap XML content.
 ///
 /// Detects `<urlset>` vs `<sitemapindex>` root element and dispatches
-/// accordingly.
+/// accordingly. Falls back to regex-based parsing when XML parsing fails
+/// (e.g., namespace-qualified tag names from default XML namespaces).
 fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
@@ -117,7 +118,8 @@ fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
     loop {
         match reader.read_event_into(&mut buf) {
             Ok(Event::Start(e)) => {
-                root_tag = Some(String::from_utf8_lossy(e.name().as_ref()).to_string());
+                root_tag =
+                    Some(String::from_utf8_lossy(e.name().local_name().as_ref()).to_string());
                 break;
             }
             Ok(Event::Eof) => break,
@@ -129,9 +131,26 @@ fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
     let root = root_tag.ok_or(SitemapError::InvalidXml)?;
 
     match root.as_str() {
-        "urlset" => parse_urlset(reader, &mut buf),
-        "sitemapindex" => parse_sitemapindex(reader, &mut buf),
-        _ => Err(SitemapError::UnknownRoot),
+        "urlset" => {
+            let result = parse_urlset(reader, &mut buf);
+            // If XML parser found no entries, try regex fallback
+            if let Ok(SitemapContent::UrlSet(ref entries)) = result {
+                if entries.is_empty() {
+                    return parse_sitemap_regex(xml);
+                }
+            }
+            result
+        }
+        "sitemapindex" => {
+            let result = parse_sitemapindex(reader, &mut buf);
+            if let Ok(SitemapContent::SitemapIndex(ref urls)) = result {
+                if urls.is_empty() {
+                    return parse_sitemapindex_regex(xml);
+                }
+            }
+            result
+        }
+        _ => parse_sitemap_regex(xml),
     }
 }
 
@@ -152,7 +171,7 @@ fn parse_urlset(
         buf.clear();
         match reader.read_event_into(buf) {
             Ok(Event::Start(e)) => {
-                current_tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                current_tag = String::from_utf8_lossy(e.name().local_name().as_ref()).to_string();
                 if current_tag == "url" {
                     in_url = true;
                     current_url = None;
@@ -176,7 +195,7 @@ fn parse_urlset(
                 }
             }
             Ok(Event::End(e)) => {
-                let name = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                let name = String::from_utf8_lossy(e.name().local_name().as_ref()).to_string();
                 if name == "url" && in_url {
                     if let Some(loc) = current_url.take() {
                         entries.push(SitemapEntry {
@@ -211,7 +230,7 @@ fn parse_sitemapindex(
         buf.clear();
         match reader.read_event_into(buf) {
             Ok(Event::Start(e)) => {
-                current_tag = String::from_utf8_lossy(e.name().as_ref()).to_string();
+                current_tag = String::from_utf8_lossy(e.name().local_name().as_ref()).to_string();
             }
             Ok(Event::Text(e)) => {
                 if current_tag == "loc" {
@@ -228,6 +247,61 @@ fn parse_sitemapindex(
     }
 
     Ok(SitemapContent::SitemapIndex(child_urls))
+}
+
+/// Regex-based fallback parser for sitemaps.
+///
+/// Handles cases where quick_xml fails due to namespace-qualified tag names.
+#[allow(clippy::unwrap_used)]
+fn parse_sitemap_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
+    let mut entries = Vec::new();
+
+    // Match <url> blocks and extract <loc>, <lastmod>, <changefreq>, <priority>
+    let url_block_re = regex::Regex::new(r"(?s)<url>(.*?)</url>").unwrap();
+    let loc_re = regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap();
+    let lastmod_re = regex::Regex::new(r"(?s)<lastmod>\s*(.*?)\s*</lastmod>").unwrap();
+    let changefreq_re = regex::Regex::new(r"(?s)<changefreq>\s*(.*?)\s*</changefreq>").unwrap();
+    let priority_re = regex::Regex::new(r"(?s)<priority>\s*(.*?)\s*</priority>").unwrap();
+
+    for cap in url_block_re.captures_iter(xml) {
+        let block = &cap[1];
+        if let Some(loc_match) = loc_re.captures(block) {
+            let url = loc_match[1].trim().to_string();
+            let lastmod = lastmod_re.captures(block).map(|m| m[1].trim().to_string());
+            let changefreq = changefreq_re
+                .captures(block)
+                .map(|m| m[1].trim().to_string());
+            let priority = priority_re
+                .captures(block)
+                .and_then(|m| m[1].trim().parse().ok());
+
+            entries.push(SitemapEntry {
+                url,
+                lastmod,
+                changefreq,
+                priority,
+            });
+        }
+    }
+
+    // Check if this is a sitemapindex (has <sitemap> blocks)
+    if entries.is_empty() && xml.contains("<sitemap>") {
+        return parse_sitemapindex_regex(xml);
+    }
+
+    Ok(SitemapContent::UrlSet(entries))
+}
+
+/// Regex-based fallback parser for sitemap indexes.
+#[allow(clippy::unwrap_used)]
+fn parse_sitemapindex_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
+    let loc_re = regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap();
+    let urls: Vec<String> = loc_re
+        .captures_iter(xml)
+        .map(|cap| cap[1].trim().to_string())
+        .collect();
+
+    Ok(SitemapContent::SitemapIndex(urls))
 }
 
 /// Sitemap parsing errors.

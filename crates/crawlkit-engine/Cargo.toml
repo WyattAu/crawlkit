@@ -48,6 +48,7 @@ getrandom = "0.2"
 dirs = "5.0"
 wasmtime.workspace = true
 quick-xml = "0.41"
+regex = "1"
 rayon = "1"
 
 [dev-dependencies]

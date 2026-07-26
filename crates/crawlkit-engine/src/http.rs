@@ -262,8 +262,8 @@ impl HttpClient {
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
             .https_only(true)
-            .pool_max_idle_per_host(config.pool_max_idle_per_host)
-            .pool_idle_timeout(Duration::from_secs(90))
+            .pool_max_idle_per_host(8)
+            .pool_idle_timeout(Duration::from_secs(30))
             .connect_timeout(Duration::from_secs(10));
 
         if let Some(keepalive) = config.tcp_keepalive {
@@ -311,8 +311,22 @@ impl HttpClient {
     /// are exhausted, or [`CrawlError::TooManyRedirects`] if the redirect
     /// limit is exceeded.
     pub async fn fetch(&self, url: &Url) -> Result<FetchResult, CrawlError> {
-        self.fetch_with_redirects(url, self.config.max_redirects)
+        match self
+            .fetch_with_redirects(url, self.config.max_redirects)
             .await
+        {
+            Err(CrawlError::RequestFailed(ref e)) if e.is_connect() => {
+                tracing::warn!(
+                    url = %url,
+                    error = %e,
+                    "Connection failed, retrying with fresh connection after 2s delay"
+                );
+                sleep(Duration::from_secs(2)).await;
+                self.fetch_with_redirects(url, self.config.max_redirects)
+                    .await
+            }
+            other => other,
+        }
     }
 
     /// Fetches a URL with conditional request headers (ETag / If-Modified-Since).

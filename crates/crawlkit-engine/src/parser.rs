@@ -495,6 +495,12 @@ impl HtmlParser {
             .select(&selector)
             .filter_map(|el| {
                 let raw_href = el.value().attr("href")?.to_string();
+
+                // Skip Cloudflare email obfuscation links
+                if raw_href.contains("/cdn-cgi/l/email-protection") {
+                    return None;
+                }
+
                 let text: String = el.text().collect::<Vec<_>>().join("").trim().to_string();
 
                 let rel: Vec<String> = el
@@ -898,15 +904,32 @@ impl HtmlParser {
         let mut tables_total = 0usize;
         let mut tables_with_captions = 0usize;
 
-        // Check html lang
+        // Check html lang — try selector first, fall back to root element scan
         let has_lang;
         let html_lang;
         if let Some(html_el) = document.select(selectors::html()).next() {
             html_lang = html_el.value().attr("lang").map(String::from);
             has_lang = html_lang.is_some();
         } else {
-            has_lang = false;
-            html_lang = None;
+            // Fallback: scan root element for html tag with lang attribute
+            let root = document.root_element();
+            let root_value = root.value();
+            if root_value.name() == "html" {
+                html_lang = root_value.attr("lang").map(String::from);
+                has_lang = html_lang.is_some();
+            } else {
+                // Check children of root for html element
+                let found = root.descendants().find_map(|node| {
+                    if let scraper::Node::Element(el) = node.value() {
+                        if el.name() == "html" {
+                            return el.attr("lang").map(String::from);
+                        }
+                    }
+                    None
+                });
+                html_lang = found;
+                has_lang = html_lang.is_some();
+            }
         }
 
         // Landmark detection via semantic HTML elements

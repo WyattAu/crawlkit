@@ -222,7 +222,7 @@ impl Analyzer for AiCitationEligibilityAnalyzer {
         // AI-CIT001: Missing canonical
         if ctx.page.meta.canonical.is_none() {
             findings.push(Finding {
-                severity: Severity::Error,
+                severity: Severity::Info,
                 category: IssueCategory::Seo,
                 code: "AI-CIT001".to_string(),
                 title: "Missing canonical URL".to_string(),

@@ -185,24 +185,6 @@ impl Analyzer for UrlFormatValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        // URL001: Double slash in URL path
-        if let Some(path_start) = url.find("://") {
-            let path = &url[path_start + 3..];
-            if path.contains("//") {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Seo,
-                    code: "URL001".to_string(),
-                    title: "Double slash in URL path".to_string(),
-                    description: "URL contains double slashes after the scheme. This can cause \
-                         indexing issues and duplicate content problems."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Remove double slashes from the URL path.".to_string(),
-                });
-            }
-        }
-
         // URL002: Uppercase in URL path
         if let Some(path_start) = url.find("://") {
             let path = &url[path_start + 3..];

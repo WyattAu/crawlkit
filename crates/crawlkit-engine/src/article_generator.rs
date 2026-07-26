@@ -84,7 +84,7 @@ fn generate_title(query: &str) -> String {
 /// Generate a meta description for a query.
 fn generate_meta_description(query: &str) -> String {
     format!(
-        "Comprehensive guide to {}. Learn everything you need to know about {} from Kingston Peptides.",
+        "Comprehensive guide to {}. Learn everything you need to know about {}.",
         query.to_lowercase(),
         query.to_lowercase()
     )

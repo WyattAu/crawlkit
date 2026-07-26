@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding};

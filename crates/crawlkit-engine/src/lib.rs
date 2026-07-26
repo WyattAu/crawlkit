@@ -71,36 +71,43 @@ pub mod analyzers;
 ///
 /// Extracts and formats article content from web pages for
 /// SEO-optimized content creation.
+#[cfg(feature = "full")]
 pub mod article_generator;
 /// Audit trail logging for crawl operations and configuration changes.
 ///
 /// Provides a tamper-evident append-only log with SHA-256 chaining for
 /// compliance and security auditing.
+#[cfg(feature = "full")]
 pub mod audit;
 /// Adapters for third-party backlink data sources (Ahrefs, GSC, Majestic).
 ///
 /// Defines the BacklinkAdapter trait for
 /// integrating external backlink data into crawl analysis.
+#[cfg(feature = "full")]
 pub mod backlink_adapters;
 /// Backlink analysis, scoring, and reporting.
 ///
 /// Computes PageRank-like scores from internal link graphs and produces
 /// per-page backlink reports and site-wide summaries.
+#[cfg(feature = "full")]
 pub mod backlinks;
 /// Backpressure controller to bound in-flight work and prevent memory blowouts.
 ///
 /// Uses tokio semaphores and bounded channels to limit concurrent tasks,
 /// ensuring the crawler stays within resource budgets.
+#[cfg(feature = "full")]
 pub mod backpressure;
 /// Circuit breaker for failing HTTP endpoints to avoid cascading failures.
 ///
 /// Per-domain circuit breakers track consecutive failures and automatically
 /// stop requests to failing domains until they recover.
+#[cfg(feature = "full")]
 pub mod circuit_breaker;
 /// Diff-based comparison of two crawl results.
 ///
 /// Detects added/removed pages, status changes, title changes, content
 /// changes, and Core Web Vitals regressions between crawls.
+#[cfg(feature = "full")]
 pub mod compare;
 /// Content gap analysis for identifying missing topics and keywords.
 ///
@@ -108,28 +115,34 @@ pub mod compare;
 /// opportunities for new content creation.
 pub mod content_gap;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
+#[cfg(feature = "full")]
 pub mod crawl_engine;
 /// Deterministic replay controller for reproducible crawl runs.
 ///
 /// Seed-based PRNG ensures that given the same input and configuration,
 /// the crawler produces identical output for testing and auditing.
+#[cfg(feature = "full")]
 pub mod determinism;
 /// DNS resolution cache and prefetching.
 ///
 /// Concurrent DNS cache with configurable TTL and background prefetching
 /// to reduce DNS lookup latency during high-throughput crawling.
+#[cfg(feature = "full")]
 pub mod dns;
 /// TLS and encryption configuration for HTTPS requests.
 ///
 /// Provides AES-256-GCM encryption at rest for sensitive crawl data,
 /// with key management via files, environment variables, or system keyrings.
+#[cfg(feature = "full")]
 pub mod encryption;
 /// Enterprise feature gating and licensing utilities.
+#[cfg(feature = "full")]
 pub mod enterprise;
 /// Export of crawl data to JSON, CSV, HTML, and Markdown formats.
 ///
 /// Configurable column selection and formatting for CSV export,
 /// with streaming support for large datasets.
+#[cfg(feature = "full")]
 pub mod export;
 /// Feature flag system for toggling capabilities at runtime.
 ///
@@ -140,39 +153,47 @@ pub mod feature_flags;
 ///
 /// Provides HttpClient with exponential backoff retry,
 /// manual redirect tracking, user-agent rotation, and streaming responses.
+#[cfg(feature = "full")]
 pub mod http;
 /// Decision engine for determining whether a page requires JavaScript rendering.
 ///
 /// Detects SPA frameworks (Next.js, Nuxt, SvelteKit, Angular) via HTML hints
 /// and URL patterns to decide when to invoke Playwright.
+#[cfg(feature = "full")]
 pub mod js_render_decision;
 /// Post-crawl analysis for cross-page SEO checks.
 ///
 /// Runs after a crawl completes to detect site-wide issues like
 /// canonical conflicts, redirect chains, and orphan pages.
+#[cfg(feature = "full")]
 pub mod post_crawl;
 /// Search query tracking and SERP analysis.
 ///
 /// Tracks search engine result pages (SERPs) for target keywords
 /// and analyzes ranking positions and changes.
+#[cfg(feature = "full")]
 pub mod query_tracker;
 
 /// Metrics collection and observability hooks.
 ///
 /// Provides atomic Metrics for tracking pages crawled,
 /// bytes fetched, timing, and circuit breaker events with zero-allocation hot paths.
+#[cfg(feature = "full")]
 pub mod observability;
 /// Playwright-based headless browser integration for JS-rendered pages.
 ///
 /// Renders JavaScript-heavy SPAs via Playwright CLI subprocess with
 /// browser context isolation, resource limits, and console/network capture.
+#[cfg(feature = "full")]
 pub mod playwright;
 /// Plugin system for extending the crawler with custom analyzers.
 ///
 /// WASM-based plugins are sandboxed via wasmtime with a well-defined
 /// ABI (`crawlkit_plugin_init`, `crawlkit_plugin_analyze`, `crawlkit_plugin_alloc/free`).
+#[cfg(feature = "full")]
 pub mod plugin;
 
+#[cfg(feature = "full")]
 pub use plugin::{
     ManifestError, PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig,
     WasmPlugin,
@@ -181,36 +202,44 @@ pub use plugin::{
 ///
 /// Binary heap-based priority queue with deduplication, domain tracking,
 /// and configurable scope control (allowed/blocked domains and paths).
+#[cfg(feature = "full")]
 pub mod queue;
 /// Per-domain rate limiting to respect politeness constraints.
 ///
 /// Token-bucket rate limiter with per-domain and global buckets,
 /// supporting crawl-delay from robots.txt and concurrency limiting.
+#[cfg(feature = "full")]
 pub mod ratelimit;
 /// Runtime resource monitoring and limit enforcement.
 ///
 /// Tracks memory, CPU, disk, and page counts against configurable limits,
 /// providing early termination when budgets are exceeded.
+#[cfg(feature = "full")]
 pub mod resource_monitor;
 /// robots.txt parsing, caching, and compliance checking.
+#[cfg(feature = "full")]
 pub mod robots;
 /// Real User Metrics (CrUX, GA) integration for performance data.
 ///
 /// Fetches Core Web Vitals from Chrome UX Report API and Google Analytics,
 /// merging lab and field data for comprehensive performance analysis.
+#[cfg(feature = "full")]
 pub mod rum;
 /// Sitemap.xml parsing and URL discovery.
+#[cfg(feature = "full")]
 pub mod sitemap;
 /// SQLite-backed persistent storage for crawl results and issues.
 ///
 /// WAL-mode SQLite with LRU page cache, batch insert operations,
 /// and memory usage tracking. Supports pages, links, issues, images,
 /// structured data, and CrUX metrics.
+#[cfg(feature = "full")]
 pub mod storage;
 /// Trait-based abstraction for storage backends.
 ///
 /// Defines [`StorageBackend`](storage_trait::StorageBackend) for pluggable
 /// storage implementations (SQLite, in-memory, distributed, etc.).
+#[cfg(feature = "full")]
 pub mod storage_trait;
 /// Common types re-exported for backward compatibility.
 pub mod types;
@@ -234,41 +263,59 @@ pub use analyzers::{
     SecurityHeaderAnalyzer, SitemapAnalyzer, SitemapEntry, SocialMediaAnalyzer, SslCertificateInfo,
     SslCertificateValidator, StructuredDataValidator, WordCountAnalyzer,
 };
+#[cfg(feature = "full")]
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
+#[cfg(feature = "full")]
 pub use backlink_adapters::{
     AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
     GscAdapter, MajesticAdapter,
 };
+#[cfg(feature = "full")]
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
+#[cfg(feature = "full")]
 pub use backpressure::{BackpressureController, BackpressureError, BoundedPipeline};
+#[cfg(feature = "full")]
 pub use circuit_breaker::{
     CircuitBreaker, CircuitBreakerConfig, CircuitBreakerRegistry, CircuitState,
 };
+#[cfg(feature = "full")]
 pub use determinism::DeterminismController;
+#[cfg(feature = "full")]
 pub use dns::{DnsCache, DnsError, DnsPrefetcher};
+#[cfg(feature = "full")]
 pub use encryption::{EncryptionConfig, EncryptionError, EncryptionManager};
 pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
+#[cfg(feature = "full")]
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
+#[cfg(feature = "full")]
 pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndicators};
 
+#[cfg(feature = "full")]
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
+#[cfg(feature = "full")]
 pub use playwright::{
     BrowserContext, BrowserType, ConsoleMessage, NetworkRequest, PlaywrightConfig,
     PlaywrightDetector, PlaywrightError, PlaywrightRenderer, RenderedPage,
     WasmError as PlaywrightWasmError,
 };
+#[cfg(feature = "full")]
 pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
+#[cfg(feature = "full")]
 pub use robots::RobotsTxtCache;
+#[cfg(feature = "full")]
 pub use rum::{
     CruxAdapter, CruxData, FieldMetrics, GoogleAnalyticsAdapter, LabMetrics, MergedMetrics,
     MetricDeltas, RumDataPoint, RumError,
 };
+#[cfg(feature = "full")]
 pub use sitemap::SitemapCache;
+#[cfg(feature = "full")]
 pub use storage::{
     CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
 };
+#[cfg(feature = "full")]
 pub use storage_trait::{new_in_memory_backend, StorageBackend};
 pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRuntimeAnalyzer};
 

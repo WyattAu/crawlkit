@@ -2,7 +2,7 @@ use std::collections::HashSet;
 use std::time::Duration;
 use url::Url;
 
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding, SslCertificateInfo};

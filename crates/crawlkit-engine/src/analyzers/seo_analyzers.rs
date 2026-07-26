@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
-use crate::storage::{IssueCategory, Severity};
+use crate::types::{IssueCategory, Severity};
 use crate::CrawlConfig;
 
 use super::{is_utility_page, AnalysisContext, Analyzer, Finding};

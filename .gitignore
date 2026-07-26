@@ -53,3 +53,4 @@ web/.astro/
 # Dashboard
 dashboard/node_modules/
 dashboard/dist/
+node_modules/

@@ -29,7 +29,7 @@ export function useCrawls() {
   }, [loadCrawls]);
 
   const startCrawl = useCallback(
-    async (config: { url: string; max_pages?: number }) => {
+    async (config: { name: string; url: string; max_pages?: number; max_depth?: number; respect_robots?: boolean }) => {
       if (!token) return;
       apiClient.setToken(token);
       const response = await apiClient.startCrawl({

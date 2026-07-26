@@ -23,7 +23,7 @@ export default function MetricCard({ title, value, icon, color }: MetricCardProp
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-sm border border-gray-200 dark:border-gray-700" style={{ boxShadow: 'var(--elevation-1)', transition: 'box-shadow var(--transition-base)' }}>
+    <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-elevation1 border border-gray-200 dark:border-gray-700 transition-shadow duration-base hover:shadow-elevation2">
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm text-gray-500 dark:text-gray-400">{title}</p>

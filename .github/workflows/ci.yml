@@ -65,7 +65,7 @@ jobs:
         with:
           key: integration
       - name: Integration tests (excluding playwright)
-        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests
+        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests
 
   security:
     name: Security Audit

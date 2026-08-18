@@ -22,6 +22,7 @@ struct ServerConfig {
     per_request_delay: Duration,
     /// Serve an `ETag` and answer 304 to matching `If-None-Match` requests.
     support_etag: bool,
+    deny_crawl: bool,
 }
 
 impl Default for ServerConfig {
@@ -29,6 +30,7 @@ impl Default for ServerConfig {
         Self {
             per_request_delay: Duration::ZERO,
             support_etag: false,
+            deny_crawl: false,
         }
     }
 }
@@ -94,7 +96,13 @@ fn serve_connection(
     }
 
     let (path, if_none_match) = parse_request(&request);
-    let (status, headers, body) = route(&path, page_count, cfg.support_etag, if_none_match);
+    let (status, headers, body) = route(
+        &path,
+        page_count,
+        cfg.support_etag,
+        cfg.deny_crawl,
+        if_none_match,
+    );
 
     let response = format!(
         "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n{headers}Connection: close\r\n\r\n{body}",
@@ -120,10 +128,16 @@ fn route(
     path: &str,
     page_count: usize,
     support_etag: bool,
+    deny_crawl: bool,
     if_none_match: Option<String>,
 ) -> (&'static str, String, String) {
     if path == "/robots.txt" {
-        return ("200 OK", String::new(), "User-agent: *\nAllow: /\n".into());
+        let body = if deny_crawl {
+            "User-agent: *\nDisallow: /\n"
+        } else {
+            "User-agent: *\nAllow: /\n"
+        };
+        return ("200 OK", String::new(), body.into());
     }
 
     if path == "/" {
@@ -246,6 +260,7 @@ async fn test_fetches_overlap_under_concurrency() {
         ServerConfig {
             per_request_delay: Duration::from_millis(120),
             support_etag: false,
+            deny_crawl: false,
         },
     );
     let mut config = engine_config(20, 4);
@@ -276,6 +291,7 @@ async fn test_incremental_recrawl_reports_not_modified() {
         ServerConfig {
             per_request_delay: Duration::ZERO,
             support_etag: true,
+            deny_crawl: false,
         },
     );
     let storage = shared_storage();
@@ -319,4 +335,21 @@ async fn test_http_client_rejects_plain_http_by_default() {
         client.fetch(&url).await.is_err(),
         "secure-by-default client must refuse plain HTTP"
     );
+}
+
+#[tokio::test]
+async fn test_robots_txt_uses_non_standard_port_and_blocks_seed() {
+    let server = TestServer::start(
+        1,
+        ServerConfig {
+            deny_crawl: true,
+            ..ServerConfig::default()
+        },
+    );
+    let engine = CrawlEngine::new_shared(engine_config(10, 2), shared_storage());
+    let output = engine.run(&server.index_url()).await.unwrap();
+
+    assert_eq!(output.pages_crawled, 0);
+    assert_eq!(output.pages_stored, 0);
+    assert_eq!(output.skipped_robots, 1);
 }

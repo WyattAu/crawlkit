@@ -98,7 +98,7 @@ pub async fn delete_schedule(
         .get(&id)
         .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))?;
 
-    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+    if !can_access_tenant(&claims, &entry.tenant_id) {
         return Err(ApiError::NotFound(format!("Schedule {id} not found")));
     }
     drop(entry);
@@ -121,7 +121,7 @@ pub async fn update_schedule(
         .get(&id)
         .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))?;
 
-    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+    if !can_access_tenant(&claims, &entry.tenant_id) {
         return Err(ApiError::NotFound(format!("Schedule {id} not found")));
     }
     drop(entry);

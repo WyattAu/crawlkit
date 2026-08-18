@@ -342,6 +342,7 @@ impl CrawlRun<'_> {
     /// Handle a 304: count it and refresh the stored page's access timestamp.
     async fn record_not_modified(&self, page_id: &Option<String>) {
         bump(&self.counters.pages_unchanged);
+        self.metrics.record_page_unchanged();
         let Some(id) = page_id.clone() else {
             return;
         };
@@ -376,6 +377,7 @@ impl CrawlRun<'_> {
         if !self.content_hashes.insert(&result.body) {
             tracing::debug!("Skipping duplicate content: {}", fetched.entry.url);
             bump(&self.counters.skipped_duplicate);
+            self.metrics.record_page_skipped_duplicate();
             return;
         }
 
@@ -1003,6 +1005,7 @@ impl CrawlEngine {
                     {
                         tracing::debug!("Blocked by robots.txt: {}", entry.url);
                         bump(&run.counters.skipped_robots);
+                        run.metrics.record_page_skipped_robots();
                         continue;
                     }
                     if let Some(delay_secs) = robots_cache.crawl_delay(scheme, &domain).await {

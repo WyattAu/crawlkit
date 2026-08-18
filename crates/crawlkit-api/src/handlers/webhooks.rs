@@ -12,8 +12,7 @@ pub async fn create_webhook(
     Extension(claims): Extension<auth::Claims>,
     Json(req): Json<CreateWebhookRequest>,
 ) -> Result<(StatusCode, Json<WebhookCreatedResponse>), ApiError> {
-    url::Url::parse(&req.url)
-        .map_err(|e| ApiError::BadRequest(format!("Invalid webhook URL: {e}")))?;
+    validate_public_url(&req.url)?;
 
     for event in &req.events {
         if event != "crawl.completed" && event != "crawl.failed" {
@@ -79,7 +78,7 @@ pub async fn delete_webhook(
         .get(&id)
         .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))?;
 
-    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+    if !can_access_tenant(&claims, &entry.tenant_id) {
         return Err(ApiError::NotFound(format!("Webhook {id} not found")));
     }
     drop(entry);

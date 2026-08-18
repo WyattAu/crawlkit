@@ -43,6 +43,12 @@ pub struct Metrics {
     pub resource_limit_hits: AtomicU64,
     /// Pages skipped due to circuit breaker being open.
     pub pages_skipped_circuit_breaker: AtomicU64,
+    /// Pages skipped because robots.txt disallowed them.
+    pub pages_skipped_robots: AtomicU64,
+    /// Pages skipped because their content hash was already seen.
+    pub pages_skipped_duplicate: AtomicU64,
+    /// Pages that answered 304 Not Modified during an incremental crawl.
+    pub pages_unchanged: AtomicU64,
 }
 
 impl Metrics {
@@ -61,6 +67,9 @@ impl Metrics {
             circuit_breaker_trips: AtomicU64::new(0),
             resource_limit_hits: AtomicU64::new(0),
             pages_skipped_circuit_breaker: AtomicU64::new(0),
+            pages_skipped_robots: AtomicU64::new(0),
+            pages_skipped_duplicate: AtomicU64::new(0),
+            pages_unchanged: AtomicU64::new(0),
         }
     }
 
@@ -103,6 +112,21 @@ impl Metrics {
     pub fn record_page_skipped_circuit_breaker(&self) {
         self.pages_skipped_circuit_breaker
             .fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a page skipped because robots.txt disallowed it.
+    pub fn record_page_skipped_robots(&self) {
+        self.pages_skipped_robots.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a page skipped as duplicate content.
+    pub fn record_page_skipped_duplicate(&self) {
+        self.pages_skipped_duplicate.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a 304 Not Modified response in an incremental crawl.
+    pub fn record_page_unchanged(&self) {
+        self.pages_unchanged.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Increment active connections.
@@ -189,6 +213,9 @@ impl Metrics {
             pages_skipped_circuit_breaker: self
                 .pages_skipped_circuit_breaker
                 .load(Ordering::Relaxed),
+            pages_skipped_robots: self.pages_skipped_robots.load(Ordering::Relaxed),
+            pages_skipped_duplicate: self.pages_skipped_duplicate.load(Ordering::Relaxed),
+            pages_unchanged: self.pages_unchanged.load(Ordering::Relaxed),
         }
     }
 
@@ -206,6 +233,9 @@ impl Metrics {
         self.resource_limit_hits.store(0, Ordering::Relaxed);
         self.pages_skipped_circuit_breaker
             .store(0, Ordering::Relaxed);
+        self.pages_skipped_robots.store(0, Ordering::Relaxed);
+        self.pages_skipped_duplicate.store(0, Ordering::Relaxed);
+        self.pages_unchanged.store(0, Ordering::Relaxed);
     }
 }
 
@@ -243,6 +273,12 @@ pub struct MetricsSnapshot {
     pub resource_limit_hits: u64,
     /// Pages skipped because circuit breaker was open.
     pub pages_skipped_circuit_breaker: u64,
+    /// Pages skipped because robots.txt disallowed them.
+    pub pages_skipped_robots: u64,
+    /// Pages skipped as duplicate content.
+    pub pages_skipped_duplicate: u64,
+    /// Pages that answered 304 Not Modified in an incremental crawl.
+    pub pages_unchanged: u64,
 }
 
 /// Shared metrics for concurrent access.
@@ -304,6 +340,26 @@ mod tests {
         let snapshot = metrics.snapshot();
         assert_eq!(snapshot.pages_crawled, 1);
         assert_eq!(snapshot.bytes_fetched, 1024);
+    }
+
+    #[test]
+    fn test_metrics_skip_and_incremental_counters_snapshot() {
+        let metrics = Metrics::new();
+        metrics.record_page_skipped_robots();
+        metrics.record_page_skipped_robots();
+        metrics.record_page_skipped_duplicate();
+        metrics.record_page_unchanged();
+
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.pages_skipped_robots, 2);
+        assert_eq!(snapshot.pages_skipped_duplicate, 1);
+        assert_eq!(snapshot.pages_unchanged, 1);
+
+        metrics.reset();
+        let snapshot = metrics.snapshot();
+        assert_eq!(snapshot.pages_skipped_robots, 0);
+        assert_eq!(snapshot.pages_skipped_duplicate, 0);
+        assert_eq!(snapshot.pages_unchanged, 0);
     }
 
     #[test]

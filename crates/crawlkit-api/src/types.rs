@@ -536,6 +536,57 @@ pub fn validate_url(url: &str) -> Result<(), ApiError> {
             "URL must use http or https scheme".to_string(),
         ));
     }
+    reject_private_target(&parsed)?;
+    Ok(())
+}
+
+/// Validate a server-side HTTP target against common SSRF destinations.
+/// DNS resolution is intentionally not performed here; the HTTP client must
+/// also enforce redirect and resolver policy at connection time.
+pub fn validate_public_url(url: &str) -> Result<(), ApiError> {
+    validate_url(url)
+}
+
+fn reject_private_target(parsed: &url::Url) -> Result<(), ApiError> {
+    let Some(host) = parsed.host_str() else {
+        return Err(ApiError::BadRequest("URL must include a host".to_string()));
+    };
+    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
+        "localhost" | "localhost.localdomain" | "metadata.google.internal"
+    ) {
+        return Err(ApiError::BadRequest(
+            "URL targets a reserved internal hostname".to_string(),
+        ));
+    }
+    let ip_host = host.trim_matches(['[', ']']);
+    if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
+        let blocked = match ip {
+            std::net::IpAddr::V4(ip) => {
+                ip.is_private()
+                    || ip.is_loopback()
+                    || ip.is_link_local()
+                    || ip.is_broadcast()
+                    || ip.is_unspecified()
+                    || ip.is_multicast()
+                    || (ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1]))
+                    || (ip.octets()[0] == 192 && ip.octets()[1] == 0 && ip.octets()[2] == 0)
+            }
+            std::net::IpAddr::V6(ip) => {
+                ip.is_loopback()
+                    || ip.is_unspecified()
+                    || ip.is_unique_local()
+                    || ip.is_unicast_link_local()
+                    || ip.is_multicast()
+            }
+        };
+        if blocked {
+            return Err(ApiError::BadRequest(
+                "URL targets a reserved or private IP address".to_string(),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -578,6 +629,17 @@ pub fn extract_tenant(claims: &auth::Claims) -> &str {
 /// Check if the current user is an admin.
 pub fn is_admin(claims: &auth::Claims) -> bool {
     claims.roles.contains(&"admin".to_string())
+}
+
+/// Tenant-ownership check for per-tenant resources.
+///
+/// Returns `true` when the resource belongs to the caller's tenant or the
+/// caller is an admin. Every handler that reads, mutates, or deletes a
+/// tenant-scoped resource must gate access through this predicate; failures
+/// surface as `404` (not `403`) to avoid leaking resource existence.
+#[must_use]
+pub fn can_access_tenant(claims: &auth::Claims, resource_tenant: &str) -> bool {
+    is_admin(claims) || resource_tenant == claims.tenant
 }
 
 /// Map OIDC roles/groups to crawlkit roles.
@@ -766,6 +828,28 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_url_rejects_ssrf_targets() {
+        for url in [
+            "http://127.0.0.1:8080/",
+            "http://10.0.0.1/",
+            "http://172.16.0.1/",
+            "http://192.168.1.1/",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://[::1]/",
+            "http://localhost/",
+            "http://metadata.google.internal/",
+        ] {
+            assert!(validate_url(url).is_err(), "SSRF target accepted: {url}");
+        }
+    }
+
+    #[test]
+    fn test_validate_url_accepts_public_ip_and_domain() {
+        assert!(validate_public_url("https://8.8.8.8/").is_ok());
+        assert!(validate_public_url("https://example.com/").is_ok());
+    }
+
+    #[test]
     fn test_validate_max_pages_bounds() {
         assert!(validate_max_pages(1).is_ok());
         assert!(validate_max_pages(10_000).is_ok());
@@ -810,6 +894,29 @@ mod tests {
         assert!(is_admin(&claims("t", &["viewer", "admin"])));
         assert!(!is_admin(&claims("t", &["viewer"])));
         assert!(!is_admin(&claims("t", &[])));
+    }
+
+    #[test]
+    fn test_can_access_tenant_owner() {
+        let viewer = claims("acme", &["viewer"]);
+        assert!(can_access_tenant(&viewer, "acme"));
+    }
+
+    #[test]
+    fn test_can_access_tenant_isolates_foreign_tenants() {
+        let viewer = claims("acme", &["viewer"]);
+        assert!(
+            !can_access_tenant(&viewer, "corp"),
+            "non-admin must not read another tenant's resource"
+        );
+        assert!(!can_access_tenant(&viewer, ""));
+    }
+
+    #[test]
+    fn test_can_access_tenant_admin_bypass() {
+        let admin = claims("acme", &["admin"]);
+        assert!(can_access_tenant(&admin, "corp"));
+        assert!(can_access_tenant(&admin, "acme"));
     }
 
     #[test]

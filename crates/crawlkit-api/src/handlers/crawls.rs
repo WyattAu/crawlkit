@@ -89,7 +89,7 @@ pub async fn get_crawl_status(
         .get(&crawl_id)
         .ok_or_else(|| ApiError::NotFound(format!("Crawl {crawl_id} not found")))?;
 
-    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+    if !can_access_tenant(&claims, &entry.tenant_id) {
         return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
     }
 
@@ -102,7 +102,7 @@ pub async fn get_crawl_stats(
     Path(crawl_id): Path<String>,
 ) -> Result<Json<CrawlStatsResponse>, ApiError> {
     if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        if !can_access_tenant(&claims, &entry.tenant_id) {
             return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
         }
     }
@@ -128,7 +128,7 @@ pub async fn get_crawl_findings(
     Path(crawl_id): Path<String>,
 ) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
     if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        if !can_access_tenant(&claims, &entry.tenant_id) {
             return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
         }
     }
@@ -192,7 +192,7 @@ pub async fn get_crawl_backlinks(
     Path(crawl_id): Path<String>,
 ) -> Result<Json<BacklinksResponse>, ApiError> {
     if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        if !can_access_tenant(&claims, &entry.tenant_id) {
             return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
         }
     }

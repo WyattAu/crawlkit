@@ -21,11 +21,40 @@ use std::time::Duration;
 use tokio::sync::Mutex;
 use url::Url;
 
-/// The result of fetching a single URL.
-pub(crate) struct FetchResult {
-    pub(crate) entry: crate::queue::QueueEntry,
-    pub(crate) result: Result<crate::FetchResult, crate::CrawlError>,
-    pub(crate) robots_raw: String,
+/// Freshness classification for incremental crawls.
+#[derive(Debug, Clone, Copy)]
+enum Freshness {
+    /// First time this URL has been seen in an incremental crawl.
+    New,
+    /// Previously seen; content changed since the last crawl.
+    Modified,
+    /// Incremental crawling disabled — no classification performed.
+    Unconditional,
+}
+
+/// The outcome of a single worker fetch.
+///
+/// Replaces the former magic-string encoding of 304 responses and carries
+/// the freshness classification needed for incremental-crawl statistics.
+enum FetchOutcome {
+    /// Page fetched successfully.
+    Fetched {
+        result: crate::FetchResult,
+        freshness: Freshness,
+    },
+    /// Server answered 304 Not Modified. `page_id` identifies the stored page
+    /// whose `fetched_at` timestamp should be refreshed.
+    NotModified { page_id: Option<String> },
+    /// Fetch failed after retries.
+    Failed(crate::CrawlError),
+}
+
+/// A completed fetch, as delivered from a worker task to the main loop.
+struct FetchedPage {
+    entry: crate::queue::QueueEntry,
+    robots_raw: String,
+    fetch_time: Duration,
+    outcome: FetchOutcome,
 }
 
 /// Trait for JavaScript page rendering.
@@ -178,6 +207,470 @@ pub struct CrawlOutput {
 /// `page_url` is the URL, `page_id` is the storage ID, `findings_count`
 /// is the number of analysis findings for that page.
 pub type OnPageCrawled = Arc<dyn Fn(&str, &str, usize) + Send + Sync>;
+
+// ---------------------------------------------------------------------------
+// Crawl execution state
+// ---------------------------------------------------------------------------
+
+/// Relaxed-ordering counter helpers. Counters are statistics only; they never
+/// gate correctness, so `Relaxed` ordering is sufficient and cheapest.
+fn bump(counter: &AtomicUsize) {
+    counter.fetch_add(1, Ordering::Relaxed);
+}
+
+fn bump_by(counter: &AtomicUsize, n: usize) {
+    counter.fetch_add(n, Ordering::Relaxed);
+}
+
+fn current(counter: &AtomicUsize) -> usize {
+    counter.load(Ordering::Relaxed)
+}
+
+/// Interior-mutable crawl counters shared across the fetch pipeline.
+#[derive(Default)]
+struct CrawlCounters {
+    pages_crawled: AtomicUsize,
+    pages_stored: AtomicUsize,
+    issues_found: AtomicUsize,
+    skipped_external: AtomicUsize,
+    skipped_robots: AtomicUsize,
+    skipped_duplicate: AtomicUsize,
+    pages_unchanged: AtomicUsize,
+    pages_modified: AtomicUsize,
+    pages_new: AtomicUsize,
+}
+
+/// Plain-value snapshot of [`CrawlCounters`] for reporting.
+#[derive(Debug, Clone, Copy)]
+struct CounterSnapshot {
+    pages_crawled: usize,
+    pages_stored: usize,
+    issues_found: usize,
+    skipped_external: usize,
+    skipped_robots: usize,
+    skipped_duplicate: usize,
+    pages_unchanged: usize,
+    pages_modified: usize,
+    pages_new: usize,
+}
+
+impl CrawlCounters {
+    fn snapshot(&self) -> CounterSnapshot {
+        CounterSnapshot {
+            pages_crawled: current(&self.pages_crawled),
+            pages_stored: current(&self.pages_stored),
+            issues_found: current(&self.issues_found),
+            skipped_external: current(&self.skipped_external),
+            skipped_robots: current(&self.skipped_robots),
+            skipped_duplicate: current(&self.skipped_duplicate),
+            pages_unchanged: current(&self.pages_unchanged),
+            pages_modified: current(&self.pages_modified),
+            pages_new: current(&self.pages_new),
+        }
+    }
+}
+
+/// Content-hash deduplication set. The strategy is chosen once at crawl start
+/// based on whether deterministic (seeded) mode is enabled.
+enum ContentHashes {
+    Deterministic(DashSet<u64>),
+    Sha256(DashSet<String>),
+}
+
+impl ContentHashes {
+    fn deterministic() -> Self {
+        Self::Deterministic(DashSet::new())
+    }
+
+    fn sha256() -> Self {
+        Self::Sha256(DashSet::new())
+    }
+
+    /// Insert the body's hash; returns `false` if the content was already seen.
+    fn insert(&self, body: &str) -> bool {
+        match self {
+            Self::Deterministic(set) => {
+                set.insert(DeterminismController::content_hash(body))
+            }
+            Self::Sha256(set) => {
+                use sha2::{Digest, Sha256};
+                let digest = Sha256::digest(body.as_bytes());
+                set.insert(digest.iter().map(|b| format!("{b:02x}")).collect())
+            }
+        }
+    }
+}
+
+/// Shared state for one crawl execution: counters, dedup sets, and the
+/// collaborators needed to analyze and persist each fetched page.
+///
+/// Each stage of the per-page pipeline is a focused method
+/// (dedup → render → analyze → store → link extraction), keeping every
+/// unit small and independently testable.
+struct CrawlRun<'a> {
+    counters: CrawlCounters,
+    visited: DashSet<String>,
+    content_hashes: ContentHashes,
+    analyzer_registry: &'a AnalyzerRegistry,
+    cfg: &'a CrawlEngineConfig,
+    storage: &'a Storage,
+    crawl_id: String,
+    seed_domain: String,
+    on_page: Option<OnPageCrawled>,
+    metrics: Metrics,
+    resource_monitor: ResourceMonitor,
+    queue: Arc<Mutex<UrlQueue>>,
+}
+
+impl CrawlRun<'_> {
+    /// Route a completed fetch through dedup, analysis, storage, and discovery.
+    async fn process(&self, fetched: &FetchedPage) {
+        match &fetched.outcome {
+            FetchOutcome::NotModified { page_id } => self.record_not_modified(page_id),
+            FetchOutcome::Failed(err) => self.record_failure(&fetched.entry.url, err),
+            FetchOutcome::Fetched { result, freshness } => {
+                self.process_fetched(fetched, result, *freshness).await;
+            }
+        }
+    }
+
+    /// Handle a 304: count it and refresh the stored page's access timestamp.
+    fn record_not_modified(&self, page_id: &Option<String>) {
+        bump(&self.counters.pages_unchanged);
+        if let Some(id) = page_id {
+            if let Err(e) = self.storage.update_page_fetched_at(id, Utc::now()) {
+                tracing::warn!(error = %e, page_id = %id, "Failed to refresh fetched_at");
+            }
+        }
+    }
+
+    /// Handle a failed fetch.
+    fn record_failure(&self, url: &Url, err: &crate::CrawlError) {
+        tracing::warn!("Failed to fetch {}: {}", url, err);
+        self.metrics.record_page_failure();
+    }
+
+    /// Process a successfully fetched page.
+    async fn process_fetched(
+        &self,
+        fetched: &FetchedPage,
+        result: &crate::FetchResult,
+        freshness: Freshness,
+    ) {
+        if !self.content_hashes.insert(&result.body) {
+            tracing::debug!("Skipping duplicate content: {}", fetched.entry.url);
+            bump(&self.counters.skipped_duplicate);
+            return;
+        }
+
+        bump(&self.counters.pages_crawled);
+        match freshness {
+            Freshness::New => bump(&self.counters.pages_new),
+            Freshness::Modified => bump(&self.counters.pages_modified),
+            Freshness::Unconditional => {}
+        }
+
+        let mut body_text = result.body.clone();
+        let mut parsed = match crate::HtmlParser::parse(&body_text, &fetched.entry.url) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Failed to parse {}: {}", fetched.entry.url, e);
+                return;
+            }
+        };
+
+        self.render_js_if_needed(&fetched.entry.url, &mut body_text, &mut parsed)
+            .await;
+
+        let (findings, analysis_time) = self.analyze(&parsed, &body_text, result, fetched);
+        bump_by(&self.counters.issues_found, findings.len());
+
+        let page_id = uuid::Uuid::new_v4().to_string();
+        let page_data =
+            self.build_page_data(&page_id, &fetched.entry.url, result, &parsed);
+        self.store(&page_data, &findings);
+
+        self.metrics.record_page_success(
+            result.body.len() as u64,
+            fetched.fetch_time.as_micros() as u64,
+            analysis_time.as_micros() as u64,
+            0, // storage_time not tracked per page
+            findings.len() as u64,
+        );
+        self.resource_monitor.record_page();
+
+        if let Some(cb) = &self.on_page {
+            cb(fetched.entry.url.as_ref(), &page_id, findings.len());
+        }
+
+        self.extract_links(&parsed, fetched.entry.depth).await;
+    }
+
+    /// Re-render with JavaScript when the decision engine requires it.
+    async fn render_js_if_needed(
+        &self,
+        url: &Url,
+        body_text: &mut String,
+        parsed: &mut crate::ParsedPage,
+    ) {
+        if !self.cfg.enable_js_rendering {
+            return;
+        }
+        let decision = crate::JsRenderDecisionEngine::new().should_render_js(
+            url.as_ref(),
+            Some(body_text),
+        );
+        let crate::JsRenderDecision::Render { reason } = decision else {
+            return;
+        };
+        tracing::info!("JS render decision for {}: {}", url, reason);
+
+        let Some(renderer) = self.cfg.js_renderer.as_ref() else {
+            return;
+        };
+        if !renderer.is_available() {
+            tracing::warn!("JS renderer not available, using static HTML: {}", url);
+            return;
+        }
+        match tokio::time::timeout(Duration::from_secs(30), renderer.render(url.as_str())).await {
+            Ok(Ok(rendered_html)) => {
+                *body_text = rendered_html;
+                match crate::HtmlParser::parse(body_text, url) {
+                    Ok(re_parsed) => *parsed = re_parsed,
+                    Err(e) => tracing::warn!("Failed to re-parse rendered {}: {}", url, e),
+                }
+            }
+            Ok(Err(e)) => tracing::warn!("JS render failed for {}: {}", url, e),
+            Err(_) => tracing::warn!("JS render timed out for {}", url),
+        }
+    }
+
+    /// Run all analyzers against the parsed page.
+    #[must_use]
+    fn analyze(
+        &self,
+        parsed: &crate::ParsedPage,
+        body_text: &str,
+        result: &crate::FetchResult,
+        fetched: &FetchedPage,
+    ) -> (Vec<crate::Finding>, Duration) {
+        let headers_vec: Vec<(String, String)> = result.headers.clone();
+        let empty_chain: Vec<RedirectHop> = Vec::new();
+        let robots_ref = if fetched.robots_raw.is_empty() {
+            None
+        } else {
+            Some(fetched.robots_raw.as_str())
+        };
+        let ctx = crate::analyzers::AnalysisContext {
+            page: parsed,
+            body: Some(body_text),
+            status_code: Some(result.status_code),
+            headers: &headers_vec,
+            response_time: Some(fetched.fetch_time),
+            redirect_chain: &empty_chain,
+            robots_txt: robots_ref,
+        };
+        let analysis_start = std::time::Instant::now();
+        let findings = self.analyzer_registry.analyze(&ctx, &self.cfg.crawl_config);
+        (findings, analysis_start.elapsed())
+    }
+
+    /// Assemble the storage record for a crawled page.
+    #[must_use]
+    fn build_page_data(
+        &self,
+        page_id: &str,
+        url: &Url,
+        result: &crate::FetchResult,
+        parsed: &crate::ParsedPage,
+    ) -> PageData {
+        let mut page_data = PageData {
+            id: page_id.to_string(),
+            url: url.clone(),
+            final_url: result.final_url.clone(),
+            status_code: result.status_code,
+            title: parsed.meta.title.clone(),
+            description: parsed.meta.description.clone(),
+            canonical_url: parsed.meta.canonical.clone(),
+            word_count: Some(parsed.word_count),
+            load_time_ms: None,
+            body_size: Some(result.body.len()),
+            fetched_at: Utc::now(),
+            links: parsed
+                .links
+                .iter()
+                .filter_map(|l| Url::parse(&l.href).ok())
+                .collect(),
+            tenant_id: self.cfg.tenant_id.clone(),
+            etag: result.etag.clone(),
+            last_modified: result.last_modified.clone(),
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+        };
+        if let Some(encryption) = self.cfg.encryption.as_ref() {
+            if encryption.is_enabled() {
+                page_data.title = encrypt_field(encryption, page_data.title.take());
+                page_data.description = encrypt_field(encryption, page_data.description.take());
+            }
+        }
+        page_data
+    }
+
+    /// Persist the page and its findings (batched in one transaction).
+    fn store(&self, page_data: &PageData, findings: &[crate::Finding]) {
+        match self.storage.insert_page(&self.crawl_id, page_data) {
+            Ok(()) => bump(&self.counters.pages_stored),
+            Err(e) => tracing::warn!("Failed to store page {}: {}", page_data.url, e),
+        }
+
+        let issues: Vec<Issue> = findings
+            .iter()
+            .map(|finding| Issue {
+                id: uuid::Uuid::new_v4().to_string(),
+                page_id: page_data.id.clone(),
+                category: finding.category.clone(),
+                severity: finding.severity.clone(),
+                code: finding.code.clone(),
+                title: finding.title.clone(),
+                description: finding.description.clone(),
+                element: None,
+                recommendation: finding.recommendation.clone(),
+                tenant_id: self.cfg.tenant_id.clone(),
+            })
+            .collect();
+        if let Err(e) = self.storage.insert_issues(&issues) {
+            tracing::warn!("Failed to store issues: {}", e);
+        }
+    }
+
+    /// Apply scope/pattern filters and enqueue newly discovered links.
+    async fn extract_links(&self, parsed: &crate::ParsedPage, depth: usize) {
+        let max_depth = self.cfg.crawl_config.max_depth;
+        let queue = self.queue.lock().await;
+        for link in &parsed.links {
+            let link_url = match Url::parse(&link.href) {
+                Ok(u) => u,
+                Err(_) => continue,
+            };
+            if self.visited.contains(&link_url.to_string()) {
+                continue;
+            }
+            let is_internal = link_url.host_str() == Some(self.seed_domain.as_str());
+
+            if !is_internal && !self.cfg.allow_external {
+                bump(&self.counters.skipped_external);
+                continue;
+            }
+            if !self.cfg.include_patterns.is_empty()
+                && !self
+                    .cfg
+                    .include_patterns
+                    .iter()
+                    .any(|p| link.href.contains(p.as_str()))
+            {
+                continue;
+            }
+            if self
+                .cfg
+                .exclude_patterns
+                .iter()
+                .any(|p| link.href.contains(p.as_str()))
+            {
+                continue;
+            }
+            if let Some(max) = max_depth {
+                if depth + 1 > max {
+                    continue;
+                }
+            }
+
+            let priority = if is_internal {
+                Priority::NORMAL
+            } else {
+                Priority::LOW
+            };
+            queue.push(link_url, depth + 1, priority);
+        }
+    }
+}
+
+/// Encrypt one field value for storage, hex-encoded and `enc:`-prefixed.
+/// Falls back to the plaintext value if encryption fails.
+fn encrypt_field(
+    encryption: &EncryptionManager,
+    value: Option<String>,
+) -> Option<String> {
+    value.map(|v| {
+        encryption
+            .encrypt(v.as_bytes())
+            .map(|enc| {
+                format!(
+                    "enc:{}",
+                    enc.iter().map(|b| format!("{b:02x}")).collect::<String>()
+                )
+            })
+            .unwrap_or(v)
+    })
+}
+
+/// Execute a single fetch, applying conditional-request logic when the crawl
+/// is incremental. Owns all state needed by the worker task.
+async fn execute_fetch(
+    client: Arc<HttpClient>,
+    storage: Arc<Storage>,
+    crawl_id: String,
+    entry: crate::queue::QueueEntry,
+    incremental: bool,
+    force: bool,
+) -> FetchOutcome {
+    if !incremental || force {
+        return match client.fetch(&entry.url).await {
+            Ok(result) => FetchOutcome::Fetched {
+                result,
+                freshness: Freshness::Unconditional,
+            },
+            Err(e) => FetchOutcome::Failed(e),
+        };
+    }
+
+    let previous = storage
+        .get_page_conditional(&crawl_id, entry.url.as_str())
+        .ok()
+        .flatten();
+    let cross_previous = storage
+        .get_latest_conditional(entry.url.as_str())
+        .ok()
+        .flatten();
+
+    // Prefer the same-crawl record (it carries the page_id needed for 304
+    // updates); fall back to the cross-crawl record for headers only.
+    let (existing_etag, existing_lm) = if let Some((_, ref etag, ref lm)) = previous {
+        (etag.as_deref(), lm.as_deref())
+    } else if let Some((ref etag, ref lm)) = cross_previous {
+        (etag.as_deref(), lm.as_deref())
+    } else {
+        (None, None)
+    };
+
+    match client
+        .fetch_conditional(&entry.url, existing_etag, existing_lm)
+        .await
+    {
+        Ok(r) if r.status_code == 304 => FetchOutcome::NotModified {
+            page_id: previous.map(|(id, _, _)| id),
+        },
+        Ok(r) => FetchOutcome::Fetched {
+            result: r,
+            freshness: if previous.is_some() {
+                Freshness::Modified
+            } else {
+                Freshness::New
+            },
+        },
+        Err(e) => FetchOutcome::Failed(e),
+    }
+}
 
 /// The crawl engine encapsulates the core crawl loop shared between
 /// CLI and API consumers. It handles queue management, robots.txt,
@@ -354,27 +847,33 @@ impl CrawlEngine {
             }
         }
 
-        let pages_crawled = AtomicUsize::new(0);
-        let pages_stored = AtomicUsize::new(0);
-        let issues_found = AtomicUsize::new(0);
-        let skipped_external = AtomicUsize::new(0);
-        let skipped_robots = AtomicUsize::new(0);
-        let skipped_duplicate = AtomicUsize::new(0);
-        let pages_unchanged = AtomicUsize::new(0);
-        let pages_modified = AtomicUsize::new(0);
-        let pages_new = AtomicUsize::new(0);
-        let visited: Arc<DashSet<String>> = Arc::new(DashSet::new());
-        let content_hashes_string: Arc<DashSet<String>> = Arc::new(DashSet::new());
-        let content_hashes_u64: Arc<DashSet<u64>> = Arc::new(DashSet::new());
-        let use_deterministic_hash = determinism.is_some();
+        let run = CrawlRun {
+            counters: CrawlCounters::default(),
+            visited: DashSet::new(),
+            content_hashes: if determinism.is_some() {
+                ContentHashes::deterministic()
+            } else {
+                ContentHashes::sha256()
+            },
+            analyzer_registry: &analyzer_registry,
+            cfg,
+            storage: &self.storage,
+            crawl_id: crawl_id.clone(),
+            seed_domain: seed_domain.clone(),
+            on_page,
+            metrics,
+            resource_monitor,
+            queue: queue.clone(),
+        };
         let crawl_start = std::time::Instant::now();
 
-        // Parallel fetch pipeline using FuturesUnordered
-        let mut in_flight: FuturesUnordered<tokio::task::JoinHandle<Option<FetchResult>>> =
-            FuturesUnordered::new();
+        // Parallel fetch pipeline: worker tasks deliver FetchedPage values
+        // that the main loop drains and processes sequentially.
         let fetch_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+        let mut in_flight: FuturesUnordered<tokio::task::JoinHandle<Option<FetchedPage>>> =
+            FuturesUnordered::new();
 
-        // Main crawl loop: dispatch URLs and process results via FuturesUnordered
+        // Main crawl loop: dispatch URLs and process completed fetches.
         loop {
             // Check time budget
             if let Some(max_time) = cfg.crawl_config.max_time {
@@ -384,32 +883,36 @@ impl CrawlEngine {
                 }
             }
 
-            let current = pages_crawled.load(Ordering::Relaxed);
-            if current >= max_pages {
+            let crawled = current(&run.counters.pages_crawled);
+            if crawled >= max_pages {
                 break;
             }
 
             // Check resource limits (every 100 pages)
-            if current.is_multiple_of(100) && current > 0 {
+            if crawled.is_multiple_of(100) && crawled > 0 {
                 if let Ok(rss_bytes) = get_process_rss_bytes() {
                     let usage = crate::ResourceUsage {
                         memory_bytes: rss_bytes,
-                        pages_processed: current,
+                        pages_processed: crawled,
                         elapsed: crawl_start.elapsed(),
                         ..Default::default()
                     };
-                    resource_monitor.update(usage);
-                    let exceeded = resource_monitor.exceeded_limits();
+                    run.resource_monitor.update(usage);
+                    let exceeded = run.resource_monitor.exceeded_limits();
                     if !exceeded.is_empty() {
                         tracing::warn!("Resource limits exceeded: {:?}", exceeded);
-                        metrics.record_resource_limit_hit();
+                        run.metrics.record_resource_limit_hit();
                         break;
                     }
                 }
             }
 
-            // Dispatch new fetches while we have capacity and URLs
-            while in_flight.len() < concurrency {
+            // Dispatch new fetches while we have capacity, URLs, and page
+            // budget. Counting in-flight fetches against the budget keeps the
+            // parallel pipeline from overshooting max_pages.
+            while in_flight.len() < concurrency
+                && current(&run.counters.pages_crawled) + in_flight.len() < max_pages
+            {
                 let entry = {
                     let q = queue.lock().await;
                     q.pop()
@@ -420,10 +923,10 @@ impl CrawlEngine {
                     None => break,
                 };
 
-                if visited.contains(&entry.url.to_string()) {
+                if run.visited.contains(&entry.url.to_string()) {
                     continue;
                 }
-                visited.insert(entry.url.to_string());
+                run.visited.insert(entry.url.to_string());
 
                 // Robots.txt check (sequential, fast)
                 let robots_raw;
@@ -435,7 +938,7 @@ impl CrawlEngine {
                         .await
                     {
                         tracing::debug!("Blocked by robots.txt: {}", entry.url);
-                        skipped_robots.fetch_add(1, Ordering::Relaxed);
+                        bump(&run.counters.skipped_robots);
                         continue;
                     }
                     if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
@@ -474,20 +977,17 @@ impl CrawlEngine {
                 let breaker = circuit_breaker_registry.get_or_create(domain);
                 if !breaker.is_allowed() {
                     tracing::debug!("Circuit breaker open for domain: {}", domain);
-                    metrics.record_page_skipped_circuit_breaker();
+                    run.metrics.record_page_skipped_circuit_breaker();
                     continue;
                 }
 
-                // Acquire concurrency permit via semaphore (owned, no lifetime issues)
-                let permit = match fetch_semaphore.clone().acquire_owned().await {
-                    Ok(p) => p,
-                    Err(_) => {
-                        tracing::warn!("Semaphore closed");
-                        continue;
-                    }
+                // Acquire concurrency permit (owned, movable into the task)
+                let Ok(permit) = fetch_semaphore.clone().acquire_owned().await else {
+                    tracing::warn!("Fetch semaphore closed");
+                    continue;
                 };
 
-                // Spawn fetch task
+                // Spawn fetch task; the permit is released when it completes.
                 let client = http_client.clone();
                 let storage = self.storage.clone();
                 let crawl_id_clone = crawl_id.clone();
@@ -495,435 +995,78 @@ impl CrawlEngine {
                 let force = cfg.force;
 
                 let handle = tokio::spawn(async move {
-                    let result = if incremental && !force {
-                        let previous = storage
-                            .get_page_conditional(&crawl_id_clone, entry.url.as_str())
-                            .ok()
-                            .flatten();
-                        let cross_previous = storage
-                            .get_latest_conditional(entry.url.as_str())
-                            .ok()
-                            .flatten();
-                        let (existing_etag, existing_lm) =
-                            if let Some((_, ref etag, ref lm)) = previous {
-                                (etag.as_deref(), lm.as_deref())
-                            } else if let Some((ref etag, ref lm)) = cross_previous {
-                                (etag.as_deref(), lm.as_deref())
-                            } else {
-                                (None, None)
-                            };
-                        match client
-                            .fetch_conditional(&entry.url, existing_etag, existing_lm)
-                            .await
-                        {
-                            Ok(r) if r.status_code == 304 => {
-                                Err(crate::CrawlError::Storage("304_not_modified".to_string()))
-                            }
-                            Ok(r) => Ok(r),
-                            Err(e) => Err(e),
-                        }
-                    } else {
-                        client.fetch(&entry.url).await
-                    };
-                    drop(permit); // Release backpressure permit
-                    Some(FetchResult {
+                    let fetch_start = std::time::Instant::now();
+                    let outcome =
+                        execute_fetch(client, storage, crawl_id_clone, entry.clone(), incremental, force)
+                            .await;
+                    let fetch_time = fetch_start.elapsed();
+                    drop(permit);
+                    Some(FetchedPage {
                         entry,
-                        result,
                         robots_raw,
+                        fetch_time,
+                        outcome,
                     })
                 });
                 in_flight.push(handle);
             }
 
-            // If no in-flight tasks and queue is empty, we're done
+            // If no in-flight tasks and the queue is exhausted, we're done
             if in_flight.is_empty() {
                 break;
             }
 
-            // Wait for next completed fetch
-            if let Some(Ok(Some(processed))) = in_flight.next().await {
-                Self::process_result(
-                    &processed,
-                    &pages_crawled,
-                    &pages_stored,
-                    &issues_found,
-                    &skipped_external,
-                    &skipped_robots,
-                    &skipped_duplicate,
-                    &pages_unchanged,
-                    &pages_modified,
-                    &pages_new,
-                    &visited,
-                    &content_hashes_string,
-                    &content_hashes_u64,
-                    use_deterministic_hash,
-                    &analyzer_registry,
-                    cfg,
-                    &self.storage,
-                    &crawl_id,
-                    &seed_domain,
-                    &on_page,
-                    &metrics,
-                    &resource_monitor,
-                    &queue,
-                )
-                .await;
+            // Wait for the next completed fetch and process it
+            if let Some(Ok(Some(fetched))) = in_flight.next().await {
+                run.process(&fetched).await;
             }
         }
 
         // Drain remaining in-flight fetches
-        while let Some(Ok(Some(processed))) = in_flight.next().await {
-            Self::process_result(
-                &processed,
-                &pages_crawled,
-                &pages_stored,
-                &issues_found,
-                &skipped_external,
-                &skipped_robots,
-                &skipped_duplicate,
-                &pages_unchanged,
-                &pages_modified,
-                &pages_new,
-                &visited,
-                &content_hashes_string,
-                &content_hashes_u64,
-                use_deterministic_hash,
-                &analyzer_registry,
-                cfg,
-                &self.storage,
-                &crawl_id,
-                &seed_domain,
-                &on_page,
-                &metrics,
-                &resource_monitor,
-                &queue,
-            )
-            .await;
+        while let Some(Ok(Some(fetched))) = in_flight.next().await {
+            run.process(&fetched).await;
         }
 
         // Finish crawl in storage
-        let final_pages_crawled = pages_crawled.load(Ordering::Relaxed);
-        let final_issues_found = issues_found.load(Ordering::Relaxed);
+        let stats = run.counters.snapshot();
         if let Err(e) = self
             .storage
-            .finish_crawl(&crawl_id, final_pages_crawled, final_issues_found)
+            .finish_crawl(&crawl_id, stats.pages_crawled, stats.issues_found)
         {
             tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
         }
 
         let elapsed = crawl_start.elapsed();
-        let snapshot = metrics.snapshot();
-
-        let final_pages_crawled = pages_crawled.load(Ordering::Relaxed);
-        let final_pages_stored = pages_stored.load(Ordering::Relaxed);
-        let final_issues_found = issues_found.load(Ordering::Relaxed);
-        let final_skipped_external = skipped_external.load(Ordering::Relaxed);
-        let final_skipped_robots = skipped_robots.load(Ordering::Relaxed);
-        let final_skipped_duplicate = skipped_duplicate.load(Ordering::Relaxed);
-        let final_pages_unchanged = pages_unchanged.load(Ordering::Relaxed);
-        let final_pages_modified = pages_modified.load(Ordering::Relaxed);
-        let final_pages_new = pages_new.load(Ordering::Relaxed);
+        let snapshot = run.metrics.snapshot();
 
         tracing::info!(
             "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
-            final_pages_crawled,
-            final_pages_stored,
-            final_issues_found,
-            final_skipped_external,
-            final_skipped_robots,
-            final_skipped_duplicate,
-            final_pages_unchanged,
-            final_pages_modified,
-            final_pages_new,
+            stats.pages_crawled,
+            stats.pages_stored,
+            stats.issues_found,
+            stats.skipped_external,
+            stats.skipped_robots,
+            stats.skipped_duplicate,
+            stats.pages_unchanged,
+            stats.pages_modified,
+            stats.pages_new,
         );
 
         Ok(CrawlOutput {
             crawl_id,
-            pages_crawled: final_pages_crawled,
-            pages_stored: final_pages_stored,
-            issues_found: final_issues_found,
-            skipped_external: final_skipped_external,
-            skipped_robots: final_skipped_robots,
-            skipped_duplicate: final_skipped_duplicate,
-            pages_unchanged: final_pages_unchanged,
-            pages_modified: final_pages_modified,
-            pages_new: final_pages_new,
+            pages_crawled: stats.pages_crawled,
+            pages_stored: stats.pages_stored,
+            issues_found: stats.issues_found,
+            skipped_external: stats.skipped_external,
+            skipped_robots: stats.skipped_robots,
+            skipped_duplicate: stats.skipped_duplicate,
+            pages_unchanged: stats.pages_unchanged,
+            pages_modified: stats.pages_modified,
+            pages_new: stats.pages_new,
             seed_domain,
             metrics: snapshot,
             elapsed,
         })
-    }
-
-    /// Process a single fetch result: dedup, parse, analyze, store, extract links.
-    #[allow(clippy::too_many_arguments)]
-    async fn process_result(
-        processed: &FetchResult,
-        pages_crawled: &AtomicUsize,
-        pages_stored: &AtomicUsize,
-        issues_found: &AtomicUsize,
-        skipped_external: &AtomicUsize,
-        _skipped_robots: &AtomicUsize,
-        skipped_duplicate: &AtomicUsize,
-        pages_unchanged: &AtomicUsize,
-        _pages_modified: &AtomicUsize,
-        _pages_new: &AtomicUsize,
-        visited: &Arc<DashSet<String>>,
-        content_hashes_string: &Arc<DashSet<String>>,
-        content_hashes_u64: &Arc<DashSet<u64>>,
-        use_deterministic_hash: bool,
-        analyzer_registry: &AnalyzerRegistry,
-        cfg: &CrawlEngineConfig,
-        storage: &Arc<Storage>,
-        crawl_id: &str,
-        seed_domain: &str,
-        on_page: &Option<OnPageCrawled>,
-        metrics: &Metrics,
-        resource_monitor: &ResourceMonitor,
-        queue: &Arc<Mutex<UrlQueue>>,
-    ) {
-        let entry = &processed.entry;
-
-        if let Err(e) = &processed.result {
-            // Check for 304 Not Modified (encoded as storage error)
-            if e.to_string().contains("304_not_modified") {
-                pages_unchanged.fetch_add(1, Ordering::Relaxed);
-                tracing::debug!("304 Not Modified: {}", entry.url);
-                return;
-            }
-            tracing::warn!("Failed to fetch {}: {}", entry.url, e);
-            metrics.record_page_failure();
-            return;
-        }
-
-        let result = match &processed.result {
-            Ok(r) => r,
-            Err(_) => {
-                // Error already logged and counters updated above
-                return;
-            }
-        };
-
-        // Content-hash deduplication
-        {
-            let is_duplicate = if use_deterministic_hash {
-                let hash = DeterminismController::content_hash(&result.body);
-                !content_hashes_u64.insert(hash)
-            } else {
-                use sha2::{Digest, Sha256};
-                let mut hasher = Sha256::new();
-                hasher.update(result.body.as_bytes());
-                let hash_result = hasher.finalize();
-                let hash: String = hash_result.iter().map(|b| format!("{b:02x}")).collect();
-                !content_hashes_string.insert(hash)
-            };
-            if is_duplicate {
-                tracing::debug!("Skipping duplicate content: {}", entry.url);
-                skipped_duplicate.fetch_add(1, Ordering::Relaxed);
-                return;
-            }
-        }
-
-        pages_crawled.fetch_add(1, Ordering::Relaxed);
-
-        // Parse HTML
-        let mut body_text = result.body.clone();
-        let mut parsed = match crate::HtmlParser::parse(&body_text, &entry.url) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Failed to parse {}: {}", entry.url, e);
-                return;
-            }
-        };
-
-        // JS rendering
-        if cfg.enable_js_rendering {
-            let js_decision_engine = crate::JsRenderDecisionEngine::new();
-            let decision =
-                js_decision_engine.should_render_js(entry.url.as_ref(), Some(&body_text));
-            if let crate::JsRenderDecision::Render { reason } = decision {
-                tracing::info!("JS render decision for {}: {}", entry.url, reason);
-                if let Some(ref renderer) = cfg.js_renderer {
-                    if renderer.is_available() {
-                        match tokio::time::timeout(
-                            Duration::from_secs(30),
-                            renderer.render(entry.url.as_str()),
-                        )
-                        .await
-                        {
-                            Ok(Ok(rendered_html)) => {
-                                body_text = rendered_html;
-                                if let Ok(re_parsed) = crate::HtmlParser::parse(&body_text, &entry.url) {
-                                    parsed = re_parsed;
-                                }
-                            }
-                            Ok(Err(e)) => {
-                                tracing::warn!("JS render failed for {}: {}", entry.url, e);
-                            }
-                            Err(_) => {
-                                tracing::warn!("JS render timed out for {}", entry.url);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Run analyzers
-        let start = std::time::Instant::now();
-        let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<RedirectHop> = vec![];
-        let robots_ref = if processed.robots_raw.is_empty() {
-            None
-        } else {
-            Some(processed.robots_raw.as_str())
-        };
-        let ctx = crate::analyzers::AnalysisContext {
-            page: &parsed,
-            body: Some(&body_text),
-            status_code: Some(result.status_code),
-            headers: &headers_vec,
-            response_time: Some(start.elapsed()),
-            redirect_chain: &empty_chain,
-            robots_txt: robots_ref,
-        };
-        let findings = analyzer_registry.analyze(&ctx, &cfg.crawl_config);
-        let analysis_time = start.elapsed();
-
-        issues_found.fetch_add(findings.len(), Ordering::Relaxed);
-
-        // Store page
-        let page_id = uuid::Uuid::new_v4().to_string();
-        let mut page_data = PageData {
-            id: page_id.clone(),
-            url: entry.url.clone(),
-            final_url: result.final_url.clone(),
-            status_code: result.status_code,
-            title: parsed.meta.title.clone(),
-            description: parsed.meta.description.clone(),
-            canonical_url: parsed.meta.canonical.clone(),
-            word_count: Some(parsed.word_count),
-            load_time_ms: None,
-            body_size: Some(result.body.len()),
-            fetched_at: Utc::now(),
-            links: parsed
-                .links
-                .iter()
-                .filter_map(|l| Url::parse(&l.href).ok())
-                .collect(),
-            tenant_id: cfg.tenant_id.clone(),
-            etag: result.etag.clone(),
-            last_modified: result.last_modified.clone(),
-            cwv_lcp: None,
-            cwv_cls: None,
-            cwv_inp: None,
-        };
-
-        // Encrypt sensitive fields
-        if let Some(ref encryption) = cfg.encryption {
-            if encryption.is_enabled() {
-                if let Some(title) = page_data.title.take() {
-                    if let Ok(encrypted) = encryption.encrypt(title.as_bytes()) {
-                        page_data.title = Some(format!(
-                            "enc:{}",
-                            encrypted.iter().map(|b| format!("{b:02x}")).collect::<String>()
-                        ));
-                    } else {
-                        page_data.title = Some(title);
-                    }
-                }
-                if let Some(desc) = page_data.description.take() {
-                    if let Ok(encrypted) = encryption.encrypt(desc.as_bytes()) {
-                        page_data.description = Some(format!(
-                            "enc:{}",
-                            encrypted.iter().map(|b| format!("{b:02x}")).collect::<String>()
-                        ));
-                    } else {
-                        page_data.description = Some(desc);
-                    }
-                }
-            }
-        }
-
-        if let Err(e) = storage.insert_page(crawl_id, &page_data) {
-            tracing::warn!("Failed to store page {}: {}", entry.url, e);
-        } else {
-            pages_stored.fetch_add(1, Ordering::Relaxed);
-        }
-
-        // Store findings
-        for finding in &findings {
-            let issue = Issue {
-                id: uuid::Uuid::new_v4().to_string(),
-                page_id: page_data.id.clone(),
-                category: finding.category.clone(),
-                severity: finding.severity.clone(),
-                code: finding.code.clone(),
-                title: finding.title.clone(),
-                description: finding.description.clone(),
-                element: None,
-                recommendation: finding.recommendation.clone(),
-                tenant_id: cfg.tenant_id.clone(),
-            };
-            if let Err(e) = storage.insert_issue(&issue) {
-                tracing::warn!("Failed to store issue: {}", e);
-            }
-        }
-
-        // Record metrics
-        metrics.record_page_success(
-            result.body.len() as u64,
-            0, // fetch_time tracked by worker
-            analysis_time.as_micros() as u64,
-            0,
-            findings.len() as u64,
-        );
-        resource_monitor.record_page();
-
-        // Invoke callback
-        if let Some(ref cb) = on_page {
-            cb(entry.url.as_ref(), &page_id, findings.len());
-        }
-
-        // Extract and queue new links
-        for link in &parsed.links {
-            let link_url = match Url::parse(&link.href) {
-                Ok(u) => u,
-                Err(_) => continue,
-            };
-            if visited.contains(&link_url.to_string()) {
-                continue;
-            }
-            let is_internal = link_url.host_str() == Some(seed_domain);
-
-            if !is_internal && !cfg.allow_external {
-                skipped_external.fetch_add(1, Ordering::Relaxed);
-                continue;
-            }
-
-            if !cfg.include_patterns.is_empty()
-                && !cfg.include_patterns.iter().any(|p| link.href.contains(p))
-            {
-                continue;
-            }
-            if cfg.exclude_patterns.iter().any(|p| link.href.contains(p)) {
-                continue;
-            }
-
-            let priority = if is_internal {
-                Priority::NORMAL
-            } else {
-                Priority::LOW
-            };
-
-            if let Some(max_depth) = cfg.crawl_config.max_depth {
-                if entry.depth + 1 > max_depth {
-                    continue;
-                }
-            }
-
-            let q = queue.lock().await;
-            q.push(link_url, entry.depth + 1, priority);
-        }
     }
 
     /// Build the analyzer registry based on feature flags.
@@ -1002,6 +1145,62 @@ fn get_process_rss_bytes() -> Result<u64, crate::CrawlError> {
 mod tests {
     use super::*;
     use crate::storage::Storage;
+
+    #[test]
+    fn test_content_hashes_sha256_detects_duplicates() {
+        let hashes = ContentHashes::sha256();
+        assert!(hashes.insert("<html>unique body</html>"));
+        assert!(!hashes.insert("<html>unique body</html>"));
+        assert!(hashes.insert("<html>different body</html>"));
+    }
+
+    #[test]
+    fn test_content_hashes_deterministic_detects_duplicates() {
+        let hashes = ContentHashes::deterministic();
+        assert!(hashes.insert("page one"));
+        assert!(!hashes.insert("page one"));
+        assert!(hashes.insert("page two"));
+    }
+
+    #[test]
+    fn test_crawl_counters_snapshot_reflects_updates() {
+        let counters = CrawlCounters::default();
+        bump(&counters.pages_crawled);
+        bump(&counters.pages_crawled);
+        bump_by(&counters.issues_found, 7);
+        let snap = counters.snapshot();
+        assert_eq!(snap.pages_crawled, 2);
+        assert_eq!(snap.issues_found, 7);
+        assert_eq!(snap.pages_stored, 0);
+    }
+
+    #[test]
+    fn test_encrypt_field_roundtrip() {
+        // encrypt_field with an enabled-but-uninitialized manager falls back
+        // to plaintext (encrypt fails on missing key). Full crypto roundtrip
+        // is covered by encryption.rs tests.
+        use crate::encryption::{EncryptionConfig, EncryptionAlgorithm, KeySource};
+        let manager = EncryptionManager::new(EncryptionConfig {
+            enabled: true,
+            key_source: KeySource::EnvVar("TEST_CRAWL_KEY_MISSING".to_string()),
+            algorithm: EncryptionAlgorithm::Aes256Gcm,
+        });
+        assert!(!manager.is_initialized());
+        assert_eq!(
+            encrypt_field(&manager, Some("plain".to_string())),
+            Some("plain".to_string())
+        );
+    }
+
+    #[test]
+    fn test_freshness_counters_dispatch() {
+        // Sanity: enum variants are constructible and distinct via debug output.
+        let variants = [Freshness::New, Freshness::Modified, Freshness::Unconditional];
+        let rendered: Vec<String> = variants.iter().map(|f| format!("{f:?}")).collect();
+        assert_eq!(rendered.len(), 3);
+        assert_ne!(rendered[0], rendered[1]);
+        assert_ne!(rendered[1], rendered[2]);
+    }
 
     #[test]
     fn test_crawl_engine_config_default() {

@@ -640,10 +640,23 @@ impl Storage {
         Ok(())
     }
 
+    /// Update the `fetched_at` timestamp of an existing page (304 Not Modified path).
+    pub fn update_page_fetched_at(
+        &self,
+        page_id: &str,
+        fetched_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE pages SET fetched_at = ?1 WHERE id = ?2",
+            params![fetched_at.to_rfc3339(), page_id],
+        )?;
+        Ok(())
+    }
+
     /// Insert a batch of issues for performance.
     /// Wraps all inserts in a single SQLite transaction for O(n) vs O(n*fsync).
-    pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
-        if issues.is_empty() {
+    pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {        if issues.is_empty() {
             return Ok(());
         }
         let conn = self.conn.lock();

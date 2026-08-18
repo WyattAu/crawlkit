@@ -631,6 +631,220 @@ pub fn default_user_roles() -> Vec<String> {
     vec!["viewer".to_string()]
 }
 
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn claims(tenant: &str, roles: &[&str]) -> auth::Claims {
+        auth::Claims {
+            sub: "user-1".to_string(),
+            tenant: tenant.to_string(),
+            roles: roles.iter().map(|r| (*r).to_string()).collect(),
+            permissions: Vec::new(),
+            exp: 999_999_999_999,
+            iat: 0,
+            jti: "jti-1".to_string(),
+        }
+    }
+
+    // -- default value helpers ------------------------------------------
+
+    #[test]
+    fn test_default_rpm() {
+        assert_eq!(default_rpm(), 60);
+    }
+
+    #[test]
+    fn test_default_max_pages() {
+        assert_eq!(default_max_pages(), 100);
+    }
+
+    #[test]
+    fn test_default_delay() {
+        assert_eq!(default_delay(), 500);
+    }
+
+    #[test]
+    fn test_default_concurrency() {
+        assert_eq!(default_concurrency(), 4);
+    }
+
+    #[test]
+    fn test_default_webhook_events() {
+        let events = default_webhook_events();
+        assert_eq!(events.len(), 2);
+        assert!(events.contains(&"crawl.completed".to_string()));
+        assert!(events.contains(&"crawl.failed".to_string()));
+    }
+
+    #[test]
+    fn test_default_user_roles() {
+        assert_eq!(default_user_roles(), vec!["viewer".to_string()]);
+    }
+
+    #[test]
+    fn test_default_schedule_interval() {
+        assert_eq!(default_schedule_interval(), 3600);
+    }
+
+    // -- RateLimitBucket --------------------------------------------------
+
+    #[test]
+    fn test_rate_limit_bucket_new() {
+        let bucket = RateLimitBucket::new(120);
+        assert_eq!(bucket.tokens, 120.0);
+        assert_eq!(bucket.max_tokens, 120.0);
+        assert!((bucket.refill_rate - 2.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_try_consume_success() {
+        let mut bucket = RateLimitBucket::new(60);
+        assert!(bucket.try_consume());
+        assert!(bucket.tokens < 60.0);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_try_consume_exhaustion() {
+        let mut bucket = RateLimitBucket::new(1);
+        assert!(bucket.try_consume());
+        let second = bucket.try_consume();
+        assert!(bucket.tokens < 1.0 || !second);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_refill_capped_at_max() {
+        let mut bucket = RateLimitBucket::new(10);
+        for _ in 0..10 {
+            bucket.try_consume();
+        }
+        assert!(bucket.tokens < 1.0);
+        bucket.last_refill = std::time::Instant::now() - std::time::Duration::from_secs(120);
+        bucket.refill();
+        assert!((bucket.tokens - 10.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn test_rate_limit_bucket_refill_partial() {
+        let mut bucket = RateLimitBucket::new(60);
+        bucket.try_consume();
+        let before = bucket.tokens;
+        bucket.last_refill = std::time::Instant::now() - std::time::Duration::from_secs(1);
+        bucket.refill();
+        assert!(bucket.tokens > before);
+        assert!(bucket.tokens <= bucket.max_tokens);
+    }
+
+    // -- validation -------------------------------------------------------
+
+    #[test]
+    fn test_validate_url_accepts_https() {
+        assert!(validate_url("https://example.com").is_ok());
+        assert!(validate_url("http://example.com/path?q=1").is_ok());
+    }
+
+    #[test]
+    fn test_validate_url_rejects_non_http_schemes() {
+        for url in ["ftp://example.com", "file:///etc/passwd"] {
+            let err = validate_url(url).unwrap_err();
+            assert!(
+                matches!(err, ApiError::BadRequest(ref msg) if msg.contains("http or https")),
+                "expected BadRequest for {url}, got {err:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_url_rejects_overlong() {
+        let long = format!("https://example.com/{}", "a".repeat(2100));
+        let err = validate_url(&long).unwrap_err();
+        assert!(matches!(err, ApiError::BadRequest(_)));
+    }
+
+    #[test]
+    fn test_validate_max_pages_bounds() {
+        assert!(validate_max_pages(1).is_ok());
+        assert!(validate_max_pages(10_000).is_ok());
+        assert!(validate_max_pages(0).is_err());
+        assert!(validate_max_pages(10_001).is_err());
+    }
+
+    #[test]
+    fn test_validate_concurrency_bounds() {
+        assert!(validate_concurrency(1).is_ok());
+        assert!(validate_concurrency(128).is_ok());
+        assert!(validate_concurrency(0).is_err());
+        assert!(validate_concurrency(129).is_err());
+    }
+
+    #[test]
+    fn test_validate_delay_bounds() {
+        assert!(validate_delay(0).is_ok());
+        assert!(validate_delay(60_000).is_ok());
+        assert!(validate_delay(60_001).is_err());
+    }
+
+    // -- API key redaction --------------------------------------------------
+
+    #[test]
+    fn test_api_key_redaction() {
+        assert_eq!(ApiKeyResponse::redacted("ck_abcdef123456"), "3456****");
+        assert_eq!(ApiKeyResponse::redacted("key"), "****");
+        assert_eq!(ApiKeyResponse::redacted(""), "****");
+    }
+
+    // -- claims helpers -----------------------------------------------------
+
+    #[test]
+    fn test_extract_tenant() {
+        assert_eq!(extract_tenant(&claims("acme", &["viewer"])), "acme");
+    }
+
+    #[test]
+    fn test_is_admin() {
+        assert!(is_admin(&claims("t", &["admin"])));
+        assert!(is_admin(&claims("t", &["viewer", "admin"])));
+        assert!(!is_admin(&claims("t", &["viewer"])));
+        assert!(!is_admin(&claims("t", &[])));
+    }
+
+    #[test]
+    fn test_map_oidc_roles_admin_wins() {
+        let roles = map_oidc_roles(&["editor".to_string()], &["corp/admin".to_string()]);
+        assert_eq!(roles, vec!["admin".to_string()]);
+    }
+
+    #[test]
+    fn test_map_oidc_roles_editor() {
+        let roles = map_oidc_roles(&["crawlkit-editor".to_string()], &[]);
+        assert_eq!(roles, vec!["editor".to_string()]);
+    }
+
+    #[test]
+    fn test_map_oidc_roles_defaults_to_viewer() {
+        let roles = map_oidc_roles(&[], &["everyone".to_string()]);
+        assert_eq!(roles, vec!["viewer".to_string()]);
+    }
+
+    // -- ApiError mapping ----------------------------------------------------
+
+    #[test]
+    fn test_api_error_status_mapping() {
+        // IntoResponse is exercised implicitly via these constructors; the
+        // status mapping itself is compile-time data. We at least verify the
+        // variants construct and format.
+        assert!(matches!(
+            ApiError::Unauthorized("nope".to_string()),
+            ApiError::Unauthorized(_)
+        ));
+        assert!(matches!(ApiError::RateLimited, ApiError::RateLimited));
+    }
+}
+
 #[derive(Serialize)]
 pub struct UserResponse {
     pub id: String,

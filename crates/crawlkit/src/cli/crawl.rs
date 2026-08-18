@@ -121,6 +121,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
             max_time: params.max_time_secs.map(std::time::Duration::from_secs),
             max_depth: params.depth,
             request_delay: std::time::Duration::from_millis(params.delay.unwrap_or(100)),
+            max_pages,
             concurrency,
             ..Default::default()
         },

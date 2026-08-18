@@ -15,53 +15,126 @@ mod selectors {
     use scraper::Selector;
     use std::sync::OnceLock;
 
-    fn cached(pattern: &str) -> &Selector {
-        static CELL: OnceLock<Selector> = OnceLock::new();
-        CELL.get_or_init(|| Selector::parse(pattern).expect("static CSS selector is valid"))
-    }
-
     #[allow(dead_code)]
     pub fn html() -> &'static Selector {
-        cached("html")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("html").expect("static CSS selector is valid"))
     }
     pub fn header() -> &'static Selector {
-        cached("header")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("header").expect("static CSS selector is valid"))
     }
     pub fn nav() -> &'static Selector {
-        cached("nav")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("nav").expect("static CSS selector is valid"))
     }
     pub fn main() -> &'static Selector {
-        cached("main")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("main").expect("static CSS selector is valid"))
     }
     pub fn aside() -> &'static Selector {
-        cached("aside")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("aside").expect("static CSS selector is valid"))
     }
     pub fn footer() -> &'static Selector {
-        cached("footer")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("footer").expect("static CSS selector is valid"))
     }
     pub fn form() -> &'static Selector {
-        cached("form")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("form").expect("static CSS selector is valid"))
     }
     pub fn section_aria() -> &'static Selector {
-        cached("section[aria-label], section[aria-labelledby]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("section[aria-label], section[aria-labelledby]").expect("static CSS selector is valid"))
     }
     pub fn role_banner() -> &'static Selector {
-        cached("[role=banner]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("[role=banner]").expect("static CSS selector is valid"))
     }
     pub fn role_navigation() -> &'static Selector {
-        cached("[role=navigation]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("[role=navigation]").expect("static CSS selector is valid"))
     }
     pub fn role_main() -> &'static Selector {
-        cached("[role=main]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("[role=main]").expect("static CSS selector is valid"))
     }
     pub fn role_complementary() -> &'static Selector {
-        cached("[role=complementary]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("[role=complementary]").expect("static CSS selector is valid"))
     }
     pub fn role_contentinfo() -> &'static Selector {
-        cached("[role=contentinfo]")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("[role=contentinfo]").expect("static CSS selector is valid"))
     }
     pub fn input_select_textarea() -> &'static Selector {
-        cached("input, select, textarea")
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("input, select, textarea").expect("static CSS selector is valid"))
+    }
+    pub fn link_hreflang() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("link[hreflang]").expect("static CSS selector is valid"))
+    }
+    pub fn anchor_href() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("a[href]").expect("static CSS selector is valid"))
+    }
+    pub fn img() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("img").expect("static CSS selector is valid"))
+    }
+    pub fn label() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("label").expect("static CSS selector is valid"))
+    }
+    pub fn fieldset() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("fieldset").expect("static CSS selector is valid"))
+    }
+    pub fn legend() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("legend").expect("static CSS selector is valid"))
+    }
+    pub fn script() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("script").expect("static CSS selector is valid"))
+    }
+    pub fn link_stylesheet() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("link[rel=stylesheet]").expect("static CSS selector is valid"))
+    }
+    pub fn style() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("style").expect("static CSS selector is valid"))
+    }
+    pub fn script_ld_json() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("script[type=\"application/ld+json\"]").expect("static CSS selector is valid"))
+    }
+    pub fn body() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("body").expect("static CSS selector is valid"))
+    }
+    pub fn noscript() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("noscript").expect("static CSS selector is valid"))
+    }
+    pub fn anchor_fragment() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("a[href^=\"#\"]").expect("static CSS selector is valid"))
+    }
+    pub fn table() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("table").expect("static CSS selector is valid"))
+    }
+    pub fn th() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("th").expect("static CSS selector is valid"))
+    }
+    pub fn caption() -> &'static Selector {
+        static CELL: OnceLock<Selector> = OnceLock::new();
+        CELL.get_or_init(|| Selector::parse("caption").expect("static CSS selector is valid"))
     }
 }
 
@@ -442,13 +515,10 @@ impl HtmlParser {
     }
 
     fn extract_hreflang(document: &Html, page_url: &Url) -> Vec<HreflangTag> {
-        let selector = match Selector::parse("link[hreflang]") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::link_hreflang();
 
         document
-            .select(&selector)
+            .select(selector)
             .filter_map(|el| {
                 let lang = el.value().attr("hreflang")?.to_string();
                 let href = el.value().attr("href")?;
@@ -488,15 +558,12 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn extract_links(document: &Html, page_url: &Url) -> Vec<ExtractedLink> {
-        let selector = match Selector::parse("a[href]") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::anchor_href();
 
         let page_domain = page_url.domain().unwrap_or("");
 
         document
-            .select(&selector)
+            .select(selector)
             .filter_map(|el| {
                 let raw_href = el.value().attr("href")?.to_string();
 
@@ -522,7 +589,7 @@ impl HtmlParser {
                 // Accessibility: extract aria-label and img alt for link text analysis
                 let aria_label = el.value().attr("aria-label").map(String::from);
                 let img_alt = el
-                    .select(&Selector::parse("img").ok()?)
+                    .select(selectors::img())
                     .next()
                     .and_then(|img| img.value().attr("alt"))
                     .map(String::from);
@@ -544,13 +611,10 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn extract_images(document: &Html) -> Vec<ExtractedImage> {
-        let selector = match Selector::parse("img") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::img();
 
         document
-            .select(&selector)
+            .select(selector)
             .map(|el| {
                 let src = el.value().attr("src").unwrap_or("").to_string();
                 let alt = el.value().attr("alt").unwrap_or("").to_string();
@@ -584,28 +648,19 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn extract_forms(document: &Html) -> Vec<ExtractedForm> {
-        let selector = match Selector::parse("form") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::form();
 
-        let input_sel = match Selector::parse("input, select, textarea") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let input_sel = selectors::input_select_textarea();
 
-        let label_sel = match Selector::parse("label") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let label_sel = selectors::label();
 
         document
-            .select(&selector)
+            .select(selector)
             .map(|form| {
                 let action = form.value().attr("action").map(String::from);
                 let method = form.value().attr("method").unwrap_or("get").to_lowercase();
 
-                let inputs: Vec<_> = form.select(&input_sel).collect();
+                let inputs: Vec<_> = form.select(input_sel).collect();
                 let input_count = inputs.len();
                 let has_file_input = inputs
                     .iter()
@@ -617,14 +672,14 @@ impl HtmlParser {
 
                 // Collect all label `for` targets within this form
                 let label_for_ids: std::collections::HashSet<String> = form
-                    .select(&label_sel)
+                    .select(label_sel)
                     .filter_map(|l| l.value().attr("for").map(String::from))
                     .collect();
 
                 // Collect all input nodes that are descendants of a <label>
                 let inputs_in_labels: std::collections::HashSet<ego_tree::NodeId> = {
                     let inner_input_sel = selectors::input_select_textarea();
-                    form.select(&label_sel)
+                    form.select(label_sel)
                         .flat_map(|label| label.select(inner_input_sel))
                         .map(|input| input.id())
                         .collect()
@@ -671,14 +726,14 @@ impl HtmlParser {
                     })
                     .collect();
 
-                let has_fieldset = Selector::parse("fieldset")
-                    .ok()
-                    .and_then(|s| form.select(&s).next().is_some().then_some(true))
-                    .unwrap_or(false);
-                let has_legend = Selector::parse("legend")
-                    .ok()
-                    .and_then(|s| form.select(&s).next().is_some().then_some(true))
-                    .unwrap_or(false);
+                let has_fieldset = form
+                    .select(selectors::fieldset())
+                    .next()
+                    .is_some();
+                let has_legend = form
+                    .select(selectors::legend())
+                    .next()
+                    .is_some();
 
                 ExtractedForm {
                     action,
@@ -699,13 +754,10 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn extract_scripts(document: &Html) -> Vec<ScriptInfo> {
-        let selector = match Selector::parse("script") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::script();
 
         document
-            .select(&selector)
+            .select(selector)
             .map(|el| {
                 let src = el.value().attr("src").map(String::from);
                 let r#async = el.value().attr("async").is_some();
@@ -730,12 +782,9 @@ impl HtmlParser {
         let mut styles = Vec::new();
 
         // External stylesheets via <link rel="stylesheet">
-        let link_sel = match Selector::parse("link[rel=stylesheet]") {
-            Ok(s) => s,
-            Err(_) => return styles,
-        };
+        let link_sel = selectors::link_stylesheet();
 
-        for el in document.select(&link_sel) {
+        for el in document.select(link_sel) {
             let href = el.value().attr("href").map(String::from);
             let media = el.value().attr("media").map(String::from);
 
@@ -747,12 +796,9 @@ impl HtmlParser {
         }
 
         // Inline <style> blocks
-        let style_sel = match Selector::parse("style") {
-            Ok(s) => s,
-            Err(_) => return styles,
-        };
+        let style_sel = selectors::style();
 
-        for el in document.select(&style_sel) {
+        for el in document.select(style_sel) {
             let has_content = !el.text().collect::<String>().trim().is_empty();
             if has_content {
                 styles.push(StyleInfo {
@@ -771,13 +817,10 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn extract_structured_data(document: &Html) -> Vec<StructuredData> {
-        let selector = match Selector::parse("script[type=\"application/ld+json\"]") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::script_ld_json();
 
         document
-            .select(&selector)
+            .select(selector)
             .filter_map(|el| {
                 let raw: String = el.text().collect();
                 let raw = raw.trim();
@@ -813,22 +856,22 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
 
     fn count_words(document: &Html) -> usize {
-        let body = Selector::parse("body").ok();
-        let script = Selector::parse("script").ok();
-        let style = Selector::parse("style").ok();
-        let noscript = Selector::parse("noscript").ok();
+        let body = selectors::body();
+        let script = selectors::script();
+        let style = selectors::style();
+        let noscript = selectors::noscript();
 
         // Collect the set of node IDs to skip (script/style/noscript elements).
         let mut skip_ids = std::collections::HashSet::new();
-        for sel in [&script, &style, &noscript].into_iter().flatten() {
+        for sel in [script, style, noscript] {
             for el in document.select(sel) {
                 skip_ids.insert(el.id());
             }
         }
 
-        let root = body
-            .as_ref()
-            .and_then(|sel| document.select(sel).next())
+        let root = document
+            .select(body)
+            .next()
             .map(|el| el.id())
             .unwrap_or_else(|| document.root_element().id());
 
@@ -990,15 +1033,13 @@ impl HtmlParser {
         }
 
         // Skip link: first <a> whose href starts with "#" and contains "skip" in text or class
-        if let Ok(sel) = Selector::parse("a[href^=\"#\"]") {
-            for el in document.select(&sel) {
-                let text: String = el.text().collect::<Vec<_>>().join("").to_lowercase();
-                let class = el.value().attr("class").unwrap_or("").to_lowercase();
-                let id = el.value().attr("href").unwrap_or("").to_lowercase();
-                if text.contains("skip") || class.contains("skip") || id.contains("skip") {
-                    has_skip_link = true;
-                    break;
-                }
+        for el in document.select(selectors::anchor_fragment()) {
+            let text: String = el.text().collect::<Vec<_>>().join("").to_lowercase();
+            let class = el.value().attr("class").unwrap_or("").to_lowercase();
+            let id = el.value().attr("href").unwrap_or("").to_lowercase();
+            if text.contains("skip") || class.contains("skip") || id.contains("skip") {
+                has_skip_link = true;
+                break;
             }
         }
 
@@ -1036,19 +1077,16 @@ impl HtmlParser {
         }
 
         // Table accessibility
-        if let Ok(table_sel) = Selector::parse("table") {
-            if let Ok(th_sel) = Selector::parse("th") {
-                if let Ok(caption_sel) = Selector::parse("caption") {
-                    for table in document.select(&table_sel) {
-                        tables_total += 1;
-                        if table.select(&th_sel).next().is_some() {
-                            tables_with_headers += 1;
-                        }
-                        if table.select(&caption_sel).next().is_some() {
-                            tables_with_captions += 1;
-                        }
-                    }
-                }
+        let table_sel = selectors::table();
+        let th_sel = selectors::th();
+        let caption_sel = selectors::caption();
+        for table in document.select(table_sel) {
+            tables_total += 1;
+            if table.select(th_sel).next().is_some() {
+                tables_with_headers += 1;
+            }
+            if table.select(caption_sel).next().is_some() {
+                tables_with_captions += 1;
             }
         }
 
@@ -1199,13 +1237,10 @@ impl<'a> LinkExtractor<'a> {
 
     /// Extract links from the document, deduplicating by href.
     fn extract_links(&mut self, document: &Html) -> Vec<ExtractedLink> {
-        let selector = match Selector::parse("a[href]") {
-            Ok(s) => s,
-            Err(_) => return Vec::new(),
-        };
+        let selector = selectors::anchor_href();
 
         document
-            .select(&selector)
+            .select(selector)
             .filter_map(|el| {
                 let raw_href = el.value().attr("href")?.to_string();
 
@@ -1232,7 +1267,7 @@ impl<'a> LinkExtractor<'a> {
 
                 let aria_label = el.value().attr("aria-label").map(String::from);
                 let img_alt = el
-                    .select(&Selector::parse("img").ok()?)
+                    .select(selectors::img())
                     .next()
                     .and_then(|img| img.value().attr("alt"))
                     .map(String::from);

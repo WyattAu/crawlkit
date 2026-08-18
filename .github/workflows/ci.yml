@@ -111,7 +111,7 @@ jobs:
           key: coverage
       - uses: taiki-e/install-action@cargo-tarpaulin
       - name: Generate coverage report
-        run: cargo tarpaulin --workspace --out Xml --skip-clean
+        run: cargo tarpaulin --workspace --out Xml --skip-clean --fail-under 85
       - name: Upload coverage
         uses: codecov/codecov-action@b9fd7d16f6d7d1b5d2bec1a2887e65ceed900238 # v4
         with:

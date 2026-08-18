@@ -108,6 +108,24 @@ jobs:
             sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip > ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
           fi
 
+      - name: Sign release artifact
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          cd target/${{ matrix.target }}/release
+          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor \
+              crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
+          else
+            gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
+              --detach-sign --armor \
+              crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip
+          fi
+
       - name: Upload artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -140,12 +158,8 @@ jobs:
 
       - name: Generate SBOM
         run: |
-          cargo install cargo-cyclonedx --locked || true
-          if command -v cargo-cyclonedx &> /dev/null; then
-            cargo cyclonedx --format json --output-dir sbom || true
-          else
-            echo '{"warning": "cargo-cyclonedx not available, SBOM generation skipped"}' > sbom/crawlkit-sbom.json
-          fi
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx --format json --output-dir sbom
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
@@ -154,3 +168,4 @@ jobs:
           files: |
             artifacts/**/crawlkit-*
             artifacts/**/checksums.txt
+            sbom/**

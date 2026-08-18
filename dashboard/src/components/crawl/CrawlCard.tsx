@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { format } from 'date-fns';
 import { ExternalLink, Clock, CheckCircle, XCircle, Loader } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -10,7 +11,7 @@ const statusConfig: Record<string, { icon: typeof Clock; color: string; label: s
   failed: { icon: XCircle, color: 'text-red-500', label: 'Failed' },
 };
 
-export default function CrawlCard({ crawl_id, start_url, status, created_at }: CrawlResult) {
+export default memo(function CrawlCard({ crawl_id, start_url, status, created_at }: CrawlResult) {
   const navigate = useNavigate();
   const config = statusConfig[status] || statusConfig.pending;
   const StatusIcon = config.icon;
@@ -38,4 +39,4 @@ export default function CrawlCard({ crawl_id, start_url, status, created_at }: C
       </div>
     </button>
   );
-}
+})

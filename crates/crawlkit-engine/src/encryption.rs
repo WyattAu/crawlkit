@@ -153,6 +153,15 @@ impl EncryptionManager {
                     })?;
 
                 if keyring_path.exists() {
+                    // Restrict file permissions to owner only (0600)
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::PermissionsExt;
+                        let _ = std::fs::set_permissions(
+                            &keyring_path,
+                            std::fs::Permissions::from_mode(0o600),
+                        );
+                    }
                     std::fs::read(&keyring_path).map_err(|e| {
                         EncryptionError::KeyNotFound(format!(
                             "Failed to read keyring file {}: {}",

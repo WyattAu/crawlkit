@@ -7,16 +7,26 @@ use crate::robots::RobotsTxtCache;
 use crate::sitemap::SitemapCache;
 use crate::storage::{Issue, PageData, Storage};
 use crate::{
-    BackpressureController, CircuitBreakerRegistry, CrawlConfig, DeterminismController,
+    CircuitBreakerRegistry, CrawlConfig, DeterminismController,
     FeatureFlags, Metrics, RedirectHop, ResourceMonitor,
 };
 use chrono::Utc;
-use rusqlite::params;
+use dashmap::DashSet;
+use futures::stream::FuturesUnordered;
+use futures::StreamExt;
 use std::collections::HashSet;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::Mutex;
 use url::Url;
+
+/// The result of fetching a single URL.
+pub(crate) struct FetchResult {
+    pub(crate) entry: crate::queue::QueueEntry,
+    pub(crate) result: Result<crate::FetchResult, crate::CrawlError>,
+    pub(crate) robots_raw: String,
+}
 
 /// Trait for JavaScript page rendering.
 ///
@@ -300,7 +310,6 @@ impl CrawlEngine {
         let metrics = Metrics::new();
         let resource_monitor = ResourceMonitor::with_default_limits();
         let circuit_breaker_registry = CircuitBreakerRegistry::with_default_config();
-        let backpressure = BackpressureController::new(concurrency);
 
         let determinism = cfg.seed.map(DeterminismController::new);
 
@@ -345,23 +354,28 @@ impl CrawlEngine {
             }
         }
 
-        let mut pages_crawled: usize = 0;
-        let mut pages_stored: usize = 0;
-        let mut issues_found: usize = 0;
-        let mut skipped_external: usize = 0;
-        let mut skipped_robots: usize = 0;
-        let mut skipped_duplicate: usize = 0;
-        let mut pages_unchanged: usize = 0;
-        let mut pages_modified: usize = 0;
-        let mut pages_new: usize = 0;
-        let mut visited: HashSet<String> = HashSet::new();
-        let mut content_hashes_string: HashSet<String> = HashSet::new();
-        let mut content_hashes_u64: HashSet<u64> = HashSet::new();
+        let pages_crawled = AtomicUsize::new(0);
+        let pages_stored = AtomicUsize::new(0);
+        let issues_found = AtomicUsize::new(0);
+        let skipped_external = AtomicUsize::new(0);
+        let skipped_robots = AtomicUsize::new(0);
+        let skipped_duplicate = AtomicUsize::new(0);
+        let pages_unchanged = AtomicUsize::new(0);
+        let pages_modified = AtomicUsize::new(0);
+        let pages_new = AtomicUsize::new(0);
+        let visited: Arc<DashSet<String>> = Arc::new(DashSet::new());
+        let content_hashes_string: Arc<DashSet<String>> = Arc::new(DashSet::new());
+        let content_hashes_u64: Arc<DashSet<u64>> = Arc::new(DashSet::new());
         let use_deterministic_hash = determinism.is_some();
         let crawl_start = std::time::Instant::now();
 
-        // Crawl loop
-        while pages_crawled < max_pages {
+        // Parallel fetch pipeline using FuturesUnordered
+        let mut in_flight: FuturesUnordered<tokio::task::JoinHandle<Option<FetchResult>>> =
+            FuturesUnordered::new();
+        let fetch_semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+
+        // Main crawl loop: dispatch URLs and process results via FuturesUnordered
+        loop {
             // Check time budget
             if let Some(max_time) = cfg.crawl_config.max_time {
                 if crawl_start.elapsed() >= max_time {
@@ -370,12 +384,17 @@ impl CrawlEngine {
                 }
             }
 
+            let current = pages_crawled.load(Ordering::Relaxed);
+            if current >= max_pages {
+                break;
+            }
+
             // Check resource limits (every 100 pages)
-            if pages_crawled.is_multiple_of(100) && pages_crawled > 0 {
+            if current.is_multiple_of(100) && current > 0 {
                 if let Ok(rss_bytes) = get_process_rss_bytes() {
                     let usage = crate::ResourceUsage {
                         memory_bytes: rss_bytes,
-                        pages_processed: pages_crawled,
+                        pages_processed: current,
                         elapsed: crawl_start.elapsed(),
                         ..Default::default()
                     };
@@ -389,448 +408,205 @@ impl CrawlEngine {
                 }
             }
 
-            // Pop URL from queue
-            let entry = {
-                let q = queue.lock().await;
-                q.pop()
-            };
+            // Dispatch new fetches while we have capacity and URLs
+            while in_flight.len() < concurrency {
+                let entry = {
+                    let q = queue.lock().await;
+                    q.pop()
+                };
 
-            let entry = match entry {
-                Some(e) => e,
-                None => break,
-            };
+                let entry = match entry {
+                    Some(e) => e,
+                    None => break,
+                };
 
-            if visited.contains(&entry.url.to_string()) {
-                continue;
-            }
-            visited.insert(entry.url.to_string());
-
-            // Robots.txt check
-            let robots_raw;
-            if cfg.crawl_config.respect_robots_txt {
-                let domain = entry.url.host_str().unwrap_or("");
-                let scheme = entry.url.scheme();
-                if robots_cache
-                    .is_disallowed(scheme, domain, entry.url.path())
-                    .await
-                {
-                    tracing::debug!("Blocked by robots.txt: {}", entry.url);
-                    skipped_robots += 1;
+                if visited.contains(&entry.url.to_string()) {
                     continue;
                 }
-                if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
-                    rate_limiter.set_crawl_delay(domain, Duration::from_secs_f64(delay_secs));
-                }
-                robots_raw = robots_cache.raw_content(scheme, domain).await;
+                visited.insert(entry.url.to_string());
 
-                // Discover sitemaps for this domain (first visit only)
-                if !domain.is_empty()
-                    && !known_sitemap_urls.contains(&format!("{scheme}://{domain}"))
-                {
-                    known_sitemap_urls.insert(format!("{scheme}://{domain}"));
-                    let sitemap_urls = robots_cache.sitemaps(scheme, domain).await;
-                    if !sitemap_urls.is_empty() {
-                        let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
-                        let q = queue.lock().await;
-                        for sm_entry in &entries {
-                            if let Ok(url) = Url::parse(&sm_entry.url) {
-                                q.push(url, 0, Priority::HIGHEST);
-                            }
-                        }
-                    }
-                }
-            } else {
-                robots_raw = String::new();
-            }
-
-            // Rate limit
-            let _ = rate_limiter
-                .acquire(entry.url.host_str().unwrap_or(""))
-                .await;
-
-            // Circuit breaker check
-            let domain = entry.url.host_str().unwrap_or("");
-            let breaker = circuit_breaker_registry.get_or_create(domain);
-            if !breaker.is_allowed() {
-                tracing::debug!("Circuit breaker open for domain: {}", domain);
-                metrics.record_page_skipped_circuit_breaker();
-                continue;
-            }
-
-            // Acquire backpressure permit
-            let _permit = match backpressure.acquire().await {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!("Backpressure acquire failed: {}", e);
-                    continue;
-                }
-            };
-
-            // Fetch
-            let start = std::time::Instant::now();
-            let result = if cfg.incremental && !cfg.force {
-                // Check for existing ETag/Last-Modified from a previous crawl
-                let previous = match self
-                    .storage
-                    .get_page_conditional(&crawl_id, entry.url.as_str())
-                {
-                    Ok(v) => v,
-                    Err(e) => {
-                        tracing::warn!(error = %e, url = %entry.url, "Failed to get page conditional");
-                        None
-                    }
-                };
-
-                let cross_previous = match self.storage.get_latest_conditional(entry.url.as_str()) {
-                    Ok(v) => v,
-                    Err(e) => {
-                        tracing::warn!(error = %e, url = %entry.url, "Failed to get latest conditional");
-                        None
-                    }
-                };
-
-                // Prefer same-crawl result (has page_id for 304 updates),
-                // fall back to cross-crawl for conditional headers only.
-                let (existing_etag, existing_lm) = if let Some((_, ref etag, ref lm)) = previous {
-                    (etag.as_deref(), lm.as_deref())
-                } else if let Some((ref etag, ref lm)) = cross_previous {
-                    (etag.as_deref(), lm.as_deref())
-                } else {
-                    (None, None)
-                };
-
-                match http_client
-                    .fetch_conditional(&entry.url, existing_etag, existing_lm)
-                    .await
-                {
-                    Ok(r) if r.status_code == 304 => {
-                        // Not Modified — skip analysis but update access timestamp
-                        pages_unchanged += 1;
-                        if let Some((page_id, _, _)) = previous {
-                            // Update the fetched_at timestamp for the existing page
-                            let conn = self.storage.conn();
-                            let _ = conn.execute(
-                                "UPDATE pages SET fetched_at = ?1 WHERE id = ?2",
-                                params![Utc::now().to_rfc3339(), page_id],
-                            );
-                        }
-                        tracing::debug!("304 Not Modified: {}", entry.url);
+                // Robots.txt check (sequential, fast)
+                let robots_raw;
+                if cfg.crawl_config.respect_robots_txt {
+                    let domain = entry.url.host_str().unwrap_or("");
+                    let scheme = entry.url.scheme();
+                    if robots_cache
+                        .is_disallowed(scheme, domain, entry.url.path())
+                        .await
+                    {
+                        tracing::debug!("Blocked by robots.txt: {}", entry.url);
+                        skipped_robots.fetch_add(1, Ordering::Relaxed);
                         continue;
                     }
-                    Ok(r) => {
-                        if previous.is_some() {
-                            pages_modified += 1;
-                        } else {
-                            pages_new += 1;
-                        }
-                        breaker.record_success();
-                        r
+                    if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
+                        rate_limiter
+                            .set_crawl_delay(domain, Duration::from_secs_f64(delay_secs));
                     }
-                    Err(e) => {
-                        tracing::warn!("Failed to fetch {}: {}", entry.url, e);
-                        let was_allowed = breaker.is_allowed();
-                        breaker.record_failure();
-                        if was_allowed && !breaker.is_allowed() {
-                            metrics.record_circuit_breaker_trip();
-                        }
-                        metrics.record_page_failure();
-                        continue;
-                    }
-                }
-            } else {
-                match http_client.fetch(&entry.url).await {
-                    Ok(r) => {
-                        breaker.record_success();
-                        r
-                    }
-                    Err(e) => {
-                        tracing::warn!("Failed to fetch {}: {}", entry.url, e);
-                        let was_allowed = breaker.is_allowed();
-                        breaker.record_failure();
-                        if was_allowed && !breaker.is_allowed() {
-                            metrics.record_circuit_breaker_trip();
-                        }
-                        metrics.record_page_failure();
-                        continue;
-                    }
-                }
-            };
-            let fetch_time = start.elapsed();
+                    robots_raw = robots_cache.raw_content(scheme, domain).await;
 
-            // Content-hash deduplication
-            {
-                let is_duplicate = if use_deterministic_hash {
-                    let hash = DeterminismController::content_hash(&result.body);
-                    !content_hashes_u64.insert(hash)
-                } else {
-                    use sha2::{Digest, Sha256};
-                    let mut hasher = Sha256::new();
-                    hasher.update(result.body.as_bytes());
-                    let hash_result = hasher.finalize();
-                    let hash: String = hash_result.iter().map(|b| format!("{b:02x}")).collect();
-                    !content_hashes_string.insert(hash)
-                };
-                if is_duplicate {
-                    tracing::debug!("Skipping duplicate content: {}", entry.url);
-                    skipped_duplicate += 1;
-                    continue;
-                }
-            }
-
-            pages_crawled += 1;
-
-            // Parse HTML
-            let mut body_text = result.body.clone();
-            let mut parsed = match crate::HtmlParser::parse(&body_text, &entry.url) {
-                Ok(p) => p,
-                Err(e) => {
-                    tracing::warn!("Failed to parse {}: {}", entry.url, e);
-                    continue;
-                }
-            };
-
-            // JS rendering: consult decision engine and render if needed
-            if cfg.enable_js_rendering {
-                let js_decision_engine = crate::JsRenderDecisionEngine::new();
-                let decision =
-                    js_decision_engine.should_render_js(entry.url.as_ref(), Some(&body_text));
-                match decision {
-                    crate::JsRenderDecision::Render { reason } => {
-                        tracing::info!("JS render decision for {}: {}", entry.url, reason);
-                        if let Some(ref renderer) = cfg.js_renderer {
-                            if renderer.is_available() {
-                                match tokio::time::timeout(
-                                    Duration::from_secs(30),
-                                    renderer.render(entry.url.as_str()),
-                                )
-                                .await
-                                {
-                                    Ok(Ok(rendered_html)) => {
-                                        body_text = rendered_html;
-                                        match crate::HtmlParser::parse(&body_text, &entry.url) {
-                                            Ok(re_parsed) => parsed = re_parsed,
-                                            Err(e) => {
-                                                tracing::warn!(
-                                                    "Failed to re-parse rendered {}: {}",
-                                                    entry.url,
-                                                    e
-                                                );
-                                            }
-                                        }
-                                    }
-                                    Ok(Err(e)) => {
-                                        tracing::warn!("JS render failed for {}: {}", entry.url, e);
-                                    }
-                                    Err(_) => {
-                                        tracing::warn!("JS render timed out for {}", entry.url);
-                                    }
+                    // Discover sitemaps for this domain (first visit only)
+                    if !domain.is_empty()
+                        && !known_sitemap_urls.contains(&format!("{scheme}://{domain}"))
+                    {
+                        known_sitemap_urls.insert(format!("{scheme}://{domain}"));
+                        let sitemap_urls = robots_cache.sitemaps(scheme, domain).await;
+                        if !sitemap_urls.is_empty() {
+                            let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
+                            let q = queue.lock().await;
+                            for sm_entry in &entries {
+                                if let Ok(url) = Url::parse(&sm_entry.url) {
+                                    q.push(url, 0, Priority::HIGHEST);
                                 }
-                            } else {
-                                tracing::warn!(
-                                    "JS renderer not available, using static HTML: {}",
-                                    entry.url
-                                );
                             }
                         }
                     }
-                    crate::JsRenderDecision::Skip { reason } => {
-                        tracing::debug!("JS skip for {}: {}", entry.url, reason);
-                    }
-                }
-            }
-
-            // Run analyzers
-            let headers_vec: Vec<(String, String)> = result.headers.clone();
-            let empty_chain: Vec<RedirectHop> = vec![];
-            let robots_ref = if robots_raw.is_empty() {
-                None
-            } else {
-                Some(robots_raw.as_str())
-            };
-            let ctx = crate::analyzers::AnalysisContext {
-                page: &parsed,
-                body: Some(&body_text),
-                status_code: Some(result.status_code),
-                headers: &headers_vec,
-                response_time: Some(fetch_time),
-                redirect_chain: &empty_chain,
-                robots_txt: robots_ref,
-            };
-            let analysis_start = std::time::Instant::now();
-            let findings = analyzer_registry.analyze(&ctx, &cfg.crawl_config);
-            let analysis_time = analysis_start.elapsed();
-
-            issues_found += findings.len();
-
-            // Store page
-            let page_id = uuid::Uuid::new_v4().to_string();
-            let mut page_data = PageData {
-                id: page_id.clone(),
-                url: entry.url.clone(),
-                final_url: result.final_url.clone(),
-                status_code: result.status_code,
-                title: parsed.meta.title.clone(),
-                description: parsed.meta.description.clone(),
-                canonical_url: parsed.meta.canonical.clone(),
-                word_count: Some(parsed.word_count),
-                load_time_ms: Some(fetch_time.as_millis() as u64),
-                body_size: Some(result.body.len()),
-                fetched_at: Utc::now(),
-                links: parsed
-                    .links
-                    .iter()
-                    .filter_map(|l| Url::parse(&l.href).ok())
-                    .collect(),
-                tenant_id: cfg.tenant_id.clone(),
-                etag: result.etag.clone(),
-                last_modified: result.last_modified.clone(),
-                cwv_lcp: None,
-                cwv_cls: None,
-                cwv_inp: None,
-            };
-
-            // Measure Core Web Vitals if JS rendering is enabled
-            if cfg.enable_js_rendering {
-                let measurer = crate::web_vitals::WebVitalsMeasurer::new();
-                match measurer.measure(entry.url.as_ref()).await {
-                    Ok(vitals) => {
-                        page_data.cwv_lcp = vitals.lcp;
-                        page_data.cwv_cls = vitals.cls;
-                        page_data.cwv_inp = vitals.inp;
-                        tracing::debug!(
-                            url = %entry.url,
-                            lcp = ?vitals.lcp,
-                            cls = ?vitals.cls,
-                            inp = ?vitals.inp,
-                            "CWV measured"
-                        );
-                    }
-                    Err(e) => {
-                        tracing::debug!("CWV measurement skipped for {}: {}", entry.url, e);
-                    }
-                }
-            }
-
-            // Encrypt sensitive fields if encryption is enabled
-            if let Some(ref encryption) = cfg.encryption {
-                if encryption.is_enabled() {
-                    if let Some(title) = page_data.title.take() {
-                        if let Ok(encrypted) = encryption.encrypt(title.as_bytes()) {
-                            page_data.title = Some(format!(
-                                "enc:{}",
-                                encrypted
-                                    .iter()
-                                    .map(|b| format!("{b:02x}"))
-                                    .collect::<String>()
-                            ));
-                        } else {
-                            page_data.title = Some(title);
-                        }
-                    }
-                    if let Some(desc) = page_data.description.take() {
-                        if let Ok(encrypted) = encryption.encrypt(desc.as_bytes()) {
-                            page_data.description = Some(format!(
-                                "enc:{}",
-                                encrypted
-                                    .iter()
-                                    .map(|b| format!("{b:02x}"))
-                                    .collect::<String>()
-                            ));
-                        } else {
-                            page_data.description = Some(desc);
-                        }
-                    }
-                }
-            }
-
-            if let Err(e) = self.storage.insert_page(&crawl_id, &page_data) {
-                tracing::warn!("Failed to store page {}: {}", entry.url, e);
-            } else {
-                pages_stored += 1;
-            }
-
-            // Store findings
-            for finding in &findings {
-                let issue = Issue {
-                    id: uuid::Uuid::new_v4().to_string(),
-                    page_id: page_data.id.clone(),
-                    category: finding.category.clone(),
-                    severity: finding.severity.clone(),
-                    code: finding.code.clone(),
-                    title: finding.title.clone(),
-                    description: finding.description.clone(),
-                    element: None,
-                    recommendation: finding.recommendation.clone(),
-                    tenant_id: cfg.tenant_id.clone(),
-                };
-                if let Err(e) = self.storage.insert_issue(&issue) {
-                    tracing::warn!("Failed to store issue: {}", e);
-                }
-            }
-
-            // Record metrics
-            metrics.record_page_success(
-                result.body.len() as u64,
-                fetch_time.as_micros() as u64,
-                analysis_time.as_micros() as u64,
-                0, // storage_time not tracked here
-                findings.len() as u64,
-            );
-            resource_monitor.record_page();
-
-            // Invoke callback
-            if let Some(ref cb) = on_page {
-                cb(entry.url.as_ref(), &page_id, findings.len());
-            }
-
-            // Extract and queue new links
-            for link in &parsed.links {
-                let link_url = match Url::parse(&link.href) {
-                    Ok(u) => u,
-                    Err(_) => continue,
-                };
-                if visited.contains(&link_url.to_string()) {
-                    continue;
-                }
-                let is_internal = link_url.host_str() == Some(&seed_domain);
-
-                // Enforce domain filtering
-                if !is_internal && !cfg.allow_external {
-                    skipped_external += 1;
-                    continue;
-                }
-
-                if !cfg.include_patterns.is_empty()
-                    && !cfg.include_patterns.iter().any(|p| link.href.contains(p))
-                {
-                    continue;
-                }
-                if cfg.exclude_patterns.iter().any(|p| link.href.contains(p)) {
-                    continue;
-                }
-
-                let priority = if is_internal {
-                    Priority::NORMAL
                 } else {
-                    Priority::LOW
-                };
+                    robots_raw = String::new();
+                }
 
-                // Enforce depth budget
-                if let Some(max_depth) = cfg.crawl_config.max_depth {
-                    if entry.depth + 1 > max_depth {
+                // Rate limit
+                let _ = rate_limiter
+                    .acquire(entry.url.host_str().unwrap_or(""))
+                    .await;
+
+                // Circuit breaker check
+                let domain = entry.url.host_str().unwrap_or("");
+                let breaker = circuit_breaker_registry.get_or_create(domain);
+                if !breaker.is_allowed() {
+                    tracing::debug!("Circuit breaker open for domain: {}", domain);
+                    metrics.record_page_skipped_circuit_breaker();
+                    continue;
+                }
+
+                // Acquire concurrency permit via semaphore (owned, no lifetime issues)
+                let permit = match fetch_semaphore.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => {
+                        tracing::warn!("Semaphore closed");
                         continue;
                     }
-                }
+                };
 
-                let q = queue.lock().await;
-                q.push(link_url, entry.depth + 1, priority);
+                // Spawn fetch task
+                let client = http_client.clone();
+                let storage = self.storage.clone();
+                let crawl_id_clone = crawl_id.clone();
+                let incremental = cfg.incremental;
+                let force = cfg.force;
+
+                let handle = tokio::spawn(async move {
+                    let result = if incremental && !force {
+                        let previous = storage
+                            .get_page_conditional(&crawl_id_clone, entry.url.as_str())
+                            .ok()
+                            .flatten();
+                        let cross_previous = storage
+                            .get_latest_conditional(entry.url.as_str())
+                            .ok()
+                            .flatten();
+                        let (existing_etag, existing_lm) =
+                            if let Some((_, ref etag, ref lm)) = previous {
+                                (etag.as_deref(), lm.as_deref())
+                            } else if let Some((ref etag, ref lm)) = cross_previous {
+                                (etag.as_deref(), lm.as_deref())
+                            } else {
+                                (None, None)
+                            };
+                        match client
+                            .fetch_conditional(&entry.url, existing_etag, existing_lm)
+                            .await
+                        {
+                            Ok(r) if r.status_code == 304 => {
+                                Err(crate::CrawlError::Storage("304_not_modified".to_string()))
+                            }
+                            Ok(r) => Ok(r),
+                            Err(e) => Err(e),
+                        }
+                    } else {
+                        client.fetch(&entry.url).await
+                    };
+                    drop(permit); // Release backpressure permit
+                    Some(FetchResult {
+                        entry,
+                        result,
+                        robots_raw,
+                    })
+                });
+                in_flight.push(handle);
+            }
+
+            // If no in-flight tasks and queue is empty, we're done
+            if in_flight.is_empty() {
+                break;
+            }
+
+            // Wait for next completed fetch
+            if let Some(Ok(Some(processed))) = in_flight.next().await {
+                Self::process_result(
+                    &processed,
+                    &pages_crawled,
+                    &pages_stored,
+                    &issues_found,
+                    &skipped_external,
+                    &skipped_robots,
+                    &skipped_duplicate,
+                    &pages_unchanged,
+                    &pages_modified,
+                    &pages_new,
+                    &visited,
+                    &content_hashes_string,
+                    &content_hashes_u64,
+                    use_deterministic_hash,
+                    &analyzer_registry,
+                    cfg,
+                    &self.storage,
+                    &crawl_id,
+                    &seed_domain,
+                    &on_page,
+                    &metrics,
+                    &resource_monitor,
+                    &queue,
+                )
+                .await;
             }
         }
 
+        // Drain remaining in-flight fetches
+        while let Some(Ok(Some(processed))) = in_flight.next().await {
+            Self::process_result(
+                &processed,
+                &pages_crawled,
+                &pages_stored,
+                &issues_found,
+                &skipped_external,
+                &skipped_robots,
+                &skipped_duplicate,
+                &pages_unchanged,
+                &pages_modified,
+                &pages_new,
+                &visited,
+                &content_hashes_string,
+                &content_hashes_u64,
+                use_deterministic_hash,
+                &analyzer_registry,
+                cfg,
+                &self.storage,
+                &crawl_id,
+                &seed_domain,
+                &on_page,
+                &metrics,
+                &resource_monitor,
+                &queue,
+            )
+            .await;
+        }
+
         // Finish crawl in storage
+        let final_pages_crawled = pages_crawled.load(Ordering::Relaxed);
+        let final_issues_found = issues_found.load(Ordering::Relaxed);
         if let Err(e) = self
             .storage
-            .finish_crawl(&crawl_id, pages_crawled, issues_found)
+            .finish_crawl(&crawl_id, final_pages_crawled, final_issues_found)
         {
             tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
         }
@@ -838,34 +614,316 @@ impl CrawlEngine {
         let elapsed = crawl_start.elapsed();
         let snapshot = metrics.snapshot();
 
+        let final_pages_crawled = pages_crawled.load(Ordering::Relaxed);
+        let final_pages_stored = pages_stored.load(Ordering::Relaxed);
+        let final_issues_found = issues_found.load(Ordering::Relaxed);
+        let final_skipped_external = skipped_external.load(Ordering::Relaxed);
+        let final_skipped_robots = skipped_robots.load(Ordering::Relaxed);
+        let final_skipped_duplicate = skipped_duplicate.load(Ordering::Relaxed);
+        let final_pages_unchanged = pages_unchanged.load(Ordering::Relaxed);
+        let final_pages_modified = pages_modified.load(Ordering::Relaxed);
+        let final_pages_new = pages_new.load(Ordering::Relaxed);
+
         tracing::info!(
             "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
-            pages_crawled,
-            pages_stored,
-            issues_found,
-            skipped_external,
-            skipped_robots,
-            skipped_duplicate,
-            pages_unchanged,
-            pages_modified,
-            pages_new,
+            final_pages_crawled,
+            final_pages_stored,
+            final_issues_found,
+            final_skipped_external,
+            final_skipped_robots,
+            final_skipped_duplicate,
+            final_pages_unchanged,
+            final_pages_modified,
+            final_pages_new,
         );
 
         Ok(CrawlOutput {
             crawl_id,
-            pages_crawled,
-            pages_stored,
-            issues_found,
-            skipped_external,
-            skipped_robots,
-            skipped_duplicate,
-            pages_unchanged,
-            pages_modified,
-            pages_new,
+            pages_crawled: final_pages_crawled,
+            pages_stored: final_pages_stored,
+            issues_found: final_issues_found,
+            skipped_external: final_skipped_external,
+            skipped_robots: final_skipped_robots,
+            skipped_duplicate: final_skipped_duplicate,
+            pages_unchanged: final_pages_unchanged,
+            pages_modified: final_pages_modified,
+            pages_new: final_pages_new,
             seed_domain,
             metrics: snapshot,
             elapsed,
         })
+    }
+
+    /// Process a single fetch result: dedup, parse, analyze, store, extract links.
+    #[allow(clippy::too_many_arguments)]
+    async fn process_result(
+        processed: &FetchResult,
+        pages_crawled: &AtomicUsize,
+        pages_stored: &AtomicUsize,
+        issues_found: &AtomicUsize,
+        skipped_external: &AtomicUsize,
+        _skipped_robots: &AtomicUsize,
+        skipped_duplicate: &AtomicUsize,
+        pages_unchanged: &AtomicUsize,
+        _pages_modified: &AtomicUsize,
+        _pages_new: &AtomicUsize,
+        visited: &Arc<DashSet<String>>,
+        content_hashes_string: &Arc<DashSet<String>>,
+        content_hashes_u64: &Arc<DashSet<u64>>,
+        use_deterministic_hash: bool,
+        analyzer_registry: &AnalyzerRegistry,
+        cfg: &CrawlEngineConfig,
+        storage: &Arc<Storage>,
+        crawl_id: &str,
+        seed_domain: &str,
+        on_page: &Option<OnPageCrawled>,
+        metrics: &Metrics,
+        resource_monitor: &ResourceMonitor,
+        queue: &Arc<Mutex<UrlQueue>>,
+    ) {
+        let entry = &processed.entry;
+
+        if let Err(e) = &processed.result {
+            // Check for 304 Not Modified (encoded as storage error)
+            if e.to_string().contains("304_not_modified") {
+                pages_unchanged.fetch_add(1, Ordering::Relaxed);
+                tracing::debug!("304 Not Modified: {}", entry.url);
+                return;
+            }
+            tracing::warn!("Failed to fetch {}: {}", entry.url, e);
+            metrics.record_page_failure();
+            return;
+        }
+
+        let result = match &processed.result {
+            Ok(r) => r,
+            Err(_) => {
+                // Error already logged and counters updated above
+                return;
+            }
+        };
+
+        // Content-hash deduplication
+        {
+            let is_duplicate = if use_deterministic_hash {
+                let hash = DeterminismController::content_hash(&result.body);
+                !content_hashes_u64.insert(hash)
+            } else {
+                use sha2::{Digest, Sha256};
+                let mut hasher = Sha256::new();
+                hasher.update(result.body.as_bytes());
+                let hash_result = hasher.finalize();
+                let hash: String = hash_result.iter().map(|b| format!("{b:02x}")).collect();
+                !content_hashes_string.insert(hash)
+            };
+            if is_duplicate {
+                tracing::debug!("Skipping duplicate content: {}", entry.url);
+                skipped_duplicate.fetch_add(1, Ordering::Relaxed);
+                return;
+            }
+        }
+
+        pages_crawled.fetch_add(1, Ordering::Relaxed);
+
+        // Parse HTML
+        let mut body_text = result.body.clone();
+        let mut parsed = match crate::HtmlParser::parse(&body_text, &entry.url) {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Failed to parse {}: {}", entry.url, e);
+                return;
+            }
+        };
+
+        // JS rendering
+        if cfg.enable_js_rendering {
+            let js_decision_engine = crate::JsRenderDecisionEngine::new();
+            let decision =
+                js_decision_engine.should_render_js(entry.url.as_ref(), Some(&body_text));
+            if let crate::JsRenderDecision::Render { reason } = decision {
+                tracing::info!("JS render decision for {}: {}", entry.url, reason);
+                if let Some(ref renderer) = cfg.js_renderer {
+                    if renderer.is_available() {
+                        match tokio::time::timeout(
+                            Duration::from_secs(30),
+                            renderer.render(entry.url.as_str()),
+                        )
+                        .await
+                        {
+                            Ok(Ok(rendered_html)) => {
+                                body_text = rendered_html;
+                                if let Ok(re_parsed) = crate::HtmlParser::parse(&body_text, &entry.url) {
+                                    parsed = re_parsed;
+                                }
+                            }
+                            Ok(Err(e)) => {
+                                tracing::warn!("JS render failed for {}: {}", entry.url, e);
+                            }
+                            Err(_) => {
+                                tracing::warn!("JS render timed out for {}", entry.url);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Run analyzers
+        let start = std::time::Instant::now();
+        let headers_vec: Vec<(String, String)> = result.headers.clone();
+        let empty_chain: Vec<RedirectHop> = vec![];
+        let robots_ref = if processed.robots_raw.is_empty() {
+            None
+        } else {
+            Some(processed.robots_raw.as_str())
+        };
+        let ctx = crate::analyzers::AnalysisContext {
+            page: &parsed,
+            body: Some(&body_text),
+            status_code: Some(result.status_code),
+            headers: &headers_vec,
+            response_time: Some(start.elapsed()),
+            redirect_chain: &empty_chain,
+            robots_txt: robots_ref,
+        };
+        let findings = analyzer_registry.analyze(&ctx, &cfg.crawl_config);
+        let analysis_time = start.elapsed();
+
+        issues_found.fetch_add(findings.len(), Ordering::Relaxed);
+
+        // Store page
+        let page_id = uuid::Uuid::new_v4().to_string();
+        let mut page_data = PageData {
+            id: page_id.clone(),
+            url: entry.url.clone(),
+            final_url: result.final_url.clone(),
+            status_code: result.status_code,
+            title: parsed.meta.title.clone(),
+            description: parsed.meta.description.clone(),
+            canonical_url: parsed.meta.canonical.clone(),
+            word_count: Some(parsed.word_count),
+            load_time_ms: None,
+            body_size: Some(result.body.len()),
+            fetched_at: Utc::now(),
+            links: parsed
+                .links
+                .iter()
+                .filter_map(|l| Url::parse(&l.href).ok())
+                .collect(),
+            tenant_id: cfg.tenant_id.clone(),
+            etag: result.etag.clone(),
+            last_modified: result.last_modified.clone(),
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+        };
+
+        // Encrypt sensitive fields
+        if let Some(ref encryption) = cfg.encryption {
+            if encryption.is_enabled() {
+                if let Some(title) = page_data.title.take() {
+                    if let Ok(encrypted) = encryption.encrypt(title.as_bytes()) {
+                        page_data.title = Some(format!(
+                            "enc:{}",
+                            encrypted.iter().map(|b| format!("{b:02x}")).collect::<String>()
+                        ));
+                    } else {
+                        page_data.title = Some(title);
+                    }
+                }
+                if let Some(desc) = page_data.description.take() {
+                    if let Ok(encrypted) = encryption.encrypt(desc.as_bytes()) {
+                        page_data.description = Some(format!(
+                            "enc:{}",
+                            encrypted.iter().map(|b| format!("{b:02x}")).collect::<String>()
+                        ));
+                    } else {
+                        page_data.description = Some(desc);
+                    }
+                }
+            }
+        }
+
+        if let Err(e) = storage.insert_page(crawl_id, &page_data) {
+            tracing::warn!("Failed to store page {}: {}", entry.url, e);
+        } else {
+            pages_stored.fetch_add(1, Ordering::Relaxed);
+        }
+
+        // Store findings
+        for finding in &findings {
+            let issue = Issue {
+                id: uuid::Uuid::new_v4().to_string(),
+                page_id: page_data.id.clone(),
+                category: finding.category.clone(),
+                severity: finding.severity.clone(),
+                code: finding.code.clone(),
+                title: finding.title.clone(),
+                description: finding.description.clone(),
+                element: None,
+                recommendation: finding.recommendation.clone(),
+                tenant_id: cfg.tenant_id.clone(),
+            };
+            if let Err(e) = storage.insert_issue(&issue) {
+                tracing::warn!("Failed to store issue: {}", e);
+            }
+        }
+
+        // Record metrics
+        metrics.record_page_success(
+            result.body.len() as u64,
+            0, // fetch_time tracked by worker
+            analysis_time.as_micros() as u64,
+            0,
+            findings.len() as u64,
+        );
+        resource_monitor.record_page();
+
+        // Invoke callback
+        if let Some(ref cb) = on_page {
+            cb(entry.url.as_ref(), &page_id, findings.len());
+        }
+
+        // Extract and queue new links
+        for link in &parsed.links {
+            let link_url = match Url::parse(&link.href) {
+                Ok(u) => u,
+                Err(_) => continue,
+            };
+            if visited.contains(&link_url.to_string()) {
+                continue;
+            }
+            let is_internal = link_url.host_str() == Some(seed_domain);
+
+            if !is_internal && !cfg.allow_external {
+                skipped_external.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
+
+            if !cfg.include_patterns.is_empty()
+                && !cfg.include_patterns.iter().any(|p| link.href.contains(p))
+            {
+                continue;
+            }
+            if cfg.exclude_patterns.iter().any(|p| link.href.contains(p)) {
+                continue;
+            }
+
+            let priority = if is_internal {
+                Priority::NORMAL
+            } else {
+                Priority::LOW
+            };
+
+            if let Some(max_depth) = cfg.crawl_config.max_depth {
+                if entry.depth + 1 > max_depth {
+                    continue;
+                }
+            }
+
+            let q = queue.lock().await;
+            q.push(link_url, entry.depth + 1, priority);
+        }
     }
 
     /// Build the analyzer registry based on feature flags.

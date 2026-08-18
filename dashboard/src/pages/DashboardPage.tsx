@@ -1,6 +1,3 @@
-import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../hooks/use_auth';
 import { useMetrics } from '../hooks/use_metrics';
 import MetricCard from '../components/ui/Card';
 import LineChart from '../components/charts/LineChart';
@@ -8,15 +5,7 @@ import BarChart from '../components/charts/BarChart';
 import { Loader } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { isAuthenticated } = useAuth();
-  const navigate = useNavigate();
   const { metrics, loading } = useMetrics();
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      navigate('/login');
-    }
-  }, [isAuthenticated, navigate]);
 
   if (loading) {
     return (

@@ -1,0 +1,237 @@
+use axum::extract::{Extension, Path, State};
+use axum::http::StatusCode;
+use axum::Json;
+use chrono::Utc;
+use uuid::Uuid;
+
+use crate::auth;
+use crate::types::*;
+
+pub async fn create_webhook(
+    State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
+    Json(req): Json<CreateWebhookRequest>,
+) -> Result<(StatusCode, Json<WebhookCreatedResponse>), ApiError> {
+    url::Url::parse(&req.url)
+        .map_err(|e| ApiError::BadRequest(format!("Invalid webhook URL: {e}")))?;
+
+    for event in &req.events {
+        if event != "crawl.completed" && event != "crawl.failed" {
+            return Err(ApiError::BadRequest(format!(
+                "Invalid event type: {event}. Must be 'crawl.completed' or 'crawl.failed'"
+            )));
+        }
+    }
+
+    let id = Uuid::new_v4().to_string();
+    let secret = generate_webhook_secret();
+    let tenant_id = extract_tenant(&claims).to_string();
+    let created_at = Utc::now();
+    let url = req.url.clone();
+    let events = req.events.clone();
+
+    let config = WebhookConfig {
+        id: id.clone(),
+        tenant_id: tenant_id.clone(),
+        url: req.url,
+        events: req.events,
+        secret: secret.clone(),
+        created_at,
+    };
+
+    state.webhooks.insert(id.clone(), config);
+    Ok((
+        StatusCode::CREATED,
+        Json(WebhookCreatedResponse {
+            id,
+            tenant_id,
+            url,
+            events,
+            secret,
+            created_at,
+        }),
+    ))
+}
+
+pub async fn list_webhooks(
+    State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
+) -> Json<Vec<WebhookConfig>> {
+    let tenant = extract_tenant(&claims);
+    let admin = is_admin(&claims);
+    Json(
+        state
+            .webhooks
+            .iter()
+            .filter(|entry| admin || entry.value().tenant_id == tenant)
+            .map(|e| e.value().clone())
+            .collect(),
+    )
+}
+
+pub async fn delete_webhook(
+    State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
+    Path(id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    let entry = state
+        .webhooks
+        .get(&id)
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))?;
+
+    if entry.tenant_id != extract_tenant(&claims) && !is_admin(&claims) {
+        return Err(ApiError::NotFound(format!("Webhook {id} not found")));
+    }
+    drop(entry);
+
+    state
+        .webhooks
+        .remove(&id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))
+}
+
+pub fn generate_webhook_secret() -> String {
+    use rand::Rng;
+    let mut rng = rand::thread_rng();
+    let bytes: Vec<u8> = (0..32).map(|_| rng.gen()).collect();
+    bytes.iter().map(|b| format!("{b:02x}")).collect::<String>()
+}
+
+#[allow(clippy::expect_used)]
+pub fn sign_webhook_payload(secret: &str, payload: &[u8]) -> String {
+    use hmac::{Hmac, Mac};
+    use sha2::Sha256;
+
+    type HmacSha256 = Hmac<Sha256>;
+
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .expect("HMAC key creation cannot fail for non-empty keys");
+    mac.update(payload);
+    let result = mac.finalize();
+    hex::encode(result.into_bytes())
+}
+
+pub async fn deliver_webhook(
+    client: &reqwest::Client,
+    webhook: &WebhookConfig,
+    payload: &WebhookPayload,
+) -> Result<(), String> {
+    let body = serde_json::to_vec(payload)
+        .map_err(|e| format!("Failed to serialize webhook payload: {e}"))?;
+    let signature = sign_webhook_payload(&webhook.secret, &body);
+
+    let max_retries = 3;
+    let mut last_error = String::new();
+
+    for attempt in 0..max_retries {
+        if attempt > 0 {
+            let delay_ms = 1000 * 2u64.pow(attempt - 1);
+            tracing::info!(
+                "Retrying webhook to {} in {}ms (attempt {}/{})",
+                webhook.url,
+                delay_ms,
+                attempt + 1,
+                max_retries
+            );
+            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+        }
+
+        tracing::debug!(
+            "Delivering webhook to {} (event={}, attempt={}/{})",
+            webhook.url,
+            payload.event,
+            attempt + 1,
+            max_retries
+        );
+
+        match client
+            .post(&webhook.url)
+            .header("Content-Type", "application/json")
+            .header("X-Webhook-Event", &payload.event)
+            .header("X-Webhook-Signature", format!("sha256={signature}"))
+            .body(body.clone())
+            .timeout(std::time::Duration::from_secs(10))
+            .send()
+            .await
+        {
+            Ok(resp) => {
+                if resp.status().is_success() {
+                    tracing::info!(
+                        "Webhook delivered successfully to {} (status={})",
+                        webhook.url,
+                        resp.status()
+                    );
+                    return Ok(());
+                }
+                let status = resp.status();
+                last_error = format!("HTTP {status}");
+                tracing::warn!(
+                    "Webhook to {} returned non-success status {status} (attempt {}/{})",
+                    webhook.url,
+                    attempt + 1,
+                    max_retries
+                );
+            }
+            Err(e) => {
+                last_error = e.to_string();
+                tracing::warn!(
+                    "Failed to send webhook to {} (attempt {}/{}): {e}",
+                    webhook.url,
+                    attempt + 1,
+                    max_retries
+                );
+            }
+        }
+    }
+
+    tracing::error!(
+        "Webhook delivery to {} failed after {max_retries} attempts: {last_error}",
+        webhook.url
+    );
+    Err(format!(
+        "Webhook delivery failed after {max_retries} attempts: {last_error}"
+    ))
+}
+
+pub fn fire_webhooks(
+    state: &AppState,
+    event: &str,
+    crawl_id: &str,
+    tenant_id: &str,
+    pages_crawled: usize,
+    issues_found: usize,
+) {
+    let payload = WebhookPayload {
+        event: event.to_string(),
+        crawl_id: crawl_id.to_string(),
+        pages_crawled,
+        issues_found,
+        timestamp: Utc::now(),
+    };
+
+    let matching: Vec<WebhookConfig> = state
+        .webhooks
+        .iter()
+        .filter(|entry| entry.value().tenant_id == tenant_id)
+        .filter(|entry| entry.value().events.iter().any(|e| e == event))
+        .map(|entry| entry.value().clone())
+        .collect();
+
+    if matching.is_empty() {
+        return;
+    }
+
+    let client = state.http_client.clone();
+    tokio::spawn(async move {
+        for webhook in matching {
+            let client = client.clone();
+            let payload = payload.clone();
+            tokio::spawn(async move {
+                if let Err(e) = deliver_webhook(&client, &webhook, &payload).await {
+                    tracing::error!("Webhook delivery failed: {e}");
+                }
+            });
+        }
+    });
+}

@@ -49,3 +49,4 @@ parking_lot.workspace = true
 urlencoding = "2.1"
 thiserror.workspace = true
 hex = "0.4"
+sentry = "0.34"

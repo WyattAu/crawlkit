@@ -86,12 +86,13 @@ export default function UsersPage() {
         <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full" aria-label="Users list">
+            <caption className="sr-only">Registered users with roles and management actions</caption>
             <thead>
               <tr className="border-b border-gray-200 dark:border-gray-700">
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Name</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Email</th>
-                <th className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Roles</th>
-                <th className="text-right px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Name</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Email</th>
+                <th scope="col" className="text-left px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Roles</th>
+                <th scope="col" className="text-right px-4 py-3 text-sm font-medium text-gray-500 dark:text-gray-400">Actions</th>
               </tr>
             </thead>
             <tbody>

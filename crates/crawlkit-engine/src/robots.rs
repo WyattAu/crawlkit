@@ -196,11 +196,10 @@ fn parse_robots_txt(content: &str, target_agent: &str) -> (Vec<RobotsRule>, Vec<
                     current_delay = Some(delay);
                 }
             }
-            "sitemap" => {
-                if !value.is_empty() {
-                    sitemap_urls.push(value);
-                }
+            "sitemap" if !value.is_empty() => {
+                sitemap_urls.push(value);
             }
+            "sitemap" => {} // Empty sitemap value, ignore
             _ => {} // Ignore unknown directives
         }
     }

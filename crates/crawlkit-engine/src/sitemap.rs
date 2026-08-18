@@ -124,11 +124,11 @@ fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
             }
             Ok(Event::Eof) => break,
             Ok(_) => continue,
-            Err(_) => return Err(SitemapError::InvalidXml),
+            Err(e) => return Err(SitemapError::InvalidXml(format!("XML parse error: {}", e))),
         }
     }
 
-    let root = root_tag.ok_or(SitemapError::InvalidXml)?;
+    let root = root_tag.ok_or(SitemapError::InvalidXml("no root element found".to_string()))?;
 
     match root.as_str() {
         "urlset" => {
@@ -305,10 +305,16 @@ fn parse_sitemapindex_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
 }
 
 /// Sitemap parsing errors.
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum SitemapError {
-    InvalidXml,
+    #[error("invalid sitemap XML: {0}")]
+    InvalidXml(String),
+
+    #[error("unknown sitemap root element")]
     UnknownRoot,
+
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 #[cfg(test)]

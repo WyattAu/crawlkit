@@ -1,0 +1,22 @@
+FROM rust:1.85-slim AS builder
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+
+RUN cargo build --release --bin crawlkit-api
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --shell /bin/bash crawlkit
+
+COPY --from=builder /app/target/release/crawlkit-api /usr/local/bin/
+
+USER crawlkit
+EXPOSE 4000
+
+ENV RUST_LOG=info
+ENTRYPOINT ["crawlkit-api"]

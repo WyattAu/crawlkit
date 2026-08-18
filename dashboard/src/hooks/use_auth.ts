@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { apiClient } from '../services/api_client';
 
 interface User {
   id: string;
@@ -15,27 +16,21 @@ interface AuthState {
   login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   setToken: (token: string) => void;
+  refreshAuth: () => Promise<boolean>;
 }
 
 export const useAuth = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
       user: null,
       isAuthenticated: false,
       login: async (email: string, password: string) => {
         try {
-          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:4000'}/api/v1/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          });
-          if (response.ok) {
-            const data = await response.json();
-            set({ token: data.token, isAuthenticated: true });
-            return true;
-          }
-          return false;
+          const data = await apiClient.login(email, password);
+          apiClient.setToken(data.token);
+          set({ token: data.token, isAuthenticated: true });
+          return true;
         } catch {
           return false;
         }
@@ -44,7 +39,22 @@ export const useAuth = create<AuthState>()(
         set({ token: null, user: null, isAuthenticated: false });
       },
       setToken: (token: string) => {
+        apiClient.setToken(token);
         set({ token, isAuthenticated: true });
+      },
+      refreshAuth: async () => {
+        const { token } = get();
+        if (!token) return false;
+        try {
+          apiClient.setToken(token);
+          const data = await apiClient.refreshToken();
+          apiClient.setToken(data.token);
+          set({ token: data.token, isAuthenticated: true });
+          return true;
+        } catch {
+          set({ token: null, user: null, isAuthenticated: false });
+          return false;
+        }
       },
     }),
     {

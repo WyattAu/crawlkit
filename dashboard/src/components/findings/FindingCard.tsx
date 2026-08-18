@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { AlertTriangle, Info, AlertCircle, Shield, ShieldAlert } from 'lucide-react';
 import type { Finding } from '../../models/types';
 
@@ -9,7 +10,7 @@ const severityConfig: Record<string, { icon: typeof Info; color: string; bg: str
   critical: { icon: ShieldAlert, color: 'text-red-700', bg: 'bg-red-50 dark:bg-red-900/20' },
 };
 
-export default function FindingCard({
+export default memo(function FindingCard({
   category,
   severity,
   title,
@@ -52,4 +53,4 @@ export default function FindingCard({
       </div>
     </div>
   );
-}
+})

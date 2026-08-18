@@ -29,12 +29,18 @@ indicatif.workspace = true
 toml.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-chrono.workspace = true
 url.workspace = true
+chrono.workspace = true
 uuid.workspace = true
-sha2.workspace = true
 async-trait = "0.1"
 tracing-opentelemetry = "0.33"
 opentelemetry = "0.32"
 opentelemetry_sdk = { version = "0.32", features = ["trace"] }
 opentelemetry-stdout = { version = "0.32", features = ["trace"] }
+sentry = "0.34"
+dhat = { workspace = true, optional = true }
+
+[features]
+default = ["full"]
+full = ["crawlkit-engine/full"]
+profiling = ["crawlkit-engine/profiling", "dhat"]

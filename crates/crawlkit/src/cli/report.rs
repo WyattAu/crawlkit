@@ -93,7 +93,10 @@ pub fn run(
 fn build_json_report(
     crawl_id: &str,
     stats: &crawlkit_engine::storage::CrawlStats,
-    backlink_data: &Option<(crawlkit_engine::BacklinkSummary, std::collections::HashMap<String, f64>)>,
+    backlink_data: &Option<(
+        crawlkit_engine::BacklinkSummary,
+        std::collections::HashMap<String, f64>,
+    )>,
 ) -> Result<String> {
     let mut data = serde_json::json!({
         "crawl_id": crawl_id,
@@ -137,7 +140,10 @@ fn build_json_report(
 fn build_markdown_report(
     crawl_id: &str,
     stats: &crawlkit_engine::storage::CrawlStats,
-    backlink_data: &Option<(crawlkit_engine::BacklinkSummary, std::collections::HashMap<String, f64>)>,
+    backlink_data: &Option<(
+        crawlkit_engine::BacklinkSummary,
+        std::collections::HashMap<String, f64>,
+    )>,
 ) -> String {
     let mut md = format!(
         "# Crawl Report\n\n\
@@ -198,10 +204,7 @@ fn build_markdown_report(
     md
 }
 
-fn build_csv_report(
-    crawl_id: &str,
-    stats: &crawlkit_engine::storage::CrawlStats,
-) -> String {
+fn build_csv_report(crawl_id: &str, stats: &crawlkit_engine::storage::CrawlStats) -> String {
     let mut csv = String::from("crawl_id,total_pages,total_issues,status\n");
     csv.push_str(&format!(
         "{},{},{},completed\n",

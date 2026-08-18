@@ -128,7 +128,9 @@ fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
         }
     }
 
-    let root = root_tag.ok_or(SitemapError::InvalidXml("no root element found".to_string()))?;
+    let root = root_tag.ok_or(SitemapError::InvalidXml(
+        "no root element found".to_string(),
+    ))?;
 
     match root.as_str() {
         "urlset" => {

@@ -656,7 +656,8 @@ impl Storage {
 
     /// Insert a batch of issues for performance.
     /// Wraps all inserts in a single SQLite transaction for O(n) vs O(n*fsync).
-    pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {        if issues.is_empty() {
+    pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
+        if issues.is_empty() {
             return Ok(());
         }
         let conn = self.conn.lock();
@@ -1032,6 +1033,22 @@ impl Storage {
         let result = conn.query_row(
             "SELECT id FROM crawls ORDER BY start_time DESC LIMIT 1",
             [],
+            |row| row.get::<_, String>(0),
+        );
+
+        match result {
+            Ok(id) => Ok(Some(id)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(StorageError::Database(e)),
+        }
+    }
+
+    /// Get the most recent crawl other than `exclude_id`.
+    pub fn get_previous_crawl_id(&self, exclude_id: &str) -> Result<Option<String>, StorageError> {
+        let conn = self.conn.lock();
+        let result = conn.query_row(
+            "SELECT id FROM crawls WHERE id != ?1 ORDER BY start_time DESC LIMIT 1",
+            params![exclude_id],
             |row| row.get::<_, String>(0),
         );
 

@@ -1,14 +1,14 @@
 use crate::analyzers::AnalyzerRegistry;
 use crate::encryption::EncryptionManager;
-use crate::http::HttpClient;
+use crate::http::{HttpClient, HttpClientConfig};
 use crate::queue::{Priority, UrlQueue};
 use crate::ratelimit::RateLimiter;
 use crate::robots::RobotsTxtCache;
 use crate::sitemap::SitemapCache;
 use crate::storage::{Issue, PageData, Storage};
 use crate::{
-    CircuitBreakerRegistry, CrawlConfig, DeterminismController,
-    FeatureFlags, Metrics, RedirectHop, ResourceMonitor,
+    CircuitBreakerRegistry, CrawlConfig, DeterminismController, FeatureFlags, Metrics, RedirectHop,
+    ResourceMonitor,
 };
 use chrono::Utc;
 use dashmap::DashSet;
@@ -120,6 +120,10 @@ pub struct CrawlEngineConfig {
     /// Whether to enable incremental crawling (ETag / If-Modified-Since).
     pub incremental: bool,
 
+    /// Allow fetching over plain HTTP. Secure by default (`false`); intended
+    /// for local test servers and trusted intranets.
+    pub allow_http: bool,
+
     /// Whether to force a full re-crawl, ignoring cached ETag/Last-Modified conditions.
     pub force: bool,
 }
@@ -167,6 +171,7 @@ impl Default for CrawlEngineConfig {
             concurrency: None,
             incremental: false,
             force: false,
+            allow_http: false,
         }
     }
 }
@@ -289,9 +294,7 @@ impl ContentHashes {
     /// Insert the body's hash; returns `false` if the content was already seen.
     fn insert(&self, body: &str) -> bool {
         match self {
-            Self::Deterministic(set) => {
-                set.insert(DeterminismController::content_hash(body))
-            }
+            Self::Deterministic(set) => set.insert(DeterminismController::content_hash(body)),
             Self::Sha256(set) => {
                 use sha2::{Digest, Sha256};
                 let digest = Sha256::digest(body.as_bytes());
@@ -313,7 +316,7 @@ struct CrawlRun<'a> {
     content_hashes: ContentHashes,
     analyzer_registry: &'a AnalyzerRegistry,
     cfg: &'a CrawlEngineConfig,
-    storage: &'a Storage,
+    storage: Arc<Storage>,
     crawl_id: String,
     seed_domain: String,
     on_page: Option<OnPageCrawled>,
@@ -326,7 +329,9 @@ impl CrawlRun<'_> {
     /// Route a completed fetch through dedup, analysis, storage, and discovery.
     async fn process(&self, fetched: &FetchedPage) {
         match &fetched.outcome {
-            FetchOutcome::NotModified { page_id } => self.record_not_modified(page_id),
+            FetchOutcome::NotModified { page_id } => {
+                self.record_not_modified(page_id).await;
+            }
             FetchOutcome::Failed(err) => self.record_failure(&fetched.entry.url, err),
             FetchOutcome::Fetched { result, freshness } => {
                 self.process_fetched(fetched, result, *freshness).await;
@@ -335,11 +340,22 @@ impl CrawlRun<'_> {
     }
 
     /// Handle a 304: count it and refresh the stored page's access timestamp.
-    fn record_not_modified(&self, page_id: &Option<String>) {
+    async fn record_not_modified(&self, page_id: &Option<String>) {
         bump(&self.counters.pages_unchanged);
-        if let Some(id) = page_id {
-            if let Err(e) = self.storage.update_page_fetched_at(id, Utc::now()) {
-                tracing::warn!(error = %e, page_id = %id, "Failed to refresh fetched_at");
+        let Some(id) = page_id.clone() else {
+            return;
+        };
+        let storage = Arc::clone(&self.storage);
+        let result =
+            tokio::task::spawn_blocking(move || storage.update_page_fetched_at(&id, Utc::now()))
+                .await;
+        match result {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                tracing::warn!(error = %e, page_id = ?page_id, "Failed to refresh fetched_at")
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, page_id = ?page_id, "Blocking task join failed")
             }
         }
     }
@@ -386,9 +402,8 @@ impl CrawlRun<'_> {
         bump_by(&self.counters.issues_found, findings.len());
 
         let page_id = uuid::Uuid::new_v4().to_string();
-        let page_data =
-            self.build_page_data(&page_id, &fetched.entry.url, result, &parsed);
-        self.store(&page_data, &findings);
+        let page_data = self.build_page_data(&page_id, &fetched.entry.url, result, &parsed);
+        self.store(&page_data, &findings).await;
 
         self.metrics.record_page_success(
             result.body.len() as u64,
@@ -416,10 +431,8 @@ impl CrawlRun<'_> {
         if !self.cfg.enable_js_rendering {
             return;
         }
-        let decision = crate::JsRenderDecisionEngine::new().should_render_js(
-            url.as_ref(),
-            Some(body_text),
-        );
+        let decision =
+            crate::JsRenderDecisionEngine::new().should_render_js(url.as_ref(), Some(body_text));
         let crate::JsRenderDecision::Render { reason } = decision else {
             return;
         };
@@ -517,13 +530,9 @@ impl CrawlRun<'_> {
         page_data
     }
 
-    /// Persist the page and its findings (batched in one transaction).
-    fn store(&self, page_data: &PageData, findings: &[crate::Finding]) {
-        match self.storage.insert_page(&self.crawl_id, page_data) {
-            Ok(()) => bump(&self.counters.pages_stored),
-            Err(e) => tracing::warn!("Failed to store page {}: {}", page_data.url, e),
-        }
-
+    /// Persist the page and its findings (batched in one transaction) on the
+    /// blocking pool so SQLite writes never stall the async runtime.
+    async fn store(&self, page_data: &PageData, findings: &[crate::Finding]) {
         let issues: Vec<Issue> = findings
             .iter()
             .map(|finding| Issue {
@@ -539,8 +548,30 @@ impl CrawlRun<'_> {
                 tenant_id: self.cfg.tenant_id.clone(),
             })
             .collect();
-        if let Err(e) = self.storage.insert_issues(&issues) {
-            tracing::warn!("Failed to store issues: {}", e);
+
+        let storage = Arc::clone(&self.storage);
+        let crawl_id = self.crawl_id.clone();
+        let page = page_data.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            let page_stored = storage
+                .insert_page(&crawl_id, &page)
+                .map(|()| page.url.clone());
+            let issues_stored = storage.insert_issues(&issues);
+            (page_stored, issues_stored)
+        })
+        .await;
+
+        match result {
+            Ok((Ok(_), Ok(()))) => bump(&self.counters.pages_stored),
+            Ok((page_res, issue_res)) => {
+                if let Err(e) = page_res {
+                    tracing::warn!("Failed to store page {}: {}", page_data.url, e);
+                }
+                if let Err(e) = issue_res {
+                    tracing::warn!("Failed to store issues: {}", e);
+                }
+            }
+            Err(e) => tracing::warn!(error = %e, "Blocking store task join failed"),
         }
     }
 
@@ -597,10 +628,7 @@ impl CrawlRun<'_> {
 
 /// Encrypt one field value for storage, hex-encoded and `enc:`-prefixed.
 /// Falls back to the plaintext value if encryption fails.
-fn encrypt_field(
-    encryption: &EncryptionManager,
-    value: Option<String>,
-) -> Option<String> {
+fn encrypt_field(encryption: &EncryptionManager, value: Option<String>) -> Option<String> {
     value.map(|v| {
         encryption
             .encrypt(v.as_bytes())
@@ -634,14 +662,19 @@ async fn execute_fetch(
         };
     }
 
-    let previous = storage
-        .get_page_conditional(&crawl_id, entry.url.as_str())
-        .ok()
-        .flatten();
-    let cross_previous = storage
-        .get_latest_conditional(entry.url.as_str())
-        .ok()
-        .flatten();
+    // Look up cached validators on the blocking pool so worker threads never
+    // stall on SQLite reads.
+    let url_string = entry.url.to_string();
+    let (previous, cross_previous) = tokio::task::spawn_blocking(move || {
+        let previous = storage
+            .get_page_conditional(&crawl_id, &url_string)
+            .ok()
+            .flatten();
+        let cross_previous = storage.get_latest_conditional(&url_string).ok().flatten();
+        (previous, cross_previous)
+    })
+    .await
+    .unwrap_or((None, None));
 
     // Prefer the same-crawl record (it carries the page_id needed for 304
     // updates); fall back to the cross-crawl record for headers only.
@@ -794,7 +827,9 @@ impl CrawlEngine {
 
         // Initialize components
         let concurrency = cfg.concurrency.unwrap_or(cfg.crawl_config.concurrency);
-        let http_client = HttpClient::from_crawl_config(&cfg.crawl_config)?;
+        let mut http_config = HttpClientConfig::from(&cfg.crawl_config);
+        http_config.allow_http = cfg.allow_http;
+        let http_client = HttpClient::new(http_config)?;
         let http_client = Arc::new(http_client);
 
         let robots_cache = Arc::new(RobotsTxtCache::new(http_client.clone(), &cfg.crawl_config));
@@ -826,11 +861,38 @@ impl CrawlEngine {
             q.push(seed_url.clone(), 0, Priority::HIGH);
         }
 
+        // Incremental mode: seed from the previous crawl's page set so pages
+        // that are reachable only through link extraction still get
+        // revalidated. A 304 on the seed skips re-parsing (and therefore
+        // link discovery), which would otherwise strand the rest of the site.
+        if cfg.incremental && !cfg.force {
+            if let Ok(Some(previous_crawl)) = self.storage.get_previous_crawl_id(&crawl_id) {
+                match self.storage.get_page_urls(&previous_crawl) {
+                    Ok(prev_urls) if !prev_urls.is_empty() => {
+                        let count = prev_urls.len();
+                        let q = queue.lock().await;
+                        for url_str in &prev_urls {
+                            if let Ok(url) = Url::parse(url_str) {
+                                q.push(url, 0, Priority::HIGHEST);
+                            }
+                        }
+                        tracing::info!(
+                            "Incremental: seeded {count} URLs from previous crawl {previous_crawl}"
+                        );
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Incremental seed lookup failed")
+                    }
+                }
+            }
+        }
+
         // Discover and queue sitemap URLs for the seed domain
         let mut known_sitemap_urls: HashSet<String> = HashSet::new();
         {
             let sitemap_urls = robots_cache
-                .sitemaps(seed_url.scheme(), seed_url.host_str().unwrap_or(""))
+                .sitemaps(seed_url.scheme(), &authority_of(&seed_url))
                 .await;
             if !sitemap_urls.is_empty() {
                 tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
@@ -857,7 +919,7 @@ impl CrawlEngine {
             },
             analyzer_registry: &analyzer_registry,
             cfg,
-            storage: &self.storage,
+            storage: Arc::clone(&self.storage),
             crawl_id: crawl_id.clone(),
             seed_domain: seed_domain.clone(),
             on_page,
@@ -928,31 +990,32 @@ impl CrawlEngine {
                 }
                 run.visited.insert(entry.url.to_string());
 
-                // Robots.txt check (sequential, fast)
+                // Robots.txt check (sequential, fast). The cache is keyed by
+                // authority (host:port) so origins on non-standard ports get
+                // their own robots.txt instead of the default port's.
                 let robots_raw;
                 if cfg.crawl_config.respect_robots_txt {
-                    let domain = entry.url.host_str().unwrap_or("");
+                    let domain = authority_of(&entry.url);
                     let scheme = entry.url.scheme();
                     if robots_cache
-                        .is_disallowed(scheme, domain, entry.url.path())
+                        .is_disallowed(scheme, &domain, entry.url.path())
                         .await
                     {
                         tracing::debug!("Blocked by robots.txt: {}", entry.url);
                         bump(&run.counters.skipped_robots);
                         continue;
                     }
-                    if let Some(delay_secs) = robots_cache.crawl_delay(scheme, domain).await {
-                        rate_limiter
-                            .set_crawl_delay(domain, Duration::from_secs_f64(delay_secs));
+                    if let Some(delay_secs) = robots_cache.crawl_delay(scheme, &domain).await {
+                        rate_limiter.set_crawl_delay(&domain, Duration::from_secs_f64(delay_secs));
                     }
-                    robots_raw = robots_cache.raw_content(scheme, domain).await;
+                    robots_raw = robots_cache.raw_content(scheme, &domain).await;
 
-                    // Discover sitemaps for this domain (first visit only)
+                    // Discover sitemaps for this origin (first visit only)
                     if !domain.is_empty()
                         && !known_sitemap_urls.contains(&format!("{scheme}://{domain}"))
                     {
                         known_sitemap_urls.insert(format!("{scheme}://{domain}"));
-                        let sitemap_urls = robots_cache.sitemaps(scheme, domain).await;
+                        let sitemap_urls = robots_cache.sitemaps(scheme, &domain).await;
                         if !sitemap_urls.is_empty() {
                             let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
                             let q = queue.lock().await;
@@ -996,9 +1059,15 @@ impl CrawlEngine {
 
                 let handle = tokio::spawn(async move {
                     let fetch_start = std::time::Instant::now();
-                    let outcome =
-                        execute_fetch(client, storage, crawl_id_clone, entry.clone(), incremental, force)
-                            .await;
+                    let outcome = execute_fetch(
+                        client,
+                        storage,
+                        crawl_id_clone,
+                        entry.clone(),
+                        incremental,
+                        force,
+                    )
+                    .await;
                     let fetch_time = fetch_start.elapsed();
                     drop(permit);
                     Some(FetchedPage {
@@ -1029,9 +1098,9 @@ impl CrawlEngine {
 
         // Finish crawl in storage
         let stats = run.counters.snapshot();
-        if let Err(e) = self
-            .storage
-            .finish_crawl(&crawl_id, stats.pages_crawled, stats.issues_found)
+        if let Err(e) =
+            self.storage
+                .finish_crawl(&crawl_id, stats.pages_crawled, stats.issues_found)
         {
             tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
         }
@@ -1122,6 +1191,17 @@ impl CrawlEngine {
 /// Get the current process RSS (Resident Set Size) in bytes.
 ///
 /// Uses `/proc/self/statm` on Linux, returns `Err` on unsupported platforms.
+/// Host plus explicit port when the URL carries a non-default one
+/// (`127.0.0.1:8080`). Used as the robots.txt cache key and fetch origin so
+/// origins on non-standard ports are not conflated with the default port.
+fn authority_of(url: &Url) -> String {
+    let host = url.host_str().unwrap_or_default();
+    match url.port() {
+        Some(port) => format!("{host}:{port}"),
+        None => host.to_string(),
+    }
+}
+
 fn get_process_rss_bytes() -> Result<u64, crate::CrawlError> {
     #[cfg(target_os = "linux")]
     {
@@ -1179,7 +1259,7 @@ mod tests {
         // encrypt_field with an enabled-but-uninitialized manager falls back
         // to plaintext (encrypt fails on missing key). Full crypto roundtrip
         // is covered by encryption.rs tests.
-        use crate::encryption::{EncryptionConfig, EncryptionAlgorithm, KeySource};
+        use crate::encryption::{EncryptionAlgorithm, EncryptionConfig, KeySource};
         let manager = EncryptionManager::new(EncryptionConfig {
             enabled: true,
             key_source: KeySource::EnvVar("TEST_CRAWL_KEY_MISSING".to_string()),
@@ -1195,7 +1275,11 @@ mod tests {
     #[test]
     fn test_freshness_counters_dispatch() {
         // Sanity: enum variants are constructible and distinct via debug output.
-        let variants = [Freshness::New, Freshness::Modified, Freshness::Unconditional];
+        let variants = [
+            Freshness::New,
+            Freshness::Modified,
+            Freshness::Unconditional,
+        ];
         let rendered: Vec<String> = variants.iter().map(|f| format!("{f:?}")).collect();
         assert_eq!(rendered.len(), 3);
         assert_ne!(rendered[0], rendered[1]);

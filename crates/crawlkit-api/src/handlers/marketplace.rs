@@ -5,7 +5,9 @@ use chrono::Utc;
 
 use crate::types::*;
 
-pub async fn list_marketplace_plugins(State(state): State<AppState>) -> Json<Vec<MarketplacePlugin>> {
+pub async fn list_marketplace_plugins(
+    State(state): State<AppState>,
+) -> Json<Vec<MarketplacePlugin>> {
     let plugins = state.marketplace.plugins.read();
     let list: Vec<MarketplacePlugin> = plugins.values().cloned().collect();
     Json(list)

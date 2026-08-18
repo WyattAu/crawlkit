@@ -144,6 +144,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         concurrency: Some(concurrency),
         incremental: params.incremental,
         force: params.force,
+        allow_http: false,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

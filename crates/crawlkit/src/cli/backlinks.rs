@@ -113,10 +113,7 @@ pub async fn run(
     Ok(())
 }
 
-fn build_json(
-    crawl_id: &str,
-    summary: &crawlkit_engine::BacklinkSummary,
-) -> Result<String> {
+fn build_json(crawl_id: &str, summary: &crawlkit_engine::BacklinkSummary) -> Result<String> {
     let top_pages: Vec<serde_json::Value> = summary
         .pages
         .iter()
@@ -143,10 +140,7 @@ fn build_json(
     }))?)
 }
 
-fn build_markdown(
-    crawl_id: &str,
-    summary: &crawlkit_engine::BacklinkSummary,
-) -> String {
+fn build_markdown(crawl_id: &str, summary: &crawlkit_engine::BacklinkSummary) -> String {
     let mut md = format!(
         "# Backlink Analysis\n\n\
         - **Crawl ID:** {crawl_id}\n\

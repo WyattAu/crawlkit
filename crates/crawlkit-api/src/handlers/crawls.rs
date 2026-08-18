@@ -247,7 +247,11 @@ pub async fn get_crawl_backlinks(
     }))
 }
 
-pub async fn run_crawl_task(state: AppState, crawl_id: String, config: crawlkit_engine::CrawlConfig) {
+pub async fn run_crawl_task(
+    state: AppState,
+    crawl_id: String,
+    config: crawlkit_engine::CrawlConfig,
+) {
     use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 
     let engine_config = CrawlEngineConfig {

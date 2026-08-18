@@ -13,15 +13,15 @@ mod oidc;
 mod router;
 mod types;
 
-use std::net::SocketAddr;
-use std::sync::Arc;
 use chrono::Utc;
 use dashmap::DashMap;
+use std::net::SocketAddr;
+use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 
 use auth::AuthManager;
-use types::{ApiKey, AppState, Metrics, MarketplaceState};
 use handlers::schedules::run_scheduler;
+use types::{ApiKey, AppState, MarketplaceState, Metrics};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -142,8 +142,8 @@ fn init_tracing() {
     );
 
     if use_otel {
-        use tracing_opentelemetry::OpenTelemetryLayer;
         use opentelemetry::trace::TracerProvider;
+        use tracing_opentelemetry::OpenTelemetryLayer;
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
             .with_simple_exporter(opentelemetry_stdout::SpanExporter::default())
             .build();

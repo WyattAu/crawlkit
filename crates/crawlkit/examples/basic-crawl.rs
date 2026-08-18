@@ -83,6 +83,7 @@ async fn main() -> Result<()> {
         pool_max_idle: 64,
         tcp_keepalive: Some(Duration::from_secs(30)),
         pool_idle_timeout: Duration::from_secs(90),
+        allow_http: false,
         connect_timeout: Duration::from_secs(10),
     };
     let client = HttpClient::new(http_config)?;

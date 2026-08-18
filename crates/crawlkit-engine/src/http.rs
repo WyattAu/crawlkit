@@ -211,6 +211,9 @@ pub struct HttpClientConfig {
     pub pool_idle_timeout: Duration,
     /// Timeout for establishing a new TCP connection.
     pub connect_timeout: Duration,
+    /// Allow plain-HTTP fetches. Secure by default (`false`); enabling is
+    /// intended for local test servers and trusted intranets.
+    pub allow_http: bool,
 }
 
 impl From<&CrawlConfig> for HttpClientConfig {
@@ -227,6 +230,7 @@ impl From<&CrawlConfig> for HttpClientConfig {
             tcp_keepalive: Some(Duration::from_secs(60)),
             pool_idle_timeout: Duration::from_secs(90),
             connect_timeout: Duration::from_secs(10),
+            allow_http: false,
         }
     }
 }
@@ -274,7 +278,7 @@ impl HttpClient {
             .timeout(config.timeout)
             .redirect(reqwest::redirect::Policy::limited(config.max_redirects))
             .user_agent(config.user_agent.next())
-            .https_only(true)
+            .https_only(!config.allow_http)
             .pool_max_idle_per_host(config.pool_max_idle_per_host)
             .pool_idle_timeout(config.pool_idle_timeout)
             .connect_timeout(config.connect_timeout);

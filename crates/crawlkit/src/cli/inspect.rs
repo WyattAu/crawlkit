@@ -42,6 +42,7 @@ pub async fn run(
         pool_max_idle: 64,
         tcp_keepalive: Some(std::time::Duration::from_secs(30)),
         pool_idle_timeout: std::time::Duration::from_secs(90),
+        allow_http: false,
         connect_timeout: std::time::Duration::from_secs(10),
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;

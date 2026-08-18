@@ -310,7 +310,9 @@ impl UrlQueue {
 
     /// Checks if a URL is within the configured scope.
     fn is_in_scope(&self, url: &Url) -> bool {
-        let domain = match url.domain() {
+        // `Url::domain()` is None for IP-literal hosts; fall back to the
+        // host string so intranet crawls by IP address stay in scope.
+        let domain = match url.domain().or_else(|| url.host_str()) {
             Some(d) => d,
             None => return false,
         };

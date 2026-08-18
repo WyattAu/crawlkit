@@ -200,7 +200,7 @@ fn parse_robots_txt(content: &str, target_agent: &str) -> (Vec<RobotsRule>, Vec<
                 sitemap_urls.push(value);
             }
             "sitemap" => {} // Empty sitemap value, ignore
-            _ => {} // Ignore unknown directives
+            _ => {}         // Ignore unknown directives
         }
     }
 

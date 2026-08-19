@@ -139,6 +139,7 @@ jobs:
           cat checksums.txt
 
       - name: Sign checksums (single signature covers all artifacts + SBOM)
+        if: env.GPG_PRIVATE_KEY != ''
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}

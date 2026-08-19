@@ -294,10 +294,23 @@ pub async fn run_scheduler(state: AppState) {
             state.metrics.crawls_total.inc();
             state.metrics.active_crawls.inc();
 
+            // Best-effort backpressure: at capacity, skip this cycle — the
+            // schedule fires again at the next interval.
+            let permit = state.crawl_permits.clone().try_acquire_owned().ok();
+            if permit.is_none() {
+                state.metrics.active_crawls.dec();
+                if let Some(mut entry) = state.crawl_results.get_mut(&crawl_id) {
+                    entry.status = "skipped_at_capacity".to_string();
+                    entry.completed_at = Some(Utc::now());
+                }
+                tracing::warn!("Scheduled crawl {crawl_id} skipped: server at crawl capacity");
+                continue;
+            }
+
             let state_clone = state.clone();
             let crawl_id_clone = crawl_id.clone();
             tokio::spawn(async move {
-                super::crawls::run_crawl_task(state_clone, crawl_id_clone, config).await;
+                super::crawls::run_crawl_task(state_clone, crawl_id_clone, config, permit).await;
             });
 
             tracing::info!("Scheduled crawl {crawl_id} started from schedule {schedule_id}");

@@ -86,6 +86,16 @@ pub struct Metrics {
     pub fetch_duration_seconds: Histogram,
     pub analysis_duration_seconds: Histogram,
     pub active_crawls: Gauge,
+    /// Crawls started, labeled by tenant. Tenant ids are admin-controlled
+    /// so label cardinality is bounded by the tenant population.
+    pub crawls_started_by_tenant: Family<TenantLabel, Counter>,
+    /// Pages crawled, labeled by tenant (incremented at crawl completion).
+    pub pages_by_tenant: Family<TenantLabel, Counter>,
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
+pub struct TenantLabel {
+    pub tenant: String,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
@@ -166,6 +176,20 @@ impl Metrics {
             active_crawls.clone(),
         );
 
+        let crawls_started_by_tenant = Family::<TenantLabel, Counter>::default();
+        registry.register(
+            "crawlkit_crawls_started_by_tenant",
+            "Crawls started, labeled by tenant",
+            crawls_started_by_tenant.clone(),
+        );
+
+        let pages_by_tenant = Family::<TenantLabel, Counter>::default();
+        registry.register(
+            "crawlkit_pages_by_tenant",
+            "Pages crawled at crawl completion, labeled by tenant",
+            pages_by_tenant.clone(),
+        );
+
         Self {
             registry: Arc::new(tokio::sync::RwLock::new(registry)),
             crawls_total,
@@ -177,6 +201,8 @@ impl Metrics {
             fetch_duration_seconds,
             analysis_duration_seconds,
             active_crawls,
+            crawls_started_by_tenant,
+            pages_by_tenant,
         }
     }
 }
@@ -219,7 +245,37 @@ pub struct AppState {
     pub login_attempts: Arc<DashMap<String, LoginAttemptRecord>>,
     /// Write-through persistence for users/tenants/API keys (`None` in
     /// tests or when persistence is disabled).
-    pub persistence: Option<Arc<crate::persistence::ApiStatePersistence>>,
+    pub persistence: Option<Arc<dyn crate::persistence::ApiStateStore>>,
+    /// Bounds concurrently running crawl tasks; submissions beyond this
+    /// capacity are rejected with 503 + Retry-After (backpressure).
+    pub crawl_permits: Arc<tokio::sync::Semaphore>,
+    /// `Idempotency-Key` → (crawl_id, created_at) for POST /crawls replay
+    /// protection within the dedupe window.
+    pub idempotency_keys: Arc<DashMap<String, IdempotencyEntry>>,
+}
+
+/// A recorded idempotency-key mapping for crawl submissions.
+#[derive(Debug, Clone)]
+pub struct IdempotencyEntry {
+    pub crawl_id: String,
+    pub created_at: DateTime<Utc>,
+}
+
+/// How long an `Idempotency-Key` remains replayable.
+pub const IDEMPOTENCY_WINDOW: chrono::Duration = chrono::Duration::hours(24);
+
+/// Default maximum concurrently running crawls when
+/// `MAX_CONCURRENT_CRAWLS` is unset.
+pub const DEFAULT_MAX_CONCURRENT_CRAWLS: usize = 4;
+
+/// Read the crawl concurrency cap from the environment.
+#[must_use]
+pub fn crawl_capacity_from_env() -> usize {
+    std::env::var("MAX_CONCURRENT_CRAWLS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(DEFAULT_MAX_CONCURRENT_CRAWLS)
 }
 
 /// Pending OIDC authorization flow state (one-shot, per `state` token).
@@ -628,6 +684,10 @@ pub enum ApiError {
     NotFound(String),
     Forbidden(String),
     RateLimited,
+    /// Server at capacity for stateful work; includes a Retry-After hint.
+    Overloaded {
+        retry_after_secs: u32,
+    },
     Internal(String),
 }
 
@@ -642,12 +702,17 @@ impl ApiError {
             | ApiError::Forbidden(msg)
             | ApiError::Internal(msg) => msg.clone(),
             ApiError::RateLimited => "Rate limit exceeded".to_string(),
+            ApiError::Overloaded { .. } => "Server at crawl capacity".to_string(),
         }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        let retry_after = match &self {
+            ApiError::Overloaded { retry_after_secs } => Some(*retry_after_secs),
+            _ => None,
+        };
         let (status, message) = match &self {
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
@@ -656,6 +721,10 @@ impl IntoResponse for ApiError {
             ApiError::RateLimited => (
                 StatusCode::TOO_MANY_REQUESTS,
                 "Rate limit exceeded".to_string(),
+            ),
+            ApiError::Overloaded { .. } => (
+                StatusCode::SERVICE_UNAVAILABLE,
+                "Server at crawl capacity; retry after the indicated interval".to_string(),
             ),
             ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
         };
@@ -673,7 +742,13 @@ impl IntoResponse for ApiError {
             "status": status.as_u16(),
         }));
 
-        (status, body).into_response()
+        let mut response = (status, body).into_response();
+        if let Some(secs) = retry_after {
+            if let Ok(value) = axum::http::HeaderValue::from_str(&secs.to_string()) {
+                response.headers_mut().insert("retry-after", value);
+            }
+        }
+        response
     }
 }
 

@@ -20,6 +20,7 @@ use crawlkit_api::auth::{AuthManager, User};
 use crawlkit_api::router::create_router;
 use crawlkit_api::types::{
     ApiKey, AppState, CrawlResult, LoginAttemptRecord, MarketplaceState, Metrics,
+    DEFAULT_MAX_CONCURRENT_CRAWLS,
 };
 
 const ORIGIN: &str = "https://dashboard.example.com";
@@ -45,6 +46,10 @@ fn make_user(id: &str, tenant: &str, role: &str, password: &str) -> User {
 }
 
 fn make_state(dir: &std::path::Path) -> AppState {
+    make_state_with_capacity(dir, DEFAULT_MAX_CONCURRENT_CRAWLS)
+}
+
+fn make_state_with_capacity(dir: &std::path::Path, crawl_capacity: usize) -> AppState {
     let storage = crawlkit_engine::storage::Storage::new(&dir.join("test.db")).unwrap();
     AppState {
         storage: Arc::new(storage),
@@ -64,6 +69,8 @@ fn make_state(dir: &std::path::Path) -> AppState {
         sessions: Arc::new(DashMap::new()),
         login_attempts: Arc::new(DashMap::<String, LoginAttemptRecord>::new()),
         persistence: None,
+        crawl_permits: Arc::new(tokio::sync::Semaphore::new(crawl_capacity)),
+        idempotency_keys: Arc::new(DashMap::new()),
     }
 }
 
@@ -658,4 +665,108 @@ async fn docs_public_false_removes_openapi_routes() {
         let _guard = DOCS_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         std::env::remove_var("DOCS_PUBLIC");
     }
+}
+
+// ---------------------------------------------------------------------------
+// Crawl backpressure + idempotency
+// ---------------------------------------------------------------------------
+
+fn crawl_body() -> Value {
+    serde_json::json!({
+        "start_url": "https://example.com",
+        "max_pages": 10,
+        "request_delay_ms": 10,
+        "concurrency": 2
+    })
+}
+
+#[tokio::test]
+async fn crawl_submission_at_capacity_returns_503_with_retry_after() {
+    let dir = tempfile::tempdir().unwrap();
+    // Zero crawl capacity: every submission must be rejected.
+    let state = make_state_with_capacity(dir.path(), 1);
+    let _hold = state.crawl_permits.clone().acquire_owned().await.unwrap();
+    state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "editor", "password123!X"));
+    let api_key = "ck_cap".to_string();
+    state.api_keys.insert(
+        api_key.clone(),
+        ApiKey {
+            key: api_key.clone(),
+            name: "t".to_string(),
+            created_at: chrono::Utc::now(),
+            requests_per_minute: 1000,
+        },
+    );
+    let app = create_router(state.clone(), vec![ORIGIN.to_string()]);
+
+    let token = {
+        let user = state.auth.find_user_by_id("u1").unwrap();
+        state.auth.generate_token(&user).unwrap()
+    };
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/crawls")
+        .header("x-api-key", &api_key)
+        .header("authorization", format!("Bearer {token}"))
+        .header("origin", ORIGIN)
+        .header("content-type", "application/json")
+        .body(Body::from(crawl_body().to_string()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+    let retry_after = response
+        .headers()
+        .get("retry-after")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or_default();
+    assert!(!retry_after.is_empty(), "Retry-After header missing");
+}
+
+#[tokio::test]
+async fn idempotency_key_replays_the_original_crawl() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("u1");
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/crawls")
+        .header("x-api-key", &test.api_key)
+        .header("authorization", format!("Bearer {token}"))
+        .header("origin", ORIGIN)
+        .header("idempotency-key", "key-abc-123")
+        .header("content-type", "application/json")
+        .body(Body::from(crawl_body().to_string()))
+        .unwrap();
+    let (status, body) = test.send(request).await;
+    assert_eq!(status, StatusCode::ACCEPTED, "first submission: {body}");
+    let first_id = body["crawl_id"].as_str().unwrap().to_string();
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/crawls")
+        .header("x-api-key", &test.api_key)
+        .header("authorization", format!("Bearer {token}"))
+        .header("origin", ORIGIN)
+        .header("idempotency-key", "key-abc-123")
+        .header("content-type", "application/json")
+        .body(Body::from(crawl_body().to_string()))
+        .unwrap();
+    let (status, body) = test.send(request).await;
+    assert_eq!(status, StatusCode::OK, "replay should be 200: {body}");
+    assert_eq!(
+        body["crawl_id"].as_str().unwrap(),
+        first_id,
+        "replay must return the original crawl id"
+    );
+    assert_eq!(
+        test.state.crawl_results.len(),
+        1,
+        "replay must not create a second crawl"
+    );
 }

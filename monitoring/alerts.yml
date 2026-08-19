@@ -1,0 +1,58 @@
+# Example Prometheus alert rules for a crawlkit API deployment.
+#
+# Scrape config (authenticate with an API key):
+#   scrape_configs:
+#     - job_name: crawlkit
+#       scheme: https
+#       authorization:
+#         type: Bearer            # or custom X-API-Key via headers config
+#       # metrics_path: /metrics  (default)
+#
+# Adjust thresholds to your SLO budget (see docs/SLO.md).
+
+groups:
+  - name: crawlkit-availability
+    rules:
+      - alert: CrawlkitHighErrorRate
+        expr: |
+          sum(rate(crawlkit_errors_total[5m]))
+            / clamp_min(sum(rate(crawlkit_requests_total[5m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: page
+        annotations:
+          summary: "crawlkit API error ratio above 5% for 10m"
+          runbook: "Check storage health and recent deploys; Sentry for stack traces."
+
+      - alert: CrawlkitLatencyRegression
+        expr: |
+          histogram_quantile(0.99,
+            sum(rate(crawlkit_request_duration_seconds_bucket[15m])) by (le)
+          ) > 0.5
+        for: 30m
+        labels:
+          severity: ticket
+        annotations:
+          summary: "crawlkit API p99 latency above 500ms for 30m"
+
+  - name: crawlkit-crawls
+    rules:
+      - alert: CrawlkitCrawlFailureSpike
+        expr: rate(crawlkit_errors_total[15m]) > 0
+        for: 30m
+        labels:
+          severity: page
+        annotations:
+          summary: "Crawls are failing continuously for 30m"
+          runbook: "Inspect crawl logs; check target reachability and storage."
+
+      - alert: CrawlkitAtCapacity
+        expr: |
+          sum(rate(crawlkit_crawls_started_by_tenant[10m])) = 0
+            and sum(crawlkit_active_crawls) >= 1
+        for: 1h
+        labels:
+          severity: ticket
+        annotations:
+          summary: "No new crawls starting while active crawls are stuck"
+          runbook: "Check for long-running/stuck crawls; consider raising MAX_CONCURRENT_CRAWLS."

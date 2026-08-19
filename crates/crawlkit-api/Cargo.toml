@@ -55,6 +55,8 @@ thiserror.workspace = true
 hex = "0.4"
 sentry = "0.34"
 rusqlite = "0.31"
+async-trait = "0.1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { version = "9", features = ["axum"] }
 

@@ -99,24 +99,39 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // API-plane state persistence (users, tenants, API keys) so a restart
-    // does not lose accounts. Disabled with API_STATE_DB_PATH="".
-    let persistence = match std::env::var("API_STATE_DB_PATH") {
-        Ok(p) if !p.is_empty() => Some(Arc::new(
-            crawlkit_api::persistence::ApiStatePersistence::open(std::path::Path::new(&p))
-                .map_err(|e| anyhow::anyhow!("Failed to open API state DB at {p}: {e}"))?,
-        )),
-        _ => {
-            let default_path = format!("{db_path}.state");
-            Some(Arc::new(
-                crawlkit_api::persistence::ApiStatePersistence::open(std::path::Path::new(
-                    &default_path,
-                ))
-                .map_err(|e| {
-                    anyhow::anyhow!("Failed to open API state DB at {default_path}: {e}")
-                })?,
-            ))
-        }
-    };
+    // does not lose accounts. Postgres via API_STATE_PG_URL; otherwise
+    // SQLite (API_STATE_DB_PATH, default `<db>.state`). Disabled with
+    // API_STATE_DB_PATH="" (and no PG URL).
+    let persistence: Option<Arc<dyn crawlkit_api::persistence::ApiStateStore>> =
+        if let Ok(pg_url) = std::env::var("API_STATE_PG_URL") {
+            if pg_url.is_empty() {
+                None
+            } else {
+                let store = crawlkit_api::persistence::PgStateStore::open(&pg_url)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("Failed to open API state PG store: {e}"))?;
+                tracing::info!("API state persisted to PostgreSQL");
+                Some(Arc::new(store))
+            }
+        } else {
+            match std::env::var("API_STATE_DB_PATH") {
+                Ok(p) if !p.is_empty() => Some(Arc::new(
+                    crawlkit_api::persistence::SqliteStateStore::open(std::path::Path::new(&p))
+                        .map_err(|e| anyhow::anyhow!("Failed to open API state DB at {p}: {e}"))?,
+                )),
+                _ => {
+                    let default_path = format!("{db_path}.state");
+                    Some(Arc::new(
+                        crawlkit_api::persistence::SqliteStateStore::open(std::path::Path::new(
+                            &default_path,
+                        ))
+                        .map_err(|e| {
+                            anyhow::anyhow!("Failed to open API state DB at {default_path}: {e}")
+                        })?,
+                    ))
+                }
+            }
+        };
 
     // Build application state
     let state = AppState {
@@ -137,6 +152,10 @@ async fn main() -> anyhow::Result<()> {
         sessions: Arc::new(DashMap::new()),
         login_attempts: Arc::new(DashMap::new()),
         persistence,
+        crawl_permits: Arc::new(tokio::sync::Semaphore::new(
+            crawlkit_api::types::crawl_capacity_from_env(),
+        )),
+        idempotency_keys: Arc::new(DashMap::new()),
     };
 
     // Restore persisted API-plane state into memory.

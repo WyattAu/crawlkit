@@ -78,3 +78,25 @@ jobs:
           cache-dependency-path: dashboard/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm test -- --run
+
+  build:
+    name: Dashboard Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@60edb5dd545a775178f52524783378188af01c71 # v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: dashboard/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # dist/ is untracked and regenerated per release; this gate ensures
+      # the dashboard always builds cleanly from source.
+      - run: pnpm build

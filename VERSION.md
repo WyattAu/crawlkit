@@ -20,7 +20,7 @@
 | 3 | GUI & UI/UX Evaluation | Complete | 2026-07-26 | Design tokens wired, reduced-motion, unused deps removed |
 | 4 | Documentation Overhaul | Complete | 2026-07-26 | README rewritten, zero emojis, technical precision |
 | 16 | v2.1.0 Release | Complete | 2026-08-18 | Security hardening, WASM ABI conformance, persistent audit |
-| 17 | v3.0.0 Release | Complete | 2026-08-19 | Breaking engine API cleanup; signed release artifacts |
+| 17 | v3.0.0 Release | Complete | 2026-08-19 | Breaking engine API cleanup; plugin trust chain; determinism rails; API backpressure/idempotency; signed release artifacts |
 
 ## Current State
 
@@ -28,7 +28,7 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 736 passing (unit+bins: 614, integration: 81 incl. 19 router + 7 WASM-ABI tests, doc: 43; 13 ignored: 7 PostgreSQL, 5 Redis, 1 Playwright — run with service containers) + 2 postgres-feature tests + 49 client-SDK tests (Go 27, Python 12, Node 10) + 41 dashboard tests
+- **Test Count:** 768 passing (unit+bins: 626, integration: 97 incl. 21 router + 13 WASM-ABI + 8 determinism tests, doc: 45; 14 service-gated ignored — PostgreSQL/Redis suites now run in CI via service containers) + 49 client-SDK tests (Go 27, Python 12, Node 10) + 44 dashboard tests
 - **Analyzer Count:** 31
 - **Clippy Warnings:** 0
 - **Unsafe Code:** Forbidden (workspace-level)

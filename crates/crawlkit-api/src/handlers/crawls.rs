@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::extract::{Extension, Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::Json;
 use chrono::Utc;
 use utoipa::ToSchema;
@@ -33,12 +33,51 @@ use crawlkit_engine::CrawlConfig;
 pub async fn start_crawl(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
+    headers: HeaderMap,
     Json(req): Json<CreateCrawlRequest>,
 ) -> Result<(StatusCode, Json<CrawlResponse>), ApiError> {
     validate_url(&req.start_url)?;
     validate_max_pages(req.max_pages)?;
     validate_concurrency(req.concurrency)?;
     validate_delay(req.request_delay_ms)?;
+
+    // Idempotent replay: a known key within the dedupe window returns the
+    // original crawl instead of starting a duplicate.
+    let idempotency_key = headers
+        .get("idempotency-key")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|k| !k.is_empty() && k.len() <= 256)
+        .map(str::to_string);
+    if let Some(key) = &idempotency_key {
+        if let Some(entry) = state.idempotency_keys.get(key) {
+            if Utc::now() - entry.created_at < IDEMPOTENCY_WINDOW {
+                let crawl_id = entry.crawl_id.clone();
+                drop(entry);
+                tracing::info!(key = %key, %crawl_id, "Idempotent crawl replay");
+                return Ok((
+                    StatusCode::OK,
+                    Json(CrawlResponse {
+                        crawl_id,
+                        status: "running".to_string(),
+                        message: "Idempotent replay of an existing crawl".to_string(),
+                    }),
+                ));
+            }
+            drop(entry);
+            state.idempotency_keys.remove(key);
+        }
+    }
+
+    // Backpressure: bound concurrent crawl tasks; reject with 503 +
+    // Retry-After when at capacity rather than queueing unboundedly.
+    let permit = state
+        .crawl_permits
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| ApiError::Overloaded {
+            retry_after_secs: 30,
+        })?;
 
     let start_url = url::Url::parse(&req.start_url)
         .map_err(|e| ApiError::BadRequest(format!("Invalid URL: {e}")))?;
@@ -78,6 +117,30 @@ pub async fn start_crawl(
 
     state.metrics.crawls_total.inc();
     state.metrics.active_crawls.inc();
+    state
+        .metrics
+        .crawls_started_by_tenant
+        .get_or_create(&TenantLabel {
+            tenant: extract_tenant(&claims).to_string(),
+        })
+        .inc();
+
+    // Reserve the idempotency mapping before acknowledging the request.
+    if let Some(key) = idempotency_key {
+        // Opportunistic cleanup of expired entries (bounded scan; the map
+        // is sized by distinct client keys, not crawl volume).
+        let now = Utc::now();
+        state
+            .idempotency_keys
+            .retain(|_, entry| now - entry.created_at < IDEMPOTENCY_WINDOW);
+        state.idempotency_keys.insert(
+            key,
+            IdempotencyEntry {
+                crawl_id: crawl_id.clone(),
+                created_at: now,
+            },
+        );
+    }
 
     // Spawn crawl task in background
     let crawl_id_clone = crawl_id.clone();
@@ -90,7 +153,7 @@ pub async fn start_crawl(
     };
 
     tokio::spawn(async move {
-        run_crawl_task(state, crawl_id_clone, config).await;
+        run_crawl_task(state, crawl_id_clone, config, Some(permit)).await;
     });
 
     Ok((
@@ -378,6 +441,8 @@ pub async fn run_crawl_task(
     state: AppState,
     crawl_id: String,
     config: crawlkit_engine::CrawlConfig,
+    // Held for the crawl's duration; released on drop (backpressure slot).
+    _permit: Option<tokio::sync::OwnedSemaphorePermit>,
 ) {
     use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 
@@ -426,6 +491,15 @@ pub async fn run_crawl_task(
                 .metrics
                 .issues_total
                 .inc_by(output.issues_found as u64);
+            if !tenant_id.is_empty() {
+                state
+                    .metrics
+                    .pages_by_tenant
+                    .get_or_create(&TenantLabel {
+                        tenant: tenant_id.clone(),
+                    })
+                    .inc_by(output.pages_crawled as u64);
+            }
             state.audit_trail.record_tenant(
                 AuditEventType::CrawlCompleted,
                 "system",

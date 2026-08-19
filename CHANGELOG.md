@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engine: WASM capability enforcement is fail-closed — manifests requesting `network`, `filesystem`, or `env_vars` permissions are rejected at load (the sandbox grants none of them)
 - Audit: persistent tamper-evident audit trail (`AUDIT_LOG_PATH`, JSONL + SHA-256 chain, fsync per event, chain verification on open, head-anchor sidecar detects tail truncation); `AuditTrail::clear` refuses to clear persistent trails; `GET /audit` is admin-only with tenant filtering for non-admins
 - Release: artifacts are GPG-signed via a single `checksums.txt` signature covering all five platform archives and the SBOM
+- Engine: WASM plugin trust chain — ed25519 manifest signing (`wasm_hash`/`signature`/`signed_by`), signature REQUIRED by default against a built-in trust store, fail-closed hash verification before wasmtime compile; `crawlkit plugin keygen/sign/verify` CLI; `allow_unsigned_plugins` escape hatch for local development
 
 ### Fixed
 - API/storage crawl-id dissociation: `CrawlResult::storage_crawl_id` now binds the public crawl id to the engine-owned storage row; stats/findings/backlinks resolve to the row that actually contains pages
@@ -41,6 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engine: `run_with_callback` decomposed — queue prefill (seed + incremental + sitemaps) and finish/report extracted into `prefill_queue`/`finish_and_report`
 
 ### Added
+- Determinism rails: seeded user-agent rotation (per-URL stable hash, `HttpClientConfig::with_seed` wired through `CrawlEngineConfig.seed`); findings and exports canonically ordered — identical input now produces byte-identical reports (regression-tested); `DeterminismController::derive_seed` made pure with an explicit order-sensitive `derive_seed_stream`; robots.txt and sitemap XML fuzz targets (2.5M+ clean runs); `.cargo/mutants.toml` baseline config
+- API backpressure + idempotency: crawl submissions bounded by `MAX_CONCURRENT_CRAWLS` (503 + Retry-After at capacity, scheduler skips gracefully); `Idempotency-Key` on `POST /api/v1/crawls` replays the original crawl within a 24h window
+- API-plane state backends: `ApiStateStore` trait; SQLite default; PostgreSQL via `API_STATE_PG_URL`
+- SLOs: `docs/SLO.md` with per-tenant usage metrics (`crawlkit_crawls_started_by_tenant`, `crawlkit_pages_by_tenant`) and example Prometheus alerts in `monitoring/alerts.yml`
+- CI: `test-services` job runs the previously-ignored PostgreSQL and Redis suites against live service containers; dashboard build gate; dashboard component testing (jsdom + @testing-library) with the first component suite — dashboard tests 3 → 44
 - OpenAPI documentation: 38 paths annotated via utoipa; OpenAPI JSON at `/api/v1/openapi.json` and Swagger UI at `/api/v1/docs` (gated by `DOCS_PUBLIC=false` → 404)
 - Persistent API-plane state: users, tenants, and API keys write-through to SQLite (`API_STATE_DB_PATH`, default `<db>.state`) and are restored on startup — a restart no longer loses accounts. Sessions remain in-memory by design (short-lived JWTs; documented trade-off)
 - Router-level API integration test suite (19 tests: auth gates, CSRF, lockout, tenant isolation, RBAC, session revocation, webhook SSRF validation, metrics auth, OpenAPI)

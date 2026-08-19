@@ -2,8 +2,11 @@ pub mod backlinks;
 pub mod compare;
 pub mod crawl;
 pub mod inspect;
+pub mod plugin;
 pub mod report;
 pub mod util;
+
+pub use plugin::PluginCommands;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -254,6 +257,12 @@ pub enum Commands {
         /// Custom user agent string
         #[arg(long)]
         user_agent: Option<String>,
+    },
+
+    /// Manage WASM plugin signing keys and verify plugin trust chains
+    Plugin {
+        #[command(subcommand)]
+        command: PluginCommands,
     },
 }
 

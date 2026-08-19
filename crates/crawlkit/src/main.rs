@@ -156,6 +156,7 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        Commands::Plugin { command } => cli::plugin::run(command),
     }
 }
 

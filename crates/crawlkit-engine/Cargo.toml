@@ -21,7 +21,7 @@ harness = false
 
 [features]
 default = ["full"]
-full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis"]
+full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek"]
 wasm = []
 postgres = ["sqlx", "tokio"]
 profiling = ["dhat"]
@@ -50,6 +50,7 @@ uuid = { workspace = true, optional = true }
 csv = { workspace = true, optional = true }
 lru = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
+ed25519-dalek = { version = "2", optional = true }
 futures = { version = "0.3", optional = true }
 toml = { workspace = true, optional = true }
 async-trait = { version = "0.1", optional = true }

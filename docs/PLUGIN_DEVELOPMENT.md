@@ -9,11 +9,11 @@ sandboxed WASM environment for security.
 
 ## Prerequisites
 
-- Rust 1.75+ with `wasm32-wasi` target
+- Rust 1.75+ with `wasm32-unknown-unknown` target
 - crawlkit-plugin-sdk crate
 
 ```bash
-rustup target add wasm32-wasi
+rustup target add wasm32-unknown-unknown
 ```
 
 ## Quick Start
@@ -85,10 +85,10 @@ crawlkit_plugin_sdk::export_analyzer!(MyAnalyzer);
 ### 4. Build for WASM
 
 ```bash
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-unknown-unknown --release
 ```
 
-The `.wasm` file will be at `target/wasm32-wasi/release/my_seo_plugin.wasm`.
+The `.wasm` file will be at `target/wasm32-unknown-unknown/release/my_seo_plugin.wasm`.
 
 ### 5. Create plugin manifest
 
@@ -119,7 +119,29 @@ description = "My custom analyzer"
 severity = "warning"
 ```
 
-### 6. Install the plugin
+### 6. Sign the plugin
+
+Crawlkit verifies an ed25519 trust chain before a plugin is compiled —
+unsigned plugins are rejected by default. After building the `.wasm`,
+sign it so it loads (see [Signing and Verifying Plugins](#signing-and-verifying-plugins) for the full walkthrough):
+
+```bash
+crawlkit plugin keygen --out ./keys          # once per author/machine
+crawlkit plugin sign --plugin ./my-seo-plugin --key ./keys/plugin-signing.key
+crawlkit plugin verify --plugin ./my-seo-plugin
+```
+
+Signing adds three fields to the manifest:
+
+```toml
+[plugin]
+# ... fields above ...
+wasm_hash = "9f2c..."   # hex sha256 of the .wasm
+signature = "ab12..."   # hex ed25519 signature over the raw 32-byte sha256 digest
+signed_by = "1f29..."   # key id: first 16 hex chars of the signer's public key
+```
+
+### 7. Install the plugin
 
 ```bash
 # Copy plugin to crawlkit plugin directory
@@ -130,6 +152,49 @@ cp crawlkit-plugin.toml ~/.crawlkit/plugins/my-seo-plugin/
 # Or use the CLI
 crawlkit plugin install ./my-seo-plugin/
 ```
+
+## Signing and Verifying Plugins
+
+Plugins are trusted via a manifest signature chain verified *before* the
+`.wasm` is handed to the WASM compiler:
+
+1. the manifest's `wasm_hash` must match the actual sha256 of the `.wasm`;
+2. `signature` must be a valid ed25519 signature over the raw 32-byte
+   sha256 digest (not over the hex string);
+3. `signed_by` must be the key id of a public key in the engine's built-in
+   trust store (`TRUSTED_PLUGIN_KEYS` in `crates/crawlkit-engine/src/plugin.rs`).
+
+The default policy (`PluginVerification::Required`) rejects any plugin
+missing or failing these checks. Embedders loading untrusted local plugins
+can opt into `PluginVerification::AllowUnsigned`, which logs a warning for
+unsigned plugins — but a *present* hash or signature that fails
+verification is always rejected, under every policy.
+
+### Walkthrough: keygen → build → sign → verify
+
+```bash
+# 1. Generate an ed25519 signing keypair (once).
+#    Creates keys/plugin-signing.key (secret — keep safe) and
+#    keys/plugin-signing.pub (public).
+crawlkit plugin keygen --out ./keys
+
+# 2. Build the plugin for WASM.
+cargo build --target wasm32-unknown-unknown --release
+
+# 3. Sign the plugin directory: hashes the .wasm referenced by the
+#    manifest, signs the digest, and writes wasm_hash / signature /
+#    signed_by into crawlkit-plugin.toml.
+crawlkit plugin sign --plugin ./my-seo-plugin --key ./keys/plugin-signing.key
+
+# 4. Verify the trust chain (same check the loader performs).
+crawlkit plugin verify --plugin ./my-seo-plugin
+```
+
+Note: a plugin signed with your own key loads under the `Required` policy
+only if your public key is added to the engine's trust store — key
+addition and rotation happen via PR and a release. For local development,
+either add your dev key to the trust store or run with an `AllowUnsigned`
+plugin configuration.
 
 ## API Reference
 
@@ -187,6 +252,7 @@ crawlkit plugin test ./my-seo-plugin/ --url https://example.com
 - Memory limited to 64MB
 - CPU limited to 100ms per call
 - All inputs are validated
+- ed25519 manifest signatures verified before compilation (fail-closed by default)
 
 ## Troubleshooting
 

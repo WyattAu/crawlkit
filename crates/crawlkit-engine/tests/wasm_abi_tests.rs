@@ -11,7 +11,16 @@
 
 use std::io::Write;
 
-use crawlkit_engine::plugin::{WasmConfig, WasmPlugin};
+use crawlkit_engine::plugin::{sign_plugin_wasm, PluginVerification, WasmConfig, WasmPlugin};
+
+/// Seed (hex) of the first-party dev key embedded in
+/// `TRUSTED_PLUGIN_KEYS` — test fixture only; production signing secrets
+/// never live in the repo.
+const TRUSTED_SEED_HEX: &str = "92bb3bc94dc375ea2c3111e1636511a8c0b22995437ee0338f4d21cdb9bfdd4d";
+
+/// An unrelated key NOT in the trust store (any 32 bytes form a valid
+/// clamped ed25519 seed). Used to forge signatures.
+const ATTACKER_SEED_HEX: &str = "0000000000000000000000000000000000000000000000000000000000000001";
 
 /// A minimal plugin written in WebAssembly text format.
 ///
@@ -86,8 +95,49 @@ categories = ["test"]
 fn load() -> (tempfile::TempDir, WasmPlugin) {
     let dir = tempfile::tempdir().unwrap();
     write_plugin(dir.path());
-    let plugin = WasmPlugin::load_with_config(dir.path(), &WasmConfig::default()).unwrap();
+    let plugin = WasmPlugin::load_with_config(dir.path(), &unsigned_config()).unwrap();
     (dir, plugin)
+}
+
+/// Config that permits unsigned fixtures (trust chain otherwise required).
+fn unsigned_config() -> WasmConfig {
+    WasmConfig {
+        plugin_verification: PluginVerification::AllowUnsigned,
+        ..WasmConfig::default()
+    }
+}
+
+/// Hex-decode a 64-char seed into 32 bytes.
+fn seed(hex: &str) -> [u8; 32] {
+    (0..32)
+        .map(|i| u8::from_str_radix(&hex[i * 2..i * 2 + 2], 16).unwrap())
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap()
+}
+
+/// Write trust fields into a fixture's manifest (preserving other fields).
+fn write_trust_fields(dir: &std::path::Path, wasm_hash: &str, signature: &str, signed_by: &str) {
+    let path = dir.join("crawlkit-plugin.toml");
+    let manifest = std::fs::read_to_string(&path).unwrap();
+    let mut value: toml::Value = toml::from_str(&manifest).unwrap();
+    let table = value
+        .get_mut("plugin")
+        .and_then(|v| v.as_table_mut())
+        .expect("manifest has a [plugin] table");
+    table.insert(
+        "wasm_hash".into(),
+        toml::Value::String(wasm_hash.to_string()),
+    );
+    table.insert(
+        "signature".into(),
+        toml::Value::String(signature.to_string()),
+    );
+    table.insert(
+        "signed_by".into(),
+        toml::Value::String(signed_by.to_string()),
+    );
+    std::fs::write(&path, toml::to_string(&value).unwrap()).unwrap();
 }
 
 #[test]
@@ -147,7 +197,7 @@ wasm = "empty.wat"
     )
     .unwrap();
 
-    let result = WasmPlugin::load_with_config(dir.path(), &WasmConfig::default());
+    let result = WasmPlugin::load_with_config(dir.path(), &unsigned_config());
     assert!(result.is_err(), "module without exports must not load");
 }
 
@@ -240,7 +290,7 @@ categories = ["seo"]
     )
     .unwrap();
 
-    let mut plugin = WasmPlugin::load_with_config(dir.path(), &WasmConfig::default())
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &unsigned_config())
         .expect("SDK-built plugin must load under the host ABI");
 
     // Long title -> TITLE002 finding.
@@ -309,7 +359,7 @@ categories = ["test"]
 
     let config = WasmConfig {
         max_analysis_timeout_ms: 100,
-        ..WasmConfig::default()
+        ..unsigned_config()
     };
     let mut plugin = WasmPlugin::load_with_config(dir.path(), &config).unwrap();
 
@@ -365,7 +415,7 @@ wasm = "plugin.wasm"
         );
         std::fs::write(dir.path().join("crawlkit-plugin.toml"), manifest).unwrap();
 
-        let result = WasmPlugin::load_with_config(dir.path(), &WasmConfig::default());
+        let result = WasmPlugin::load_with_config(dir.path(), &unsigned_config());
         let err = match result {
             Ok(_) => panic!("capability-requesting manifest must be rejected"),
             Err(e) => e,
@@ -375,4 +425,154 @@ wasm = "plugin.wasm"
             "expected capability rejection, got: {err}"
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Plugin trust chain (ed25519 manifest signing)
+// ---------------------------------------------------------------------------
+
+/// Unsigned plugins must be rejected under the default (Required) policy.
+#[test]
+fn unsigned_plugin_rejected_under_required_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    write_plugin(dir.path());
+
+    let err = match WasmPlugin::load_with_config(dir.path(), &WasmConfig::default()) {
+        Ok(_) => panic!("unsigned plugin must be rejected under Required policy"),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("missing wasm_hash"),
+        "expected missing wasm_hash rejection, got: {err}"
+    );
+}
+
+/// Under AllowUnsigned the same fixture loads and works end-to-end.
+#[test]
+fn unsigned_plugin_loads_and_runs_under_allow_unsigned_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    write_plugin(dir.path());
+
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &unsigned_config()).unwrap();
+    let result = plugin.analyze("<p>x", "https://example.com").unwrap();
+    assert!(result.contains("WAT001"));
+}
+
+/// Happy path: a manifest signed by the embedded first-party key loads
+/// under the strict default policy and runs across the ABI boundary.
+#[test]
+fn signed_plugin_loads_and_runs_under_required_policy() {
+    let dir = tempfile::tempdir().unwrap();
+    write_plugin(dir.path());
+
+    let wasm_bytes = std::fs::read(dir.path().join("plugin.wasm")).unwrap();
+    let (wasm_hash, signature, signed_by) = sign_plugin_wasm(&wasm_bytes, &seed(TRUSTED_SEED_HEX));
+    write_trust_fields(dir.path(), &wasm_hash, &signature, &signed_by);
+
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &WasmConfig::default())
+        .expect("signed plugin with valid trust chain must load under Required policy");
+    let result = plugin.analyze("<p>x", "https://example.com").unwrap();
+    assert!(result.contains("WAT001"));
+    assert_eq!(
+        plugin.metadata().signed_by.as_deref(),
+        Some(signed_by.as_str())
+    );
+}
+
+/// A manifest carrying a valid signature over a DIFFERENT digest (i.e. the
+/// .wasm was swapped/tampered after signing) must be rejected — under
+/// every policy, because a declared hash mismatch is always fail-closed.
+#[test]
+fn tampered_wasm_hash_is_rejected() {
+    for policy in [
+        PluginVerification::Required,
+        PluginVerification::AllowUnsigned,
+    ] {
+        let config = WasmConfig {
+            plugin_verification: policy,
+            ..WasmConfig::default()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        write_plugin(dir.path());
+
+        // Sign bytes that are NOT the plugin.wasm on disk.
+        let (wasm_hash, signature, signed_by) =
+            sign_plugin_wasm(b"(module)", &seed(TRUSTED_SEED_HEX));
+        write_trust_fields(dir.path(), &wasm_hash, &signature, &signed_by);
+
+        let err = match WasmPlugin::load_with_config(dir.path(), &config) {
+            Ok(_) => panic!("tampered wasm must be rejected regardless of policy"),
+            Err(e) => e,
+        };
+        assert!(
+            err.to_string().contains("wasm_hash mismatch"),
+            "expected wasm_hash mismatch rejection, got: {err}"
+        );
+    }
+}
+
+/// Forged signatures must fail closed: an unknown signing key, and a
+/// signature by the wrong key claiming a trusted key id.
+#[test]
+fn forged_signature_is_rejected() {
+    let wasm_bytes = WAT_PLUGIN.as_bytes();
+    let trusted = seed(TRUSTED_SEED_HEX);
+    let attacker = seed(ATTACKER_SEED_HEX);
+    let trusted_key_id = sign_plugin_wasm(wasm_bytes, &trusted).2;
+
+    // Case 1: signed by a key that is not in the trust store.
+    {
+        let dir = tempfile::tempdir().unwrap();
+        write_plugin(dir.path());
+        let (wasm_hash, signature, signed_by) = sign_plugin_wasm(wasm_bytes, &attacker);
+        write_trust_fields(dir.path(), &wasm_hash, &signature, &signed_by);
+
+        let err = match WasmPlugin::load_with_config(dir.path(), &WasmConfig::default()) {
+            Ok(_) => panic!("signature from unknown key must be rejected"),
+            Err(e) => e,
+        };
+        assert!(
+            err.to_string().contains("unknown key id"),
+            "expected unknown key rejection, got: {err}"
+        );
+    }
+
+    // Case 2: claims the trusted key id but the signature is by the
+    // attacker's key (correct hash, wrong signer).
+    {
+        let dir = tempfile::tempdir().unwrap();
+        write_plugin(dir.path());
+        let (wasm_hash, forged_signature, _) = sign_plugin_wasm(wasm_bytes, &attacker);
+        write_trust_fields(dir.path(), &wasm_hash, &forged_signature, &trusted_key_id);
+
+        let err = match WasmPlugin::load_with_config(dir.path(), &WasmConfig::default()) {
+            Ok(_) => panic!("wrong-key signature claiming a trusted id must be rejected"),
+            Err(e) => e,
+        };
+        assert!(
+            err.to_string().contains("bad signature"),
+            "expected bad-signature rejection, got: {err}"
+        );
+    }
+}
+
+/// A present-but-invalid signature is rejected even under AllowUnsigned —
+/// the lax policy only waives ABSENT trust metadata, never bad crypto.
+#[test]
+fn allow_unsigned_still_rejects_bad_crypto() {
+    let dir = tempfile::tempdir().unwrap();
+    write_plugin(dir.path());
+
+    let (wasm_hash, signature, signed_by) =
+        sign_plugin_wasm(WAT_PLUGIN.as_bytes(), &seed(ATTACKER_SEED_HEX));
+    write_trust_fields(dir.path(), &wasm_hash, &signature, &signed_by);
+
+    let err = match WasmPlugin::load_with_config(dir.path(), &unsigned_config()) {
+        Ok(_) => panic!("present-but-forged signature must be rejected under AllowUnsigned"),
+        Err(e) => e,
+    };
+    assert!(
+        err.to_string().contains("unknown key id"),
+        "expected unknown key rejection, got: {err}"
+    );
 }

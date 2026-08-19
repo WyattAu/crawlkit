@@ -39,7 +39,7 @@ This document outlines the infrastructure for the plugin marketplace.
 | CDN | Cloudflare | WASM file distribution |
 | Gateway | Cloudflare Workers | API routing and rate limiting |
 | Scanner | Rust | WASM security scanning |
-| Signing | Rust + Ring | Plugin signature verification |
+| Signing | SHIPPED: Rust + ed25519-dalek | Plugin signature verification via the built-in trust store |
 
 ### Database Schema
 
@@ -137,10 +137,16 @@ GET    /api/v1/plugins/{name}/test/{test_id}  # Get test results
 
 ### Security Features
 
-**Plugin Signing:**
-- Each plugin version signed with Ed25519
-- Signature verified before installation
-- Signature stored in registry
+**Plugin Signing (SHIPPED in v3.0):**
+- Shipped: plugins are signed with ed25519 (`crawlkit plugin keygen/sign/verify`)
+  and verified by the engine against a built-in trust store
+  (`TRUSTED_PLUGIN_KEYS`) *before* the WASM is compiled — fail-closed by
+  default, with an opt-in `AllowUnsigned` policy for local development
+- Each plugin version records `wasm_hash` (sha256), `signature` (ed25519
+  over the raw digest), and `signed_by` (key id) in its manifest
+- Registry-side signature storage is used for marketplace listings
+- Future: KMS-backed key custody and automated key rotation for the
+  release signing service
 
 **Scanning:**
 - WASM binary analyzed for vulnerabilities
@@ -164,7 +170,9 @@ GET    /api/v1/plugins/{name}/test/{test_id}  # Get test results
 - PostgreSQL on AWS RDS
 - Cloudflare for CDN and Gateway
 - AWS Lambda for scanner
-- AWS KMS for signing keys
+- AWS KMS for signing keys (future — current signing uses the shipped
+  built-in ed25519 trust store; KMS custody is planned for the release
+  signing service)
 
 **Monitoring:**
 - Prometheus metrics
@@ -197,7 +205,7 @@ GET    /api/v1/plugins/{name}/test/{test_id}  # Get test results
 - Basic plugin management
 
 ### Phase 2: Security (4 weeks)
-- Plugin signing
+- Plugin signing — SHIPPED in v3.0 (built-in ed25519 trust store)
 - WASM scanning
 - Access control
 

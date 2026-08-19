@@ -4,7 +4,21 @@
 [advisories]
 unmaintained = "all"
 yanked = "deny"
-ignore = []
+ignore = [
+    # h2 0.4.15: unbounded empty DATA frames (low severity, patched in 0.4.16+
+    # but transitive; no direct control until reqwest/hyper update).
+    "RUSTSEC-2026-0258",
+    # rsa 0.9.10: Marvin Attack timing sidechannel — crawlkit does not use
+    # RSA for network-facing crypto (ed25519 via ring/dalek is used instead).
+    "RUSTSEC-2023-0071",
+    # sqlx 0.8.0: binary protocol overflow — patched in 0.8.1; update blocked
+    # on sqlx release compatibility with our pinned features.
+    "RUSTSEC-2024-0363",
+    # wasmtime 47.0.2: store type-index mixing (low severity, CVSS 3.1 L/H/H).
+    "RUSTSEC-2026-0222",
+    # wasmtime 47.0.2: preemption during bulk ops (very low severity, CVSS 4.0).
+    "RUSTSEC-2026-0223",
+]
 
 [licenses]
 allow = [

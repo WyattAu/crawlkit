@@ -101,6 +101,180 @@ impl SecurityHeaderAnalyzer {
         }
         score.max(0) as u32
     }
+    // ---- Individual header checks (single responsibility each) ----
+
+    fn check_csp(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        match Self::get_header(h, "Content-Security-Policy") {
+            None => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC001".to_string(),
+                title: "Missing Content-Security-Policy header".to_string(),
+                description: "No Content-Security-Policy header was found. CSP helps prevent XSS, clickjacking, and other code injection attacks.".into(),
+                url: url.to_string(),
+                recommendation: "Implement a Content-Security-Policy header. Start with default-src \'self\' and refine as needed.".into(),
+            }),
+            Some(csp) if !Self::is_valid_csp(csp) => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC013".to_string(),
+                title: "Invalid Content-Security-Policy syntax".to_string(),
+                description: "The CSP header value does not appear to contain valid directive syntax.".into(),
+                url: url.to_string(),
+                recommendation: "Ensure CSP contains at least one valid directive (e.g. default-src, script-src).".into(),
+            }),
+            _ => {}
+        }
+    }
+
+    fn check_hsts(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        match Self::get_header(h, "Strict-Transport-Security") {
+            None => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC002".to_string(),
+                title: "Missing Strict-Transport-Security header".to_string(),
+                description: "No Strict-Transport-Security (HSTS) header was found. HSTS forces browsers to use HTTPS.".into(),
+                url: url.to_string(),
+                recommendation: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.".into(),
+            }),
+            Some(hsts) => {
+                for issue in Self::validate_hsts(hsts) {
+                    f.push(Finding {
+                        severity: Severity::Warning, category: IssueCategory::Security,
+                        code: "SEC014".to_string(), title: "HSTS configuration issue".into(),
+                        description: format!("HSTS header: {issue}."), url: url.to_string(),
+                        recommendation: "Set max-age to at least 31536000 (1 year). Add includeSubDomains and preload.".into(),
+                    });
+                }
+                if !hsts.to_lowercase().contains("includesubdomains") {
+                    f.push(Finding {
+                        severity: Severity::Info, category: IssueCategory::Security,
+                        code: "SEC015".to_string(), title: "HSTS missing includeSubDomains".into(),
+                        description: "The HSTS header does not include the includeSubDomains directive.".into(),
+                        url: url.to_string(), recommendation: "Add includeSubDomains to protect all subdomains.".into(),
+                    });
+                }
+                if !hsts.to_lowercase().contains("preload") {
+                    f.push(Finding {
+                        severity: Severity::Info, category: IssueCategory::Security,
+                        code: "SEC016".to_string(), title: "HSTS missing preload".into(),
+                        description: "The HSTS header does not include the preload directive.".into(),
+                        url: url.to_string(),
+                        recommendation: "Consider adding preload for browser HSTS preload list inclusion.".into(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn check_xfo(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        match Self::get_header(h, "X-Frame-Options") {
+            None => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC003".to_string(), title: "Missing X-Frame-Options header".into(),
+                description: "No X-Frame-Options header was found. This header prevents clickjacking by controlling frame embedding.".into(),
+                url: url.to_string(), recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".into(),
+            }),
+            Some(value) => {
+                if value.to_uppercase().trim() != "DENY" && value.to_uppercase().trim() != "SAMEORIGIN" {
+                    f.push(Finding {
+                        severity: Severity::Warning, category: IssueCategory::Security,
+                        code: "SEC004".to_string(), title: "Invalid X-Frame-Options value".into(),
+                        description: format!("X-Frame-Options is \"{value}\" but must be DENY or SAMEORIGIN."),
+                        url: url.to_string(), recommendation: "Set X-Frame-Options to DENY (preferred) or SAMEORIGIN.".into(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn check_xcto(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        match Self::get_header(h, "X-Content-Type-Options") {
+            None => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC005".to_string(), title: "Missing X-Content-Type-Options header".into(),
+                description: "No X-Content-Type-Options header was found. This header prevents MIME-type sniffing.".into(),
+                url: url.to_string(), recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+            }),
+            Some(value) if value.trim().to_lowercase() != "nosniff" => f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Security,
+                code: "SEC006".to_string(), title: "Invalid X-Content-Type-Options value".into(),
+                description: format!("X-Content-Type-Options is \"{value}\" but must be nosniff."),
+                url: url.to_string(), recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+            }),
+            _ => {}
+        }
+    }
+
+    fn check_referrer(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        const RECOMMENDED: &[&str] = &[
+            "no-referrer", "no-referrer-when-downgrade", "origin",
+            "origin-when-cross-origin", "same-origin", "strict-origin",
+            "strict-origin-when-cross-origin", "unsafe-url",
+        ];
+        match Self::get_header(h, "Referrer-Policy") {
+            None => f.push(Finding {
+                severity: Severity::Info, category: IssueCategory::Security,
+                code: "SEC007".to_string(), title: "Missing Referrer-Policy header".into(),
+                description: "No Referrer-Policy header was found. This header controls how much referrer information is sent with requests.".into(),
+                url: url.to_string(), recommendation: "Set Referrer-Policy to strict-origin-when-cross-origin or no-referrer for maximum privacy.".into(),
+            }),
+            Some(value) if !RECOMMENDED.contains(&value.trim()) => f.push(Finding {
+                severity: Severity::Info, category: IssueCategory::Security,
+                code: "SEC017".to_string(), title: "Uncommon Referrer-Policy value".into(),
+                description: format!("Referrer-Policy \"{value}\" is not in the list of commonly used policies."),
+                url: url.to_string(), recommendation: "Consider using strict-origin-when-cross-origin or no-referrer.".into(),
+            }),
+            _ => {}
+        }
+    }
+
+    fn check_permissions(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        match Self::get_header(h, "Permissions-Policy") {
+            None => f.push(Finding {
+                severity: Severity::Info, category: IssueCategory::Security,
+                code: "SEC008".to_string(), title: "Missing Permissions-Policy header".into(),
+                description: "No Permissions-Policy header was found. This header controls which browser features APIs can be used.".into(),
+                url: url.to_string(),
+                recommendation: "Consider setting Permissions-Policy to disable unused features like camera, microphone, geolocation.".into(),
+            }),
+            Some(pp) => {
+                let pp_lower = pp.to_lowercase();
+                for feature in &["camera", "microphone", "geolocation"] {
+                    if pp_lower.contains(feature) && !pp_lower.contains(&format!("{feature}=()")) {
+                        f.push(Finding {
+                            severity: Severity::Info, category: IssueCategory::Security,
+                            code: "SEC018".to_string(), title: format!("Permissions-Policy: {feature} not restricted"),
+                            description: format!("The {feature} feature in Permissions-Policy is not explicitly restricted."),
+                            url: url.to_string(), recommendation: format!("Add {feature}=() to Permissions-Policy to disable it if not needed."),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    fn check_cross_origin(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+        let checks = [
+            ("Cross-Origin-Embedder-Policy", "SEC009", "Cross-Origin-Embedder-Policy",
+             "COEP prevents resources from loading cross-origin without explicit permission.",
+             "Set COEP to require-corp for stricter cross-origin isolation."),
+            ("Cross-Origin-Opener-Policy", "SEC010", "Cross-Origin-Opener-Policy",
+             "COOP isolates your browsing context from cross-origin popups.",
+             "Set COOP to same-origin for stricter isolation."),
+            ("Cross-Origin-Resource-Policy", "SEC011", "Cross-Origin-Resource-Policy",
+             "CORP prevents cross-origin reads of embedded resources.",
+             "Set CORP to same-origin if the resource should only be used by the same origin."),
+        ];
+        for (header, code, name, desc, rec) in checks {
+            if Self::get_header(h, header).is_none() {
+                f.push(Finding {
+                    severity: Severity::Info, category: IssueCategory::Security,
+                    code: code.to_string(), title: format!("Missing {name} header"),
+                    description: format!("No {name} header was found. {desc}"),
+                    url: url.to_string(), recommendation: rec.into(),
+                });
+            }
+        }
+    }
 }
 
 impl Default for SecurityHeaderAnalyzer {
@@ -110,339 +284,33 @@ impl Default for SecurityHeaderAnalyzer {
 }
 
 impl Analyzer for SecurityHeaderAnalyzer {
-    fn name(&self) -> &str {
-        "security-headers"
-    }
+    fn name(&self) -> &str { "security-headers" }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
+        let mut f = Vec::new();
         let url = &ctx.page.url;
-        let headers = ctx.headers;
-
-        // --- Content-Security-Policy ---
-        match Self::get_header(headers, "Content-Security-Policy") {
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Security,
-                    code: "SEC001".to_string(),
-                    title: "Missing Content-Security-Policy header".to_string(),
-                    description: "No Content-Security-Policy header was found. CSP helps prevent \
-                                  XSS, clickjacking, and other code injection attacks."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Implement a Content-Security-Policy header. Start with \
-                                     \"default-src 'self'\" and refine as needed."
-                        .to_string(),
-                });
-            }
-            Some(csp) => {
-                if !Self::is_valid_csp(csp) {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Security,
-                        code: "SEC013".to_string(),
-                        title: "Invalid Content-Security-Policy syntax".to_string(),
-                        description: "The CSP header value does not appear to contain valid \
-                                      directive syntax."
-                            .to_string(),
-                        url: url.clone(),
-                        recommendation: "Ensure CSP contains at least one valid directive \
-                                         (e.g. default-src, script-src)."
-                            .to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- Strict-Transport-Security (HSTS) ---
-        match Self::get_header(headers, "Strict-Transport-Security") {
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Security,
-                    code: "SEC002".to_string(),
-                    title: "Missing Strict-Transport-Security header".to_string(),
-                    description: "No Strict-Transport-Security (HSTS) header was found. HSTS \
-                                  forces browsers to use HTTPS."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Add \"Strict-Transport-Security: max-age=31536000; \
-                                     includeSubDomains; preload\"."
-                        .to_string(),
-                });
-            }
-            Some(hsts) => {
-                let hsts_issues = Self::validate_hsts(hsts);
-                for issue in &hsts_issues {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Security,
-                        code: "SEC014".to_string(),
-                        title: "HSTS configuration issue".to_string(),
-                        description: format!("HSTS header: {issue}."),
-                        url: url.clone(),
-                        recommendation: "Set max-age to at least 31536000 (1 year). Add \
-                                         includeSubDomains and preload."
-                            .to_string(),
-                    });
-                }
-                if !hsts.to_lowercase().contains("includesubdomains") {
-                    findings.push(Finding {
-                        severity: Severity::Info,
-                        category: IssueCategory::Security,
-                        code: "SEC015".to_string(),
-                        title: "HSTS missing includeSubDomains".to_string(),
-                        description: "The HSTS header does not include the includeSubDomains \
-                                      directive."
-                            .to_string(),
-                        url: url.clone(),
-                        recommendation: "Add includeSubDomains to protect all subdomains."
-                            .to_string(),
-                    });
-                }
-                if !hsts.to_lowercase().contains("preload") {
-                    findings.push(Finding {
-                        severity: Severity::Info,
-                        category: IssueCategory::Security,
-                        code: "SEC016".to_string(),
-                        title: "HSTS missing preload".to_string(),
-                        description: "The HSTS header does not include the preload directive."
-                            .to_string(),
-                        url: url.clone(),
-                        recommendation: "Consider adding preload for browser HSTS preload \
-                                         list inclusion."
-                            .to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- X-Frame-Options ---
-        match Self::get_header(headers, "X-Frame-Options") {
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Security,
-                    code: "SEC003".to_string(),
-                    title: "Missing X-Frame-Options header".to_string(),
-                    description: "No X-Frame-Options header was found. This header prevents \
-                                  clickjacking by controlling frame embedding."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string(),
-                });
-            }
-            Some(value) => {
-                let upper = value.to_uppercase().trim().to_string();
-                if upper != "DENY" && upper != "SAMEORIGIN" {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Security,
-                        code: "SEC004".to_string(),
-                        title: "Invalid X-Frame-Options value".to_string(),
-                        description: format!(
-                            "X-Frame-Options is \"{value}\" but must be DENY or SAMEORIGIN."
-                        ),
-                        url: url.clone(),
-                        recommendation: "Set X-Frame-Options to DENY (preferred) or SAMEORIGIN."
-                            .to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- X-Content-Type-Options ---
-        match Self::get_header(headers, "X-Content-Type-Options") {
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Security,
-                    code: "SEC005".to_string(),
-                    title: "Missing X-Content-Type-Options header".to_string(),
-                    description: "No X-Content-Type-Options header was found. This header \
-                                  prevents MIME-type sniffing."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Set X-Content-Type-Options to nosniff.".to_string(),
-                });
-            }
-            Some(value) => {
-                if value.trim().to_lowercase() != "nosniff" {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Security,
-                        code: "SEC006".to_string(),
-                        title: "Invalid X-Content-Type-Options value".to_string(),
-                        description: format!(
-                            "X-Content-Type-Options is \"{value}\" but must be nosniff."
-                        ),
-                        url: url.clone(),
-                        recommendation: "Set X-Content-Type-Options to nosniff.".to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- Referrer-Policy ---
-        const RECOMMENDED_REFERRER: &[&str] = &[
-            "no-referrer",
-            "no-referrer-when-downgrade",
-            "origin",
-            "origin-when-cross-origin",
-            "same-origin",
-            "strict-origin",
-            "strict-origin-when-cross-origin",
-            "unsafe-url",
-        ];
-        match Self::get_header(headers, "Referrer-Policy") {
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Security,
-                    code: "SEC007".to_string(),
-                    title: "Missing Referrer-Policy header".to_string(),
-                    description: "No Referrer-Policy header was found. This header controls how \
-                                  much referrer information is sent with requests."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Set Referrer-Policy to strict-origin-when-cross-origin \
-                                     or no-referrer for maximum privacy."
-                        .to_string(),
-                });
-            }
-            Some(value) => {
-                if !RECOMMENDED_REFERRER.contains(&value.trim()) {
-                    findings.push(Finding {
-                        severity: Severity::Info,
-                        category: IssueCategory::Security,
-                        code: "SEC017".to_string(),
-                        title: "Uncommon Referrer-Policy value".to_string(),
-                        description: format!(
-                            "Referrer-Policy \"{value}\" is not in the list of commonly used \
-                             policies."
-                        ),
-                        url: url.clone(),
-                        recommendation: "Consider using strict-origin-when-cross-origin or \
-                                         no-referrer."
-                            .to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- Permissions-Policy ---
-        if Self::get_header(headers, "Permissions-Policy").is_none() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Security,
-                code: "SEC008".to_string(),
-                title: "Missing Permissions-Policy header".to_string(),
-                description: "No Permissions-Policy header was found. This header controls \
-                              which browser features APIs can be used."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Consider setting Permissions-Policy to disable unused features \
-                                 like camera, microphone, geolocation."
-                    .to_string(),
-            });
-        } else if let Some(pp) = Self::get_header(headers, "Permissions-Policy") {
-            // Check that dangerous features are restricted
-            let dangerous = ["camera", "microphone", "geolocation"];
-            for feature in &dangerous {
-                if pp.to_lowercase().contains(feature)
-                    && pp.to_lowercase().contains(&format!("{feature}=()"))
-                {
-                    // Feature is restricted (empty allowlist) — good
-                } else if pp.to_lowercase().contains(feature) {
-                    findings.push(Finding {
-                        severity: Severity::Info,
-                        category: IssueCategory::Security,
-                        code: "SEC018".to_string(),
-                        title: format!("Permissions-Policy: {feature} not restricted"),
-                        description: format!(
-                            "The {feature} feature in Permissions-Policy is not explicitly \
-                             restricted."
-                        ),
-                        url: url.clone(),
-                        recommendation: format!(
-                            "Add {feature}=() to Permissions-Policy to disable it if not \
-                             needed."
-                        ),
-                    });
-                }
-            }
-        }
-
-        // --- Cross-Origin-Embedder-Policy (COEP) ---
-        if Self::get_header(headers, "Cross-Origin-Embedder-Policy").is_none() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Security,
-                code: "SEC009".to_string(),
-                title: "Missing Cross-Origin-Embedder-Policy header".to_string(),
-                description: "No COEP header was found. COEP prevents resources from loading \
-                              cross-origin without explicit permission."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Set COEP to require-corp for stricter cross-origin isolation."
-                    .to_string(),
-            });
-        }
-
-        // --- Cross-Origin-Opener-Policy (COOP) ---
-        if Self::get_header(headers, "Cross-Origin-Opener-Policy").is_none() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Security,
-                code: "SEC010".to_string(),
-                title: "Missing Cross-Origin-Opener-Policy header".to_string(),
-                description: "No COOP header was found. COOP isolates your browsing context \
-                              from cross-origin popups."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Set COOP to same-origin for stricter isolation.".to_string(),
-            });
-        }
-
-        // --- Cross-Origin-Resource-Policy (CORP) ---
-        if Self::get_header(headers, "Cross-Origin-Resource-Policy").is_none() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Security,
-                code: "SEC011".to_string(),
-                title: "Missing Cross-Origin-Resource-Policy header".to_string(),
-                description: "No CORP header was found. CORP prevents cross-origin reads of \
-                              embedded resources."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Set CORP to same-origin if the resource should only be used \
-                                 by the same origin."
-                    .to_string(),
-            });
-        }
-
-        // --- Security posture score ---
-        let score = Self::compute_score(&findings);
-        findings.push(Finding {
-            severity: Severity::Info,
-            category: IssueCategory::Security,
-            code: "SEC012".to_string(),
-            title: "Security posture score".to_string(),
-            description: format!("Security header score: {score}/100."),
-            url: url.clone(),
+        let h = ctx.headers;
+        self.check_csp(h, url, &mut f);
+        self.check_hsts(h, url, &mut f);
+        self.check_xfo(h, url, &mut f);
+        self.check_xcto(h, url, &mut f);
+        self.check_referrer(h, url, &mut f);
+        self.check_permissions(h, url, &mut f);
+        self.check_cross_origin(h, url, &mut f);
+        let score = Self::compute_score(&f);
+        f.push(Finding {
+            severity: Severity::Info, category: IssueCategory::Security,
+            code: "SEC012".to_string(), title: "Security posture score".to_string(),
+            description: format!("Security header score: {score}/100."), url: url.clone(),
             recommendation: if score < 50 {
-                "Security posture is weak. Prioritize adding CSP, HSTS, and frame-protecting \
-                 headers."
-                    .to_string()
+                "Security posture is weak. Prioritize adding CSP, HSTS, and frame-protecting headers.".into()
             } else if score < 80 {
-                "Security posture is moderate. Address remaining missing headers.".to_string()
+                "Security posture is moderate. Address remaining missing headers.".into()
             } else {
-                "Security posture is strong. Minor improvements possible.".to_string()
+                "Security posture is strong. Minor improvements possible.".into()
             },
         });
-
-        findings
+        f
     }
 }
 

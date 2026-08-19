@@ -289,7 +289,8 @@ func (c *Client) post(ctx context.Context, path string, body interface{}, result
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	// POST /api/v1/crawls responds 202 Accepted; other resources use 200/201.
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
 		return parseErrorResponse(resp)
 	}
 

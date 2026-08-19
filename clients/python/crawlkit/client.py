@@ -29,6 +29,7 @@ class CrawlkitClient:
         api_key: Optional[str] = None,
         jwt_token: Optional[str] = None,
         timeout: float = 30.0,
+        transport: Optional[httpx.BaseTransport] = None,
     ):
         """Initialize the client.
 
@@ -37,6 +38,7 @@ class CrawlkitClient:
             api_key: API key for authentication.
             jwt_token: JWT token for authentication.
             timeout: Request timeout in seconds.
+            transport: Optional httpx transport override (e.g. for testing).
         """
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
@@ -51,6 +53,7 @@ class CrawlkitClient:
             base_url=self.base_url,
             headers=headers,
             timeout=timeout,
+            transport=transport,
         )
 
     def close(self):

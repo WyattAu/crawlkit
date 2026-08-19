@@ -1421,7 +1421,7 @@ Defense-grade standards ensure crawlkit can be used in security-sensitive enviro
 
 | Standard | Status | Implementation |
 |----------|--------|----------------|
-| **Audit trail** | Planned | Every crawl logged with config hash, start/end time, page count, issue count; append-only audit log |
+| **Audit trail** | Active | SHA-256-chained tamper-evident audit log; optional persistence (`AUDIT_LOG_PATH`) with fsync-per-event, chain verification on open, and a head-anchor sidecar for truncation detection; tenant-scoped access (`audit:read`); crawl lifecycle, auth, and tenant events recorded |
 | **Input validation** | Active | URL parsing with `url` crate; depth/page limits enforced; pattern validation; malformed input rejected |
 | **Encryption at rest** | Planned | Optional SQLCipher for SQLite; encrypted export files (AES-256-GCM); config file encryption |
 | **Dependency auditing** | Active | `cargo audit` in CI; `cargo deny` for license and advisory checks |
@@ -1506,9 +1506,9 @@ ECN (Electronic Communication Network) standards apply to crawlkit's pipeline de
 |----------|--------|----------------|
 | **Deterministic error handling** | Active | `thiserror`-typed errors; every error variant documented |
 | **Error recovery** | Active | Exponential backoff retry; configurable per error class |
-| **Backpressure** | Planned | Bounded channels (capacity 1000); semaphore-based concurrency; slow consumer stalls producer |
-| **Circuit breaker** | Planned | Per-domain circuit breaker; open after N consecutive failures; half-open after cooldown |
-| **Idempotency** | Planned | URL + status code as idempotency key; skip re-crawl if unchanged within TTL |
+| **Backpressure** | Partial | Bounded in-flight fetch set (semaphore permits = concurrency); queue + dispatch loop stall producers when budget is exhausted; API plane still lacks bounded queues |
+| **Circuit breaker** | Active | Per-domain circuit breaker registry checked in the crawl dispatch loop; opens after consecutive failures with cooldown recovery |
+| **Idempotency** | Active | ETag/Last-Modified conditional re-fetch (304 → `FetchOutcome::NotModified`); incremental mode seeds the previous crawl's page set for revalidation |
 | **Timeout handling** | Active | Per-request timeout (default: 30s); per-crawl timeout (configurable) |
 
 #### Backpressure Design

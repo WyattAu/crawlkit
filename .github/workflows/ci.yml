@@ -49,8 +49,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
       - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
-      - name: Unit tests (fast feedback)
-        run: cargo test --lib --workspace
+      - name: Unit tests (fast feedback, incl. bin-only crates e.g. crawlkit-api)
+        run: cargo test --workspace --bins --lib
       - name: Doc tests
         run: cargo test --doc --workspace
 
@@ -61,11 +61,13 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@42dc69e1aa15d091125809e98cf2ef0119e2e91ae # v2
         with:
           key: integration
       - name: Integration tests (excluding playwright)
-        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests
+        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests --test property_tests --test wasm_abi_tests --test router_tests
 
   security:
     name: Security Audit
@@ -125,10 +127,37 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: dtolnay/rust-toolchain@1.85.0
-      - uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+      - uses: Swatinem/rust-cache@42dc69e1aa15d091125809e98cf2ef0119e2e91ae # v2
         with:
           key: msrv
       - run: cargo check --workspace
+
+  semver:
+    name: Semver Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: Swatinem/rust-cache@42dc69e1aa15d091125809e98cf2ef0119e2e91ae # v2
+        with:
+          key: semver
+      - uses: taiki-e/install-action@0c5db7f7f897c5d3271fd99a1e5672c59a647e90 # v2
+        with:
+          tool: cargo-semver-checks
+      # Compare against the latest tagged release; before any v2.x tag exists
+      # this is advisory-only (continue-on-error) so it cannot block CI yet.
+      - name: cargo-semver-checks-lint
+        continue-on-error: true
+        run: |
+          BASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$BASE" ]; then
+            cargo semver-checks check-release --baseline "$BASE"
+          else
+            echo "No tags found; skipping semver baseline (advisory)"
+          fi
 
   fuzz:
     name: Fuzz Smoke Test
@@ -146,11 +175,12 @@ jobs:
       - uses: taiki-e/install-action@cargo-fuzz
       - name: Run fuzz targets (smoke test)
         run: |
-          if [ -d fuzz ]; then
+          if [ -d crates/crawlkit-engine/fuzz ]; then
+            cd crates/crawlkit-engine
             for target in $(cargo fuzz list 2>/dev/null); do
               echo "Running fuzz target: $target"
               cargo fuzz run "$target" -- -max_total_time=30 || exit 1
             done
           else
-            echo "No fuzz directory found, skipping fuzz tests"
+            echo "No fuzz directory found (expected at crates/crawlkit-engine/fuzz), skipping fuzz tests"
           fi

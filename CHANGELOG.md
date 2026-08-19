@@ -5,6 +5,111 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Security
+- API: closed cross-tenant exposure in `GET /crawls/{id}/stats|findings|backlinks` — unknown crawl ids now default-deny instead of falling through to unscoped storage queries
+- API: RBAC enforced on administrative surfaces (tenants, API keys, marketplace, user deletion) via `require_permission`; new `tenant:*`, `marketplace:*`, and `audit:read` permissions on the admin role; non-admins can no longer delete tenant-mate users
+- API: session revocation is now enforced by the JWT middleware; sessions are registered on login, refresh, and OIDC callback
+- API: brute-force lockout on `/auth/login` (5 failures per email per 15 min → 15 min lockout)
+- API: OIDC hardening — id_tokens are validated against the provider JWKS (signature, `iss`, `aud`, `exp`), PKCE (S256) and nonce binding added to the authorization flow
+- API: SSRF hardening — server-side outbound HTTP client re-validates every redirect hop against the blocklist (5-hop cap); webhook destinations re-validated at delivery time
+- API: `requests_per_minute` bounded (1..=10,000) on API key creation
+- API: admin bootstrap password can be supplied via `ADMIN_PASSWORD` (no longer logged when provided); password generator modulo bias removed
+- API: `/metrics` requires an API key by default; `METRICS_PUBLIC=true` reopens it with a startup warning
+- Engine: HTML/Markdown export escapes crawled page content (titles, URLs, finding text) — closes report-injection via crafted page titles
+- Engine: WASM sandbox wall-clock timeout enforced via wasmtime epoch interruption (watchdog thread + `Trap::Interrupt` detection) — runaway plugins terminate at `max_analysis_timeout_ms` instead of running indefinitely
+- Engine: WASM capability enforcement is fail-closed — manifests requesting `network`, `filesystem`, or `env_vars` permissions are rejected at load (the sandbox grants none of them)
+- Audit: persistent tamper-evident audit trail (`AUDIT_LOG_PATH`, JSONL + SHA-256 chain, fsync per event, chain verification on open, head-anchor sidecar detects tail truncation); `AuditTrail::clear` refuses to clear persistent trails; `GET /audit` is admin-only with tenant filtering for non-admins
+
+### Fixed
+- API/storage crawl-id dissociation: `CrawlResult::storage_crawl_id` now binds the public crawl id to the engine-owned storage row; stats/findings/backlinks resolve to the row that actually contains pages
+- Plugin SDK exported a different ABI than the host consumed (`alloc`/`free` missing, non-NUL-terminated results) — SDK now implements the host ABI with a sound header-based guest allocator; added host<->guest conformance tests (WAT fixture + wasm32-compiled SDK example)
+- Duplicate analyzer registration lists merged into `AnalyzerRegistry` single registration site (engine list had drifted, omitting 3 analyzers); "empty" sitemap/SSL analyzers no longer emit per-page noise findings (`SITEMAP001`, `SSL007`)
+- Engine: `PgStorage` sync-trait bridge no longer panics outside a Tokio runtime — uses a dedicated global blocking runtime instead of `Handle::current().block_on` (regression-tested from plain-sync and `spawn_blocking` contexts)
+- Go client: `StartCrawl` now accepts `202 Accepted` (previously always failed against the real API)
+
+### Changed
+- `crawlkit-api` restructured as lib + bin to enable integration testing of the router
+- Engine: `CrawlError::Storage` is now the structured `StorageError` type (was `String`); new `CrawlError::Internal` for non-storage subsystem failures
+- Engine: crawl-lifetime storage calls (`start_crawl`, incremental lookups, `finish_crawl`) moved off the async runtime onto the blocking pool
+- Engine: `run_with_callback` decomposed — queue prefill (seed + incremental + sitemaps) and finish/report extracted into `prefill_queue`/`finish_and_report`
+
+### Added
+- Router-level API integration test suite (17 tests: auth gates, CSRF, lockout, tenant isolation, RBAC, session revocation, webhook SSRF validation, metrics auth)
+- WASM ABI integration tests (7 tests) incl. full SDK→wasm32→wasmtime conformance run, wall-clock timeout kill, and capability fail-closed checks
+- Audit events recorded for login success/failure, session revocation, crawl lifecycle, and tenant mutations
+- Client SDK test suites: Go (httptest, table-driven), Python (unittest + httpx.MockTransport), Node (jest with committed toolchain) — 49 tests total; Python client gained an optional `transport` injection point for testing
+- CI: bin-target unit tests (88 previously silently skipped), `property_tests` (21 previously excluded), `wasm_abi_tests`, and `router_tests` now run; fuzz job path fixed (was a guaranteed no-op); honest `cargo-machete` dependency check replaces the fake `^use ` grep; advisory `cargo-semver-checks` job
+- Dependabot, CODEOWNERS, PR/issue templates; ADR-001 numbering collision resolved (WASM error detection → ADR-005)
+- Version/test-count claims across README/VERSION/ROADMAP reconciled with reality; fabricated claims removed (Lean4 verification, aspirational docs now banner-marked)
+
+### API (Rust)
+- `crawlkit-engine`: `AuditTrail::open_persistent`, `record_tenant`, `events_for_tenant`; `AuditEvent.tenant_id`; new `AuditEventType` auth/tenant variants; `AuditError`; `CrawlError::Internal`
+- `crawlkit-plugin-sdk`: `crawlkit_plugin_sdk::exported::{alloc_raw, free_raw}` (macro-internal allocator, now sound via size headers)
+
+### Added
+- OpenAPI documentation: 38 paths annotated via utoipa; OpenAPI JSON at `/api/v1/openapi.json` and Swagger UI at `/api/v1/docs` (gated by `DOCS_PUBLIC=false` → 404)
+- Persistent API-plane state: users, tenants, and API keys write-through to SQLite (`API_STATE_DB_PATH`, default `<db>.state`) and are restored on startup — a restart no longer loses accounts. Sessions remain in-memory by design (short-lived JWTs; documented trade-off)
+- Dashboard test suite grew 3 → 41 vitest tests (api_client method/auth/error coverage + use_auth hook store transitions); eslint + tsc clean
+
+### Changed (breaking — engine API)
+- `Analyzer::analyze` no longer takes `&CrawlConfig` (zero of 33 implementations used it); `AnalyzerRegistry::analyze(&ctx)` follows
+- `HtmlParser::parse` returns `ParsedPage` directly — the dead `ParseError` type is removed (the HTML5 parser is error-tolerant by design); `StreamingHtmlParser::parse` likewise
+
+### Removed
+- `parser::ParseError` (never constructed); `Analyzer` trait's unused config parameter
+
+### Housekeeping
+- `clients/nodejs/node_modules`, `dashboard/dist` build outputs, and Python `__pycache__` untracked from git (files remain locally; ignored going forward)
+
+## [2.3.0] - 2026-07-27
+
+### Added
+- Redis-backed distributed crawl queue (sorted sets, ZPOPMAX)
+- PostgreSQL storage backend via the `StorageBackend` trait (sqlx) with migrations (`001_init.sql`)
+- Core Web Vitals measurement via Chrome DevTools Protocol (LCP/CLS/INP/FCP/TTFB), wired into the crawl engine when JS rendering is enabled (PerformanceObserver JS injection)
+- `cwv_lcp`/`cwv_cls`/`cwv_inp` fields on `PageData`
+- Redis/PostgreSQL/browser-dependent tests marked `#[ignore]`
+
+## [2.2.0] - 2026-07-26
+
+### Added
+- Streaming HTML parser (`parse_stream` with a `ParserEvent` channel)
+- Native plugin loading via libloading (`.so`/`.dylib`/`.dll`)
+- `LinkExtractor` helper with deduplication
+- Webhook HMAC-SHA256 signing and HTTP delivery with retry; webhook secret generated once, returned at creation, never serialized
+- `PATCH /schedules/:id` and `last_run_at` tracking for scheduled crawls
+- Session management (list, revoke) and hardened OIDC SSO: state token TTL (10 min), user provisioning, role mapping
+
+### Changed
+- Pre-commit unsafe-code check excludes `native_plugin.rs`
+
+## [2.1.0] - 2026-07-26
+
+### Added
+- Multi-tenant API isolation: all CRUD endpoints scoped by JWT tenant; tenant derived from JWT (never client-supplied), with admin bypass
+- Plugin manifest validation: semver, SPDX license, required fields
+- Storage abstraction layer: `StorageBackend` trait with SQLite implementation
+- Rustdoc examples on 11 public API items
+
+### Changed
+- Connection pool sizing scales with concurrency config
+- Rate limiter LRU eviction (10K domain max)
+- Export N+1 query elimination (bulk load issues/links)
+- Version bump to 2.1.0
+
+## [2.0.0] - 2026-07-24
+
+### Added
+- WASM plugin system, JWT authentication, RBAC, enterprise architecture
+- Rustdoc coverage, ADRs, runnable examples, security guide
+- Workspace renamed `crawlkit-core` to `crawlkit-engine`
+
+### Changed
+- Removed `http2_prior_knowledge` (not supported in reqwest 0.12)
+- Version bump to 2.0.0
+
 ## [0.4.0] - 2026-07-23
 
 ### Added

@@ -27,7 +27,7 @@ test-unit:
 
 # Run integration tests
 test-integration:
-    cargo test --workspace --test integration_tests --test backlink_integration_tests --test playwright_integration_tests --test rum_integration_tests
+    cargo test --workspace --test integration_tests --test backlink_integration_tests --test playwright_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test router_tests
 
 # Run benchmarks
 bench:

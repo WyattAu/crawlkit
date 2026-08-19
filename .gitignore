@@ -19,6 +19,8 @@ Thumbs.db
 # Environment
 .env
 .env.local
+.env.*
+!.env.example
 
 # Output files
 *.json
@@ -31,6 +33,11 @@ Thumbs.db
 *.db-journal
 *.db-wal
 *.db-shm
+crawlkit-api.db
+
+# dhat heap profiling artifacts (may land in repo root or /tmp copies)
+*.dhat*.heap.json
+crawlkit-dhat.json
 
 # Logs
 *.log
@@ -54,3 +61,6 @@ web/.astro/
 dashboard/node_modules/
 dashboard/dist/
 node_modules/
+
+# Client SDKs
+clients/nodejs/node_modules/

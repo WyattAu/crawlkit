@@ -1,3 +1,5 @@
+> STATUS: Aspirational/historical document — describes planned or simulated work; not a verifiable test report of the current codebase.
+
 # Final Test Execution Report
 
 ## Executive Summary

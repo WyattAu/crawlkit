@@ -1,3 +1,5 @@
+> STATUS: Aspirational/historical document — describes planned or simulated work; not a verifiable test report of the current codebase.
+
 # Mobile Application Architecture
 
 ## Document Information

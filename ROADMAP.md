@@ -8,7 +8,7 @@ Last Updated: 2026-07-26
 
 ## Current State (v2.1.0)
 
-- 642 tests passing (449 engine + 103 API + 31 plugin SDK + 26 doc tests + 31 integration + 3 RUM + 21 property-based), zero clippy warnings, zero rustfmt diffs
+- 736 tests passing (614 unit+bins, 81 integration incl. 19 router-level + 7 WASM-ABI tests, 43 doc; 6 ignored), plus 49 client-SDK tests and 41 dashboard tests, zero clippy warnings, zero rustfmt diffs
 - 31 analyzers (23 core + 4 AI + 1 WASM + 3 advanced canonical) with Rayon parallel execution
 - CLI + REST API + HTML/JSON/CSV/Markdown export
 - 12 modules wired into production (observability, resource_monitor, circuit_breaker, backpressure, determinism, feature_flags, js_render_decision, playwright, advanced_features, encryption, alert_manager, metrics)
@@ -21,7 +21,7 @@ Last Updated: 2026-07-26
 - Astro Starlight documentation site: 13 pages
 - CI/CD: 10 jobs (format, clippy, unit tests, doc tests, integration tests, security audit, supply chain audit, fuzz test, release builds, MSRV 1.85.0)
 - Pre-commit hook: 11 checks (fmt, clippy, build, unit tests, doc tests, integration tests, security audit, secret scan, unsafe code, MSRV, dead code)
-- Lean4 formal verification scaffolding for circuit breaker, PageRank, and audit chain
+- (deferred) formal verification of queue/circuit-breaker invariants — not started
 - Property-based testing with proptest (21 tests across parser, storage, queue, rate limiter, meta)
 - Typed TypeScript API client (zero `as unknown as` casts)
 - CSRF origin validation on state-changing API requests

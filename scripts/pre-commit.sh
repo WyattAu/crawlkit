@@ -69,8 +69,8 @@ check "Unit tests (cargo test --lib --workspace)" cargo test --lib --workspace
 check "Doc tests (cargo test --doc --workspace)" cargo test --doc --workspace
 
 # 6. Integration tests
-check "Integration tests (cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests)" \
-    cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests
+check "Integration tests (cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test router_tests)" \
+    cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test router_tests
 
 # 7. Security audit -- warn only
 warn "Security audit (cargo audit)" cargo audit
@@ -112,33 +112,19 @@ fi
 # 10. MSRV check -- warn only
 warn "MSRV check (cargo +1.85.0 check --workspace)" cargo +1.85.0 check --workspace
 
-# 11. Unused dependencies -- warn only (dead imports)
-printf "${CYAN}[%d/${total}]${NC} Unused dependencies (dead imports) ... " "$((passed + failed + warnings + 1))"
-if grep -rn '#\[allow(unused_imports)\]' \
-    --include="*.rs" \
-    --exclude-dir=target --exclude-dir=.git \
-    "$REPO_ROOT/crates/" \
-    2>/dev/null | grep -q .; then
-    printf "${YELLOW}WARN (found allow(unused_imports) annotations)${NC}\n"
-    warnings=$((warnings + 1))
-elif grep -rn '#\[allow(dead_code)\]' \
-    --include="*.rs" \
-    --exclude-dir=target --exclude-dir=.git \
-    "$REPO_ROOT/crates/" \
-    2>/dev/null | grep -v 'auth_mw\|oidc' | grep -q .; then
-    printf "${YELLOW}WARN (found allow(dead_code) annotations outside known API blocks)${NC}\n"
-    warnings=$((warnings + 1))
-elif grep -rn '^use ' --include="*.rs" \
-    --exclude-dir=target --exclude-dir=.git \
-    "$REPO_ROOT/crates/" \
-    2>/dev/null | \
-    grep -v 'test\|example\|bench\|#\[cfg(test' | \
-    grep -q .; then
-    printf "${GREEN}PASS${NC}\n"
-    passed=$((passed + 1))
+# 11. Unused dependencies -- warn only (cargo-machete)
+printf "${CYAN}[%d/${total}]${NC} Unused dependencies (cargo machete) ... " "$((passed + failed + warnings + 1))"
+if command -v cargo-machete >/dev/null 2>&1; then
+    if cargo machete --workspace >/dev/null 2>&1; then
+        printf "${GREEN}PASS${NC}\n"
+        passed=$((passed + 1))
+    else
+        printf "${YELLOW}WARN (cargo machete found unused dependencies)${NC}\n"
+        warnings=$((warnings + 1))
+    fi
 else
-    printf "${GREEN}PASS${NC}\n"
-    passed=$((passed + 1))
+    printf "${YELLOW}skipped (cargo-machete not installed)${NC}\n"
+    warnings=$((warnings + 1))
 fi
 
 echo ""

@@ -410,7 +410,7 @@ Phase 7 includes cross-cutting standards compliance work. These tasks are tracke
 
 **Goal:** AI-specific SEO signals and WebAssembly error detection.
 
-**ADR:** `ADR-001-wasm-error-detection-and-ai-result-optimization.md`
+**ADR:** `ADR-005-wasm-error-detection-and-ai-result-optimization.md`
 
 ### Tasks
 

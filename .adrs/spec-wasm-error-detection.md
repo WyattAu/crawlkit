@@ -1,6 +1,6 @@
 # WASM Error Detection Analyzers — Implementation Spec
 
-**ADR Reference:** ADR-001
+**ADR Reference:** ADR-005
 **Status:** Proposed
 **Estimated Effort:** 2-3 weeks (static), 2 weeks (runtime, post-Phase 7.1)
 

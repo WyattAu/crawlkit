@@ -1,15 +1,15 @@
-# ADR-001: WASM Error Detection & AI Result Optimization Analyzers
+# ADR-005: WASM Error Detection & AI Result Optimization Analyzers
 
 | Field | Value |
 |-------|-------|
-| **ADR ID** | ADR-001 |
+| **ADR ID** | ADR-005 |
 | **Title** | Add WASM Error Detection and AI Result Optimization Analyzers |
 | **Status** | Proposed |
 | **Date** | 2026-07-23 |
 | **Author** | Nexus (Principal Systems Architect) |
 | **Deciders** | Project Owner, Architect |
 | **Related Standards** | IEEE 1016 (Software Design Description), SEO industry practices |
-| **Related ADRs** | None (first ADR) |
+| **Related ADRs** | ADR-003 (WASM Plugin Sandboxing) |
 | **Related Docs** | `.adrs/coding-standards.md` (Engineering Standards v1.0.0) |
 
 ---

@@ -1,6 +1,6 @@
 # AI Result Optimization Analyzers — Implementation Spec
 
-**ADR Reference:** ADR-001
+**ADR Reference:** ADR-005
 **Status:** Proposed
 **Estimated Effort:** 2-3 weeks (all static, ships with v1.0)
 

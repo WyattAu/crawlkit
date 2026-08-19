@@ -36,7 +36,7 @@ impl Analyzer for WordCountThresholdAnalyzer {
         "word-count-threshold"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -82,7 +82,7 @@ impl Analyzer for ExternalLinkRatioAnalyzer {
         "external-link-ratio"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -136,7 +136,7 @@ impl Analyzer for PerformanceBudgetAnalyzer {
         "performance-budget"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -186,7 +186,7 @@ fn main() -> Result<()> {
 </html>"#;
 
     let url = Url::parse("https://example.com/page")?;
-    let parsed = HtmlParser::parse(html, &url)?;
+    let parsed = HtmlParser::parse(html, &url);
 
     // Build the default registry (18 built-in analyzers)
     let config = CrawlConfig::default();
@@ -225,7 +225,7 @@ fn main() -> Result<()> {
     ];
 
     for analyzer in &analyzers {
-        let findings = analyzer.analyze(&ctx, &config);
+        let findings = analyzer.analyze(&ctx);
         if findings.is_empty() {
             println!("[PASS] {} — no issues", analyzer.name());
         } else {

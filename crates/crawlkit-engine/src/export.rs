@@ -31,7 +31,7 @@ pub enum ExportError {
 
 impl From<ExportError> for CrawlError {
     fn from(e: ExportError) -> Self {
-        CrawlError::Storage(e.to_string())
+        CrawlError::Internal(e.to_string())
     }
 }
 
@@ -352,13 +352,19 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
 
     let mut md = String::new();
 
-    md.push_str(&format!("# Crawl Report — `{}`\n\n", meta.target_url));
-    md.push_str(&format!("**Crawl ID:** `{}`  \n", crawl_id));
+    md.push_str(&format!(
+        "# Crawl Report — `{}`\n\n",
+        escape_markdown(&meta.target_url)
+    ));
+    md.push_str(&format!(
+        "**Crawl ID:** `{}`  \n",
+        escape_markdown(crawl_id)
+    ));
     if let Some(ref start) = meta.start_time {
-        md.push_str(&format!("**Started:** {start}  \n"));
+        md.push_str(&format!("**Started:** {}  \n", escape_markdown(start)));
     }
     if let Some(ref end) = meta.end_time {
-        md.push_str(&format!("**Finished:** {end}  \n"));
+        md.push_str(&format!("**Finished:** {}  \n", escape_markdown(end)));
     }
     md.push('\n');
 
@@ -394,7 +400,7 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
     let mut cats: Vec<_> = stats.issues_by_category.iter().collect();
     cats.sort_by(|a, b| b.1.cmp(a.1));
     for (cat, count) in &cats {
-        md.push_str(&format!("| {cat} | {count} |\n"));
+        md.push_str(&format!("| {} | {count} |\n", escape_markdown(cat)));
     }
     md.push('\n');
 
@@ -406,9 +412,9 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
             md.push_str(&format!(
                 "| {} | {} | {} | {} | {} |\n",
                 i + 1,
-                ti.severity,
-                ti.code,
-                ti.title,
+                escape_markdown(&ti.severity),
+                escape_markdown(&ti.code),
+                escape_markdown(&ti.title),
                 ti.affected_pages
             ));
         }
@@ -470,6 +476,7 @@ pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportEr
         } else {
             "status-ok"
         };
+        let url = escape_html(&page.url);
         rows.push_str(&format!(
             r#"<tr>
   <td><a href="{url}" target="_blank">{url}</a></td>
@@ -479,9 +486,9 @@ pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportEr
   <td class="num">{lt}</td>
   <td class="num">{ic}</td>
 </tr>"#,
-            url = page.url,
+            url = url,
             status = page.status_code,
-            title = page.title.as_deref().unwrap_or("—"),
+            title = escape_html(page.title.as_deref().unwrap_or("—")),
             wc = page
                 .word_count
                 .map(|v| v.to_string())
@@ -505,9 +512,9 @@ pub fn export_html(storage: &Storage, crawl_id: &str) -> Result<String, ExportEr
   <td class="num">{pages}</td>
 </tr>"#,
             color = color,
-            sev = ti.severity,
-            code = ti.code,
-            title = ti.title,
+            sev = escape_html(&ti.severity),
+            code = escape_html(&ti.code),
+            title = escape_html(&ti.title),
             pages = ti.affected_pages,
         ));
     }
@@ -624,8 +631,8 @@ function filterTable() {{
 </script>
 </body>
 </html>"#,
-        target = meta.target_url,
-        crawl_id = crawl_id,
+        target = escape_html(&meta.target_url),
+        crawl_id = escape_html(crawl_id),
         total_pages = stats.total_pages,
         total_issues = stats.total_issues,
         avg_time = stats
@@ -643,7 +650,10 @@ function filterTable() {{
             cats.sort_by(|a, b| b.1.cmp(a.1));
             cats.iter()
                 .map(|(cat, count)| {
-                    format!("<tr><td>{cat}</td><td class=\"num\">{count}</td></tr>")
+                    format!(
+                        "<tr><td>{}</td><td class=\"num\">{count}</td></tr>",
+                        escape_html(cat)
+                    )
                 })
                 .collect::<String>()
         },
@@ -661,6 +671,48 @@ function filterTable() {{
 
 fn severity_order() -> &'static [&'static str] {
     &["critical", "error", "warning", "info"]
+}
+
+/// HTML-escape a string for safe interpolation into the report template.
+///
+/// Escapes the five characters that can alter HTML structure or attribute
+/// boundaries: `&`, `<`, `>`, `"`, and `'`.
+fn escape_html(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '&' => out.push_str("&amp;"),
+            '<' => out.push_str("&lt;"),
+            '>' => out.push_str("&gt;"),
+            '"' => out.push_str("&quot;"),
+            '\'' => out.push_str("&#39;"),
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
+/// Markdown-escape a string for safe interpolation into the Markdown report.
+///
+/// Escapes characters that could alter Markdown structure — link brackets,
+/// code spans, and table pipes — everywhere, plus a leading `#` or `-` that
+/// would otherwise render as a heading or list marker.
+fn escape_markdown(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for (i, c) in s.char_indices() {
+        match c {
+            '[' | ']' | '`' | '|' => {
+                out.push('\\');
+                out.push(c);
+            }
+            '#' | '-' if i == 0 => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -992,7 +1044,7 @@ fn build_cwv_detail_section(metrics: &[CruxRow]) -> String {
   <td class="num {fcp_cls}">{fcp}</td>
   <td class="num {ttfb_cls}">{ttfb}</td>
 </tr>"#,
-            url = m.url,
+            url = escape_html(&m.url),
             lcp = m
                 .lcp_p75
                 .map(|v| format!("{:.0}ms", v))
@@ -1375,5 +1427,177 @@ mod tests {
             ..Default::default()
         };
         assert_eq!(sel.headers(), vec!["url", "status_code"]);
+    }
+
+    // --- Escaping tests ---
+
+    #[test]
+    fn test_escape_html_escapes_dangerous_characters() {
+        assert_eq!(escape_html("&<>\"'"), "&amp;&lt;&gt;&quot;&#39;");
+        assert_eq!(escape_html("plain text"), "plain text");
+        assert_eq!(
+            escape_html("<script>alert(1)</script>"),
+            "&lt;script&gt;alert(1)&lt;/script&gt;"
+        );
+    }
+
+    #[test]
+    fn test_escape_markdown_escapes_structural_characters() {
+        assert_eq!(
+            escape_markdown("[link](`code`) | cell"),
+            "\\[link\\](\\`code\\`) \\| cell"
+        );
+        assert_eq!(escape_markdown("# heading"), "\\# heading");
+        assert_eq!(escape_markdown("- item"), "\\- item");
+        // Mid-text markers that cannot start a structure stay readable.
+        assert_eq!(escape_markdown("mid # hash - dash"), "mid # hash - dash");
+    }
+
+    #[test]
+    fn test_html_escapes_hostile_page_title_and_url() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let page = PageData {
+            id: "evil".into(),
+            url: Url::parse("https://example.com/page").unwrap(),
+            final_url: Url::parse("https://example.com/page").unwrap(),
+            status_code: 200,
+            title: Some("<script>alert(1)</script>".into()),
+            description: Some("<img src=x onerror=alert(2)>".into()),
+            canonical_url: None,
+            word_count: Some(10),
+            load_time_ms: Some(50),
+            body_size: Some(128),
+            fetched_at: Utc::now(),
+            links: vec![],
+            tenant_id: None,
+            etag: None,
+            last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+        };
+        storage.insert_pages(&crawl_id, &[page]).unwrap();
+
+        // The url crate normalizes hostile characters, so overwrite the
+        // stored URL directly to simulate a hostile/corrupted database row.
+        storage
+            .conn()
+            .execute(
+                "UPDATE pages SET url = 'https://evil.example/\"><img src=x>' WHERE id = 'evil'",
+                [],
+            )
+            .unwrap();
+        storage.finish_crawl(&crawl_id, 1, 0).unwrap();
+
+        let html = export_html(&storage, &crawl_id).unwrap();
+
+        assert!(!html.contains("<script>alert"), "raw script tag leaked");
+        assert!(!html.contains("<img src=x>"), "raw img tag leaked");
+        assert!(html.contains("&lt;script&gt;alert(1)&lt;/script&gt;"));
+        assert!(html.contains("https://evil.example/&quot;&gt;&lt;img src=x&gt;"));
+    }
+
+    #[test]
+    fn test_html_escapes_hostile_target_url_and_finding_text() {
+        let storage = Storage::new_in_memory().unwrap();
+        let target = "\"><script>alert(3)</script>";
+        let crawl_id = storage.start_crawl(target, None).unwrap();
+
+        let page = PageData {
+            id: "p1".into(),
+            url: Url::parse("https://example.com/").unwrap(),
+            final_url: Url::parse("https://example.com/").unwrap(),
+            status_code: 200,
+            title: Some("T".into()),
+            description: None,
+            canonical_url: None,
+            word_count: None,
+            load_time_ms: None,
+            body_size: None,
+            fetched_at: Utc::now(),
+            links: vec![],
+            tenant_id: None,
+            etag: None,
+            last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+        };
+        storage.insert_pages(&crawl_id, &[page]).unwrap();
+
+        let issues = vec![Issue {
+            id: "i1".into(),
+            page_id: "p1".into(),
+            category: IssueCategory::Seo,
+            severity: Severity::Error,
+            code: "SEO\"><script>".into(),
+            title: "<script>alert(4)</script>".into(),
+            description: "desc".into(),
+            element: None,
+            recommendation: "rec".into(),
+            tenant_id: None,
+        }];
+        storage.insert_issues(&issues).unwrap();
+        storage.finish_crawl(&crawl_id, 1, 1).unwrap();
+
+        let html = export_html(&storage, &crawl_id).unwrap();
+
+        assert!(!html.contains("<script>alert"), "raw script tag leaked");
+        assert!(html.contains("&quot;&gt;&lt;script&gt;alert(3)&lt;/script&gt;"));
+        assert!(html.contains("&lt;script&gt;alert(4)&lt;/script&gt;"));
+        assert!(html.contains("SEO&quot;&gt;&lt;script&gt;"));
+    }
+
+    #[test]
+    fn test_markdown_escapes_hostile_finding_text() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let page = PageData {
+            id: "p1".into(),
+            url: Url::parse("https://example.com/").unwrap(),
+            final_url: Url::parse("https://example.com/").unwrap(),
+            status_code: 200,
+            title: Some("T".into()),
+            description: None,
+            canonical_url: None,
+            word_count: None,
+            load_time_ms: None,
+            body_size: None,
+            fetched_at: Utc::now(),
+            links: vec![],
+            tenant_id: None,
+            etag: None,
+            last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+        };
+        storage.insert_pages(&crawl_id, &[page]).unwrap();
+
+        let issues = vec![Issue {
+            id: "i1".into(),
+            page_id: "p1".into(),
+            category: IssueCategory::Seo,
+            severity: Severity::Error,
+            code: "SEO001".into(),
+            title: "[inject](https://evil)`|`".into(),
+            description: "desc".into(),
+            element: None,
+            recommendation: "rec".into(),
+            tenant_id: None,
+        }];
+        storage.insert_issues(&issues).unwrap();
+        storage.finish_crawl(&crawl_id, 1, 1).unwrap();
+
+        let md = export_markdown(&storage, &crawl_id).unwrap();
+
+        // Brackets, code spans, and pipes must not render as structures.
+        assert!(!md.contains("[inject]"));
+        assert!(!md.contains("`|`"));
+        assert!(md.contains("\\[inject\\]"));
+        assert!(md.contains("\\`\\|\\`"));
     }
 }

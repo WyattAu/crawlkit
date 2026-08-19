@@ -4,7 +4,6 @@
 
 use crawlkit_engine::analyzers::{AnalysisContext, Analyzer, Finding};
 use crawlkit_engine::storage::{IssueCategory, Severity};
-use crawlkit_engine::CrawlConfig;
 
 /// Custom analyzer that checks for specific content patterns.
 pub struct ContentPatternAnalyzer {
@@ -22,7 +21,7 @@ impl Analyzer for ContentPatternAnalyzer {
         "content-pattern"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let content = ctx
             .page

@@ -211,7 +211,7 @@ pub struct Finding {
 ///
 /// impl Analyzer for MyAnalyzer {
 ///     fn name(&self) -> &str { "my-analyzer" }
-///     fn analyze(&self, _ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+///     fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
 ///         vec![]
 ///     }
 /// }
@@ -221,7 +221,7 @@ pub trait Analyzer: Send + Sync {
     fn name(&self) -> &str;
 
     /// Analyze a page and return any findings/issues.
-    fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding>;
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding>;
 }
 
 /// Stop words for keyword density analysis (common English words).
@@ -267,45 +267,94 @@ impl AnalyzerRegistry {
     /// canonical URLs, meta tags, headings, links, images, structured data,
     /// security, accessibility, social media, AI crawlers, and WASM patterns.
     pub fn new(_config: &CrawlConfig) -> Self {
-        Self {
-            analyzers: vec![
-                Box::new(HttpStatusAnalyzer::new()),
-                Box::new(RedirectChainAnalyzer::new()),
-                Box::new(CanonicalUrlValidator::new()),
-                Box::new(HreflangValidator::new()),
-                Box::new(SitemapAnalyzer::empty()),
-                Box::new(RobotsTxtAnalyzer::empty()),
-                Box::new(MetaTagAnalyzer::new()),
-                Box::new(HeadingHierarchyAnalyzer::new()),
-                Box::new(LinkAnalyzer::new()),
-                Box::new(ImageAnalyzer::new()),
-                Box::new(StructuredDataValidator::new()),
-                Box::new(ContentQualityAnalyzer::new()),
-                Box::new(WordCountAnalyzer::new()),
-                Box::new(SecurityHeaderAnalyzer::new()),
-                Box::new(SslCertificateValidator::empty()),
-                Box::new(MobileFriendlinessChecker::new()),
-                Box::new(AccessibilityAnalyzer::new()),
-                Box::new(SocialMediaAnalyzer::new()),
-                Box::new(EntityAnalyzer::new()),
-                Box::new(EnhancedReadabilityAnalyzer::new()),
-                Box::new(KeywordAnalyzer::new()),
-                Box::new(EcommerceSignalsAnalyzer::new()),
-                Box::new(InternationalSeoAnalyzer::new()),
-                // Phase 8: AI Search Optimization Analyzers
-                Box::new(crate::ai_analyzers::AiCrawlerAccessibilityAnalyzer::new()),
-                Box::new(crate::ai_analyzers::AiContentStructureAnalyzer::new()),
-                Box::new(crate::ai_analyzers::AiCitationEligibilityAnalyzer::new()),
-                Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()),
-                // Phase 8: WASM Error Detection Analyzers
-                #[cfg(feature = "full")]
-                Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()),
-                // Advanced canonical & hreflang analysis
-                Box::new(crate::advanced_canonical::AdvancedCanonicalAnalyzer::new()),
-                Box::new(crate::advanced_canonical::SitemapCanonicalValidator::new()),
-                Box::new(crate::advanced_canonical::UrlFormatValidator::new()),
-            ],
+        Self::build_registry(true, true)
+    }
+
+    /// Create a registry with the default analyzers, honouring runtime
+    /// feature flags.
+    ///
+    /// This delegates to the same single registration site as
+    /// [`AnalyzerRegistry::new`]; [`crate::FLAG_AI_ANALYZERS`] and
+    /// [`crate::FLAG_WASM_ANALYZERS`] control whether the optional AI and
+    /// WASM analyzer groups are included.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::analyzers::AnalyzerRegistry;
+    /// use crawlkit_engine::{FeatureFlags, FLAG_AI_ANALYZERS};
+    ///
+    /// let mut flags = FeatureFlags::default();
+    /// flags.set(FLAG_AI_ANALYZERS, false);
+    /// let registry = AnalyzerRegistry::with_feature_flags(&flags);
+    /// assert!(registry.len() > 20);
+    /// ```
+    #[cfg(feature = "full")]
+    pub fn with_feature_flags(flags: &crate::FeatureFlags) -> Self {
+        Self::build_registry(
+            flags.get(crate::FLAG_AI_ANALYZERS),
+            flags.get(crate::FLAG_WASM_ANALYZERS),
+        )
+    }
+
+    /// Single registration site for all built-in analyzers.
+    ///
+    /// `include_ai` and `include_wasm` toggle the optional analyzer groups;
+    /// every other analyzer is always registered.
+    fn build_registry(include_ai: bool, include_wasm: bool) -> Self {
+        let mut analyzers: Vec<Box<dyn Analyzer>> = vec![
+            Box::new(HttpStatusAnalyzer::new()),
+            Box::new(RedirectChainAnalyzer::new()),
+            Box::new(CanonicalUrlValidator::new()),
+            Box::new(HreflangValidator::new()),
+            Box::new(SitemapAnalyzer::empty()),
+            Box::new(RobotsTxtAnalyzer::empty()),
+            Box::new(MetaTagAnalyzer::new()),
+            Box::new(HeadingHierarchyAnalyzer::new()),
+            Box::new(LinkAnalyzer::new()),
+            Box::new(ImageAnalyzer::new()),
+            Box::new(StructuredDataValidator::new()),
+            Box::new(ContentQualityAnalyzer::new()),
+            Box::new(WordCountAnalyzer::new()),
+            Box::new(SecurityHeaderAnalyzer::new()),
+            Box::new(SslCertificateValidator::empty()),
+            Box::new(MobileFriendlinessChecker::new()),
+            Box::new(AccessibilityAnalyzer::new()),
+            Box::new(SocialMediaAnalyzer::new()),
+            Box::new(EntityAnalyzer::new()),
+            Box::new(EnhancedReadabilityAnalyzer::new()),
+            Box::new(KeywordAnalyzer::new()),
+            Box::new(EcommerceSignalsAnalyzer::new()),
+            Box::new(InternationalSeoAnalyzer::new()),
+            // Advanced canonical & hreflang analysis
+            Box::new(crate::advanced_canonical::AdvancedCanonicalAnalyzer::new()),
+            Box::new(crate::advanced_canonical::SitemapCanonicalValidator::new()),
+            Box::new(crate::advanced_canonical::UrlFormatValidator::new()),
+        ];
+
+        if include_ai {
+            // Phase 8: AI Search Optimization Analyzers
+            analyzers.push(Box::new(
+                crate::ai_analyzers::AiCrawlerAccessibilityAnalyzer::new(),
+            ));
+            analyzers.push(Box::new(
+                crate::ai_analyzers::AiContentStructureAnalyzer::new(),
+            ));
+            analyzers.push(Box::new(
+                crate::ai_analyzers::AiCitationEligibilityAnalyzer::new(),
+            ));
+            analyzers.push(Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()));
         }
+
+        // Phase 8: WASM Error Detection Analyzers
+        #[cfg(feature = "full")]
+        if include_wasm {
+            analyzers.push(Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()));
+        }
+        #[cfg(not(feature = "full"))]
+        let _ = include_wasm;
+
+        Self { analyzers }
     }
 
     /// Create a registry with custom analyzers.
@@ -329,21 +378,18 @@ impl AnalyzerRegistry {
     /// Analyzers run in parallel via rayon when the `full` feature is enabled,
     /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
     /// from all analyzers.
-    pub fn analyze(&self, ctx: &AnalysisContext, config: &CrawlConfig) -> Vec<Finding> {
+    pub fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         #[cfg(feature = "full")]
         {
             use rayon::prelude::*;
             self.analyzers
                 .par_iter()
-                .flat_map(|a| a.analyze(ctx, config))
+                .flat_map(|a| a.analyze(ctx))
                 .collect()
         }
         #[cfg(not(feature = "full"))]
         {
-            self.analyzers
-                .iter()
-                .flat_map(|a| a.analyze(ctx, config))
-                .collect()
+            self.analyzers.iter().flat_map(|a| a.analyze(ctx)).collect()
         }
     }
 
@@ -420,7 +466,7 @@ mod tests {
     fn test_http_status_200() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         // Should have info about status category
         assert!(findings.iter().any(|f| f.code == "HTTP006"));
     }
@@ -429,7 +475,7 @@ mod tests {
     fn test_http_status_404() {
         let page = make_page("https://example.com/missing");
         let ctx = make_ctx(&page, Some(404));
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP004"));
     }
 
@@ -437,7 +483,7 @@ mod tests {
     fn test_http_status_500() {
         let page = make_page("https://example.com/error");
         let ctx = make_ctx(&page, Some(500));
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP005"));
         assert!(findings.iter().any(|f| f.severity == Severity::Critical));
     }
@@ -446,7 +492,7 @@ mod tests {
     fn test_http_status_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP001"));
     }
 
@@ -455,7 +501,7 @@ mod tests {
         let mut page = make_page("https://example.com/soft404");
         page.word_count = 0;
         let ctx = make_ctx(&page, Some(200));
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP003"));
     }
 
@@ -471,7 +517,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = HttpStatusAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP002"));
     }
 
@@ -481,7 +527,7 @@ mod tests {
     fn test_redirect_no_hops() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -504,7 +550,7 @@ mod tests {
             redirect_chain: &hops,
             robots_txt: None,
         };
-        let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR001"));
     }
 
@@ -532,7 +578,7 @@ mod tests {
             redirect_chain: &hops,
             robots_txt: None,
         };
-        let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR002"));
     }
 
@@ -553,7 +599,7 @@ mod tests {
             redirect_chain: &hops,
             robots_txt: None,
         };
-        let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR003"));
     }
 
@@ -574,7 +620,7 @@ mod tests {
             redirect_chain: &hops,
             robots_txt: None,
         };
-        let findings = RedirectChainAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR004"));
     }
 
@@ -584,7 +630,7 @@ mod tests {
     fn test_canonical_missing() {
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = CanonicalUrlValidator::new().analyze(&ctx, &default_config());
+        let findings = CanonicalUrlValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CANON001"));
     }
 
@@ -593,7 +639,7 @@ mod tests {
         let mut page = make_page("https://example.com/page");
         page.meta.canonical = Some(Url::parse("https://example.com/page").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        let findings = CanonicalUrlValidator::new().analyze(&ctx, &default_config());
+        let findings = CanonicalUrlValidator::new().analyze(&ctx);
         // Self-referencing is fine — no mismatch finding
         assert!(!findings.iter().any(|f| f.code == "CANON003"));
     }
@@ -603,7 +649,7 @@ mod tests {
         let mut page = make_page("https://example.com/page");
         page.meta.canonical = Some(Url::parse("https://example.com/other").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        let findings = CanonicalUrlValidator::new().analyze(&ctx, &default_config());
+        let findings = CanonicalUrlValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CANON003"));
     }
 
@@ -613,7 +659,7 @@ mod tests {
     fn test_hreflang_no_tags() {
         let page = make_page("https://example.com/en");
         let ctx = make_ctx(&page, Some(200));
-        let findings = HreflangValidator::new().analyze(&ctx, &default_config());
+        let findings = HreflangValidator::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -631,7 +677,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HreflangValidator::new().analyze(&ctx, &default_config());
+        let findings = HreflangValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HREF001"));
     }
 
@@ -649,7 +695,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HreflangValidator::new().analyze(&ctx, &default_config());
+        let findings = HreflangValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HREF002"));
     }
 
@@ -671,7 +717,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HreflangValidator::new().analyze(&ctx, &default_config());
+        let findings = HreflangValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HREF003"));
     }
 
@@ -693,7 +739,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HreflangValidator::new().analyze(&ctx, &default_config());
+        let findings = HreflangValidator::new().analyze(&ctx);
         // No errors for valid setup
         assert!(!findings.iter().any(|f| f.severity == Severity::Error));
     }
@@ -704,8 +750,9 @@ mod tests {
     fn test_sitemap_no_data() {
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SitemapAnalyzer::empty().analyze(&ctx, &default_config());
-        assert!(findings.iter().any(|f| f.code == "SITEMAP001"));
+        let findings = SitemapAnalyzer::empty().analyze(&ctx);
+        // Empty-data analyzers must not emit per-page noise findings.
+        assert!(findings.is_empty());
     }
 
     #[test]
@@ -715,7 +762,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, Vec::new());
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SITEMAP002"));
     }
 
@@ -726,7 +773,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, Vec::new());
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SITEMAP002"));
     }
 
@@ -743,7 +790,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, entries);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SITEMAP003"));
     }
 
@@ -760,7 +807,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, entries);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SITEMAP004"));
     }
 
@@ -777,7 +824,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, entries);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SITEMAP005"));
     }
 
@@ -794,7 +841,7 @@ mod tests {
         let analyzer = SitemapAnalyzer::new(known, entries);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         // No errors for valid metadata
         assert!(!findings.iter().any(|f| f.severity == Severity::Error));
     }
@@ -805,7 +852,7 @@ mod tests {
     fn test_robots_empty() {
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = RobotsTxtAnalyzer::empty().analyze(&ctx, &default_config());
+        let findings = RobotsTxtAnalyzer::empty().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -821,7 +868,7 @@ mod tests {
         let analyzer = RobotsTxtAnalyzer::new(rules, Vec::new());
         let page = make_page("https://example.com/admin/secret");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ROBOT002"));
     }
 
@@ -837,7 +884,7 @@ mod tests {
         let analyzer = RobotsTxtAnalyzer::new(rules, Vec::new());
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "ROBOT002"));
     }
 
@@ -853,7 +900,7 @@ mod tests {
         let analyzer = RobotsTxtAnalyzer::new(rules, Vec::new());
         let page = make_page("https://example.com/admin/public/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ROBOT001"));
     }
 
@@ -869,7 +916,7 @@ mod tests {
         let analyzer = RobotsTxtAnalyzer::new(rules, Vec::new());
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ROBOT003"));
     }
 
@@ -885,7 +932,7 @@ mod tests {
         let analyzer = RobotsTxtAnalyzer::new(rules, vec!["not-a-url".to_string()]);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ROBOT004"));
     }
 
@@ -895,7 +942,7 @@ mod tests {
     fn test_meta_missing_title() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META001"));
     }
 
@@ -904,7 +951,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("Hi".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META002"));
     }
 
@@ -913,7 +960,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("A".repeat(80));
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META003"));
     }
 
@@ -922,7 +969,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("A".repeat(45));
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "META002"));
         assert!(!findings.iter().any(|f| f.code == "META003"));
     }
@@ -931,7 +978,7 @@ mod tests {
     fn test_meta_missing_description() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META004"));
     }
 
@@ -940,7 +987,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("Short".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META005"));
     }
 
@@ -949,7 +996,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(200));
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META006"));
     }
 
@@ -957,7 +1004,7 @@ mod tests {
     fn test_meta_missing_og_tags() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         // Should flag og:title, og:description, og:image, og:url, og:type
         let og_codes: Vec<&str> = findings
             .iter()
@@ -971,7 +1018,7 @@ mod tests {
     fn test_meta_missing_twitter_tags() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         // Should flag twitter:card, twitter:title, twitter:image
         let tw_count = findings.iter().filter(|f| f.code == "SOCIAL007").count();
         assert!(tw_count >= 1);
@@ -981,7 +1028,7 @@ mod tests {
     fn test_meta_missing_viewport() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "META009"));
     }
 
@@ -999,7 +1046,7 @@ mod tests {
         page.meta.twitter.title = Some("Twitter Title".to_string());
         page.meta.twitter.image = Some("https://example.com/tw.png".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MetaTagAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = MetaTagAnalyzer::new().analyze(&ctx);
         // Should have no errors or warnings about missing tags
         assert!(!findings
             .iter()
@@ -1012,7 +1059,7 @@ mod tests {
     fn test_heading_no_headings() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HEAD001"));
     }
 
@@ -1032,7 +1079,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HEAD002"));
     }
 
@@ -1052,7 +1099,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HEAD003"));
     }
 
@@ -1072,7 +1119,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HEAD004"));
     }
 
@@ -1102,7 +1149,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "HEAD004"));
     }
 
@@ -1137,7 +1184,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = HeadingHierarchyAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HEAD005"));
     }
 
@@ -1158,7 +1205,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("Good Title Here for SEO".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = registry.analyze(&ctx, &config);
+        let findings = registry.analyze(&ctx);
         // Should produce findings from multiple analyzers
         assert!(!findings.is_empty());
     }
@@ -1170,7 +1217,7 @@ mod tests {
             fn name(&self) -> &str {
                 "dummy"
             }
-            fn analyze(&self, _ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+            fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
                 vec![Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Custom("test".to_string()),
@@ -1188,7 +1235,7 @@ mod tests {
 
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = registry.analyze(&ctx, &default_config());
+        let findings = registry.analyze(&ctx);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, "DUMMY001");
     }
@@ -1306,7 +1353,7 @@ mod tests {
         let registry = AnalyzerRegistry::new(&config);
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = registry.analyze(&ctx, &config);
+        let findings = registry.analyze(&ctx);
 
         // A minimal page should produce several findings
         let codes: Vec<&str> = findings.iter().map(|f| f.code.as_str()).collect();
@@ -1352,7 +1399,7 @@ mod tests {
         page.has_skip_link = true;
 
         let ctx = make_ctx(&page, Some(200));
-        let findings = registry.analyze(&ctx, &config);
+        let findings = registry.analyze(&ctx);
 
         // Should have few/no errors
         let errors: Vec<&Finding> = findings
@@ -1374,7 +1421,7 @@ mod tests {
     fn test_link_analyzer_no_links() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK001"));
         let link001 = findings.iter().find(|f| f.code == "LINK001").unwrap();
         assert!(link001.description.contains("Internal: 0"));
@@ -1411,7 +1458,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         let link001 = findings.iter().find(|f| f.code == "LINK001").unwrap();
         assert!(link001.description.contains("Internal: 2"));
         assert!(link001.description.contains("External: 1"));
@@ -1429,7 +1476,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK003"));
     }
 
@@ -1445,7 +1492,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK004"));
     }
 
@@ -1461,7 +1508,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK005"));
     }
 
@@ -1477,7 +1524,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(404));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK002"));
     }
 
@@ -1488,7 +1535,7 @@ mod tests {
         let analyzer = LinkAnalyzer::with_inbound_links(inbound);
         let page = make_page("https://example.com/orphan");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "LINK006"));
     }
 
@@ -1499,7 +1546,7 @@ mod tests {
         let analyzer = LinkAnalyzer::with_inbound_links(inbound);
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "LINK006"));
     }
 
@@ -1515,7 +1562,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = LinkAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = LinkAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "LINK003"));
     }
 
@@ -1527,7 +1574,7 @@ mod tests {
     fn test_image_analyzer_no_images() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ImageAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -1543,7 +1590,7 @@ mod tests {
             is_lazy_loaded: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ImageAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "IMG001"));
     }
 
@@ -1559,7 +1606,7 @@ mod tests {
             is_lazy_loaded: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ImageAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "IMG001"));
     }
 
@@ -1593,7 +1640,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ImageAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "IMG003"));
         let img003 = findings.iter().find(|f| f.code == "IMG003").unwrap();
         assert!(img003.description.contains("2 of 3"));
@@ -1611,7 +1658,7 @@ mod tests {
             is_lazy_loaded: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ImageAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ImageAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "IMG004"));
     }
 
@@ -1651,7 +1698,7 @@ mod tests {
     fn test_structured_data_no_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD001"));
     }
 
@@ -1664,7 +1711,7 @@ mod tests {
             data: serde_json::json!({"@type": "Article", "headline": "Test"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD002"));
     }
 
@@ -1677,7 +1724,7 @@ mod tests {
             data: serde_json::json!({"@type": "Article"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD003"));
     }
 
@@ -1690,7 +1737,7 @@ mod tests {
             data: serde_json::json!({"@context": "https://schema.org"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD004"));
     }
 
@@ -1703,7 +1750,7 @@ mod tests {
             data: serde_json::json!({"@context": "https://schema.org", "@type": "CustomWidget"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD005"));
     }
 
@@ -1719,7 +1766,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SD006"));
         let sd006 = findings.iter().find(|f| f.code == "SD006").unwrap();
         assert!(sd006.description.contains("headline"));
@@ -1740,7 +1787,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SD006"));
     }
 
@@ -1757,7 +1804,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SD006"));
     }
 
@@ -1774,7 +1821,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = StructuredDataValidator::new().analyze(&ctx, &default_config());
+        let findings = StructuredDataValidator::new().analyze(&ctx);
         // "schema.org" without https is accepted as valid
         assert!(!findings.iter().any(|f| f.code == "SD003"));
     }
@@ -1787,7 +1834,7 @@ mod tests {
     fn test_content_quality_empty_page() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx);
         // Should flag zero content
         assert!(findings.iter().any(|f| f.code == "CQ003"));
     }
@@ -1797,7 +1844,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.word_count = 150;
         let ctx = make_ctx(&page, Some(200));
-        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CQ004"));
     }
 
@@ -1806,7 +1853,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.word_count = 5000;
         let ctx = make_ctx(&page, Some(200));
-        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CQ005"));
     }
 
@@ -1821,7 +1868,7 @@ mod tests {
             length: 66,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CQ001"));
     }
 
@@ -1847,7 +1894,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = ContentQualityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = ContentQualityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CQ002"));
         let cq002 = findings.iter().find(|f| f.code == "CQ002").unwrap();
         assert!(cq002.description.contains("rust"));
@@ -1895,7 +1942,7 @@ mod tests {
     fn test_word_count_analyzer_empty() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "WC001"));
         assert!(findings.iter().any(|f| f.code == "WC002"));
     }
@@ -1910,7 +1957,7 @@ mod tests {
             length: 22,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
         let wc001 = findings.iter().find(|f| f.code == "WC001").unwrap();
         assert!(wc001.description.contains("Words: 150"));
     }
@@ -1925,7 +1972,7 @@ mod tests {
             length: 5,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "WC003"));
     }
 
@@ -1941,7 +1988,7 @@ mod tests {
             length: 150,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "WC004"));
     }
 
@@ -1962,7 +2009,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = WordCountAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
         // Should have WC001 but not WC002 or WC003
         assert!(findings.iter().any(|f| f.code == "WC001"));
         assert!(!findings.iter().any(|f| f.code == "WC002"));
@@ -1977,7 +2024,7 @@ mod tests {
     fn test_security_headers_none_present() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // Should flag missing CSP, HSTS, XFO, XCTO
         assert!(findings.iter().any(|f| f.code == "SEC001"));
         assert!(findings.iter().any(|f| f.code == "SEC002"));
@@ -2031,7 +2078,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // Should not flag any missing headers
         assert!(!findings.iter().any(|f| f.code == "SEC001"));
         assert!(!findings.iter().any(|f| f.code == "SEC002"));
@@ -2058,7 +2105,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC004"));
     }
 
@@ -2075,7 +2122,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC006"));
     }
 
@@ -2092,7 +2139,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // SAMEORIGIN is valid, should not flag SEC003 or SEC004
         assert!(!findings.iter().any(|f| f.code == "SEC003"));
         assert!(!findings.iter().any(|f| f.code == "SEC004"));
@@ -2114,7 +2161,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC014"));
     }
 
@@ -2134,7 +2181,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC014"));
     }
 
@@ -2154,7 +2201,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC013"));
     }
 
@@ -2174,7 +2221,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SEC013"));
     }
 
@@ -2202,7 +2249,7 @@ mod tests {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // Lowercase header names should still be found
         assert!(!findings.iter().any(|f| f.code == "SEC001"));
         assert!(!findings.iter().any(|f| f.code == "SEC002"));
@@ -2214,7 +2261,7 @@ mod tests {
     fn test_security_headers_score_decreases_with_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         let score_finding = findings.iter().find(|f| f.code == "SEC012").unwrap();
         // With multiple missing headers, score should be well below 100
         assert!(score_finding.description.contains("/100"));
@@ -2236,8 +2283,9 @@ mod tests {
     fn test_ssl_no_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SslCertificateValidator::empty().analyze(&ctx, &default_config());
-        assert!(findings.iter().any(|f| f.code == "SSL007"));
+        let findings = SslCertificateValidator::empty().analyze(&ctx);
+        // Empty-data analyzers must not emit per-page noise findings.
+        assert!(findings.is_empty());
     }
 
     #[test]
@@ -2255,7 +2303,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SSL001"));
     }
 
@@ -2274,7 +2322,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         // Should NOT be expired but should be flagged as expiring soon (or not, depending on
         // the current date relative to 2025-08-01)
         let has_expiry_finding = findings
@@ -2299,7 +2347,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         // Should not have critical or error findings
         assert!(!findings.iter().any(|f| f.severity == Severity::Critical));
         assert!(!findings.iter().any(|f| f.severity == Severity::Error));
@@ -2322,7 +2370,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SSL003"));
     }
 
@@ -2341,7 +2389,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://localhost");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SSL006"));
     }
 
@@ -2360,7 +2408,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SSL004"));
     }
 
@@ -2379,7 +2427,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://sub.example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SSL004"));
     }
 
@@ -2398,7 +2446,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SSL005"));
     }
 
@@ -2417,7 +2465,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SSL005"));
     }
 
@@ -2436,7 +2484,7 @@ mod tests {
         let validator = SslCertificateValidator::new(Some(cert));
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = validator.analyze(&ctx, &default_config());
+        let findings = validator.analyze(&ctx);
         // example.com is in SANs, so no mismatch
         assert!(!findings.iter().any(|f| f.code == "SSL004"));
     }
@@ -2449,7 +2497,7 @@ mod tests {
     fn test_mobile_missing_viewport() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB001"));
     }
 
@@ -2458,7 +2506,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "MOB001"));
         assert!(!findings.iter().any(|f| f.code == "MOB002"));
         assert!(!findings.iter().any(|f| f.code == "MOB003"));
@@ -2471,7 +2519,7 @@ mod tests {
         page.meta.viewport =
             Some("width=device-width, initial-scale=1, user-scalable=no".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB004"));
     }
 
@@ -2481,7 +2529,7 @@ mod tests {
         page.meta.viewport =
             Some("width=device-width, initial-scale=1, maximum-scale=1.0".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB005"));
     }
 
@@ -2490,7 +2538,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.viewport = Some("width=980".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB003"));
     }
 
@@ -2499,7 +2547,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.viewport = Some("initial-scale=1".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB002"));
     }
 
@@ -2508,7 +2556,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.viewport = Some("width=device-width, initial-scale=2.0".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB009"));
     }
 
@@ -2535,7 +2583,7 @@ mod tests {
             "width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1.0".to_string(),
         );
         let ctx = make_ctx(&page, Some(200));
-        let findings = MobileFriendlinessChecker::new().analyze(&ctx, &default_config());
+        let findings = MobileFriendlinessChecker::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MOB004"));
         assert!(findings.iter().any(|f| f.code == "MOB005"));
     }
@@ -2566,7 +2614,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y001"));
         let f = findings.iter().find(|f| f.code == "A11Y001").unwrap();
         assert!(f.description.contains("/a.png"));
@@ -2584,7 +2632,7 @@ mod tests {
             is_lazy_loaded: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y001"));
     }
 
@@ -2592,7 +2640,7 @@ mod tests {
     fn test_a11y_no_headings() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y002"));
     }
 
@@ -2605,7 +2653,7 @@ mod tests {
             length: 7,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y003"));
     }
 
@@ -2625,7 +2673,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y004"));
     }
 
@@ -2645,7 +2693,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y005"));
     }
 
@@ -2675,7 +2723,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y005"));
     }
 
@@ -2684,7 +2732,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.has_main_landmark = false;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y006"));
     }
 
@@ -2693,7 +2741,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.has_main_landmark = true;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y006"));
     }
 
@@ -2709,7 +2757,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y009"));
     }
 
@@ -2725,7 +2773,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y010"));
     }
 
@@ -2741,7 +2789,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y009"));
         assert!(!findings.iter().any(|f| f.code == "A11Y010"));
     }
@@ -2771,7 +2819,7 @@ mod tests {
             has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y011"));
     }
 
@@ -2800,7 +2848,7 @@ mod tests {
             has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y011"));
     }
 
@@ -2809,7 +2857,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = true;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y012"));
     }
 
@@ -2818,7 +2866,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = false;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y012"));
     }
 
@@ -2828,7 +2876,7 @@ mod tests {
         page.tables_total = 2;
         page.tables_with_headers = 1;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y014"));
         let f = findings.iter().find(|f| f.code == "A11Y014").unwrap();
         assert!(f.description.contains("1 of 2"));
@@ -2840,7 +2888,7 @@ mod tests {
         page.tables_total = 2;
         page.tables_with_headers = 2;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y014"));
     }
 
@@ -2849,7 +2897,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.has_lang_attribute = false;
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "A11Y016"));
     }
 
@@ -2859,7 +2907,7 @@ mod tests {
         page.has_lang_attribute = true;
         page.html_lang = Some("en".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "A11Y016"));
     }
 
@@ -2867,7 +2915,7 @@ mod tests {
     fn test_a11y_no_images_no_findings() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         // Should not have A11Y001 (images missing alt) when there are no images
         assert!(!findings.iter().any(|f| f.code == "A11Y001"));
     }
@@ -2901,7 +2949,7 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = AccessibilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = AccessibilityAnalyzer::new().analyze(&ctx);
         // Well-accessible page should have no errors
         let errors: Vec<&Finding> = findings
             .iter()
@@ -2923,7 +2971,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.og.image = Some("https://example.com/og.png".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOCIAL001"));
     }
 
@@ -2934,7 +2982,7 @@ mod tests {
         page.og_image_width = Some(1200);
         page.og_image_height = Some(630);
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SOCIAL001"));
         assert!(!findings.iter().any(|f| f.code == "SOCIAL002"));
         assert!(!findings.iter().any(|f| f.code == "SOCIAL003"));
@@ -2947,7 +2995,7 @@ mod tests {
         page.og_image_width = Some(600);
         page.og_image_height = Some(315);
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOCIAL002"));
         assert!(findings.iter().any(|f| f.code == "SOCIAL003"));
     }
@@ -2959,7 +3007,7 @@ mod tests {
         page.og_image_width = Some(800);
         page.og_image_height = Some(630);
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOCIAL002"));
         assert!(!findings.iter().any(|f| f.code == "SOCIAL003"));
     }
@@ -2968,7 +3016,7 @@ mod tests {
     fn test_social_missing_twitter_card() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOCIAL004"));
     }
 
@@ -2977,7 +3025,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.twitter.card = Some("summary_large_image".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SOCIAL004"));
         assert!(!findings.iter().any(|f| f.code == "SOCIAL005"));
     }
@@ -2987,7 +3035,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.twitter.card = Some("invalid_type".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOCIAL005"));
     }
 
@@ -2995,7 +3043,7 @@ mod tests {
     fn test_social_incomplete_og_tags() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         // Missing og:title, og:description, og:image, og:url, og:type
         assert!(findings.iter().any(|f| f.code == "SOCIAL006"));
         let f = findings.iter().find(|f| f.code == "SOCIAL006").unwrap();
@@ -3011,7 +3059,7 @@ mod tests {
         page.meta.og.url = Some("https://example.com".to_string());
         page.meta.og.r#type = Some("website".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SOCIAL006"));
     }
 
@@ -3028,7 +3076,7 @@ mod tests {
         page.meta.twitter.description = Some("Desc".to_string());
         page.meta.twitter.image = Some("https://example.com/tw.png".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         let score = findings.iter().find(|f| f.code == "SOCIAL008").unwrap();
         assert!(score.description.contains("8/8"));
     }
@@ -3038,7 +3086,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.meta.og.image = None;
         let ctx = make_ctx(&page, Some(200));
-        let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = SocialMediaAnalyzer::new().analyze(&ctx);
         // No OG image = no dimension warning needed
         assert!(!findings.iter().any(|f| f.code == "SOCIAL001"));
     }
@@ -3049,7 +3097,7 @@ mod tests {
             let mut page = make_page("https://example.com");
             page.meta.twitter.card = Some(card_type.to_string());
             let ctx = make_ctx(&page, Some(200));
-            let findings = SocialMediaAnalyzer::new().analyze(&ctx, &default_config());
+            let findings = SocialMediaAnalyzer::new().analyze(&ctx);
             assert!(
                 !findings.iter().any(|f| f.code == "SOCIAL005"),
                 "Card type {card_type} should be valid"
@@ -3065,7 +3113,7 @@ mod tests {
     fn test_entity_analyzer_empty_page() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = EntityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EntityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ENTITY005"));
         assert!(findings.iter().any(|f| f.code == "ENTITY006"));
     }
@@ -3147,7 +3195,7 @@ mod tests {
         }];
         page.word_count = 500;
         let ctx = make_ctx(&page, Some(200));
-        let findings = EntityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EntityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ENTITY001"));
     }
 
@@ -3159,7 +3207,7 @@ mod tests {
     fn test_readability_empty_page() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -3173,7 +3221,7 @@ mod tests {
             length: 48,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "READ001"));
         assert!(findings.iter().any(|f| f.code == "READ005"));
         let fre = findings.iter().find(|f| f.code == "READ005").unwrap();
@@ -3193,7 +3241,7 @@ mod tests {
             length: 150,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "READ001"));
         let fk = findings.iter().find(|f| f.code == "READ001").unwrap();
         assert!(fk.description.contains("Grade level:"));
@@ -3220,7 +3268,7 @@ mod tests {
             length: 140,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EnhancedReadabilityAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "READ001"));
         assert!(findings.iter().any(|f| f.code == "READ002"));
         assert!(findings.iter().any(|f| f.code == "READ003"));
@@ -3293,7 +3341,7 @@ mod tests {
     fn test_keyword_analyzer_empty_page() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = KeywordAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -3314,7 +3362,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = KeywordAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "KW001"));
         assert!(findings.iter().any(|f| f.code == "KW002"));
     }
@@ -3384,7 +3432,7 @@ mod tests {
             length: 55,
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = KeywordAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = KeywordAnalyzer::new().analyze(&ctx);
         let kw003 = findings.iter().find(|f| f.code == "KW003");
         assert!(kw003.is_some());
         assert_eq!(kw003.unwrap().severity, Severity::Warning);
@@ -3398,7 +3446,7 @@ mod tests {
     fn test_ecom_empty_page() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -3421,7 +3469,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ECOM001"));
         assert!(findings.iter().any(|f| f.code == "ECOM002"));
         assert!(findings.iter().any(|f| f.code == "ECOM003"));
@@ -3446,7 +3494,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ECOM004"));
     }
 
@@ -3464,7 +3512,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ECOM006"));
     }
 
@@ -3481,7 +3529,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ECOM001"));
         assert!(!findings.iter().any(|f| f.code == "ECOM002"));
     }
@@ -3499,7 +3547,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = EcommerceSignalsAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 
@@ -3512,7 +3560,7 @@ mod tests {
         let mut page = make_page("https://example.com");
         page.html_lang = Some("en".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ISEO004"));
     }
 
@@ -3554,7 +3602,7 @@ mod tests {
             url: Url::parse("https://example.com/en/about").unwrap(),
         }];
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ISEO001"));
     }
 
@@ -3572,7 +3620,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ISEO002"));
     }
 
@@ -3590,7 +3638,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ISEO003"));
     }
 
@@ -3609,7 +3657,7 @@ mod tests {
         ];
         page.html_lang = Some("en".to_string());
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "ISEO006"));
     }
 
@@ -3631,7 +3679,7 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.severity == Severity::Error));
     }
 
@@ -3648,7 +3696,7 @@ mod tests {
         let mut page = make_page("https://example.com/products");
         page.html_lang = None;
         let ctx = make_ctx(&page, Some(200));
-        let findings = InternationalSeoAnalyzer::new().analyze(&ctx, &default_config());
+        let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "ISEO004"));
     }
 

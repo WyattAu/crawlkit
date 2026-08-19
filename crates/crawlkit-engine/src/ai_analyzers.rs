@@ -1,7 +1,6 @@
 use crate::ai_bots::AiBotRegistry;
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 // ---------------------------------------------------------------------------
 // AI Crawler Accessibility Analyzer
@@ -33,7 +32,7 @@ impl Analyzer for AiCrawlerAccessibilityAnalyzer {
         "ai-crawler-accessibility"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -108,7 +107,7 @@ impl Analyzer for AiContentStructureAnalyzer {
         "ai-content-structure"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -218,7 +217,7 @@ impl Analyzer for AiCitationEligibilityAnalyzer {
         "ai-citation-eligibility"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -302,7 +301,7 @@ impl Analyzer for AiAnswerBoxAnalyzer {
         "ai-answer-box"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -438,10 +437,6 @@ mod tests {
         }
     }
 
-    fn default_config() -> CrawlConfig {
-        CrawlConfig::default()
-    }
-
     #[test]
     fn test_ai_crawler_accessibility_analyzer() {
         let analyzer = AiCrawlerAccessibilityAnalyzer::new();
@@ -456,7 +451,7 @@ mod tests {
             robots_txt: None,
         };
 
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         // Should find "no robots.txt" since we don't have one
         assert!(findings.iter().any(|f| f.code == "AI-ACC009"));
     }
@@ -476,7 +471,7 @@ mod tests {
             robots_txt: None,
         };
 
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "AI-CIT001"));
     }
 
@@ -501,7 +496,7 @@ mod tests {
             robots_txt: None,
         };
 
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "AI-AB001"));
     }
 

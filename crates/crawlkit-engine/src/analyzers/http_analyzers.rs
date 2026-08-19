@@ -3,7 +3,6 @@ use std::time::Duration;
 use url::Url;
 
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding, SslCertificateInfo};
 
@@ -59,7 +58,7 @@ impl Analyzer for HttpStatusAnalyzer {
         "http-status"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -215,7 +214,7 @@ impl Analyzer for RedirectChainAnalyzer {
         "redirect-chain"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let hops = ctx.redirect_chain;
@@ -378,7 +377,7 @@ impl Analyzer for RobotsTxtAnalyzer {
         "robots-txt"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -533,27 +532,15 @@ impl Analyzer for SslCertificateValidator {
         "ssl-certificate"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
+        // No certificate data was captured for this crawl; SSL validation is
+        // a silent no-op rather than a per-page informational finding.
         let info = match &self.cert_info {
             Some(i) => i,
-            None => {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Security,
-                    code: "SSL007".to_string(),
-                    title: "No SSL certificate data available".to_string(),
-                    description: "No TLS certificate information was provided for validation."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Provide certificate data from the TLS connection to enable \
-                                     SSL validation."
-                        .to_string(),
-                });
-                return findings;
-            }
+            None => return Vec::new(),
         };
 
         // --- Expired certificate ---

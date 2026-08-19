@@ -150,13 +150,7 @@ async fn main() -> Result<()> {
         );
 
         // Parse HTML
-        let parsed = match HtmlParser::parse(&result.body, &entry.url) {
-            Ok(p) => p,
-            Err(e) => {
-                eprintln!("  Parse error {}: {e}", entry.url);
-                continue;
-            }
-        };
+        let parsed = HtmlParser::parse(&result.body, &entry.url);
 
         // Run analyzers
         let headers_vec: Vec<(String, String)> = result.headers.clone();
@@ -169,7 +163,7 @@ async fn main() -> Result<()> {
             redirect_chain: &[],
             robots_txt: None,
         };
-        let findings = analyzer_registry.analyze(&ctx, &config);
+        let findings = analyzer_registry.analyze(&ctx);
         issues_found += findings.len();
 
         // Store page

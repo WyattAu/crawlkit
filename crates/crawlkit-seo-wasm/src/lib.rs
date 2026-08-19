@@ -122,15 +122,7 @@ pub fn analyze_seo(html: &str, url: &str) -> String {
         .unwrap_or_else(|_| Url::parse("https://example.com").expect("hardcoded URL must parse"));
 
     // 2. Parse HTML with crawlkit-engine parser
-    let parsed: ParsedPage = match HtmlParser::parse(html, &parsed_url) {
-        Ok(p) => p,
-        Err(e) => {
-            let err = serde_json::json!({
-                "error": format!("HTML parse error: {e}"),
-            });
-            return err.to_string();
-        }
-    };
+    let parsed: ParsedPage = HtmlParser::parse(html, &parsed_url);
 
     // 3. Build analyzer registry and config
     let config = CrawlConfig::default();
@@ -150,7 +142,7 @@ pub fn analyze_seo(html: &str, url: &str) -> String {
     };
 
     // 5. Run analyzers
-    let findings = registry.analyze(&ctx, &config);
+    let findings = registry.analyze(&ctx);
 
     // 6. Extract metadata from parsed page
     let title = parsed.meta.title.clone().unwrap_or_default();

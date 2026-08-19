@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{
     count_sentences, count_syllables, flesch_kincaid_grade, flesch_reading_ease, is_utility_page,
@@ -139,7 +138,7 @@ impl Analyzer for StructuredDataValidator {
         "structured-data"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -279,7 +278,7 @@ impl Analyzer for ContentQualityAnalyzer {
         "content-quality"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -712,7 +711,7 @@ impl Analyzer for EntityAnalyzer {
         "entity-analyzer"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -923,7 +922,7 @@ impl Analyzer for EnhancedReadabilityAnalyzer {
         "enhanced-readability"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

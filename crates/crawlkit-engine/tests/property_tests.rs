@@ -405,7 +405,7 @@ proptest! {
     #[test]
     fn empty_html_empty_meta(_seed in 0u32..1000) {
         let url = Url::parse("https://example.com").unwrap();
-        let page = crawlkit_engine::HtmlParser::parse("", &url).unwrap();
+        let page = crawlkit_engine::HtmlParser::parse("", &url);
         prop_assert!(page.meta.title.is_none());
         prop_assert!(page.meta.description.is_none());
         prop_assert!(page.headings.is_empty());
@@ -423,8 +423,8 @@ proptest! {
             "<!DOCTYPE html><html><head><title>{}</title></head><body></body></html>",
             title
         );
-        let page1 = crawlkit_engine::HtmlParser::parse(&html, &url).unwrap();
-        let page2 = crawlkit_engine::HtmlParser::parse(&html, &url).unwrap();
+        let page1 = crawlkit_engine::HtmlParser::parse(&html, &url);
+        let page2 = crawlkit_engine::HtmlParser::parse(&html, &url);
         prop_assert_eq!(&page1.meta.title, &page2.meta.title);
         prop_assert_eq!(page1.meta.title.as_deref(), Some(title.as_str()));
     }
@@ -454,7 +454,7 @@ proptest! {
                 title
             )
         };
-        let page = crawlkit_engine::HtmlParser::parse(&html, &url).unwrap();
+        let page = crawlkit_engine::HtmlParser::parse(&html, &url);
         if has_desc {
             prop_assert!(page.meta.description.is_some());
         } else {
@@ -479,7 +479,7 @@ proptest! {
              </head><body></body></html>",
             title, desc
         );
-        let page = crawlkit_engine::HtmlParser::parse(&html, &url).unwrap();
+        let page = crawlkit_engine::HtmlParser::parse(&html, &url);
         prop_assert_eq!(page.meta.title.as_deref(), Some(title.as_str()));
         prop_assert_eq!(page.meta.description.as_deref(), Some(desc.as_str()));
         prop_assert!(page.links.is_empty());
@@ -500,7 +500,7 @@ proptest! {
             "<!DOCTYPE html><html><body><p>{}</p></body></html>",
             body_text
         );
-        let page = crawlkit_engine::HtmlParser::parse(&html, &url).unwrap();
+        let page = crawlkit_engine::HtmlParser::parse(&html, &url);
         let expected: usize = words.iter().filter(|w| !w.is_empty()).count();
         prop_assert_eq!(page.word_count, expected);
     }

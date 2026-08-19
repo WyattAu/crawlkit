@@ -1,5 +1,4 @@
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding};
 
@@ -52,7 +51,7 @@ impl Analyzer for ImageAnalyzer {
         "image-analyzer"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -259,7 +258,7 @@ impl Analyzer for EcommerceSignalsAnalyzer {
         "ecommerce-signals"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

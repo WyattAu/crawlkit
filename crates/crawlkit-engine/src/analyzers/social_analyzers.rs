@@ -1,5 +1,4 @@
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding};
 
@@ -31,7 +30,7 @@ impl Analyzer for SocialMediaAnalyzer {
         "social-media"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

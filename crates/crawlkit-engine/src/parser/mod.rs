@@ -26,22 +26,6 @@ use url::Url;
 
 use crate::meta::MetaTags;
 
-/// Errors that can occur during HTML parsing.
-///
-/// Covers CSS selector compilation failures, URL resolution errors,
-/// and JSON-LD parsing issues.
-#[derive(Debug, thiserror::Error)]
-pub enum ParseError {
-    #[error("selector compilation failed: {0}")]
-    Selector(String),
-
-    #[error("URL resolution failed: {0}")]
-    UrlResolution(#[from] url::ParseError),
-
-    #[error("JSON-LD parse error: {0}")]
-    JsonLd(String),
-}
-
 /// A heading extracted from the page (H1–H6).
 ///
 /// Used by the [`HeadingHierarchyAnalyzer`](crate::HeadingHierarchyAnalyzer)
@@ -261,13 +245,13 @@ pub struct ParsedPage {
 /// # Examples
 ///
 /// ```rust
-/// use crawlkit_engine::{HtmlParser, parser::ParseError};
+/// use crawlkit_engine::HtmlParser;
 /// use url::Url;
 ///
 /// let html = r#"<!DOCTYPE html><html><head><title>Test</title></head>
 /// <body><h1>Hello</h1><a href="/link">link</a></body></html>"#;
 /// let url = Url::parse("https://example.com/page").unwrap();
-/// let page = HtmlParser::parse(html, &url).unwrap();
+/// let page = HtmlParser::parse(html, &url);
 ///
 /// assert_eq!(page.meta.title.as_deref(), Some("Test"));
 /// assert_eq!(page.headings.len(), 1);
@@ -282,11 +266,10 @@ impl HtmlParser {
     /// stylesheets, structured data (JSON-LD), accessibility landmarks,
     /// and social media metadata.
     ///
-    /// # Errors
-    ///
-    /// Currently always returns `Ok`. The `ParseError` type is reserved
-    /// for future selector compilation or URL resolution failures.
-    pub fn parse(html: &str, url: &Url) -> Result<ParsedPage, ParseError> {
+    /// The underlying HTML5 parser is error-tolerant by design: malformed
+    /// input yields a best-effort DOM rather than an error, so parsing is
+    /// infallible.
+    pub fn parse(html: &str, url: &Url) -> ParsedPage {
         let document = Html::parse_document(html);
 
         let meta = Self::extract_meta(&document, url);
@@ -302,7 +285,7 @@ impl HtmlParser {
         let accessibility = Self::extract_accessibility(&document, Some(html));
         let social = Self::extract_social(&document);
 
-        Ok(ParsedPage {
+        ParsedPage {
             url: url.to_string(),
             meta,
             headings,
@@ -329,7 +312,7 @@ impl HtmlParser {
             tables_with_captions: accessibility.13,
             og_image_width: social.0,
             og_image_height: social.1,
-        })
+        }
     }
 
     // ---------------------------------------------------------------------------

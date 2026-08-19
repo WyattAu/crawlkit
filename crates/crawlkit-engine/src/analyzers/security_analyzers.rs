@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{AnalysisContext, Analyzer, Finding};
 
@@ -115,7 +114,7 @@ impl Analyzer for SecurityHeaderAnalyzer {
         "security-headers"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let headers = ctx.headers;
@@ -480,7 +479,7 @@ impl Analyzer for MobileFriendlinessChecker {
         "mobile-friendliness"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -640,7 +639,7 @@ impl Analyzer for AccessibilityAnalyzer {
         "accessibility"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

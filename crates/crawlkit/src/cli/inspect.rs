@@ -55,7 +55,7 @@ pub async fn run(
     let fetch_time = start.elapsed();
 
     pb.set_message("Parsing HTML...");
-    let parsed = HtmlParser::parse(&result.body, &url).context("Failed to parse HTML")?;
+    let parsed = HtmlParser::parse(&result.body, &url);
 
     pb.set_message("Running 28 analyzers...");
     let headers_vec: Vec<(String, String)> = result.headers.clone();
@@ -69,7 +69,7 @@ pub async fn run(
         redirect_chain: &empty_chain,
         robots_txt: None,
     };
-    let findings = registry.analyze(&ctx, &config);
+    let findings = registry.analyze(&ctx);
 
     let crux_data = if feature_flags.get(crawlkit_engine::feature_flags::FLAG_RUM_INTEGRATION) {
         let adapter = crawlkit_engine::CruxAdapter::from_env();

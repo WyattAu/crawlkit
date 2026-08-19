@@ -13,8 +13,9 @@ pub struct WasmConfig {
     pub max_fuel: u64,
     /// Maximum bytes the WASM linear memory may grow to.
     pub max_memory_bytes: usize,
-    /// Timeout for a single `analyze` call in milliseconds (reserved for
-    /// future use with epoch-based interruption).
+    /// Wall-clock timeout for a single `analyze` call in milliseconds,
+    /// enforced via wasmtime epoch interruption. A plugin that exceeds it
+    /// traps with a deadline error instead of running indefinitely.
     pub max_analysis_timeout_ms: u64,
 }
 
@@ -288,6 +289,7 @@ pub fn validate_manifest(manifest: &PluginMetadata) -> Result<(), ManifestError>
 pub struct WasmPlugin {
     pub manifest: PluginMetadata,
     config: WasmConfig,
+    engine: wasmtime::Engine,
     store: wasmtime::Store<()>,
     instance: wasmtime::Instance,
     memory: wasmtime::Memory,
@@ -313,6 +315,27 @@ impl WasmPlugin {
             ));
         }
 
+        // Capability enforcement (fail-closed): the sandbox links NO host
+        // functions — plugins are pure compute with no I/O. A manifest that
+        // requests network/filesystem/env access cannot have that request
+        // honored, so loading fails loudly instead of silently ignoring
+        // the declared capability.
+        if let Some(perms) = &manifest.plugin.permissions {
+            let network = perms.network.unwrap_or(false);
+            let filesystem = perms.filesystem.unwrap_or(false);
+            let env_vars = perms.env_vars.as_ref().is_some_and(|v| !v.is_empty());
+            if network || filesystem || env_vars {
+                return Err(PluginError::InvalidManifest(
+                    concat!(
+                        "plugin requests capabilities (network/filesystem/env_vars) ",
+                        "that the sandbox cannot grant: plugins are deny-by-default ",
+                        "pure compute with no host imports",
+                    )
+                    .to_string(),
+                ));
+            }
+        }
+
         // Validate manifest fields before loading WASM
         validate_manifest(&manifest.plugin).map_err(|e| {
             tracing::warn!(
@@ -329,9 +352,11 @@ impl WasmPlugin {
             })?;
         let wasm_path = plugin_dir.join(wasm_file);
 
-        // Configure wasmtime with fuel limits to prevent infinite loops.
+        // Configure wasmtime with fuel limits to prevent infinite loops and
+        // epoch interruption to enforce wall-clock timeouts.
         let mut engine_config = wasmtime::Config::new();
         engine_config.consume_fuel(true);
+        engine_config.epoch_interruption(true);
         let engine = wasmtime::Engine::new(&engine_config)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to create engine: {}", e)))?;
 
@@ -342,6 +367,12 @@ impl WasmPlugin {
         store
             .set_fuel(config.max_fuel)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to set fuel: {}", e)))?;
+
+        // With epoch interruption enabled, every call traps unless a
+        // deadline is armed. Load-time calls (init) run under a
+        // effectively-infinite deadline; only `analyze` arms the tight
+        // per-call timeout.
+        store.set_epoch_deadline(u64::MAX);
 
         let linker = wasmtime::Linker::new(&engine);
 
@@ -380,6 +411,7 @@ impl WasmPlugin {
         Ok(Self {
             manifest: manifest.plugin,
             config: config.clone(),
+            engine,
             store,
             instance,
             memory,
@@ -387,6 +419,10 @@ impl WasmPlugin {
     }
 
     /// Analyze HTML content using the plugin.
+    ///
+    /// Enforces the configured wall-clock timeout via epoch interruption:
+    /// a watchdog thread increments the engine epoch when the deadline
+    /// passes, trapping execution inside the guest.
     pub fn analyze(&mut self, html: &str, url: &str) -> Result<String, PluginError> {
         let analyze_func = self
             .instance
@@ -427,17 +463,55 @@ impl WasmPlugin {
             [url_ptr as usize..(url_ptr as usize + url_bytes.len())]
             .copy_from_slice(url_bytes);
 
-        let result_ptr = analyze_func
-            .call(
-                &mut self.store,
-                (
-                    html_ptr,
-                    html_bytes.len() as i32,
-                    url_ptr,
-                    url_bytes.len() as i32,
-                ),
-            )
-            .map_err(|e| PluginError::AnalysisFailed(format!("Analyze failed: {}", e)))?;
+        // Arm the wall-clock deadline for this call, then start the watchdog
+        // that bumps the engine epoch if the guest overruns.
+        self.store.set_epoch_deadline(1);
+        let watchdog =
+            EpochWatchdog::spawn(self.engine.clone(), self.config.max_analysis_timeout_ms);
+
+        let analyze_result = analyze_func.call(
+            &mut self.store,
+            (
+                html_ptr,
+                html_bytes.len() as i32,
+                url_ptr,
+                url_bytes.len() as i32,
+            ),
+        );
+
+        watchdog.cancel();
+
+        let result_ptr = analyze_result.map_err(|e| {
+            // Epoch-deadline kills surface as `Trap::Interrupt` (or an
+            // "epoch" message on some wasmtime versions); fuel exhaustion
+            // reports "all fuel consumed".
+            let is_timeout = e
+                .downcast_ref::<wasmtime::Trap>()
+                .is_some_and(|trap| matches!(trap, wasmtime::Trap::Interrupt))
+                || e.to_string().contains("epoch");
+            let is_fuel = e.to_string().contains("all fuel consumed");
+            if is_timeout {
+                PluginError::AnalysisFailed(format!(
+                    "Plugin exceeded the {}ms analysis timeout and was terminated",
+                    self.config.max_analysis_timeout_ms
+                ))
+            } else if is_fuel {
+                PluginError::AnalysisFailed(format!(
+                    "Plugin exhausted its {} instruction fuel budget and was terminated",
+                    self.config.max_fuel
+                ))
+            } else {
+                PluginError::AnalysisFailed(format!("Analyze failed: {}", e))
+            }
+        })?;
+
+        // A null (0) return means the plugin could not produce a result
+        // (e.g. allocation failure inside the guest).
+        if result_ptr == 0 {
+            return Err(PluginError::AnalysisFailed(
+                "Plugin analyze returned a null pointer".to_string(),
+            ));
+        }
 
         let result = self.read_string(result_ptr as usize)?;
 
@@ -499,6 +573,54 @@ impl WasmPlugin {
     /// Get plugin metadata.
     pub fn metadata(&self) -> &PluginMetadata {
         &self.manifest
+    }
+}
+
+/// Wall-clock watchdog for WASM plugin execution.
+///
+/// Sleeps in small increments until either cancelled (the plugin finished)
+/// or the deadline passes, at which point it increments the wasmtime engine
+/// epoch — trapping any guest execution armed with an epoch deadline.
+struct EpochWatchdog {
+    done: Arc<std::sync::atomic::AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+}
+
+impl EpochWatchdog {
+    fn spawn(engine: wasmtime::Engine, timeout_ms: u64) -> Self {
+        let done = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let flag = Arc::clone(&done);
+        let handle = std::thread::spawn(move || {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(timeout_ms);
+            while !flag.load(std::sync::atomic::Ordering::Relaxed) {
+                if std::time::Instant::now() >= deadline {
+                    engine.increment_epoch();
+                    return;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+        });
+        Self {
+            done,
+            handle: Some(handle),
+        }
+    }
+
+    /// Signal completion and join the watchdog thread.
+    fn cancel(mut self) {
+        self.done.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
+    }
+}
+
+impl Drop for EpochWatchdog {
+    fn drop(&mut self) {
+        self.done.store(true, std::sync::atomic::Ordering::Relaxed);
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }
 

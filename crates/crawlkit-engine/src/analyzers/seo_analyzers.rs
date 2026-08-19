@@ -2,7 +2,6 @@ use std::collections::{HashMap, HashSet};
 use url::Url;
 
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 use super::{is_utility_page, AnalysisContext, Analyzer, Finding};
 
@@ -43,7 +42,7 @@ impl Analyzer for CanonicalUrlValidator {
         "canonical-url"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let page_url = match Url::parse(url) {
@@ -168,7 +167,7 @@ impl Analyzer for HreflangValidator {
         "hreflang"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let hreflang_tags = &ctx.page.meta.hreflang;
@@ -329,21 +328,14 @@ impl Analyzer for SitemapAnalyzer {
         "sitemap"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
         if self.known_urls.is_empty() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Seo,
-                code: "SITEMAP001".to_string(),
-                title: "No sitemap data available".to_string(),
-                description: "No sitemap URLs were loaded for validation.".to_string(),
-                url: url.clone(),
-                recommendation: "Provide sitemap data to enable sitemap validation.".to_string(),
-            });
-            return findings;
+            // No sitemap data was loaded for this crawl; sitemap validation
+            // is a silent no-op rather than a per-page informational finding.
+            return Vec::new();
         }
 
         // Check if this page URL is in the sitemap
@@ -444,7 +436,7 @@ impl Analyzer for MetaTagAnalyzer {
         "meta-tags"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let meta = &ctx.page.meta;
@@ -591,7 +583,7 @@ impl Analyzer for HeadingHierarchyAnalyzer {
         "heading-hierarchy"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let headings = &ctx.page.headings;
@@ -732,7 +724,7 @@ impl Analyzer for LinkAnalyzer {
         "link-analyzer"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -898,7 +890,7 @@ impl Analyzer for WordCountAnalyzer {
         "word-count"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -1098,7 +1090,7 @@ impl Analyzer for KeywordAnalyzer {
         "keyword-analyzer"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -1308,7 +1300,7 @@ impl Analyzer for InternationalSeoAnalyzer {
         "international-seo"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

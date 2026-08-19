@@ -1,7 +1,6 @@
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::playwright::RenderedPage;
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 // NOTE: WASM pattern analysis requires raw HTML access. Currently uses
 // page metadata as proxy. Full implementation requires parser extension
@@ -32,7 +31,7 @@ impl Analyzer for WasmPatternAnalyzer {
         "wasm-pattern"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         // NOTE: Full WASM analysis requires raw HTML access.
@@ -384,10 +383,6 @@ mod tests {
         }
     }
 
-    fn default_config() -> CrawlConfig {
-        CrawlConfig::default()
-    }
-
     fn make_ctx<'a>(page: &'a ParsedPage) -> AnalysisContext<'a> {
         AnalysisContext {
             page,
@@ -406,7 +401,7 @@ mod tests {
         let page = make_page("https://example.com", "module.wasm");
         let ctx = make_ctx(&page);
 
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         // Should detect WASM-related patterns
         assert!(
             !findings.is_empty()
@@ -423,7 +418,7 @@ mod tests {
         let page = make_page("https://example.com", "app.js");
         let ctx = make_ctx(&page);
 
-        let findings = analyzer.analyze(&ctx, &default_config());
+        let findings = analyzer.analyze(&ctx);
         // No WASM patterns means no WASM-related findings
         assert!(findings.iter().all(|f| !f.code.starts_with("WASM")));
     }

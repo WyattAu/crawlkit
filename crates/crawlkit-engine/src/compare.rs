@@ -20,7 +20,7 @@ pub enum CompareError {
 
 impl From<CompareError> for CrawlError {
     fn from(e: CompareError) -> Self {
-        CrawlError::Storage(e.to_string())
+        CrawlError::Internal(e.to_string())
     }
 }
 

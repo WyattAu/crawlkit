@@ -6,7 +6,7 @@ use url::Url;
 use tokio::sync::mpsc;
 
 use super::links::LinkExtractor;
-use super::{ExtractedLink, HtmlParser, MetaTags, ParseError, ParsedPage};
+use super::{ExtractedLink, HtmlParser, MetaTags, ParsedPage};
 
 /// Events emitted by the streaming HTML parser.
 ///
@@ -116,15 +116,10 @@ impl HtmlParser {
                 }
             }
 
-            match HtmlParser::parse(&buffer, &base_url) {
-                Ok(page) => {
-                    let _ = tx.send(ParserEvent::Meta(page.meta.clone())).await;
-                    let _ = tx.send(ParserEvent::Done(Box::new(page))).await;
-                }
-                Err(e) => {
-                    let _ = tx.send(ParserEvent::Error(e.to_string())).await;
-                }
-            }
+            // Parsing is infallible (error-tolerant HTML5 parser).
+            let page = HtmlParser::parse(&buffer, &base_url);
+            let _ = tx.send(ParserEvent::Meta(page.meta.clone())).await;
+            let _ = tx.send(ParserEvent::Done(Box::new(page))).await;
         });
 
         rx
@@ -147,7 +142,7 @@ impl HtmlParser {
 /// parser.feed("<body><h1>Hello</h1></body></html>");
 ///
 /// assert!(parser.has_complete_document());
-/// let page = parser.parse().unwrap();
+/// let page = parser.parse();
 /// assert_eq!(page.meta.title.as_deref(), Some("Test"));
 /// ```
 pub struct StreamingHtmlParser {
@@ -184,9 +179,11 @@ impl StreamingHtmlParser {
     ///
     /// # Errors
     ///
-    /// Returns `ParseError` if parsing fails (currently never happens).
-    pub fn parse(&mut self) -> Result<ParsedPage, ParseError> {
-        let url = url::Url::parse("about:blank")?;
+    pub fn parse(&mut self) -> ParsedPage {
+        let url = url::Url::parse("about:blank").unwrap_or_else(|_| {
+            url::Url::parse("about:invalid")
+                .unwrap_or_else(|_| unreachable!("about: scheme always parses"))
+        });
         HtmlParser::parse(&self.buffer, &url)
     }
 

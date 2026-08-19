@@ -389,13 +389,7 @@ impl CrawlRun<'_> {
         }
 
         let mut body_text = result.body.clone();
-        let mut parsed = match crate::HtmlParser::parse(&body_text, &fetched.entry.url) {
-            Ok(p) => p,
-            Err(e) => {
-                tracing::warn!("Failed to parse {}: {}", fetched.entry.url, e);
-                return;
-            }
-        };
+        let mut parsed = crate::HtmlParser::parse(&body_text, &fetched.entry.url);
 
         self.render_js_if_needed(&fetched.entry.url, &mut body_text, &mut parsed)
             .await;
@@ -450,10 +444,7 @@ impl CrawlRun<'_> {
         match tokio::time::timeout(Duration::from_secs(30), renderer.render(url.as_str())).await {
             Ok(Ok(rendered_html)) => {
                 *body_text = rendered_html;
-                match crate::HtmlParser::parse(body_text, url) {
-                    Ok(re_parsed) => *parsed = re_parsed,
-                    Err(e) => tracing::warn!("Failed to re-parse rendered {}: {}", url, e),
-                }
+                *parsed = crate::HtmlParser::parse(body_text, url);
             }
             Ok(Err(e)) => tracing::warn!("JS render failed for {}: {}", url, e),
             Err(_) => tracing::warn!("JS render timed out for {}", url),
@@ -486,7 +477,7 @@ impl CrawlRun<'_> {
             robots_txt: robots_ref,
         };
         let analysis_start = std::time::Instant::now();
-        let findings = self.analyzer_registry.analyze(&ctx, &self.cfg.crawl_config);
+        let findings = self.analyzer_registry.analyze(&ctx);
         (findings, analysis_start.elapsed())
     }
 
@@ -821,11 +812,15 @@ impl CrawlEngine {
             cfg.concurrency.unwrap_or(cfg.crawl_config.concurrency),
         );
 
-        // Start crawl in storage
-        let crawl_id = self
-            .storage
-            .start_crawl(start_url, None)
-            .map_err(|e| crate::CrawlError::Storage(e.to_string()))?;
+        // Start crawl in storage. Off the async runtime: this is a
+        // synchronous SQLite write (with fsync) under a Mutex.
+        let storage_for_start = Arc::clone(&self.storage);
+        let start_url_owned = start_url.to_string();
+        let crawl_id = tokio::task::spawn_blocking(move || {
+            storage_for_start.start_crawl(&start_url_owned, None)
+        })
+        .await
+        .map_err(|e| crate::CrawlError::Internal(format!("storage task panicked: {e}")))??;
 
         // Initialize components
         let concurrency = cfg.concurrency.unwrap_or(cfg.crawl_config.concurrency);
@@ -857,59 +852,10 @@ impl CrawlEngine {
         // Build analyzer registry
         let analyzer_registry = self.build_analyzer_registry();
 
-        // Seed the queue
-        {
-            let q = queue.lock().await;
-            q.push(seed_url.clone(), 0, Priority::HIGH);
-        }
-
-        // Incremental mode: seed from the previous crawl's page set so pages
-        // that are reachable only through link extraction still get
-        // revalidated. A 304 on the seed skips re-parsing (and therefore
-        // link discovery), which would otherwise strand the rest of the site.
-        if cfg.incremental && !cfg.force {
-            if let Ok(Some(previous_crawl)) = self.storage.get_previous_crawl_id(&crawl_id) {
-                match self.storage.get_page_urls(&previous_crawl) {
-                    Ok(prev_urls) if !prev_urls.is_empty() => {
-                        let count = prev_urls.len();
-                        let q = queue.lock().await;
-                        for url_str in &prev_urls {
-                            if let Ok(url) = Url::parse(url_str) {
-                                q.push(url, 0, Priority::HIGHEST);
-                            }
-                        }
-                        tracing::info!(
-                            "Incremental: seeded {count} URLs from previous crawl {previous_crawl}"
-                        );
-                    }
-                    Ok(_) => {}
-                    Err(e) => {
-                        tracing::warn!(error = %e, "Incremental seed lookup failed")
-                    }
-                }
-            }
-        }
-
-        // Discover and queue sitemap URLs for the seed domain
-        let mut known_sitemap_urls: HashSet<String> = HashSet::new();
-        {
-            let sitemap_urls = robots_cache
-                .sitemaps(seed_url.scheme(), &authority_of(&seed_url))
-                .await;
-            if !sitemap_urls.is_empty() {
-                tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
-                let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
-                tracing::info!("Parsed {} URLs from sitemaps", entries.len());
-                let q = queue.lock().await;
-                for entry in &entries {
-                    if known_sitemap_urls.insert(entry.url.clone()) {
-                        if let Ok(url) = Url::parse(&entry.url) {
-                            q.push(url, 0, Priority::HIGHEST);
-                        }
-                    }
-                }
-            }
-        }
+        // Seed, incremental history, and sitemap URLs into the queue.
+        let mut known_sitemap_urls = self
+            .prefill_queue(&queue, &seed_url, &crawl_id, &robots_cache, &sitemap_cache)
+            .await;
 
         let run = CrawlRun {
             counters: CrawlCounters::default(),
@@ -1099,12 +1045,125 @@ impl CrawlEngine {
             run.process(&fetched).await;
         }
 
-        // Finish crawl in storage
-        let stats = run.counters.snapshot();
-        if let Err(e) =
-            self.storage
-                .finish_crawl(&crawl_id, stats.pages_crawled, stats.issues_found)
+        Ok(self.finish_and_report(&run, crawl_start).await)
+    }
+
+    /// Prefill the crawl queue before the dispatch loop runs.
+    ///
+    /// Seeds the start URL, pulls the previous crawl's page set in
+    /// incremental mode (so pages reachable only via link extraction are
+    /// still revalidated), and queues URLs from robots.txt-declared
+    /// sitemaps for the seed domain.
+    ///
+    /// Returns the set of origins whose sitemaps were already consumed so
+    /// the dispatch loop fetches each origin's sitemaps at most once.
+    async fn prefill_queue(
+        &self,
+        queue: &Arc<Mutex<UrlQueue>>,
+        seed_url: &Url,
+        crawl_id: &str,
+        robots_cache: &Arc<RobotsTxtCache>,
+        sitemap_cache: &Arc<SitemapCache>,
+    ) -> HashSet<String> {
+        let cfg = &self.config;
+
+        // Seed the queue
+        queue.lock().await.push(seed_url.clone(), 0, Priority::HIGH);
+
+        // Incremental mode: seed from the previous crawl's page set so pages
+        // that are reachable only through link extraction still get
+        // revalidated. A 304 on the seed skips re-parsing (and therefore
+        // link discovery), which would otherwise strand the rest of the site.
+        if cfg.incremental && !cfg.force {
+            // Storage lookups run on the blocking pool; failures degrade
+            // gracefully to a fresh crawl.
+            let storage_for_lookup = Arc::clone(&self.storage);
+            let crawl_id_for_lookup = crawl_id.to_string();
+            let previous = tokio::task::spawn_blocking(move || {
+                storage_for_lookup
+                    .get_previous_crawl_id(&crawl_id_for_lookup)
+                    .ok()
+                    .flatten()
+                    .map(|previous_crawl| {
+                        let urls = storage_for_lookup
+                            .get_page_urls(&previous_crawl)
+                            .unwrap_or_default();
+                        (previous_crawl, urls)
+                    })
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Incremental seed task failed");
+                None
+            });
+
+            if let Some((previous_crawl, prev_urls)) = previous {
+                if !prev_urls.is_empty() {
+                    let count = prev_urls.len();
+                    {
+                        let q = queue.lock().await;
+                        for url_str in &prev_urls {
+                            if let Ok(url) = Url::parse(url_str) {
+                                q.push(url, 0, Priority::HIGHEST);
+                            }
+                        }
+                    }
+                    tracing::info!(
+                        "Incremental: seeded {count} URLs from previous crawl {previous_crawl}"
+                    );
+                }
+            }
+        }
+
+        // Discover and queue sitemap URLs for the seed domain
+        let mut known_sitemap_urls: HashSet<String> = HashSet::new();
         {
+            let sitemap_urls = robots_cache
+                .sitemaps(seed_url.scheme(), &authority_of(seed_url))
+                .await;
+            if !sitemap_urls.is_empty() {
+                tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
+                let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
+                tracing::info!("Parsed {} URLs from sitemaps", entries.len());
+                let q = queue.lock().await;
+                for entry in &entries {
+                    if known_sitemap_urls.insert(entry.url.clone()) {
+                        if let Ok(url) = Url::parse(&entry.url) {
+                            q.push(url, 0, Priority::HIGHEST);
+                        }
+                    }
+                }
+            }
+        }
+        known_sitemap_urls
+    }
+
+    /// Persist crawl completion and assemble the output report.
+    ///
+    /// Runs the final storage write on the blocking pool (SQLite write with
+    /// fsync), emits the completion summary, and snapshots metrics.
+    async fn finish_and_report<'a>(
+        &self,
+        run: &CrawlRun<'a>,
+        crawl_start: std::time::Instant,
+    ) -> CrawlOutput {
+        let crawl_id = run.crawl_id.clone();
+        let stats = run.counters.snapshot();
+        let storage_for_finish = Arc::clone(&self.storage);
+        let crawl_id_for_finish = crawl_id.clone();
+        let finish_result = tokio::task::spawn_blocking(move || {
+            storage_for_finish.finish_crawl(
+                &crawl_id_for_finish,
+                stats.pages_crawled,
+                stats.issues_found,
+            )
+        })
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, crawl_id = %crawl_id, "Storage finish task failed");
+            Ok(())
+        });
+        if let Err(e) = finish_result {
             tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
         }
 
@@ -1124,7 +1183,7 @@ impl CrawlEngine {
             stats.pages_new,
         );
 
-        Ok(CrawlOutput {
+        CrawlOutput {
             crawl_id,
             pages_crawled: stats.pages_crawled,
             pages_stored: stats.pages_stored,
@@ -1135,54 +1194,20 @@ impl CrawlEngine {
             pages_unchanged: stats.pages_unchanged,
             pages_modified: stats.pages_modified,
             pages_new: stats.pages_new,
-            seed_domain,
+            seed_domain: run.seed_domain.clone(),
             metrics: snapshot,
             elapsed,
-        })
+        }
     }
 
     /// Build the analyzer registry based on feature flags.
+    ///
+    /// Delegates to [`AnalyzerRegistry::with_feature_flags`], the single
+    /// registration site for the built-in analyzer set (also used by
+    /// [`AnalyzerRegistry::new`]). The `ai_analyzers` and `wasm_analyzers`
+    /// feature flags control the optional analyzer groups.
     fn build_analyzer_registry(&self) -> AnalyzerRegistry {
-        let flags = &self.config.feature_flags;
-
-        let mut analyzers: Vec<Box<dyn crate::analyzers::Analyzer>> = vec![
-            Box::new(crate::HttpStatusAnalyzer::new()),
-            Box::new(crate::RedirectChainAnalyzer::new()),
-            Box::new(crate::CanonicalUrlValidator::new()),
-            Box::new(crate::HreflangValidator::new()),
-            Box::new(crate::SitemapAnalyzer::empty()),
-            Box::new(crate::RobotsTxtAnalyzer::empty()),
-            Box::new(crate::MetaTagAnalyzer::new()),
-            Box::new(crate::HeadingHierarchyAnalyzer::new()),
-            Box::new(crate::LinkAnalyzer::new()),
-            Box::new(crate::ImageAnalyzer::new()),
-            Box::new(crate::StructuredDataValidator::new()),
-            Box::new(crate::ContentQualityAnalyzer::new()),
-            Box::new(crate::WordCountAnalyzer::new()),
-            Box::new(crate::SecurityHeaderAnalyzer::new()),
-            Box::new(crate::SslCertificateValidator::empty()),
-            Box::new(crate::MobileFriendlinessChecker::new()),
-            Box::new(crate::AccessibilityAnalyzer::new()),
-            Box::new(crate::SocialMediaAnalyzer::new()),
-            Box::new(crate::EntityAnalyzer::new()),
-            Box::new(crate::EnhancedReadabilityAnalyzer::new()),
-            Box::new(crate::KeywordAnalyzer::new()),
-            Box::new(crate::EcommerceSignalsAnalyzer::new()),
-            Box::new(crate::InternationalSeoAnalyzer::new()),
-        ];
-
-        if flags.get(crate::FLAG_AI_ANALYZERS) {
-            analyzers.push(Box::new(crate::AiCrawlerAccessibilityAnalyzer::new()));
-            analyzers.push(Box::new(crate::AiContentStructureAnalyzer::new()));
-            analyzers.push(Box::new(crate::AiCitationEligibilityAnalyzer::new()));
-            analyzers.push(Box::new(crate::AiAnswerBoxAnalyzer::new()));
-        }
-
-        if flags.get(crate::FLAG_WASM_ANALYZERS) {
-            analyzers.push(Box::new(crate::WasmPatternAnalyzer::new()));
-        }
-
-        AnalyzerRegistry::with_analyzers(analyzers)
+        AnalyzerRegistry::with_feature_flags(&self.config.feature_flags)
     }
 
     /// Get a reference to the underlying storage.
@@ -1209,17 +1234,17 @@ fn get_process_rss_bytes() -> Result<u64, crate::CrawlError> {
     #[cfg(target_os = "linux")]
     {
         let statm = std::fs::read_to_string("/proc/self/statm")
-            .map_err(|e| crate::CrawlError::Storage(e.to_string()))?;
+            .map_err(|e| crate::CrawlError::Internal(format!("failed to read statm: {e}")))?;
         let fields: Vec<&str> = statm.split_whitespace().collect();
         if fields.len() >= 2 {
             let pages: u64 = fields[1]
                 .parse()
-                .map_err(|e| crate::CrawlError::Storage(format!("Failed to parse RSS: {e}")))?;
+                .map_err(|e| crate::CrawlError::Internal(format!("failed to parse RSS: {e}")))?;
             let page_size = 4096u64;
             return Ok(pages * page_size);
         }
     }
-    Err(crate::CrawlError::Storage(
+    Err(crate::CrawlError::Internal(
         "RSS not available on this platform".to_string(),
     ))
 }
@@ -1337,6 +1362,33 @@ mod tests {
                 .total_pages,
             0
         );
+    }
+
+    #[test]
+    fn test_build_analyzer_registry_parity_with_default_registry() {
+        let storage = Storage::new_in_memory().unwrap();
+        let engine = CrawlEngine::new(CrawlEngineConfig::default(), storage);
+        let registry = engine.build_analyzer_registry();
+        // The engine must register exactly the same analyzer set as
+        // AnalyzerRegistry::new (single registration site), including the
+        // advanced canonical analyzers the duplicated list used to omit.
+        assert_eq!(
+            registry.len(),
+            AnalyzerRegistry::new(&CrawlConfig::default()).len()
+        );
+        assert_eq!(registry.len(), 31);
+    }
+
+    #[test]
+    fn test_build_analyzer_registry_respects_feature_flags() {
+        let storage = Storage::new_in_memory().unwrap();
+        let mut config = CrawlEngineConfig::default();
+        config.feature_flags.set(crate::FLAG_AI_ANALYZERS, false);
+        config.feature_flags.set(crate::FLAG_WASM_ANALYZERS, false);
+        let engine = CrawlEngine::new(config, storage);
+        let registry = engine.build_analyzer_registry();
+        // 26 base analyzers; the AI (4) and WASM (1) groups are disabled.
+        assert_eq!(registry.len(), 26);
     }
 
     struct MockJsRenderer {

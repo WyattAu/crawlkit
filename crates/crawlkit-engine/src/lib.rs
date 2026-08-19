@@ -31,7 +31,7 @@
 //!
 //! let url = url::Url::parse("https://example.com")?;
 //! let result = client.fetch(&url).await?;
-//! let parsed = HtmlParser::parse(&result.body, &url)?;
+//! let parsed = HtmlParser::parse(&result.body, &url);
 //! # Ok(())
 //! # }
 //! ```
@@ -367,8 +367,8 @@ pub mod parser;
 
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{
-    ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParseError,
-    ParsedPage, ParserEvent, ScriptInfo, StreamingHtmlParser, StructuredData, StyleInfo,
+    ExtractedForm, ExtractedImage, ExtractedInput, ExtractedLink, Heading, HtmlParser, ParsedPage,
+    ParserEvent, ScriptInfo, StreamingHtmlParser, StructuredData, StyleInfo,
 };
 
 mod duration_ms {
@@ -455,7 +455,12 @@ pub enum CrawlError {
 
     /// A storage/database error occurred.
     #[error("storage error: {0}")]
-    Storage(String),
+    Storage(#[from] crate::storage::StorageError),
+
+    /// An unexpected internal failure (I/O, environment, or subsystem
+    /// errors that are not storage-related).
+    #[error("internal error: {0}")]
+    Internal(String),
 
     /// All retry attempts were exhausted.
     #[error("max retries exceeded after {0} attempts")]

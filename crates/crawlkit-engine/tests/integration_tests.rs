@@ -131,7 +131,7 @@ fn test_analyzer_registry_full_pipeline() {
         robots_txt: None,
     };
 
-    let findings = registry.analyze(&ctx, &config);
+    let findings = registry.analyze(&ctx);
 
     // Should produce findings from multiple analyzers
     assert!(!findings.is_empty());
@@ -323,7 +323,6 @@ fn test_rate_limiter_integration() {
 #[test]
 fn test_wasm_pattern_analyzer_integration() {
     let analyzer = WasmPatternAnalyzer::new();
-    let config = make_test_config();
 
     let page = ParsedPage {
         url: "https://example.com".to_string(),
@@ -369,7 +368,7 @@ fn test_wasm_pattern_analyzer_integration() {
         robots_txt: None,
     };
 
-    let findings = analyzer.analyze(&ctx, &config);
+    let findings = analyzer.analyze(&ctx);
     // Should detect WASM patterns
     assert!(findings.iter().any(|f| f.code.starts_with("WASM")));
 }
@@ -377,7 +376,6 @@ fn test_wasm_pattern_analyzer_integration() {
 #[test]
 fn test_ai_analyzer_integration() {
     let analyzer = AiCrawlerAccessibilityAnalyzer::new();
-    let config = make_test_config();
 
     let page = make_test_page("https://example.com");
     let ctx = AnalysisContext {
@@ -390,7 +388,7 @@ fn test_ai_analyzer_integration() {
         robots_txt: None,
     };
 
-    let findings = analyzer.analyze(&ctx, &config);
+    let findings = analyzer.analyze(&ctx);
     // Should find "no robots.txt" since we don't have one
     assert!(findings.iter().any(|f| f.code == "AI-ACC009"));
 }
@@ -453,7 +451,7 @@ fn test_full_crawl_pipeline() {
             robots_txt: None,
         };
 
-        let findings = registry.analyze(&ctx, &config);
+        let findings = registry.analyze(&ctx);
 
         // Store page
         let page = make_page_data(&url);

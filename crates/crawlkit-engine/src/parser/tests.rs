@@ -7,7 +7,7 @@ fn test_url() -> Url {
 #[test]
 fn test_parse_title() {
     let html = r#"<!DOCTYPE html><html><head><title>My Page</title></head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.title.as_deref(), Some("My Page"));
 }
 
@@ -16,7 +16,7 @@ fn test_parse_meta_description() {
     let html = r#"<!DOCTYPE html><html><head>
         <meta name="description" content="A great page">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.description.as_deref(), Some("A great page"));
 }
 
@@ -25,7 +25,7 @@ fn test_parse_canonical() {
     let html = r#"<!DOCTYPE html><html><head>
         <link rel="canonical" href="/canonical-page">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert!(page.meta.canonical.is_some());
     assert!(page
         .meta
@@ -44,7 +44,7 @@ fn test_parse_open_graph() {
         <meta property="og:url" content="https://example.com">
         <meta property="og:type" content="website">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.og.title.as_deref(), Some("OG Title"));
     assert_eq!(page.meta.og.description.as_deref(), Some("OG Desc"));
     assert_eq!(
@@ -64,7 +64,7 @@ fn test_parse_twitter_cards() {
         <meta name="twitter:description" content="TW Desc">
         <meta name="twitter:image" content="https://example.com/tw.png">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(
         page.meta.twitter.card.as_deref(),
         Some("summary_large_image")
@@ -82,7 +82,7 @@ fn test_parse_headings() {
         <h2>Another</h2>
         <h3>Sub</h3>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.headings.len(), 4);
     assert_eq!(page.headings[0].level, 1);
     assert_eq!(page.headings[0].text, "Main Title");
@@ -98,7 +98,7 @@ fn test_extract_links() {
         <a href="https://external.com/page">External</a>
         <a href="/page" rel="nofollow noopen">Nofollow</a>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.links.len(), 3);
 
     assert_eq!(page.links[0].href, "https://example.com/internal");
@@ -118,7 +118,7 @@ fn test_extract_images() {
         <img src="/img2.jpg">
         <img src="/img3.webp" loading="lazy" data-src="/img3-real.webp">
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.images.len(), 3);
 
     assert_eq!(page.images[0].src, "/img1.png");
@@ -144,7 +144,7 @@ fn test_extract_forms() {
             <input type="search" name="s">
         </form>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.forms.len(), 2);
 
     assert_eq!(page.forms[0].action.as_deref(), Some("/submit"));
@@ -163,7 +163,7 @@ fn test_extract_scripts() {
         <script type="application/ld+json">{"@type":"WebSite"}</script>
         <script>console.log("hi")</script>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     // 4 total script tags
     assert_eq!(page.scripts.len(), 4);
     assert!(page.scripts[0].r#async);
@@ -181,7 +181,7 @@ fn test_extract_styles() {
         <link rel="stylesheet" href="/print.css" media="print">
         <style>body { margin: 0; }</style>
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.styles.len(), 3);
     assert!(!page.styles[0].is_inline);
     assert_eq!(page.styles[0].href.as_deref(), Some("/style.css"));
@@ -200,7 +200,7 @@ fn test_extract_json_ld() {
         }
         </script>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.structured_data.len(), 1);
     assert_eq!(
         page.structured_data[0].context.as_deref(),
@@ -217,7 +217,7 @@ fn test_word_count() {
         <script>var x = 1;</script>
         <style>.a { color: red; }</style>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     // "Hello World" = 2, "This is a test paragraph with some words." = 8
     assert_eq!(page.word_count, 10);
 }
@@ -230,7 +230,7 @@ fn test_word_count_excludes_script_and_style() {
         <style>.hidden { display: none; }</style>
         <noscript>JavaScript is required</noscript>
     </body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     // Only "Visible text here." should count = 3
     assert_eq!(page.word_count, 3);
 }
@@ -242,7 +242,7 @@ fn test_hreflang() {
         <link rel="alternate" hreflang="fr" href="https://example.com/fr">
         <link rel="alternate" hreflang="x-default" href="https://example.com">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.hreflang.len(), 3);
     assert_eq!(page.meta.hreflang[0].lang, "en");
     assert_eq!(page.meta.hreflang[1].lang, "fr");
@@ -254,7 +254,7 @@ fn test_robots_meta() {
     let html = r#"<!DOCTYPE html><html><head>
         <meta name="robots" content="noindex, nofollow">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert!(page.meta.is_noindex());
     assert!(page.meta.is_nofollow());
 }
@@ -265,7 +265,7 @@ fn test_language_and_charset() {
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.language.as_deref(), Some("en"));
     assert!(page.meta.charset.is_some());
     assert!(page.meta.viewport.is_some());
@@ -273,7 +273,7 @@ fn test_language_and_charset() {
 
 #[test]
 fn test_empty_html() {
-    let page = HtmlParser::parse("", &test_url()).unwrap();
+    let page = HtmlParser::parse("", &test_url());
     assert!(page.meta.title.is_none());
     assert!(page.headings.is_empty());
     assert!(page.links.is_empty());
@@ -286,7 +286,7 @@ fn test_title_fallback_to_og() {
     let html = r#"<!DOCTYPE html><html><head>
         <meta property="og:title" content="OG Fallback Title">
     </head><body></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     assert_eq!(page.meta.title.as_deref(), Some("OG Fallback Title"));
 }
 
@@ -294,7 +294,7 @@ fn test_title_fallback_to_og() {
 fn test_parsed_page_serialization() {
     let html = r#"<!DOCTYPE html><html><head><title>Test</title></head>
     <body><h1>Hi</h1><a href="/link">link</a></body></html>"#;
-    let page = HtmlParser::parse(html, &test_url()).unwrap();
+    let page = HtmlParser::parse(html, &test_url());
     let json = serde_json::to_string(&page).unwrap();
     let deser: ParsedPage = serde_json::from_str(&json).unwrap();
     assert_eq!(page.meta.title, deser.meta.title);
@@ -349,7 +349,7 @@ fn test_streaming_parser_parse() {
     parser.feed(r#"<!DOCTYPE html><html><head><title>Stream Test</title></head>"#);
     parser.feed(r#"<body><h1>Hello World</h1><a href="/link">link</a></body></html>"#);
 
-    let page = parser.parse().unwrap();
+    let page = parser.parse();
     assert_eq!(page.meta.title.as_deref(), Some("Stream Test"));
     assert_eq!(page.url, "about:blank");
 }
@@ -361,7 +361,7 @@ fn test_streaming_parser_parse_incomplete() {
     parser.feed(r#"<body><h1>Partial content"#);
 
     // Should still parse, even without complete document markers
-    let page = parser.parse().unwrap();
+    let page = parser.parse();
     assert_eq!(page.meta.title.as_deref(), Some("Incomplete"));
 }
 
@@ -398,7 +398,7 @@ fn test_streaming_parser_multiple_chunks() {
     parser.feed("</html>");
 
     assert!(parser.has_complete_document());
-    let page = parser.parse().unwrap();
+    let page = parser.parse();
     assert_eq!(page.meta.title.as_deref(), Some("Multi Chunk"));
     assert_eq!(page.word_count, 1);
 }
@@ -412,7 +412,7 @@ mod lang_test {
     fn test_lang_attribute_from_html() {
         let html = r#"<!DOCTYPE html><html lang="en" data-theme="midnight-navy"><head><title>Test</title></head><body></body></html>"#;
         let url = Url::parse("https://example.com").unwrap();
-        let page = HtmlParser::parse(html, &url).unwrap();
+        let page = HtmlParser::parse(html, &url);
         // Check the accessibility section
         assert!(
             page.has_lang_attribute,

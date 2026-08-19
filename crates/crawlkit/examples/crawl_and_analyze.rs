@@ -18,7 +18,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Status: {}", result.status_code);
     println!("Body size: {} bytes", result.body.len());
 
-    let parsed = HtmlParser::parse(&result.body, &url)?;
+    let parsed = HtmlParser::parse(&result.body, &url);
     println!("Title: {:?}", parsed.meta.title);
     println!("Links: {}", parsed.links.len());
     println!("Images: {}", parsed.images.len());
@@ -33,7 +33,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         robots_txt: None,
     };
 
-    let findings = registry.analyze(&ctx, &config);
+    let findings = registry.analyze(&ctx);
     println!("\nFindings ({} total):", findings.len());
     for finding in &findings {
         println!(

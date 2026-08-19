@@ -11,7 +11,6 @@
 
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
-use crate::CrawlConfig;
 
 /// Advanced canonical and hreflang analyzer that catches issues
 /// Ahrefs and other premium tools detect but basic crawlers miss.
@@ -35,7 +34,7 @@ impl Analyzer for AdvancedCanonicalAnalyzer {
         "advanced-canonical"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -133,7 +132,7 @@ impl Analyzer for SitemapCanonicalValidator {
         "sitemap-canonical"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
@@ -184,7 +183,7 @@ impl Analyzer for UrlFormatValidator {
         "url-format"
     }
 
-    fn analyze(&self, ctx: &AnalysisContext, _config: &CrawlConfig) -> Vec<Finding> {
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 

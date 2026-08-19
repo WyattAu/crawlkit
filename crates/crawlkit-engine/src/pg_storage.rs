@@ -32,6 +32,32 @@ pub struct PgStorage {
     pool: PgPool,
 }
 
+/// Process-global runtime driving the synchronous `StorageBackend` bridge.
+///
+/// The sync trait methods must not call `Handle::current().block_on`:
+/// that panics inside async contexts ("cannot block_on within a runtime")
+/// and outside any runtime entirely. This shared runtime is lazily created
+/// once per process and intentionally never dropped (statics are not
+/// dropped), so it can be used safely from synchronous code and from
+/// `spawn_blocking` threads.
+static BLOCKING_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+/// Borrow the global bridge runtime, creating it on first use.
+fn blocking_runtime() -> &'static tokio::runtime::Runtime {
+    // `get_or_init` cannot propagate errors, and runtime construction
+    // only fails under process-fatal conditions (thread/resource
+    // exhaustion); panicking here matches `tokio::main`'s behavior.
+    #[allow(clippy::panic)]
+    BLOCKING_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .thread_name("crawlkit-pg-bridge")
+            .build()
+            .unwrap_or_else(|e| panic!("PgStorage failed to build its blocking runtime: {e}"))
+    })
+}
+
 impl PgStorage {
     /// Create a new PostgreSQL storage instance.
     ///
@@ -149,7 +175,7 @@ impl PgStorage {
         let tenant_id = tenant_id.map(|s| s.to_string());
         let filters = filters.clone();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let mut query = String::from(
                 "SELECT f.id, f.page_id, f.category, f.severity, f.code, f.title, f.description, f.element, f.recommendation, f.tenant_id
@@ -227,7 +253,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let seed_url = seed_url.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             sqlx::query("INSERT INTO crawls (id, start_time, target_url) VALUES ($1, $2, $3)")
                 .bind(&crawl_id)
@@ -248,7 +274,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             sqlx::query(
                 "UPDATE crawls SET end_time = $1, pages_crawled = $2, total_issues = $3 WHERE id = $4",
@@ -268,7 +294,7 @@ impl StorageBackend for PgStorage {
         let crawl_id = crawl_id.to_string();
         let page = page.clone();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let mut tx = pool.begin().await?;
 
@@ -343,7 +369,7 @@ impl StorageBackend for PgStorage {
         let crawl_id = crawl_id.to_string();
         let pages = pages.to_vec();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let mut tx = pool.begin().await?;
 
@@ -417,7 +443,7 @@ impl StorageBackend for PgStorage {
         let crawl_id = crawl_id.to_string();
         let url = url.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let result = sqlx::query(
                 "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
@@ -439,7 +465,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
                 "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
@@ -467,7 +493,7 @@ impl StorageBackend for PgStorage {
         let crawl_id = crawl_id.to_string();
         let tenant_id = tenant_id.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
                 "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
@@ -491,7 +517,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let issue = issue.clone();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             sqlx::query(
                 "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
@@ -520,7 +546,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let issues = issues.to_vec();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let mut tx = pool.begin().await?;
 
@@ -569,7 +595,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let total_pages: (i64,) = sqlx::query_as(
                 "SELECT COALESCE(COUNT(*), 0) FROM pages WHERE crawl_id = $1",
@@ -647,7 +673,7 @@ impl StorageBackend for PgStorage {
         let crawl_id = crawl_id.to_string();
         let url = url.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let result = sqlx::query(
                 "SELECT id, etag, last_modified FROM pages WHERE crawl_id = $1 AND url = $2",
@@ -675,7 +701,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let url = url.to_string();
 
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let result = sqlx::query(
                 "SELECT etag, last_modified FROM pages WHERE url = $1 ORDER BY fetched_at DESC LIMIT 1",
@@ -696,7 +722,7 @@ impl StorageBackend for PgStorage {
 
     fn finish(&self) -> Result<(), StorageError> {
         let pool = self.pool.clone();
-        let rt = tokio::runtime::Handle::current();
+        let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             pool.close().await;
             Ok(())
@@ -710,6 +736,66 @@ mod tests {
     use super::*;
     use crate::storage::{IssueCategory, Severity};
     use crate::storage_trait::StorageBackend;
+
+    /// A lazily-connecting pool that never actually reaches a server.
+    /// sqlx requires a Tokio context even for lazy pool setup, so the pool
+    /// is created inside a throwaway runtime.
+    fn unreachable_pool() -> PgPool {
+        let pool = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime")
+            .block_on(async {
+                sqlx::postgres::PgPoolOptions::new()
+                    .max_connections(1)
+                    .acquire_timeout(std::time::Duration::from_millis(250))
+                    .connect_lazy("postgres://invalid:invalid@127.0.0.1:1/none")
+                    .expect("lazy pool does not connect")
+            });
+        pool
+    }
+
+    /// Regression: the sync trait bridge previously called
+    /// `Handle::current().block_on`, which panics outside any runtime —
+    /// including from plain synchronous code and `spawn_blocking` threads.
+    /// With the dedicated runtime, calls from a no-runtime context return a
+    /// database error instead of panicking.
+    #[test]
+    fn sync_trait_methods_do_not_panic_outside_tokio() {
+        let storage = PgStorage::from_pool(unreachable_pool());
+
+        // No ambient tokio runtime here; the old implementation panicked at
+        // `Handle::current()` before ever reaching the database.
+        let result = storage.start_crawl("https://example.com", None);
+        assert!(
+            result.is_err(),
+            "expected a connection error, got {result:?}"
+        );
+    }
+
+    /// The same contract from inside `spawn_blocking` — the supported
+    /// calling convention for sync storage on an async runtime.
+    #[tokio::test]
+    async fn sync_trait_methods_work_from_spawn_blocking() {
+        // Pool setup itself needs a non-async thread (sqlx lazy pools
+        // require a runtime context, and runtimes cannot nest).
+        let storage = std::sync::Arc::new(
+            tokio::task::spawn_blocking(|| PgStorage::from_pool(unreachable_pool()))
+                .await
+                .expect("pool setup"),
+        );
+
+        let storage_clone = storage.clone();
+        let result = tokio::task::spawn_blocking(move || {
+            storage_clone.start_crawl("https://example.com", None)
+        })
+        .await
+        .expect("spawn_blocking join");
+        assert!(
+            result.is_err(),
+            "expected a connection error, got {result:?}"
+        );
+    }
 
     fn test_page(id: &str, url: &str, status: u16) -> PageData {
         PageData {

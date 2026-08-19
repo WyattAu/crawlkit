@@ -15,6 +15,9 @@ pub enum OidcError {
 
     #[error("User info fetch failed: {0}")]
     UserInfo(String),
+
+    #[error("id_token validation failed: {0}")]
+    InvalidIdToken(String),
 }
 
 /// OIDC provider configuration.
@@ -41,6 +44,8 @@ pub struct OidcEndpoints {
     pub token_endpoint: String,
     pub userinfo_endpoint: String,
     pub jwks_uri: String,
+    /// `issuer` from the discovery document; pinned into id_token validation.
+    pub issuer: String,
 }
 
 /// OIDC tokens.
@@ -66,10 +71,68 @@ pub struct OidcUserInfo {
     pub roles: Vec<String>,
 }
 
+/// Claims extracted from a validated id_token.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OidcIdClaims {
+    pub sub: String,
+    pub nonce: Option<String>,
+    pub email: Option<String>,
+    pub name: Option<String>,
+    #[serde(default)]
+    pub groups: Vec<String>,
+    #[serde(default)]
+    pub roles: Vec<String>,
+}
+
+/// PKCE (RFC 7636) challenge pair.
+#[derive(Debug, Clone)]
+pub struct PkceChallenge {
+    pub code_verifier: String,
+    pub code_challenge: String,
+}
+
+/// Generate a PKCE S256 challenge pair from 32 random bytes.
+pub fn generate_pkce() -> PkceChallenge {
+    use rand::RngCore;
+    use sha2::{Digest, Sha256};
+
+    let mut entropy = [0u8; 32];
+    rand::thread_rng().fill_bytes(&mut entropy);
+    let code_verifier = base64url_no_pad(&entropy);
+    let digest = Sha256::digest(code_verifier.as_bytes());
+    let code_challenge = base64url_no_pad(&digest);
+    PkceChallenge {
+        code_verifier,
+        code_challenge,
+    }
+}
+
+/// RFC 4648 base64url without padding (no external dependency).
+fn base64url_no_pad(bytes: &[u8]) -> String {
+    const ALPHABET: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let b0 = chunk[0] as u32;
+        let b1 = *chunk.get(1).unwrap_or(&0) as u32;
+        let b2 = *chunk.get(2).unwrap_or(&0) as u32;
+        let n = (b0 << 16) | (b1 << 8) | b2;
+        out.push(ALPHABET[(n >> 18) as usize & 63] as char);
+        out.push(ALPHABET[(n >> 12) as usize & 63] as char);
+        if chunk.len() > 1 {
+            out.push(ALPHABET[(n >> 6) as usize & 63] as char);
+        }
+        if chunk.len() > 2 {
+            out.push(ALPHABET[n as usize & 63] as char);
+        }
+    }
+    out
+}
+
 /// OIDC manager for handling authentication.
 pub struct OidcManager {
     config: OidcConfig,
     endpoints: Arc<RwLock<Option<OidcEndpoints>>>,
+    jwks: Arc<RwLock<Option<jsonwebtoken::jwk::JwkSet>>>,
     client: reqwest::Client,
 }
 
@@ -79,6 +142,7 @@ impl OidcManager {
         Self {
             config,
             endpoints: Arc::new(RwLock::new(None)),
+            jwks: Arc::new(RwLock::new(None)),
             client: reqwest::Client::new(),
         }
     }
@@ -118,14 +182,30 @@ impl OidcManager {
                 .as_str()
                 .ok_or_else(|| OidcError::Discovery("Missing jwks_uri".into()))?
                 .to_string(),
+            issuer: discovery["issuer"]
+                .as_str()
+                .ok_or_else(|| OidcError::Discovery("Missing issuer".into()))?
+                .to_string(),
         };
+
+        // Fetch and cache the provider JWKS so id_tokens can be validated.
+        let jwks: jsonwebtoken::jwk::JwkSet = self
+            .client
+            .get(&endpoints.jwks_uri)
+            .send()
+            .await
+            .map_err(|e| OidcError::Discovery(format!("JWKS fetch failed: {e}")))?
+            .json()
+            .await
+            .map_err(|e| OidcError::Discovery(format!("JWKS parse failed: {e}")))?;
+        *self.jwks.write() = Some(jwks);
 
         *self.endpoints.write() = Some(endpoints.clone());
         Ok(endpoints)
     }
 
-    /// Generate authorization URL.
-    pub fn authorization_url(&self, state: &str) -> String {
+    /// Generate authorization URL with PKCE (S256) and nonce bound in.
+    pub fn authorization_url(&self, state: &str, nonce: &str, code_challenge: &str) -> String {
         let scopes = self.config.scopes.join(" ");
         let guard = self.endpoints.read();
         let ep = guard
@@ -133,17 +213,23 @@ impl OidcManager {
             .map(|e| e.authorization_endpoint.as_str())
             .unwrap_or("");
         format!(
-            "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}",
+            "{}?client_id={}&redirect_uri={}&response_type=code&scope={}&state={}&nonce={}&code_challenge={}&code_challenge_method=S256",
             ep,
-            self.config.client_id,
+            urlencoding::encode(&self.config.client_id),
             urlencoding::encode(&self.config.redirect_uri),
             urlencoding::encode(&scopes),
             urlencoding::encode(state),
+            urlencoding::encode(nonce),
+            urlencoding::encode(code_challenge),
         )
     }
 
-    /// Exchange authorization code for tokens.
-    pub async fn exchange_code(&self, code: &str) -> Result<OidcTokens, OidcError> {
+    /// Exchange authorization code for tokens (PKCE-aware).
+    pub async fn exchange_code(
+        &self,
+        code: &str,
+        code_verifier: &str,
+    ) -> Result<OidcTokens, OidcError> {
         let client_secret = std::env::var(&self.config.client_secret_env)
             .map_err(|e| OidcError::TokenExchange(format!("Missing env var: {e}")))?;
 
@@ -153,6 +239,7 @@ impl OidcManager {
             ("redirect_uri", &self.config.redirect_uri),
             ("client_id", &self.config.client_id),
             ("client_secret", &client_secret),
+            ("code_verifier", code_verifier),
         ];
 
         let token_endpoint = self
@@ -205,6 +292,63 @@ impl OidcManager {
         Ok(user_info)
     }
 
+    /// Validate an id_token against the provider's JWKS.
+    ///
+    /// Enforces signature (via cached JWKS, matched by `kid`), issuer (from
+    /// discovery), audience (our client_id), expiry, and — when provided —
+    /// the one-shot `nonce` bound into the authorization request.
+    pub fn validate_id_token(
+        &self,
+        id_token: &str,
+        expected_nonce: &str,
+    ) -> Result<OidcIdClaims, OidcError> {
+        let endpoints = self
+            .endpoints
+            .read()
+            .clone()
+            .ok_or_else(|| OidcError::InvalidIdToken("Endpoints not discovered".into()))?;
+        let jwks = self
+            .jwks
+            .read()
+            .clone()
+            .ok_or_else(|| OidcError::InvalidIdToken("JWKS not loaded".into()))?;
+
+        let header = jsonwebtoken::decode_header(id_token)
+            .map_err(|e| OidcError::InvalidIdToken(format!("Malformed token header: {e}")))?;
+
+        let jwk = jwks
+            .keys
+            .iter()
+            .find(|k| match &header.kid {
+                Some(kid) => k.common.key_id.as_deref() == Some(kid.as_str()),
+                None => true,
+            })
+            .ok_or_else(|| {
+                OidcError::InvalidIdToken("No matching signing key in provider JWKS".into())
+            })?;
+
+        let algorithm = header.alg;
+
+        let decoding_key = jsonwebtoken::DecodingKey::from_jwk(jwk)
+            .map_err(|e| OidcError::InvalidIdToken(format!("Unsupported JWKS key: {e}")))?;
+
+        let mut validation = jsonwebtoken::Validation::new(algorithm);
+        validation.set_audience(&[&self.config.client_id]);
+        validation.set_issuer(&[&endpoints.issuer]);
+        validation.validate_exp = true;
+
+        let token_data = jsonwebtoken::decode::<OidcIdClaims>(id_token, &decoding_key, &validation)
+            .map_err(|e| OidcError::InvalidIdToken(format!("{e}")))?;
+
+        let claims = token_data.claims;
+        match claims.nonce.as_deref() {
+            Some(nonce) if nonce == expected_nonce => Ok(claims),
+            _ => Err(OidcError::InvalidIdToken(
+                "nonce mismatch: token is not bound to this authorization request".into(),
+            )),
+        }
+    }
+
     /// Get config.
     #[allow(dead_code)]
     pub fn config(&self) -> &OidcConfig {
@@ -254,6 +398,7 @@ mod tests {
             token_endpoint: "https://auth.example.com/token".to_string(),
             userinfo_endpoint: "https://auth.example.com/userinfo".to_string(),
             jwks_uri: "https://auth.example.com/.well-known/jwks.json".to_string(),
+            issuer: "https://auth.example.com".to_string(),
         };
         let json = serde_json::to_string(&endpoints).unwrap();
         let deserialized: OidcEndpoints = serde_json::from_str(&json).unwrap();
@@ -273,6 +418,7 @@ mod tests {
             deserialized.jwks_uri,
             "https://auth.example.com/.well-known/jwks.json"
         );
+        assert_eq!(deserialized.issuer, "https://auth.example.com");
     }
 
     // ---------------------------------------------------------------
@@ -437,6 +583,7 @@ mod tests {
             token_endpoint: "https://auth.example.com/token".to_string(),
             userinfo_endpoint: "https://auth.example.com/userinfo".to_string(),
             jwks_uri: "https://auth.example.com/jwks".to_string(),
+            issuer: "https://auth.example.com".to_string(),
         };
         let cloned = endpoints.clone();
         assert_eq!(
@@ -444,5 +591,80 @@ mod tests {
             endpoints.authorization_endpoint
         );
         assert_eq!(cloned.token_endpoint, endpoints.token_endpoint);
+    }
+
+    // ---------------------------------------------------------------
+    // PKCE + base64url helpers
+    // ---------------------------------------------------------------
+
+    #[test]
+    fn test_base64url_no_pad_known_vectors() {
+        // RFC 4648 test vectors (base64url variant, unpadded).
+        assert_eq!(base64url_no_pad(b""), "");
+        assert_eq!(base64url_no_pad(b"f"), "Zg");
+        assert_eq!(base64url_no_pad(b"fo"), "Zm8");
+        assert_eq!(base64url_no_pad(b"foo"), "Zm9v");
+        assert_eq!(base64url_no_pad(b"foob"), "Zm9vYg");
+        assert_eq!(base64url_no_pad(b"fooba"), "Zm9vYmE");
+        assert_eq!(base64url_no_pad(b"foobar"), "Zm9vYmFy");
+        // URL-safe alphabet: 0xfb 0xff produces '+' '/' in standard base64.
+        assert_eq!(base64url_no_pad(&[0xfb, 0xff]), "-_8");
+    }
+
+    #[test]
+    fn test_generate_pkce_produces_s256_consistent_pair() {
+        use sha2::{Digest, Sha256};
+        let pkce = generate_pkce();
+        assert_eq!(pkce.code_verifier.len(), 43); // 32 bytes -> 43 base64url chars
+        let digest = Sha256::digest(pkce.code_verifier.as_bytes());
+        assert_eq!(pkce.code_challenge, base64url_no_pad(&digest));
+    }
+
+    #[test]
+    fn test_generate_pkce_is_non_deterministic() {
+        let a = generate_pkce();
+        let b = generate_pkce();
+        assert_ne!(a.code_verifier, b.code_verifier);
+    }
+
+    #[test]
+    fn test_authorization_url_includes_pkce_and_nonce() {
+        let manager = OidcManager::new(OidcConfig {
+            provider: "test".to_string(),
+            client_id: "client id/&".to_string(),
+            client_secret_env: "SECRET".to_string(),
+            discovery_url: "https://idp.example.com".to_string(),
+            scopes: vec!["openid".to_string(), "email".to_string()],
+            redirect_uri: "http://localhost:4000/cb".to_string(),
+        });
+        // parking_lot RwLock::write takes &self, so no `mut` binding needed.
+        *manager.endpoints.write() = Some(OidcEndpoints {
+            authorization_endpoint: "https://idp.example.com/authorize".to_string(),
+            token_endpoint: "https://idp.example.com/token".to_string(),
+            userinfo_endpoint: "https://idp.example.com/userinfo".to_string(),
+            jwks_uri: "https://idp.example.com/jwks".to_string(),
+            issuer: "https://idp.example.com".to_string(),
+        });
+        let url = manager.authorization_url("state123", "nonce456", "challenge789");
+        assert!(url.contains("code_challenge=challenge789"));
+        assert!(url.contains("code_challenge_method=S256"));
+        assert!(url.contains("nonce=nonce456"));
+        assert!(url.contains("state=state123"));
+        // client_id must be URL-encoded (no raw spaces or ampersands).
+        assert!(url.contains("client_id=client%20id%2F%26"));
+    }
+
+    #[test]
+    fn test_validate_id_token_rejects_when_not_discovered() {
+        let manager = OidcManager::new(OidcConfig {
+            provider: "test".to_string(),
+            client_id: "cid".to_string(),
+            client_secret_env: "SECRET".to_string(),
+            discovery_url: "https://idp.example.com".to_string(),
+            scopes: vec!["openid".to_string()],
+            redirect_uri: "http://localhost:4000/cb".to_string(),
+        });
+        let result = manager.validate_id_token("x.y.z", "nonce");
+        assert!(matches!(result, Err(OidcError::InvalidIdToken(_))));
     }
 }

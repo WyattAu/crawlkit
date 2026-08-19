@@ -1,22 +1,61 @@
-use axum::extract::{Path, State};
+use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::Utc;
 
+use crate::auth;
 use crate::types::*;
 
+/// List marketplace plugins. Requires the `marketplace:read` permission.
+#[utoipa::path(
+    get,
+    path = "/api/v1/marketplace/plugins",
+    tag = "marketplace",
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "All marketplace plugins", body = [MarketplacePlugin]),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:read permission", body = ApiErrorBody)
+    )
+)]
 pub async fn list_marketplace_plugins(
     State(state): State<AppState>,
-) -> Json<Vec<MarketplacePlugin>> {
+    Extension(claims): Extension<auth::Claims>,
+) -> Result<Json<Vec<MarketplacePlugin>>, ApiError> {
+    require_permission(&claims, "marketplace:read")?;
     let plugins = state.marketplace.plugins.read();
     let list: Vec<MarketplacePlugin> = plugins.values().cloned().collect();
-    Json(list)
+    Ok(Json(list))
 }
 
+/// Get a marketplace plugin by name. Requires `marketplace:read`.
+#[utoipa::path(
+    get,
+    path = "/api/v1/marketplace/plugins/{name}",
+    tag = "marketplace",
+    params(
+        ("name" = String, Path, description = "Plugin name")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Plugin details", body = MarketplacePlugin),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:read permission", body = ApiErrorBody),
+        (status = 404, description = "Plugin not found", body = ApiErrorBody)
+    )
+)]
 pub async fn get_marketplace_plugin(
     State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
     Path(name): Path<String>,
 ) -> Result<Json<MarketplacePlugin>, ApiError> {
+    require_permission(&claims, "marketplace:read")?;
     let plugins = state.marketplace.plugins.read();
     plugins
         .get(&name)
@@ -25,10 +64,29 @@ pub async fn get_marketplace_plugin(
         .ok_or_else(|| ApiError::NotFound(format!("Plugin '{name}' not found")))
 }
 
+/// Publish a new plugin to the marketplace. Requires `marketplace:write`.
+#[utoipa::path(
+    post,
+    path = "/api/v1/marketplace/plugins",
+    tag = "marketplace",
+    request_body = SubmitPluginRequest,
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 201, description = "Plugin published", body = MarketplacePlugin),
+        (status = 400, description = "Plugin name already exists", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:write permission or CSRF origin rejected", body = ApiErrorBody)
+    )
+)]
 pub async fn submit_plugin(
     State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
     Json(input): Json<SubmitPluginRequest>,
 ) -> Result<(StatusCode, Json<MarketplacePlugin>), ApiError> {
+    require_permission(&claims, "marketplace:write")?;
     {
         let plugins = state.marketplace.plugins.read();
         if plugins.contains_key(&input.name) {
@@ -61,10 +119,31 @@ pub async fn submit_plugin(
     Ok((StatusCode::CREATED, Json(plugin)))
 }
 
+/// Remove a plugin from the marketplace. Requires `marketplace:write`.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/marketplace/plugins/{name}",
+    tag = "marketplace",
+    params(
+        ("name" = String, Path, description = "Plugin name")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 204, description = "Plugin deleted"),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:write permission or CSRF origin rejected", body = ApiErrorBody),
+        (status = 404, description = "Plugin not found", body = ApiErrorBody)
+    )
+)]
 pub async fn delete_marketplace_plugin(
     State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
     Path(name): Path<String>,
 ) -> Result<StatusCode, ApiError> {
+    require_permission(&claims, "marketplace:write")?;
     let mut plugins = state.marketplace.plugins.write();
     if plugins.remove(&name).is_some() {
         Ok(StatusCode::NO_CONTENT)
@@ -86,11 +165,35 @@ pub async fn download_plugin(
     }
 }
 
+/// Execute a plugin against a free-form test input. Requires
+/// `marketplace:write`. Both the request and response bodies are
+/// plugin-defined JSON documents.
+#[utoipa::path(
+    post,
+    path = "/api/v1/marketplace/plugins/{name}/test",
+    tag = "marketplace",
+    request_body(content = serde_json::Value, description = "Plugin-defined test input"),
+    params(
+        ("name" = String, Path, description = "Plugin name")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Plugin-defined test result (e.g. status, findings, execution_time_ms)", body = serde_json::Value),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:write permission or CSRF origin rejected", body = ApiErrorBody),
+        (status = 404, description = "Plugin not found", body = ApiErrorBody)
+    )
+)]
 pub async fn test_plugin(
     State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
     Path(name): Path<String>,
     Json(input): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
+    require_permission(&claims, "marketplace:write")?;
     let _ = input;
     let plugins = state.marketplace.plugins.read();
     if plugins.contains_key(&name) {

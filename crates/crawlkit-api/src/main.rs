@@ -3,15 +3,6 @@
 //! Built on Axum with API-key authentication and per-key rate limiting.
 //! Start a crawl via `POST /api/v1/crawls` and poll status at
 //! `GET /api/v1/crawls/{crawl_id}`.
-#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
-
-mod auth;
-mod auth_mw;
-mod handlers;
-mod middleware;
-mod oidc;
-mod router;
-mod types;
 
 use chrono::Utc;
 use dashmap::DashMap;
@@ -19,9 +10,10 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 
-use auth::AuthManager;
-use handlers::schedules::run_scheduler;
-use types::{ApiKey, AppState, MarketplaceState, Metrics};
+use crawlkit_api::handlers::schedules::run_scheduler;
+use crawlkit_api::router;
+use crawlkit_api::types::{ssrf_safe_redirect_policy, ApiKey, AppState, MarketplaceState, Metrics};
+use crawlkit_api::{auth, auth::AuthManager, oidc};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -58,7 +50,7 @@ async fn main() -> anyhow::Result<()> {
     api_keys.insert(
         default_key.clone(),
         ApiKey {
-            key: default_key,
+            key: default_key.clone(),
             name: "development".to_string(),
             created_at: Utc::now(),
             requests_per_minute: 300,
@@ -87,24 +79,106 @@ async fn main() -> anyhow::Result<()> {
     // OIDC setup
     let oidc = setup_oidc().await;
 
+    // Server-side outbound HTTP client. All redirects are re-validated
+    // against the SSRF blocklist on every hop (webhooks, OIDC endpoints).
+    let http_client = reqwest::Client::builder()
+        .redirect(ssrf_safe_redirect_policy())
+        .build()
+        .map_err(|e| anyhow::anyhow!("Failed to build HTTP client: {e}"))?;
+
+    // Audit trail: persistent + tamper-evident when AUDIT_LOG_PATH is set
+    // (JSONL with SHA-256 chaining, fsync per event, truncation anchor).
+    let audit_trail = match std::env::var("AUDIT_LOG_PATH") {
+        Ok(path) if !path.is_empty() => {
+            let trail = crawlkit_engine::AuditTrail::open_persistent(std::path::Path::new(&path))
+                .map_err(|e| anyhow::anyhow!("Failed to open audit log at {path}: {e}"))?;
+            tracing::info!("Audit trail persisted to {path} (tamper-evident, chained)");
+            Arc::new(trail)
+        }
+        _ => Arc::new(crawlkit_engine::AuditTrail::new()),
+    };
+
+    // API-plane state persistence (users, tenants, API keys) so a restart
+    // does not lose accounts. Disabled with API_STATE_DB_PATH="".
+    let persistence = match std::env::var("API_STATE_DB_PATH") {
+        Ok(p) if !p.is_empty() => Some(Arc::new(
+            crawlkit_api::persistence::ApiStatePersistence::open(std::path::Path::new(&p))
+                .map_err(|e| anyhow::anyhow!("Failed to open API state DB at {p}: {e}"))?,
+        )),
+        _ => {
+            let default_path = format!("{db_path}.state");
+            Some(Arc::new(
+                crawlkit_api::persistence::ApiStatePersistence::open(std::path::Path::new(
+                    &default_path,
+                ))
+                .map_err(|e| {
+                    anyhow::anyhow!("Failed to open API state DB at {default_path}: {e}")
+                })?,
+            ))
+        }
+    };
+
     // Build application state
     let state = AppState {
         storage: Arc::new(storage),
         api_keys,
         rate_limits: Arc::new(DashMap::new()),
         crawl_results: Arc::new(DashMap::new()),
-        audit_trail: Arc::new(crawlkit_engine::AuditTrail::new()),
+        audit_trail,
         metrics: Arc::new(Metrics::new()),
         webhooks: Arc::new(DashMap::new()),
         schedules: Arc::new(DashMap::new()),
-        http_client: reqwest::Client::new(),
+        http_client,
         auth,
         oidc,
         oidc_states: Arc::new(DashMap::new()),
         tenants: Arc::new(DashMap::new()),
         marketplace: MarketplaceState::new(),
         sessions: Arc::new(DashMap::new()),
+        login_attempts: Arc::new(DashMap::new()),
+        persistence,
     };
+
+    // Restore persisted API-plane state into memory.
+    if let Some(persistence) = &state.persistence {
+        let users = persistence
+            .load_users()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to load users: {e}"))?;
+        for user in users {
+            state.auth.add_user(user);
+        }
+
+        let tenants = persistence
+            .load_tenants()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to load tenants: {e}"))?;
+        for tenant in tenants {
+            state.tenants.insert(tenant.id.clone(), tenant);
+        }
+
+        // Persist the bootstrap key so it survives restarts too.
+        if let Some(persistence) = &state.persistence {
+            if let Some(key) = state.api_keys.get(&default_key) {
+                let _ = persistence.save_api_key(&key).await;
+            }
+        }
+
+        let keys = persistence
+            .load_api_keys()
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to load API keys: {e}"))?;
+        for key in keys {
+            state.api_keys.insert(key.key.clone(), key);
+        }
+
+        tracing::info!(
+            "API state restored: {} users, {} tenants, {} API keys",
+            state.auth.list_users().len(),
+            state.tenants.len(),
+            state.api_keys.len()
+        );
+    }
 
     // Build router
     let cors = router::build_cors();
@@ -115,6 +189,24 @@ async fn main() -> anyhow::Result<()> {
 
     // Start server
     let addr = SocketAddr::from(([0, 0, 0, 0], 4000));
+    if std::env::var("METRICS_PUBLIC")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("true")
+    {
+        tracing::warn!(
+            "METRICS_PUBLIC=true: /metrics is unauthenticated. Endpoint labels \
+             and request rates are exposed without an API key."
+        );
+    }
+    if router::docs_enabled() {
+        tracing::info!(
+            "API docs enabled: GET /api/v1/docs and GET /api/v1/openapi.json are public \
+             (set DOCS_PUBLIC=false to disable)"
+        );
+    } else {
+        tracing::info!("API docs disabled (DOCS_PUBLIC=false): docs routes return 404");
+    }
+
     tracing::info!("crawlkit API listening on {addr}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
@@ -159,17 +251,29 @@ fn init_tracing() {
 }
 
 fn create_admin(auth: &AuthManager) -> anyhow::Result<()> {
-    let admin_password: String = (0..24)
-        .map(|_| {
-            let idx = rand::random::<u8>() % 62;
-            match idx {
-                0..=9 => (b'0' + idx) as char,
-                10..=35 => (b'a' + idx - 10) as char,
-                36..=61 => (b'A' + idx - 36) as char,
-                _ => unreachable!(),
-            }
-        })
-        .collect();
+    // Prefer an operator-supplied password; only generate (and print) one
+    // when ADMIN_PASSWORD is not provided.
+    let admin_password = match std::env::var("ADMIN_PASSWORD") {
+        Ok(p) if !p.is_empty() => p,
+        _ => {
+            use rand::seq::SliceRandom;
+            const ALPHABET: &[u8] =
+                b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            let mut rng = rand::thread_rng();
+            let password: String = (0..24)
+                .map(|_| {
+                    let idx = ALPHABET.choose(&mut rng).copied().unwrap_or(b'x');
+                    idx as char
+                })
+                .collect();
+            tracing::warn!(
+                "Admin account created. Email: admin@crawlkit.local. \
+                 Generated password printed once below — set ADMIN_PASSWORD to control it. \
+                 CHANGE THIS PASSWORD IMMEDIATELY. Password: {password}"
+            );
+            password
+        }
+    };
     let admin_password_hash = auth
         .hash_password(&admin_password)
         .map_err(|e| anyhow::anyhow!("Failed to hash admin password: {e}"))?;
@@ -182,10 +286,6 @@ fn create_admin(auth: &AuthManager) -> anyhow::Result<()> {
         roles: vec!["admin".to_string()],
         enabled: true,
     });
-    tracing::warn!(
-        "Admin account created. Email: admin@crawlkit.local, Password: {}. CHANGE THIS PASSWORD IMMEDIATELY.",
-        admin_password
-    );
     Ok(())
 }
 

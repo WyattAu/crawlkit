@@ -5,6 +5,15 @@ use axum::Json;
 
 use crate::types::*;
 
+/// Liveness probe.
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse)
+    )
+)]
 pub async fn health() -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok".to_string(),
@@ -12,6 +21,22 @@ pub async fn health() -> Json<HealthResponse> {
     })
 }
 
+/// Prometheus metrics endpoint (text format).
+///
+/// Requires an API key unless `METRICS_PUBLIC=true` is set.
+#[utoipa::path(
+    get,
+    path = "/metrics",
+    tag = "health",
+    security(
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Prometheus text exposition", content_type = "text/plain"),
+        (status = 401, description = "Missing or invalid API key", body = ApiErrorBody),
+        (status = 429, description = "Rate limit exceeded", body = ApiErrorBody)
+    )
+)]
 pub async fn metrics_endpoint(State(state): State<AppState>) -> Response {
     let registry = state.metrics.registry.read().await;
     let mut buffer = String::new();

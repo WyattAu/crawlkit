@@ -4,12 +4,32 @@ use axum::extract::{Extension, Path, State};
 use axum::http::StatusCode;
 use axum::Json;
 use chrono::Utc;
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::auth;
 use crate::types::*;
+use crawlkit_engine::AuditEventType;
 use crawlkit_engine::CrawlConfig;
 
+/// Start an asynchronous crawl. Returns immediately with `202`; poll
+/// `GET /api/v1/crawls/{crawl_id}` for status.
+#[utoipa::path(
+    post,
+    path = "/api/v1/crawls",
+    tag = "crawls",
+    request_body = CreateCrawlRequest,
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 202, description = "Crawl accepted and started in the background", body = CrawlResponse),
+        (status = 400, description = "Invalid URL, max_pages, concurrency, or delay", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody)
+    )
+)]
 pub async fn start_crawl(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -26,18 +46,11 @@ pub async fn start_crawl(
     let crawl_id = Uuid::new_v4().to_string();
     let tenant_id = extract_tenant(&claims).to_string();
 
-    let config_json = serde_json::to_string(&serde_json::json!({
-        "start_url": start_url,
-        "max_pages": req.max_pages,
-        "request_delay_ms": req.request_delay_ms,
-        "concurrency": req.concurrency,
-    }))
-    .unwrap_or_default();
-
-    state
-        .storage
-        .start_crawl(start_url.as_ref(), Some(&config_json))
-        .map_err(|e| ApiError::Internal(format!("Failed to start crawl: {e}")))?;
+    // The engine owns the storage row (it starts the crawl inside
+    // `run_with_callback` and reports the id via `CrawlOutput`); the API-level
+    // crawl_id above is the public identifier tracked in `crawl_results`.
+    // Pages/findings are written under the engine's id and resolved through
+    // `CrawlResult::storage_crawl_id` once the run completes.
 
     let result = CrawlResult {
         crawl_id: crawl_id.clone(),
@@ -48,9 +61,20 @@ pub async fn start_crawl(
         issues_found: 0,
         created_at: Utc::now(),
         completed_at: None,
+        storage_crawl_id: None,
     };
 
     state.crawl_results.insert(crawl_id.clone(), result);
+
+    state.audit_trail.record_tenant(
+        AuditEventType::CrawlStarted,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!(
+            "crawl started for {start_url} (max_pages={})",
+            req.max_pages
+        ),
+    );
 
     state.metrics.crawls_total.inc();
     state.metrics.active_crawls.inc();
@@ -79,6 +103,24 @@ pub async fn start_crawl(
     ))
 }
 
+/// Get the status of a crawl. Cross-tenant access returns `404` by design.
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawls/{crawl_id}",
+    tag = "crawls",
+    params(
+        ("crawl_id" = String, Path, description = "Crawl identifier returned by the start endpoint")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Crawl status", body = CrawlResult),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 404, description = "Crawl not found or owned by another tenant", body = ApiErrorBody)
+    )
+)]
 pub async fn get_crawl_status(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -96,20 +138,61 @@ pub async fn get_crawl_status(
     Ok(Json(entry.value().clone()))
 }
 
+/// Default-deny tenant gate for crawl-scoped endpoints.
+///
+/// The crawl MUST be known to this instance AND belong to the caller's
+/// tenant (or the caller must be an admin). Unknown ids are rejected: an
+/// absent entry must never fall through to an unscoped storage query.
+fn authorize_crawl_access(
+    state: &AppState,
+    claims: &auth::Claims,
+    crawl_id: &str,
+) -> Result<String, ApiError> {
+    let entry = state
+        .crawl_results
+        .get(crawl_id)
+        .ok_or_else(|| ApiError::NotFound(format!("Crawl {crawl_id} not found")))?;
+
+    if !can_access_tenant(claims, &entry.tenant_id) {
+        return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
+    }
+
+    // Storage rows live under the engine's crawl id once available.
+    Ok(entry
+        .storage_crawl_id
+        .clone()
+        .unwrap_or_else(|| crawl_id.to_string()))
+}
+
+/// Aggregate statistics for a crawl (page/issue counts, severity breakdown).
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawls/{crawl_id}/stats",
+    tag = "crawls",
+    params(
+        ("crawl_id" = String, Path, description = "Crawl identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Crawl statistics", body = CrawlStatsResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 404, description = "Crawl not found or owned by another tenant", body = ApiErrorBody),
+        (status = 500, description = "Storage failure", body = ApiErrorBody)
+    )
+)]
 pub async fn get_crawl_stats(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
     Path(crawl_id): Path<String>,
 ) -> Result<Json<CrawlStatsResponse>, ApiError> {
-    if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if !can_access_tenant(&claims, &entry.tenant_id) {
-            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
-        }
-    }
+    let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
     let stats = state
         .storage
-        .get_stats(&crawl_id)
+        .get_stats(&storage_crawl_id)
         .map_err(|e| ApiError::Internal(format!("Failed to get stats: {e}")))?;
 
     Ok(Json(CrawlStatsResponse {
@@ -122,21 +205,36 @@ pub async fn get_crawl_stats(
     }))
 }
 
+/// List findings (issues) detected during a crawl.
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawls/{crawl_id}/findings",
+    tag = "crawls",
+    params(
+        ("crawl_id" = String, Path, description = "Crawl identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Findings for the crawl", body = [CrawlFinding]),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 404, description = "Crawl not found or owned by another tenant", body = ApiErrorBody),
+        (status = 500, description = "Storage failure", body = ApiErrorBody)
+    )
+)]
 pub async fn get_crawl_findings(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
     Path(crawl_id): Path<String>,
 ) -> Result<Json<Vec<serde_json::Value>>, ApiError> {
-    if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if !can_access_tenant(&claims, &entry.tenant_id) {
-            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
-        }
-    }
+    let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
     let filter = crawlkit_engine::storage::IssueFilter::default();
     let issues = state
         .storage
-        .get_issues(&crawl_id, &filter)
+        .get_issues(&storage_crawl_id, &filter)
         .map_err(|e| ApiError::Internal(format!("Failed to get findings: {e}")))?;
 
     let findings: Vec<serde_json::Value> = issues
@@ -159,6 +257,20 @@ pub async fn get_crawl_findings(
     Ok(Json(findings))
 }
 
+/// List crawls visible to the caller (own tenant, or all for admins).
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawls",
+    tag = "crawls",
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Crawls visible to the caller", body = [CrawlResult]),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody)
+    )
+)]
 pub async fn list_crawls(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -175,7 +287,7 @@ pub async fn list_crawls(
     Json(results)
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ToSchema)]
 #[allow(dead_code)]
 pub struct BacklinksResponse {
     crawl_id: String,
@@ -186,25 +298,40 @@ pub struct BacklinksResponse {
     top_pages_by_pagerank: Vec<serde_json::Value>,
 }
 
+/// Internal/external link analysis and PageRank summary for a crawl.
+#[utoipa::path(
+    get,
+    path = "/api/v1/crawls/{crawl_id}/backlinks",
+    tag = "crawls",
+    params(
+        ("crawl_id" = String, Path, description = "Crawl identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Backlink and PageRank summary", body = BacklinksResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 404, description = "Crawl not found or owned by another tenant", body = ApiErrorBody),
+        (status = 500, description = "Storage failure", body = ApiErrorBody)
+    )
+)]
 pub async fn get_crawl_backlinks(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
     Path(crawl_id): Path<String>,
 ) -> Result<Json<BacklinksResponse>, ApiError> {
-    if let Some(entry) = state.crawl_results.get(&crawl_id) {
-        if !can_access_tenant(&claims, &entry.tenant_id) {
-            return Err(ApiError::NotFound(format!("Crawl {crawl_id} not found")));
-        }
-    }
+    let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
     let link_pairs = state
         .storage
-        .get_links_for_crawl(&crawl_id)
+        .get_links_for_crawl(&storage_crawl_id)
         .map_err(|e| ApiError::Internal(format!("Failed to get links: {e}")))?;
 
     let external_links = state
         .storage
-        .get_external_links(&crawl_id)
+        .get_external_links(&storage_crawl_id)
         .map_err(|e| ApiError::Internal(format!("Failed to get external links: {e}")))?;
 
     let mut analyzer = crawlkit_engine::BacklinkAnalyzer::new();
@@ -273,23 +400,22 @@ pub async fn run_crawl_task(
 
     match result {
         Ok(output) => {
-            let _ =
-                engine
-                    .storage()
-                    .finish_crawl(&crawl_id, output.pages_crawled, output.issues_found);
+            // The engine has already finished its own storage row
+            // (`output.crawl_id`); bind it to the public crawl id so that
+            // stats/findings/backlinks resolve to the row holding pages.
+            if let Some(mut entry) = state.crawl_results.get_mut(&crawl_id) {
+                entry.storage_crawl_id = Some(output.crawl_id.clone());
+                entry.status = "completed".to_string();
+                entry.pages_crawled = output.pages_crawled;
+                entry.issues_found = output.issues_found;
+                entry.completed_at = Some(Utc::now());
+            }
 
             let tenant_id = state
                 .crawl_results
                 .get(&crawl_id)
                 .map(|r| r.tenant_id.clone())
                 .unwrap_or_default();
-
-            if let Some(mut result) = state.crawl_results.get_mut(&crawl_id) {
-                result.status = "completed".to_string();
-                result.pages_crawled = output.pages_crawled;
-                result.issues_found = output.issues_found;
-                result.completed_at = Some(Utc::now());
-            }
 
             state.metrics.active_crawls.dec();
             state
@@ -300,6 +426,15 @@ pub async fn run_crawl_task(
                 .metrics
                 .issues_total
                 .inc_by(output.issues_found as u64);
+            state.audit_trail.record_tenant(
+                AuditEventType::CrawlCompleted,
+                "system",
+                Some(&tenant_id),
+                &format!(
+                    "crawl completed: {} pages, {} issues",
+                    output.pages_crawled, output.issues_found
+                ),
+            );
             state
                 .metrics
                 .fetch_duration_seconds
@@ -337,6 +472,12 @@ pub async fn run_crawl_task(
                 result.completed_at = Some(Utc::now());
             }
             state.metrics.active_crawls.dec();
+            state.audit_trail.record_tenant(
+                AuditEventType::CrawlFailed,
+                "system",
+                Some(&tenant_id),
+                &format!("crawl failed: {e}"),
+            );
             super::webhooks::fire_webhooks(&state, "crawl.failed", &crawl_id, &tenant_id, 0, 0);
         }
     }

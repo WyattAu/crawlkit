@@ -7,6 +7,23 @@ use uuid::Uuid;
 use crate::auth;
 use crate::types::*;
 
+/// Create a recurring crawl schedule (minimum interval: 60 seconds).
+#[utoipa::path(
+    post,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    request_body = CreateScheduleRequest,
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 201, description = "Schedule created", body = ScheduleResponse),
+        (status = 400, description = "Invalid URL, bounds, or interval below 60s", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody)
+    )
+)]
 pub async fn create_schedule(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -61,6 +78,20 @@ pub async fn create_schedule(
     Ok((StatusCode::CREATED, Json(response)))
 }
 
+/// List schedules visible to the caller (own tenant, or all for admins).
+#[utoipa::path(
+    get,
+    path = "/api/v1/schedules",
+    tag = "schedules",
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Schedules visible to the caller", body = [ScheduleResponse]),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody)
+    )
+)]
 pub async fn list_schedules(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -88,6 +119,25 @@ pub async fn list_schedules(
     )
 }
 
+/// Delete a schedule. Cross-tenant access returns `404` by design.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/schedules/{id}",
+    tag = "schedules",
+    params(
+        ("id" = String, Path, description = "Schedule identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 204, description = "Schedule deleted"),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody),
+        (status = 404, description = "Schedule not found or owned by another tenant", body = ApiErrorBody)
+    )
+)]
 pub async fn delete_schedule(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -110,6 +160,27 @@ pub async fn delete_schedule(
         .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))
 }
 
+/// Partially update a schedule. Omitted fields keep their current values.
+#[utoipa::path(
+    patch,
+    path = "/api/v1/schedules/{id}",
+    tag = "schedules",
+    request_body = UpdateScheduleRequest,
+    params(
+        ("id" = String, Path, description = "Schedule identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Updated schedule", body = ScheduleResponse),
+        (status = 400, description = "Invalid URL, bounds, or interval below 60s", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody),
+        (status = 404, description = "Schedule not found or owned by another tenant", body = ApiErrorBody)
+    )
+)]
 pub async fn update_schedule(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -217,6 +288,7 @@ pub async fn run_scheduler(state: AppState) {
                 issues_found: 0,
                 created_at: Utc::now(),
                 completed_at: None,
+                storage_crawl_id: None,
             };
             state.crawl_results.insert(crawl_id.clone(), result);
             state.metrics.crawls_total.inc();

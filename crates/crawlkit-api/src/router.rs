@@ -2,6 +2,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use tower_http::cors::{AllowHeaders, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::auth_mw::auth_middleware as jwt_auth_middleware;
 use crate::handlers::api_keys::*;
@@ -16,6 +17,15 @@ use crate::handlers::users::*;
 use crate::handlers::webhooks::*;
 use crate::middleware::*;
 use crate::types::*;
+
+/// Whether the documentation endpoints (`/api/v1/openapi.json`,
+/// `/api/v1/docs`) are registered. Docs are public by default; setting
+/// `DOCS_PUBLIC=false` removes the routes entirely (404).
+pub fn docs_enabled() -> bool {
+    !std::env::var("DOCS_PUBLIC")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("false")
+}
 
 /// Build the full application router with protected and public routes.
 pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Router {
@@ -82,13 +92,42 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
 
     let public = Router::new()
         .route("/health", get(health))
-        .route("/metrics", get(metrics_endpoint))
         .route("/api/v1/auth/login", post(login))
         .route("/api/v1/auth/oidc/authorize", get(oidc_authorize))
         .route("/api/v1/auth/oidc/callback", get(oidc_callback));
 
+    // API docs are public by default; DOCS_PUBLIC=false removes the routes
+    // (both the OpenAPI JSON and the Swagger UI) so they return 404.
+    let docs_router: Router<AppState> = if docs_enabled() {
+        Router::new().merge(
+            SwaggerUi::new("/api/v1/docs").url("/api/v1/openapi.json", crate::openapi::openapi()),
+        )
+    } else {
+        Router::new()
+    };
+
+    // /metrics exposes endpoint labels and request rates and is therefore
+    // gated behind API-key auth by default. Set METRICS_PUBLIC=true to keep
+    // it open for legacy scrape setups that cannot send headers (a warning
+    // is logged at startup in that case).
+    let metrics_router = if std::env::var("METRICS_PUBLIC")
+        .unwrap_or_default()
+        .eq_ignore_ascii_case("true")
+    {
+        Router::new().route("/metrics", get(metrics_endpoint))
+    } else {
+        Router::new()
+            .route("/metrics", get(metrics_endpoint))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                api_key_auth_middleware,
+            ))
+    };
+
     Router::new()
         .merge(public)
+        .merge(docs_router)
+        .merge(metrics_router)
         .merge(protected)
         .layer(axum::middleware::from_fn(csp_headers))
         .layer(axum::middleware::from_fn_with_state(

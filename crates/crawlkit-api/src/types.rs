@@ -13,6 +13,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use crawlkit_engine::storage::Storage;
 use crawlkit_engine::AuditTrail;
@@ -90,6 +91,12 @@ pub struct Metrics {
 #[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
 pub struct EndpointLabel {
     pub endpoint: String,
+}
+
+impl Default for Metrics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Metrics {
@@ -178,14 +185,14 @@ impl Metrics {
 // Application state
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Tenant {
     pub id: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTenantRequest {
     pub id: String,
     pub name: String,
@@ -204,10 +211,98 @@ pub struct AppState {
     pub http_client: reqwest::Client,
     pub auth: Arc<auth::AuthManager>,
     pub oidc: Option<Arc<OidcManager>>,
-    pub oidc_states: Arc<DashMap<String, DateTime<Utc>>>,
+    pub oidc_states: Arc<DashMap<String, OidcPendingState>>,
     pub tenants: Arc<dashmap::DashMap<String, Tenant>>,
     pub marketplace: MarketplaceState,
     pub sessions: Arc<DashMap<String, SessionInfo>>,
+    /// Per-email login attempt tracking for brute-force lockout.
+    pub login_attempts: Arc<DashMap<String, LoginAttemptRecord>>,
+    /// Write-through persistence for users/tenants/API keys (`None` in
+    /// tests or when persistence is disabled).
+    pub persistence: Option<Arc<crate::persistence::ApiStatePersistence>>,
+}
+
+/// Pending OIDC authorization flow state (one-shot, per `state` token).
+#[derive(Debug, Clone)]
+pub struct OidcPendingState {
+    pub created_at: DateTime<Utc>,
+    /// PKCE code verifier (S256). Sent to the token endpoint on callback.
+    pub code_verifier: String,
+    /// Nonce bound into the authorization request; must match the id_token.
+    pub nonce: String,
+}
+
+/// Brute-force protection record, keyed by normalized email.
+#[derive(Debug, Clone)]
+pub struct LoginAttemptRecord {
+    pub failures: u32,
+    pub window_start: DateTime<Utc>,
+    pub locked_until: Option<DateTime<Utc>>,
+}
+
+/// Maximum failed login attempts per email before lockout.
+pub const LOGIN_MAX_FAILURES: u32 = 5;
+/// Window over which failures accumulate.
+pub const LOGIN_FAILURE_WINDOW: chrono::Duration = chrono::Duration::minutes(15);
+/// Lockout duration once the failure threshold is reached.
+pub const LOGIN_LOCKOUT: chrono::Duration = chrono::Duration::minutes(15);
+
+/// Returns `Err(Unauthorized)` when the caller is currently locked out,
+/// `Ok(record)` otherwise (creating or resetting the window as needed).
+pub fn check_login_lockout(
+    attempts: &DashMap<String, LoginAttemptRecord>,
+    email: &str,
+    now: DateTime<Utc>,
+) -> Result<(), ApiError> {
+    let key = email.trim().to_ascii_lowercase();
+    if let Some(mut entry) = attempts.get_mut(&key) {
+        let record = entry.value_mut();
+        // Reset the window once it (and any lockout) has fully expired.
+        let window_expired = now - record.window_start > LOGIN_FAILURE_WINDOW;
+        let lockout_expired = record.locked_until.is_none_or(|until| now >= until);
+        if window_expired && lockout_expired {
+            *record = LoginAttemptRecord {
+                failures: 0,
+                window_start: now,
+                locked_until: None,
+            };
+        } else if let Some(until) = record.locked_until {
+            if now < until {
+                return Err(ApiError::Unauthorized(format!(
+                    "Account temporarily locked due to failed login attempts. Try again after {until}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Record a failed login attempt; engages the lockout at the threshold.
+pub fn record_login_failure(
+    attempts: &DashMap<String, LoginAttemptRecord>,
+    email: &str,
+    now: DateTime<Utc>,
+) {
+    let key = email.trim().to_ascii_lowercase();
+    let mut entry = attempts.entry(key).or_insert_with(|| LoginAttemptRecord {
+        failures: 0,
+        window_start: now,
+        locked_until: None,
+    });
+    let record = entry.value_mut();
+    if now - record.window_start > LOGIN_FAILURE_WINDOW {
+        record.failures = 0;
+        record.window_start = now;
+    }
+    record.failures += 1;
+    if record.failures >= LOGIN_MAX_FAILURES {
+        record.locked_until = Some(now + LOGIN_LOCKOUT);
+    }
+}
+
+/// Clear failure state after a successful login.
+pub fn clear_login_failures(attempts: &DashMap<String, LoginAttemptRecord>, email: &str) {
+    attempts.remove(&email.trim().to_ascii_lowercase());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,12 +314,12 @@ pub struct SessionInfo {
     pub revoked: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct RevokeSessionRequest {
     pub jti: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct SessionResponse {
     pub jti: String,
     pub user_id: String,
@@ -237,7 +332,7 @@ pub struct SessionResponse {
 // Request / Response types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateCrawlRequest {
     pub start_url: String,
     #[serde(default = "default_max_pages")]
@@ -258,14 +353,14 @@ pub fn default_concurrency() -> usize {
     4
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CrawlResponse {
     pub crawl_id: String,
     pub status: String,
     pub message: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CrawlResult {
     pub crawl_id: String,
     pub tenant_id: String,
@@ -275,9 +370,14 @@ pub struct CrawlResult {
     pub issues_found: usize,
     pub created_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
+    /// Storage-layer crawl id owned by the engine once the run completes.
+    /// `crawl_id` remains the public API identifier; this field maps it to
+    /// the row that actually contains pages and findings.
+    #[serde(default)]
+    pub storage_crawl_id: Option<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct CrawlStatsResponse {
     pub crawl_id: String,
     pub total_pages: usize,
@@ -287,7 +387,22 @@ pub struct CrawlStatsResponse {
     pub avg_response_time_ms: Option<f64>,
 }
 
-#[derive(Debug, Deserialize)]
+/// Single crawl finding as returned by `GET /api/v1/crawls/{id}/findings`.
+/// Documentation mirror of the engine's storage `Issue` projection.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct CrawlFinding {
+    pub id: String,
+    pub page_id: String,
+    pub category: String,
+    pub severity: String,
+    pub code: String,
+    pub title: String,
+    pub description: String,
+    pub element: Option<String>,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct ApiKeyCreateRequest {
     pub name: String,
     #[serde(default = "default_rpm")]
@@ -298,7 +413,7 @@ pub fn default_rpm() -> u32 {
     60
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ApiKeyResponse {
     pub key: String,
     pub name: String,
@@ -316,7 +431,7 @@ impl ApiKeyResponse {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct HealthResponse {
     pub status: String,
     pub version: String,
@@ -326,19 +441,20 @@ pub struct HealthResponse {
 // Webhook types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct WebhookConfig {
     pub id: String,
     pub tenant_id: String,
     pub url: String,
     pub events: Vec<String>,
+    /// Never serialized in responses; listed webhooks omit the secret.
     #[serde(skip_serializing, default)]
     pub secret: String,
     pub created_at: DateTime<Utc>,
 }
 
 /// Response returned once when a webhook is created, containing the secret.
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct WebhookCreatedResponse {
     pub id: String,
     pub tenant_id: String,
@@ -348,7 +464,7 @@ pub struct WebhookCreatedResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateWebhookRequest {
     pub url: String,
     #[serde(default = "default_webhook_events")]
@@ -372,10 +488,12 @@ pub struct WebhookPayload {
 // Scheduled crawl types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ScheduleConfig {
     pub id: String,
     pub tenant_id: String,
+    /// Internal engine crawl configuration (URL + delay); free-form in docs.
+    #[schema(value_type = Object)]
     pub crawl_config: CrawlConfig,
     pub interval_secs: u64,
     pub enabled: bool,
@@ -384,7 +502,7 @@ pub struct ScheduleConfig {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateScheduleRequest {
     pub start_url: String,
     #[serde(default = "default_max_pages")]
@@ -401,7 +519,7 @@ pub fn default_schedule_interval() -> u64 {
     3600
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct ScheduleResponse {
     pub id: String,
     pub start_url: String,
@@ -412,7 +530,7 @@ pub struct ScheduleResponse {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, ToSchema)]
 pub struct UpdateScheduleRequest {
     #[serde(default)]
     pub start_url: Option<String>,
@@ -428,7 +546,7 @@ pub struct UpdateScheduleRequest {
 // Plugin marketplace types
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct MarketplacePlugin {
     pub name: String,
     pub version: String,
@@ -443,7 +561,7 @@ pub struct MarketplacePlugin {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, ToSchema)]
 #[allow(dead_code)]
 pub struct SubmitPluginRequest {
     pub name: String,
@@ -480,13 +598,52 @@ impl MarketplaceState {
 // Error types
 // ---------------------------------------------------------------------------
 
+/// JSON error body emitted by every `ApiError` response.
+/// Documentation mirror of the `{"error": ..., "status": ...}` shape.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApiErrorBody {
+    /// Human-readable error message.
+    pub error: String,
+    /// HTTP status code (numeric).
+    pub status: u16,
+}
+
+/// Audit event entry as returned by `GET /api/v1/audit`.
+/// Documentation mirror of the engine's `AuditEvent` serialization.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct ApiAuditEvent {
+    pub id: String,
+    pub timestamp: DateTime<Utc>,
+    pub event_type: String,
+    pub actor: String,
+    pub tenant_id: Option<String>,
+    pub details: String,
+    pub hash: String,
+}
+
 #[derive(Debug)]
 pub enum ApiError {
     Unauthorized(String),
     BadRequest(String),
     NotFound(String),
+    Forbidden(String),
     RateLimited,
     Internal(String),
+}
+
+impl ApiError {
+    /// Human-readable message without the HTTP status.
+    #[must_use]
+    pub fn message(&self) -> String {
+        match self {
+            ApiError::Unauthorized(msg)
+            | ApiError::BadRequest(msg)
+            | ApiError::NotFound(msg)
+            | ApiError::Forbidden(msg)
+            | ApiError::Internal(msg) => msg.clone(),
+            ApiError::RateLimited => "Rate limit exceeded".to_string(),
+        }
+    }
 }
 
 impl IntoResponse for ApiError {
@@ -494,6 +651,7 @@ impl IntoResponse for ApiError {
         let (status, message) = match &self {
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
             ApiError::BadRequest(msg) => (StatusCode::BAD_REQUEST, msg.clone()),
+            ApiError::Forbidden(msg) => (StatusCode::FORBIDDEN, msg.clone()),
             ApiError::NotFound(msg) => (StatusCode::NOT_FOUND, msg.clone()),
             ApiError::RateLimited => (
                 StatusCode::TOO_MANY_REQUESTS,
@@ -617,6 +775,36 @@ pub fn validate_delay(ms: u64) -> Result<(), ApiError> {
     Ok(())
 }
 
+/// Maximum allowed requests-per-minute for a created API key.
+pub const MAX_API_KEY_RPM: u32 = 10_000;
+
+pub fn validate_rpm(rpm: u32) -> Result<(), ApiError> {
+    if !(1..=MAX_API_KEY_RPM).contains(&rpm) {
+        return Err(ApiError::BadRequest(format!(
+            "requests_per_minute must be between 1 and {MAX_API_KEY_RPM}"
+        )));
+    }
+    Ok(())
+}
+
+/// Redirect policy for all server-side outbound HTTP (webhooks, OIDC).
+///
+/// Every hop is re-validated against the SSRF blocklist: a redirect to a
+/// private/loopback/metadata address aborts the request instead of being
+/// followed. Hop count is additionally capped.
+pub fn ssrf_safe_redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        const MAX_HOPS: usize = 5;
+        if attempt.previous().len() >= MAX_HOPS {
+            attempt.stop()
+        } else if validate_public_url(attempt.url().as_str()).is_ok() {
+            attempt.follow()
+        } else {
+            attempt.error("redirect target failed SSRF validation")
+        }
+    })
+}
+
 // ---------------------------------------------------------------------------
 // Helper functions
 // ---------------------------------------------------------------------------
@@ -640,6 +828,21 @@ pub fn is_admin(claims: &auth::Claims) -> bool {
 #[must_use]
 pub fn can_access_tenant(claims: &auth::Claims, resource_tenant: &str) -> bool {
     is_admin(claims) || resource_tenant == claims.tenant
+}
+
+/// Permission enforcement for privileged operations.
+///
+/// Returns `Ok(())` when the JWT claims carry the required permission,
+/// otherwise `Err(Forbidden)`. Handlers for administrative surfaces
+/// (tenants, API keys, marketplace) must call this before mutating state.
+pub fn require_permission(claims: &auth::Claims, permission: &str) -> Result<(), ApiError> {
+    if claims.permissions.iter().any(|p| p == permission) {
+        Ok(())
+    } else {
+        Err(ApiError::Forbidden(format!(
+            "Missing required permission: {permission}"
+        )))
+    }
 }
 
 /// Map OIDC roles/groups to crawlkit roles.
@@ -674,13 +877,13 @@ pub fn map_oidc_roles(oidc_roles: &[String], oidc_groups: &[String]) -> Vec<Stri
 // Auth types
 // ---------------------------------------------------------------------------
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct LoginRequest {
     pub email: String,
     pub password: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateUserRequest {
     pub email: String,
     pub name: String,
@@ -952,7 +1155,7 @@ mod tests {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ToSchema)]
 pub struct UserResponse {
     pub id: String,
     pub email: String,

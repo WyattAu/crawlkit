@@ -10,8 +10,12 @@ use axum::{
 use crate::auth::{AuthManager, Claims};
 
 /// Authorization middleware that checks JWT and permissions.
+///
+/// Validates the Bearer token signature, then enforces session state: a
+/// session recorded as revoked (or expired) in `state.sessions` is rejected
+/// even though its signature is still valid.
 pub async fn auth_middleware(
-    State(state): State<crate::AppState>,
+    State(state): State<crate::types::AppState>,
     request: Request,
     next: Next,
 ) -> Result<Response, StatusCode> {
@@ -29,6 +33,26 @@ pub async fn auth_middleware(
         .auth
         .validate_token(token)
         .map_err(|_| StatusCode::UNAUTHORIZED)?;
+
+    // Enforce server-side session state when a session exists for this jti.
+    if let Some(session) = state.sessions.get(&claims.jti) {
+        if session.revoked {
+            tracing::info!(
+                user_id = %claims.sub,
+                jti = %claims.jti,
+                "Rejected revoked session"
+            );
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+        if chrono::Utc::now() >= session.expires_at {
+            tracing::info!(
+                user_id = %claims.sub,
+                jti = %claims.jti,
+                "Rejected expired session"
+            );
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    }
 
     let mut request = request;
     request.extensions_mut().insert(claims);

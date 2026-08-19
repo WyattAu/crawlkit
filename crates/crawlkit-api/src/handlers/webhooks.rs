@@ -7,6 +7,25 @@ use uuid::Uuid;
 use crate::auth;
 use crate::types::*;
 
+/// Register a webhook for crawl lifecycle events.
+///
+/// The signing secret is returned exactly once, in the `201` response.
+#[utoipa::path(
+    post,
+    path = "/api/v1/webhooks",
+    tag = "webhooks",
+    request_body = CreateWebhookRequest,
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 201, description = "Webhook created; secret returned once", body = WebhookCreatedResponse),
+        (status = 400, description = "URL failed SSRF validation or unknown event type", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody)
+    )
+)]
 pub async fn create_webhook(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -52,6 +71,21 @@ pub async fn create_webhook(
     ))
 }
 
+/// List webhooks visible to the caller (own tenant, or all for admins).
+/// Secrets are never included in listings.
+#[utoipa::path(
+    get,
+    path = "/api/v1/webhooks",
+    tag = "webhooks",
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Webhooks visible to the caller", body = [WebhookConfig]),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody)
+    )
+)]
 pub async fn list_webhooks(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -68,6 +102,25 @@ pub async fn list_webhooks(
     )
 }
 
+/// Delete a webhook. Cross-tenant access returns `404` by design.
+#[utoipa::path(
+    delete,
+    path = "/api/v1/webhooks/{id}",
+    tag = "webhooks",
+    params(
+        ("id" = String, Path, description = "Webhook identifier")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 204, description = "Webhook deleted"),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "CSRF origin validation failed", body = ApiErrorBody),
+        (status = 404, description = "Webhook not found or owned by another tenant", body = ApiErrorBody)
+    )
+)]
 pub async fn delete_webhook(
     State(state): State<AppState>,
     Extension(claims): Extension<auth::Claims>,
@@ -116,6 +169,15 @@ pub async fn deliver_webhook(
     webhook: &WebhookConfig,
     payload: &WebhookPayload,
 ) -> Result<(), String> {
+    // Defense in depth: re-validate the destination at delivery time. The
+    // HTTP client also re-validates every redirect hop.
+    if let Err(e) = validate_public_url(&webhook.url) {
+        return Err(format!(
+            "Webhook URL failed SSRF validation: {}",
+            e.message()
+        ));
+    }
+
     let body = serde_json::to_vec(payload)
         .map_err(|e| format!("Failed to serialize webhook payload: {e}"))?;
     let signature = sign_webhook_payload(&webhook.secret, &body);

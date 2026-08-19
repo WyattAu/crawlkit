@@ -99,6 +99,11 @@ impl AuthManager {
                 "role:write".to_string(),
                 "apikey:read".to_string(),
                 "apikey:write".to_string(),
+                "tenant:read".to_string(),
+                "tenant:write".to_string(),
+                "marketplace:read".to_string(),
+                "marketplace:write".to_string(),
+                "audit:read".to_string(),
             ],
         });
         manager.add_role(Role {
@@ -108,11 +113,16 @@ impl AuthManager {
                 "crawl:write".to_string(),
                 "report:read".to_string(),
                 "report:write".to_string(),
+                "marketplace:read".to_string(),
             ],
         });
         manager.add_role(Role {
             name: "viewer".to_string(),
-            permissions: vec!["crawl:read".to_string(), "report:read".to_string()],
+            permissions: vec![
+                "crawl:read".to_string(),
+                "report:read".to_string(),
+                "marketplace:read".to_string(),
+            ],
         });
 
         manager

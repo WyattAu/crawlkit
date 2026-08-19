@@ -206,9 +206,14 @@ impl SecurityHeaderAnalyzer {
 
     fn check_referrer(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
         const RECOMMENDED: &[&str] = &[
-            "no-referrer", "no-referrer-when-downgrade", "origin",
-            "origin-when-cross-origin", "same-origin", "strict-origin",
-            "strict-origin-when-cross-origin", "unsafe-url",
+            "no-referrer",
+            "no-referrer-when-downgrade",
+            "origin",
+            "origin-when-cross-origin",
+            "same-origin",
+            "strict-origin",
+            "strict-origin-when-cross-origin",
+            "unsafe-url",
         ];
         match Self::get_header(h, "Referrer-Policy") {
             None => f.push(Finding {
@@ -254,23 +259,38 @@ impl SecurityHeaderAnalyzer {
 
     fn check_cross_origin(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
         let checks = [
-            ("Cross-Origin-Embedder-Policy", "SEC009", "Cross-Origin-Embedder-Policy",
-             "COEP prevents resources from loading cross-origin without explicit permission.",
-             "Set COEP to require-corp for stricter cross-origin isolation."),
-            ("Cross-Origin-Opener-Policy", "SEC010", "Cross-Origin-Opener-Policy",
-             "COOP isolates your browsing context from cross-origin popups.",
-             "Set COOP to same-origin for stricter isolation."),
-            ("Cross-Origin-Resource-Policy", "SEC011", "Cross-Origin-Resource-Policy",
-             "CORP prevents cross-origin reads of embedded resources.",
-             "Set CORP to same-origin if the resource should only be used by the same origin."),
+            (
+                "Cross-Origin-Embedder-Policy",
+                "SEC009",
+                "Cross-Origin-Embedder-Policy",
+                "COEP prevents resources from loading cross-origin without explicit permission.",
+                "Set COEP to require-corp for stricter cross-origin isolation.",
+            ),
+            (
+                "Cross-Origin-Opener-Policy",
+                "SEC010",
+                "Cross-Origin-Opener-Policy",
+                "COOP isolates your browsing context from cross-origin popups.",
+                "Set COOP to same-origin for stricter isolation.",
+            ),
+            (
+                "Cross-Origin-Resource-Policy",
+                "SEC011",
+                "Cross-Origin-Resource-Policy",
+                "CORP prevents cross-origin reads of embedded resources.",
+                "Set CORP to same-origin if the resource should only be used by the same origin.",
+            ),
         ];
         for (header, code, name, desc, rec) in checks {
             if Self::get_header(h, header).is_none() {
                 f.push(Finding {
-                    severity: Severity::Info, category: IssueCategory::Security,
-                    code: code.to_string(), title: format!("Missing {name} header"),
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: code.to_string(),
+                    title: format!("Missing {name} header"),
                     description: format!("No {name} header was found. {desc}"),
-                    url: url.to_string(), recommendation: rec.into(),
+                    url: url.to_string(),
+                    recommendation: rec.into(),
                 });
             }
         }
@@ -284,7 +304,9 @@ impl Default for SecurityHeaderAnalyzer {
 }
 
 impl Analyzer for SecurityHeaderAnalyzer {
-    fn name(&self) -> &str { "security-headers" }
+    fn name(&self) -> &str {
+        "security-headers"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut f = Vec::new();

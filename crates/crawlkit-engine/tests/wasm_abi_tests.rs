@@ -421,8 +421,9 @@ wasm = "plugin.wasm"
             Err(e) => e,
         };
         assert!(
-            err.to_string().contains("capabilities"),
-            "expected capability rejection, got: {err}"
+            err.to_string().contains("capabilities")
+                || err.to_string().contains("allow_plugin_network"),
+            "expected capability or network rejection, got: {err}"
         );
     }
 }
@@ -575,4 +576,148 @@ fn allow_unsigned_still_rejects_bad_crypto() {
         err.to_string().contains("unknown key id"),
         "expected unknown key rejection, got: {err}"
     );
+}
+
+// ---------------------------------------------------------------------------
+// Network capability tests (B2: grantable WASM host fetch via crawlkit_host)
+// ---------------------------------------------------------------------------
+
+const NETWORK_WAT: &str = r#"
+(module
+  (import "crawlkit_host" "fetch" (func $fetch (param i32 i32) (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 0) "http://169.254.169.254/latest/meta-data\00")
+  (data (i32.const 128) "[]\00")
+  (global $heap (mut i32) (i32.const 256))
+  (func (export "crawlkit_plugin_init") (param i32) (result i32) i32.const 0)
+  (func (export "crawlkit_plugin_alloc") (param $size i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (global.get $heap))
+    (global.set $heap (i32.add (global.get $heap) (local.get $size)))
+    (local.get $ptr))
+  (func (export "crawlkit_plugin_free") (param i32))
+  (func (export "crawlkit_plugin_analyze")
+        (param i32) (param i32) (param i32) (param i32) (result i32)
+    (local $result i32)
+    (local.set $result (call $fetch (i32.const 0) (i32.const 40)))
+    ;; If fetch returned 0 (SSRF-blocked), return the static fallback at offset 128
+    (if (result i32) (i32.eqz (local.get $result))
+      (then (i32.const 128))
+      (else (local.get $result))
+    ))
+)
+"#;
+
+const NO_FETCH_WAT: &str = r#"
+(module
+  (memory (export "memory") 1)
+  (data (i32.const 1024) "[{\"code\":\"NO001\"}]\00")
+  (global $heap (mut i32) (i32.const 2048))
+  (func (export "crawlkit_plugin_init") (param i32) (result i32) i32.const 0)
+  (func (export "crawlkit_plugin_alloc") (param $size i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (global.get $heap))
+    (global.set $heap (i32.add (global.get $heap) (local.get $size)))
+    (local.get $ptr))
+  (func (export "crawlkit_plugin_free") (param i32))
+  (func (export "crawlkit_plugin_analyze")
+        (param i32) (param i32) (param i32) (param i32) (result i32)
+    (i32.const 1024))
+)
+"#;
+
+fn write_net_plugin(dir: &std::path::Path, wat: &str, manifest_perms: &str) {
+    use std::io::Write;
+    std::fs::write(dir.join("plugin.wasm"), wat).unwrap();
+    let mut f = std::fs::File::create(dir.join("crawlkit-plugin.toml")).unwrap();
+    write!(
+        f,
+        r#"[plugin]
+name = "net-test"
+version = "1.0.0"
+api_version = "1.0"
+author = "b2-test"
+description = "network capability test"
+license = "Apache-2.0"
+
+{manifest_perms}
+
+[plugin.entry]
+wasm = "plugin.wasm"
+
+[plugin.analyzer]
+name = "net-test-analyzer"
+categories = ["test"]
+"#
+    )
+    .unwrap();
+}
+
+fn net_config(allow_network: bool) -> WasmConfig {
+    WasmConfig {
+        allow_plugin_network: allow_network,
+        plugin_verification: PluginVerification::AllowUnsigned,
+        ..WasmConfig::default()
+    }
+}
+
+#[test]
+fn network_plugin_rejected_when_config_disallows() {
+    let dir = tempfile::tempdir().unwrap();
+    write_net_plugin(
+        dir.path(),
+        NETWORK_WAT,
+        "[plugin.permissions]\nnetwork = true\n",
+    );
+    let result = WasmPlugin::load_with_config(dir.path(), &net_config(false));
+    assert!(
+        result.is_err(),
+        "must reject when allow_plugin_network=false"
+    );
+    assert!(
+        match result {
+            Err(e) => e.to_string().contains("allow_plugin_network"),
+            Ok(_) => false,
+        },
+        "error should name the config flag"
+    );
+}
+
+#[test]
+fn network_plugin_loads_when_config_grants() {
+    let dir = tempfile::tempdir().unwrap();
+    write_net_plugin(
+        dir.path(),
+        NETWORK_WAT,
+        "[plugin.permissions]\nnetwork = true\n",
+    );
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &net_config(true)).unwrap();
+    let result = plugin.analyze("<html></html>", "https://test.example.com");
+    assert!(
+        result.is_ok(),
+        "fetch is SSRF-blocked (returns 0), but load+call should succeed"
+    );
+}
+
+#[test]
+fn non_requesting_plugin_loads_without_network() {
+    let dir = tempfile::tempdir().unwrap();
+    write_net_plugin(dir.path(), NO_FETCH_WAT, "");
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &net_config(true)).unwrap();
+    let result = plugin
+        .analyze("<html></html>", "https://test.example.com")
+        .unwrap();
+    assert!(result.contains("NO001"));
+}
+
+#[test]
+fn fetch_import_fails_when_network_not_linked() {
+    let dir = tempfile::tempdir().unwrap();
+    write_net_plugin(
+        dir.path(),
+        NETWORK_WAT,
+        "[plugin.permissions]\nnetwork = true\n",
+    );
+    let result = WasmPlugin::load_with_config(dir.path(), &net_config(false));
+    assert!(result.is_err(), "import not linked → instantiation fails");
 }

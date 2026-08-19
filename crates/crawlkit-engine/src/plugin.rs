@@ -38,6 +38,11 @@ pub struct WasmConfig {
     pub max_analysis_timeout_ms: u64,
     /// Trust-chain policy applied to the manifest's hash/signature fields.
     pub plugin_verification: PluginVerification,
+    /// When true, plugins whose manifest declares `permissions.network = true`
+    /// may call the host `crawlkit_host.fetch` function (SSRF-validated,
+    /// redirect-free, 1 MiB cap, 10 s timeout). The default is false:
+    /// network access is deny-by-default even if the manifest requests it.
+    pub allow_plugin_network: bool,
 }
 
 impl Default for WasmConfig {
@@ -54,6 +59,9 @@ impl Default for WasmConfig {
             // Fail-closed by default: unsigned/untrusted plugins are
             // rejected unless the embedder explicitly opts out.
             plugin_verification: PluginVerification::Required,
+            // Network access deny-by-default; must be explicitly enabled
+            // by the embedder in addition to the manifest declaring it.
+            allow_plugin_network: false,
         }
     }
 }
@@ -555,6 +563,69 @@ pub struct WasmPlugin {
     memory: wasmtime::Memory,
 }
 
+/// Determine whether `url` is a public HTTP(S) target that the WASM host
+/// fetch may follow. Rejects non-HTTP schemes, metadata/internal hostnames,
+/// and private/loopback/link-local/multicast IP addresses.
+fn is_public_http_url(url: &str) -> bool {
+    let Ok(parsed) = url::Url::parse(url) else {
+        return false;
+    };
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
+    if matches!(
+        normalized.as_str(),
+        "localhost" | "localhost.localdomain" | "metadata.google.internal"
+    ) {
+        return false;
+    }
+    let ip_host = host.trim_matches(['[', ']']);
+    if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
+        return !match ip {
+            std::net::IpAddr::V4(v4) => {
+                v4.is_private()
+                    || v4.is_loopback()
+                    || v4.is_link_local()
+                    || v4.is_broadcast()
+                    || v4.is_unspecified()
+                    || v4.is_multicast()
+                    || (v4.octets()[0] == 100 && (64..=127).contains(&v4.octets()[1]))
+                    || (v4.octets()[0] == 192 && v4.octets()[1] == 0 && v4.octets()[2] == 0)
+            }
+            std::net::IpAddr::V6(v6) => {
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    || v6.is_unique_local()
+                    || v6.is_unicast_link_local()
+                    || v6.is_multicast()
+            }
+        };
+    }
+    true
+}
+
+/// Dedicated blocking runtime for WASM host fetch calls (leaked static,
+/// same pattern as [`PgStorage`](crate::pg_storage::BLOCKING_RUNTIME)).
+static FETCH_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
+
+fn fetch_runtime() -> &'static tokio::runtime::Runtime {
+    #[allow(clippy::panic)]
+    FETCH_RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .thread_name("crawlkit-wasm-fetch")
+            .build()
+            .unwrap_or_else(|e| panic!("WASM fetch runtime failed to build: {e}"))
+    })
+}
+
+// Error types for plugin loading are already defined above.
+
 impl WasmPlugin {
     /// Load a WASM plugin from a directory with default security configuration.
     pub fn load(plugin_dir: &Path) -> Result<Self, PluginError> {
@@ -571,24 +642,39 @@ impl WasmPlugin {
             ));
         }
 
-        // Capability enforcement (fail-closed): the sandbox links NO host
-        // functions — plugins are pure compute with no I/O. A manifest that
-        // requests network/filesystem/env access cannot have that request
-        // honored, so loading fails loudly instead of silently ignoring
-        // the declared capability.
+        // Capability enforcement (fail-closed with grantable network).
+        // filesystem and env_vars are always rejected; network is grantable
+        // only when BOTH the manifest declares it AND the embedder enables it
+        // via WasmConfig.allow_plugin_network.
         if let Some(perms) = &manifest.plugin.permissions {
-            let network = perms.network.unwrap_or(false);
-            let filesystem = perms.filesystem.unwrap_or(false);
-            let env_vars = perms.env_vars.as_ref().is_some_and(|v| !v.is_empty());
-            if network || filesystem || env_vars {
+            let network_requested = perms.network.unwrap_or(false);
+            let filesystem_requested = perms.filesystem.unwrap_or(false);
+            let env_vars_requested = perms.env_vars.as_ref().is_some_and(|v| !v.is_empty());
+            if filesystem_requested || env_vars_requested {
                 return Err(PluginError::InvalidManifest(
                     concat!(
-                        "plugin requests capabilities (network/filesystem/env_vars) ",
-                        "that the sandbox cannot grant: plugins are deny-by-default ",
-                        "pure compute with no host imports",
+                        "plugin requests filesystem/env_vars capabilities ",
+                        "that the sandbox cannot grant; only network is grantable ",
+                        "via allow_plugin_network config",
                     )
                     .to_string(),
                 ));
+            }
+            if network_requested && !config.allow_plugin_network {
+                return Err(PluginError::InvalidManifest(
+                    concat!(
+                        "plugin requests network capability but allow_plugin_network ",
+                        "is false; set WasmConfig.allow_plugin_network = true to grant ",
+                        "HTTP access (SSRF-validated, no redirects, 1 MiB cap, 10s timeout)"
+                    )
+                    .to_string(),
+                ));
+            }
+            if network_requested && config.allow_plugin_network {
+                tracing::info!(
+                    "Granting network capability to plugin: {}",
+                    manifest.plugin.name
+                );
             }
         }
 
@@ -637,7 +723,133 @@ impl WasmPlugin {
         // per-call timeout.
         store.set_epoch_deadline(u64::MAX);
 
-        let linker = wasmtime::Linker::new(&engine);
+        let mut linker = wasmtime::Linker::new(&engine);
+
+        // When network capability is granted (manifest declares it AND config
+        // enables it), link the host fetch function. Otherwise the sandbox
+        // remains pure-compute (no imports linked).
+        let network_granted = manifest
+            .plugin
+            .permissions
+            .as_ref()
+            .is_some_and(|p| p.network.unwrap_or(false))
+            && config.allow_plugin_network;
+
+        if network_granted {
+            linker
+                .func_wrap(
+                    "crawlkit_host",
+                    "fetch",
+                    |mut caller: wasmtime::Caller<'_, ()>, url_ptr: i32, url_len: i32| -> i32 {
+                        // Read URL bytes from guest memory
+                        let url_bytes = {
+                            let memory = match caller.get_export("memory") {
+                                Some(wasmtime::Extern::Memory(m)) => m,
+                                _ => return 0,
+                            };
+                            let data = memory.data(&caller);
+                            let start = url_ptr as usize;
+                            let end = start + url_len as usize;
+                            if end > data.len() {
+                                return 0;
+                            }
+                            data[start..end].to_vec()
+                        };
+
+                        let url = match String::from_utf8(url_bytes) {
+                            Ok(s) => s,
+                            Err(_) => return 0,
+                        };
+
+                        if !is_public_http_url(&url) {
+                            tracing::debug!("WASM fetch blocked by SSRF guard: {url}");
+                            return 0;
+                        }
+
+                        // Fetch via the dedicated blocking runtime (never
+                        // panics from within a Tokio worker because the
+                        // runtime is separate and leaked).
+                        let rt = fetch_runtime();
+                        let result = rt.block_on(async {
+                            let client = reqwest::Client::builder()
+                                .redirect(reqwest::redirect::Policy::none())
+                                .timeout(std::time::Duration::from_secs(10))
+                                .build()
+                                .map_err(|e| e.to_string())?;
+                            let resp = client.get(&url).send().await.map_err(|e| e.to_string())?;
+                            let status = resp.status().as_u16();
+                            let body = resp.bytes().await.map_err(|e| e.to_string())?;
+                            // Cap at 1 MiB
+                            let body = if body.len() > 1_048_576 {
+                                &body[..1_048_576]
+                            } else {
+                                &body
+                            };
+                            let body_str = String::from_utf8_lossy(body).into_owned();
+                            Ok::<(u16, String), String>((status, body_str))
+                        });
+
+                        let json = match result {
+                            Ok((status, body)) => serde_json::json!({
+                                "status": status,
+                                "body": body,
+                            })
+                            .to_string(),
+                            Err(e) => {
+                                tracing::debug!("WASM fetch failed: {e}");
+                                return 0;
+                            }
+                        };
+
+                        let json_bytes = json.as_bytes();
+                        let alloc_len = json_bytes.len() + 1; // +1 for NUL
+
+                        // Allocate in guest via crawlkit_plugin_alloc
+                        let alloc_fn = match caller
+                            .get_export("crawlkit_plugin_alloc")
+                            .and_then(|e| e.into_func())
+                        {
+                            Some(f) => f,
+                            None => return 0,
+                        };
+                        let mut alloc_result = [wasmtime::Val::I32(0)];
+                        if alloc_fn
+                            .call(
+                                &mut caller,
+                                &[wasmtime::Val::I32(alloc_len as i32)],
+                                &mut alloc_result,
+                            )
+                            .is_err()
+                        {
+                            return 0;
+                        }
+                        let result_ptr = match alloc_result[0] {
+                            wasmtime::Val::I32(p) => p,
+                            _ => return 0,
+                        };
+                        if result_ptr == 0 {
+                            return 0;
+                        }
+
+                        // Write JSON + NUL into guest memory at result_ptr
+                        if let Some(wasmtime::Extern::Memory(memory)) = caller.get_export("memory")
+                        {
+                            let data = memory.data_mut(&mut caller);
+                            let start = result_ptr as usize;
+                            let end = start + alloc_len;
+                            if end <= data.len() {
+                                data[start..start + json_bytes.len()].copy_from_slice(json_bytes);
+                                data[start + json_bytes.len()] = 0; // NUL terminator
+                            }
+                        }
+
+                        result_ptr
+                    },
+                )
+                .map_err(|e| {
+                    PluginError::LoadFailed(format!("Failed to link crawlkit_host.fetch: {e}"))
+                })?;
+        }
 
         let instance = linker
             .instantiate(&mut store, &module)
@@ -1248,5 +1460,54 @@ mod tests {
             validate_manifest(&metadata).unwrap_err(),
             ManifestError::EntryPointNotWasm
         );
+    }
+}
+
+#[cfg(test)]
+mod ssrf_tests {
+    use super::is_public_http_url;
+
+    #[test]
+    fn rejects_non_http_schemes() {
+        assert!(!is_public_http_url("ftp://example.com/file"));
+        assert!(!is_public_http_url("file:///etc/passwd"));
+    }
+
+    #[test]
+    fn rejects_localhost_and_metadata() {
+        assert!(!is_public_http_url("http://localhost/"));
+        assert!(!is_public_http_url(
+            "http://metadata.google.internal/latest"
+        ));
+    }
+
+    #[test]
+    fn rejects_private_ipv4() {
+        assert!(!is_public_http_url("http://127.0.0.1/"));
+        assert!(!is_public_http_url("http://10.0.0.1/api"));
+        assert!(!is_public_http_url(
+            "http://169.254.169.254/latest/meta-data"
+        ));
+        assert!(!is_public_http_url("http://192.168.1.1/admin"));
+        assert!(!is_public_http_url("http://172.16.0.1/internal"));
+    }
+
+    #[test]
+    fn rejects_private_ipv6() {
+        assert!(!is_public_http_url("http://[::1]/"));
+        assert!(!is_public_http_url("http://[fd00::1]/"));
+    }
+
+    #[test]
+    fn rejects_empty_and_malformed() {
+        assert!(!is_public_http_url(""));
+        assert!(!is_public_http_url("not-a-url"));
+    }
+
+    #[test]
+    fn accepts_valid_public_https() {
+        assert!(is_public_http_url("https://example.com"));
+        assert!(is_public_http_url("https://api.stripe.com/v1/charges"));
+        assert!(is_public_http_url("http://example.com:8080/path?q=1"));
     }
 }

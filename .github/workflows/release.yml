@@ -80,6 +80,9 @@ jobs:
 
       - name: Build (cross)
         if: matrix.cross
+        env:
+          OPENSSL_STATIC: "1"
+          OPENSSL_NO_VENDOR: "1"
         run: cross build --release --target ${{ matrix.target }}
 
       - name: Run tests (native)
@@ -115,8 +118,8 @@ jobs:
         with:
           name: crawlkit-${{ matrix.target }}
           path: |
-            crawlkit-${{ github.ref_name }}-${{ matrix.target }}.*
-            !crawlkit-${{ github.ref_name }}-${{ matrix.target }}.d
+            target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.*
+            !target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.d
 
   release:
     name: Create Release

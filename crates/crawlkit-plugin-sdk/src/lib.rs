@@ -49,6 +49,13 @@ pub use analyzer::Analyzer;
 pub use context::AnalysisContext;
 pub use finding::{Finding, Severity};
 
+/// Host-ABI allocator internals used by the `export_analyzer!` macro.
+///
+/// Not intended for direct use by plugin authors.
+pub mod exported {
+    pub use crate::export::{alloc_raw, free_raw};
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

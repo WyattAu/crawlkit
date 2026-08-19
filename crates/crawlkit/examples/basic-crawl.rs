@@ -85,6 +85,7 @@ async fn main() -> Result<()> {
         pool_idle_timeout: Duration::from_secs(90),
         allow_http: false,
         connect_timeout: Duration::from_secs(10),
+        seed: None,
     };
     let client = HttpClient::new(http_config)?;
 

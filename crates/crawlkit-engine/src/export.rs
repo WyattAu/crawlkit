@@ -216,8 +216,42 @@ pub struct JsonExport {
     pub crawl: JsonCrawlMeta,
     /// All pages.
     pub pages: Vec<JsonPage>,
-    /// Aggregate stats.
+    /// Aggregate stats (serialized with sorted map keys for
+    /// byte-deterministic output).
+    #[serde(serialize_with = "serialize_stats_canonical")]
     pub stats: CrawlStats,
+}
+
+/// Serialize [`CrawlStats`] with canonically sorted map keys.
+///
+/// The aggregate maps are `HashMap`s whose iteration order differs per
+/// instance (and therefore per export call), which would make JSON output
+/// byte-nondeterministic. Sorting the entries here pins the serialized
+/// form so identical input always exports identical bytes.
+fn serialize_stats_canonical<S>(stats: &CrawlStats, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    use serde::ser::SerializeMap;
+    let severity: std::collections::BTreeMap<&str, &usize> = stats
+        .issues_by_severity
+        .iter()
+        .map(|(k, v)| (k.as_str(), v))
+        .collect();
+    let category: std::collections::BTreeMap<&str, &usize> = stats
+        .issues_by_category
+        .iter()
+        .map(|(k, v)| (k.as_str(), v))
+        .collect();
+
+    let mut map = serializer.serialize_map(Some(6))?;
+    map.serialize_entry("total_pages", &stats.total_pages)?;
+    map.serialize_entry("total_issues", &stats.total_issues)?;
+    map.serialize_entry("issues_by_severity", &severity)?;
+    map.serialize_entry("issues_by_category", &category)?;
+    map.serialize_entry("avg_response_time_ms", &stats.avg_response_time_ms)?;
+    map.serialize_entry("total_body_size", &stats.total_body_size)?;
+    map.end()
 }
 
 #[derive(Serialize)]
@@ -398,7 +432,8 @@ pub fn export_markdown(storage: &Storage, crawl_id: &str) -> Result<String, Expo
     md.push_str("## Issues by Category\n\n");
     md.push_str("| Category | Count |\n|---|---|\n");
     let mut cats: Vec<_> = stats.issues_by_category.iter().collect();
-    cats.sort_by(|a, b| b.1.cmp(a.1));
+    // Count desc, then key asc as a deterministic tie-breaker.
+    cats.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
     for (cat, count) in &cats {
         md.push_str(&format!("| {} | {count} |\n", escape_markdown(cat)));
     }
@@ -647,7 +682,7 @@ function filterTable() {{
         severity_bars = severity_bars,
         category_rows = {
             let mut cats: Vec<_> = stats.issues_by_category.iter().collect();
-            cats.sort_by(|a, b| b.1.cmp(a.1));
+            cats.sort_by(|a, b| b.1.cmp(a.1).then_with(|| a.0.cmp(b.0)));
             cats.iter()
                 .map(|(cat, count)| {
                     format!(
@@ -769,12 +804,14 @@ fn read_crawl_meta(conn: &Connection, crawl_id: &str) -> Result<JsonCrawlMeta, E
     .map_err(ExportError::from)
 }
 
+/// Read all pages for a crawl, canonically ordered by URL string so that
+/// identical storage contents always export byte-identical output.
 fn read_pages(conn: &Connection, crawl_id: &str) -> Result<Vec<PageRow>, ExportError> {
     let mut stmt = conn.prepare(
         "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at
-         FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC",
+         FROM pages WHERE crawl_id = ?1",
     )?;
-    let rows = stmt
+    let mut rows = stmt
         .query_map([crawl_id], |row| {
             Ok(PageRow {
                 id: row.get(0)?,
@@ -791,6 +828,9 @@ fn read_pages(conn: &Connection, crawl_id: &str) -> Result<Vec<PageRow>, ExportE
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    // SQL row order reflects nondeterministic insertion order; sort by URL
+    // for canonical, byte-identical exports.
+    rows.sort_by(|a, b| a.url.cmp(&b.url));
     Ok(rows)
 }
 
@@ -829,6 +869,11 @@ fn read_issues_grouped_by_page(
     for row in rows {
         grouped.entry(row.page_id.clone()).or_default().push(row);
     }
+    // Canonical ordering per page: findings sorted by (code, element) so
+    // identical storage contents always serialize byte-identically.
+    for issues in grouped.values_mut() {
+        issues.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.element.cmp(&b.element)));
+    }
     Ok(grouped)
 }
 
@@ -856,6 +901,10 @@ fn read_links_grouped_by_page(
     for (page_id, target_url) in rows {
         grouped.entry(page_id).or_default().push(target_url);
     }
+    // Canonical ordering: sorted link lists for byte-identical exports.
+    for links in grouped.values_mut() {
+        links.sort();
+    }
     Ok(grouped)
 }
 
@@ -876,7 +925,7 @@ fn read_crux_metrics(conn: &Connection, crawl_id: &str) -> Result<Vec<CruxRow>, 
          JOIN pages p ON cm.page_id = p.id
          WHERE p.crawl_id = ?1",
     )?;
-    let rows = stmt
+    let mut rows = stmt
         .query_map([crawl_id], |row| {
             Ok(CruxRow {
                 url: row.get(0)?,
@@ -888,6 +937,7 @@ fn read_crux_metrics(conn: &Connection, crawl_id: &str) -> Result<Vec<CruxRow>, 
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    rows.sort_by(|a, b| a.url.cmp(&b.url));
     Ok(rows)
 }
 
@@ -917,6 +967,23 @@ fn read_top_issues(
             })
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    // Deterministic tie-breakers beyond the SQL ordering (severity rank,
+    // affected pages) so identical data always yields identical reports.
+    let severity_rank = |s: &str| match s {
+        "critical" => 0,
+        "error" => 1,
+        "warning" => 2,
+        _ => 3,
+    };
+    let mut rows = rows;
+    rows.sort_by(|a, b| {
+        severity_rank(&a.severity)
+            .cmp(&severity_rank(&b.severity))
+            .then_with(|| b.affected_pages.cmp(&a.affected_pages))
+            .then_with(|| a.code.cmp(&b.code))
+            .then_with(|| a.title.cmp(&b.title))
+    });
+    rows.truncate(limit);
     Ok(rows)
 }
 
@@ -1354,6 +1421,59 @@ mod tests {
             .unwrap();
         assert_eq!(home["issues"].as_array().unwrap().len(), 2);
         assert_eq!(home["links"].as_array().unwrap().len(), 1);
+    }
+
+    // --- Canonical ordering tests ---
+
+    #[test]
+    fn test_export_pages_and_issues_sorted() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        seed_data(&storage, &crawl_id);
+
+        let json_str = export_json(&storage, &crawl_id, false).unwrap();
+        let v: serde_json::Value = serde_json::from_str(&json_str).unwrap();
+        let pages = v["pages"].as_array().unwrap();
+
+        let urls: Vec<&str> = pages.iter().map(|p| p["url"].as_str().unwrap()).collect();
+        let mut sorted_urls = urls.clone();
+        sorted_urls.sort();
+        assert_eq!(urls, sorted_urls, "pages must be sorted by URL");
+
+        for page in pages {
+            let codes: Vec<&str> = page["issues"]
+                .as_array()
+                .map(|a| a.iter().map(|i| i["code"].as_str().unwrap()).collect())
+                .unwrap_or_default();
+            let mut sorted_codes = codes.clone();
+            sorted_codes.sort();
+            assert_eq!(codes, sorted_codes, "issues must be sorted by code");
+        }
+    }
+
+    #[test]
+    fn test_export_byte_identical_across_calls() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        seed_data(&storage, &crawl_id);
+
+        let json1 = export_json(&storage, &crawl_id, false).unwrap();
+        let json2 = export_json(&storage, &crawl_id, false).unwrap();
+        assert_eq!(json1, json2);
+
+        let md1 = export_markdown(&storage, &crawl_id).unwrap();
+        let md2 = export_markdown(&storage, &crawl_id).unwrap();
+        assert_eq!(md1, md2);
+
+        let html1 = export_html(&storage, &crawl_id).unwrap();
+        let html2 = export_html(&storage, &crawl_id).unwrap();
+        assert_eq!(html1, html2);
+
+        let conn = &*storage.conn();
+        let selector = CsvColumnSelector::all();
+        let csv1 = export_csv(conn, &crawl_id, &selector).unwrap();
+        let csv2 = export_csv(conn, &crawl_id, &selector).unwrap();
+        assert_eq!(csv1, csv2);
     }
 
     // --- Markdown tests ---

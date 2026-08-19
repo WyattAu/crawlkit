@@ -826,6 +826,12 @@ impl CrawlEngine {
         let concurrency = cfg.concurrency.unwrap_or(cfg.crawl_config.concurrency);
         let mut http_config = HttpClientConfig::from(&cfg.crawl_config);
         http_config.allow_http = cfg.allow_http;
+        // Seeded crawls get deterministic user-agent assignment (per-URL
+        // stable hash) instead of round-robin, removing task-interleaving
+        // nondeterminism from the fetch plane.
+        if let Some(seed) = cfg.seed {
+            http_config = http_config.with_seed(seed);
+        }
         let http_client = HttpClient::new(http_config)?;
         let http_client = Arc::new(http_client);
 

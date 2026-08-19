@@ -15,16 +15,26 @@ use std::sync::Arc;
 ///
 /// let ctrl = DeterminismController::new(42);
 /// assert_eq!(ctrl.seed(), 42);
-/// let seed1 = ctrl.derive_seed("context1");
-/// let seed2 = ctrl.derive_seed("context1");
-/// assert_ne!(seed1, seed2); // counter makes each call unique
+///
+/// // derive_seed is a pure hash of (seed, context): the same context
+/// // always yields the same derived seed, on any controller instance.
+/// assert_eq!(ctrl.derive_seed("context1"), ctrl.derive_seed("context1"));
+/// let ctrl2 = DeterminismController::new(42);
+/// assert_eq!(ctrl.derive_seed("context1"), ctrl2.derive_seed("context1"));
+///
+/// // derive_seed_stream mixes in an internal counter, so repeated calls
+/// // with the same context are unique (but call-order sensitive).
+/// assert_ne!(
+///     ctrl.derive_seed_stream("context1"),
+///     ctrl.derive_seed_stream("context1")
+/// );
 /// ```
 pub struct DeterminismController {
     /// Base seed for reproducible randomness.
     seed: u64,
     /// Whether determinism is enforced.
     enforced: Arc<AtomicBool>,
-    /// Counter for unique seeding.
+    /// Counter for unique seeding in [`DeterminismController::derive_seed_stream`].
     counter: AtomicU64,
 }
 
@@ -52,8 +62,31 @@ impl DeterminismController {
     }
 
     /// Generate a deterministic seed for a specific context.
+    ///
+    /// This is a **pure** function of `(self.seed, context)`: no internal
+    /// state is read or mutated, so the same controller (or a fresh one
+    /// with the same base seed) always returns the same value for the
+    /// same context, regardless of call order or concurrency. Prefer this
+    /// over [`derive_seed_stream`](Self::derive_seed_stream) whenever the
+    /// context alone identifies the use site.
     #[must_use]
     pub fn derive_seed(&self, context: &str) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.seed.hash(&mut hasher);
+        context.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    /// Generate a stream of unique seeds for a repeated context.
+    ///
+    /// Unlike [`derive_seed`](Self::derive_seed), this mixes in an internal
+    /// atomic counter, so each call returns a fresh value even for the same
+    /// context. This makes it **order-sensitive**: results depend on how
+    /// many calls happened before, so only use it when you genuinely need a
+    /// non-repeating stream (e.g. simulating random draws) and not for
+    /// replaying deterministic crawls.
+    #[must_use]
+    pub fn derive_seed_stream(&self, context: &str) -> u64 {
         let counter = self.counter.fetch_add(1, Ordering::AcqRel);
         let mut hasher = DefaultHasher::new();
         self.seed.hash(&mut hasher);
@@ -122,6 +155,40 @@ mod tests {
         let seed1 = ctrl.derive_seed("context1");
         let seed2 = ctrl.derive_seed("context2");
         assert_ne!(seed1, seed2);
+    }
+
+    #[test]
+    fn test_derive_seed_is_pure_for_same_context() {
+        let ctrl = DeterminismController::new(42);
+        assert_eq!(ctrl.derive_seed("ctx"), ctrl.derive_seed("ctx"));
+        // Interleaving other calls must not change the result.
+        let first = ctrl.derive_seed("ctx");
+        let _ = ctrl.derive_seed("other");
+        let _ = ctrl.derive_seed_stream("other");
+        assert_eq!(ctrl.derive_seed("ctx"), first);
+    }
+
+    #[test]
+    fn test_derive_seed_matches_across_instances() {
+        let ctrl1 = DeterminismController::new(7);
+        let ctrl2 = DeterminismController::new(7);
+        assert_eq!(ctrl1.derive_seed("page/1"), ctrl2.derive_seed("page/1"));
+        // A different base seed must (statistically) change the derivation.
+        let ctrl3 = DeterminismController::new(8);
+        assert_ne!(ctrl1.derive_seed("page/1"), ctrl3.derive_seed("page/1"));
+    }
+
+    #[test]
+    fn test_derive_seed_stream_is_unique_per_call() {
+        let ctrl = DeterminismController::new(42);
+        let s1 = ctrl.derive_seed_stream("ctx");
+        let s2 = ctrl.derive_seed_stream("ctx");
+        let s3 = ctrl.derive_seed_stream("ctx");
+        assert_ne!(s1, s2);
+        assert_ne!(s2, s3);
+        assert_ne!(s1, s3);
+        // Stream values differ from the pure derivation for the same context.
+        assert_ne!(ctrl.derive_seed("ctx"), ctrl.derive_seed_stream("ctx"));
     }
 
     #[test]

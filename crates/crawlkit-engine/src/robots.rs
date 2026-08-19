@@ -138,7 +138,11 @@ impl RobotsTxtCache {
 /// - Disallow/Allow paths are prefix-matched
 /// - Crawl-delay specifies delay between requests
 /// - Sitemap directives are collected
-fn parse_robots_txt(content: &str, target_agent: &str) -> (Vec<RobotsRule>, Vec<String>) {
+///
+/// Pure function over `(content, target_agent)` — never panics on
+/// arbitrary input, making it safe to fuzz and to run on untrusted
+/// robots.txt files. Returns `(matched rules, sitemap URLs)`.
+pub fn parse_robots_txt(content: &str, target_agent: &str) -> (Vec<RobotsRule>, Vec<String>) {
     let mut rules = Vec::new();
     let mut sitemap_urls = Vec::new();
     let mut current_agent = String::new();

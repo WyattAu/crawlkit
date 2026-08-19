@@ -328,6 +328,7 @@ async fn test_http_client_rejects_plain_http_by_default() {
         pool_idle_timeout: Duration::from_secs(30),
         connect_timeout: Duration::from_secs(5),
         allow_http: false,
+        seed: None,
     };
     let client = HttpClient::new(config).unwrap();
     let url = url::Url::parse(&server.index_url()).unwrap();

@@ -44,6 +44,7 @@ pub async fn run(
         pool_idle_timeout: std::time::Duration::from_secs(90),
         allow_http: false,
         connect_timeout: std::time::Duration::from_secs(10),
+        seed: None,
     };
     let client = HttpClient::new(http_config).context("Failed to create HTTP client")?;
     let config = crawlkit_engine::CrawlConfig::default();

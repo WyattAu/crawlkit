@@ -1,3 +1,5 @@
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -153,6 +155,40 @@ impl UserAgentRotator {
         &self.agents[idx % self.agents.len()]
     }
 
+    /// Returns the user-agent for a URL, selected by a stable hash of
+    /// `(seed, url)`.
+    ///
+    /// Unlike [`next`](Self::next), this is a pure function of its inputs:
+    /// the same `(url, seed)` pair always maps to the same agent across
+    /// threads, rotator instances, and runs. Use this for seeded,
+    /// reproducible crawls; keep [`next`](Self::next) for unseeded ones.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::http::UserAgentRotator;
+    ///
+    /// let rotator = UserAgentRotator::new(vec!["bot/1.0".to_string(), "bot/2.0".to_string()]);
+    /// // Same (url, seed) → same agent, regardless of call order.
+    /// assert_eq!(
+    ///     rotator.ua_for_url("https://example.com/a", 42),
+    ///     rotator.ua_for_url("https://example.com/a", 42)
+    /// );
+    /// // A fresh instance selects identically.
+    /// let rotator2 = UserAgentRotator::new(vec!["bot/1.0".to_string(), "bot/2.0".to_string()]);
+    /// assert_eq!(
+    ///     rotator.ua_for_url("https://example.com/a", 42),
+    ///     rotator2.ua_for_url("https://example.com/a", 42)
+    /// );
+    /// ```
+    pub fn ua_for_url(&self, url: &str, seed: u64) -> &str {
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u64(seed);
+        hasher.write(url.as_bytes());
+        let index = (hasher.finish() % self.agents.len() as u64) as usize;
+        &self.agents[index]
+    }
+
     /// Returns the number of user-agents in the rotation.
     pub fn len(&self) -> usize {
         self.agents.len()
@@ -214,6 +250,36 @@ pub struct HttpClientConfig {
     /// Allow plain-HTTP fetches. Secure by default (`false`); enabling is
     /// intended for local test servers and trusted intranets.
     pub allow_http: bool,
+    /// Optional seed for deterministic user-agent rotation.
+    ///
+    /// When `Some`, per-request user agents are selected via
+    /// [`UserAgentRotator::ua_for_url`] (a stable hash of the URL and the
+    /// seed) instead of round-robin [`UserAgentRotator::next`], so
+    /// concurrent task interleaving cannot change which agent is sent.
+    /// `None` by default.
+    pub seed: Option<u64>,
+}
+
+impl HttpClientConfig {
+    /// Enables deterministic user-agent rotation for this client.
+    ///
+    /// When a seed is set, each request's user agent is chosen by a stable
+    /// hash of `(seed, url)` rather than by round-robin counter, so the
+    /// same crawl always sends the same agent per URL.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use crawlkit_engine::{CrawlConfig, http::HttpClientConfig};
+    ///
+    /// let config = HttpClientConfig::from(&CrawlConfig::default()).with_seed(42);
+    /// assert_eq!(config.seed, Some(42));
+    /// ```
+    #[must_use]
+    pub fn with_seed(mut self, seed: u64) -> Self {
+        self.seed = Some(seed);
+        self
+    }
 }
 
 impl From<&CrawlConfig> for HttpClientConfig {
@@ -231,6 +297,7 @@ impl From<&CrawlConfig> for HttpClientConfig {
             pool_idle_timeout: Duration::from_secs(90),
             connect_timeout: Duration::from_secs(10),
             allow_http: false,
+            seed: None,
         }
     }
 }
@@ -317,6 +384,18 @@ impl HttpClient {
         Self::new(cfg)
     }
 
+    /// Selects the per-request user-agent for a URL.
+    ///
+    /// Seeded clients pick the agent via a stable `(seed, url)` hash so the
+    /// selection is independent of task interleaving; unseeded clients keep
+    /// the round-robin rotation.
+    fn ua_for(&self, url: &Url) -> &str {
+        match self.config.seed {
+            Some(seed) => self.config.user_agent.ua_for_url(url.as_str(), seed),
+            None => self.config.user_agent.next(),
+        }
+    }
+
     /// Fetches a URL with retry logic and redirect tracking.
     ///
     /// Returns a [`FetchResult`] with the final URL, status, headers, and body.
@@ -363,7 +442,7 @@ impl HttpClient {
         last_modified: Option<&str>,
     ) -> Result<FetchResult, CrawlError> {
         let start = Instant::now();
-        let user_agent = self.config.user_agent.next();
+        let user_agent = self.ua_for(url);
 
         let mut request = self.client.get(url.as_str()).header(USER_AGENT, user_agent);
 
@@ -520,7 +599,7 @@ impl HttpClient {
 
         for attempt in 0..=max_retries {
             let start = Instant::now();
-            let user_agent = self.config.user_agent.next();
+            let user_agent = self.ua_for(url);
 
             let result = self
                 .client
@@ -646,7 +725,7 @@ impl HttpClient {
 
         for _ in 0..=self.config.max_redirects {
             let start = Instant::now();
-            let user_agent = self.config.user_agent.next();
+            let user_agent = self.ua_for(&current_url);
 
             let response = self
                 .client
@@ -748,7 +827,7 @@ impl HttpClient {
     /// Returns errors for network failures.
     pub async fn fetch_reader(&self, url: &Url) -> Result<FetchStreamReader, CrawlError> {
         let start = Instant::now();
-        let user_agent = self.config.user_agent.next();
+        let user_agent = self.ua_for(url);
 
         let response = self
             .client
@@ -965,6 +1044,77 @@ mod tests {
         assert_eq!(rotator.len(), 1);
         let agent = rotator.next().to_string();
         assert!(agent.starts_with("crawlkit/"));
+    }
+
+    #[test]
+    fn test_ua_for_url_is_stable_across_calls_and_instances() {
+        let agents: Vec<String> = (1..=5).map(|i| format!("agent-{i}")).collect();
+        let rotator_a = UserAgentRotator::new(agents.clone());
+        let rotator_b = UserAgentRotator::new(agents);
+        for url in [
+            "https://example.com/",
+            "https://example.com/a",
+            "https://other.org/b?x=1",
+        ] {
+            let first = rotator_a.ua_for_url(url, 42);
+            assert_eq!(first, rotator_a.ua_for_url(url, 42), "repeat call differs");
+            assert_eq!(first, rotator_b.ua_for_url(url, 42), "instance differs");
+        }
+    }
+
+    #[test]
+    fn test_ua_for_url_returns_member_of_pool() {
+        let agents: Vec<String> = (1..=4).map(|i| format!("agent-{i}")).collect();
+        let rotator = UserAgentRotator::new(agents.clone());
+        for seed in [0u64, 1, 42, u64::MAX] {
+            for url in ["https://example.com/", "", "https://example.com/deep/path"] {
+                assert!(agents.iter().any(|a| a == rotator.ua_for_url(url, seed)));
+            }
+        }
+    }
+
+    #[test]
+    fn test_ua_for_url_seed_changes_selection() {
+        let agents: Vec<String> = (1..=8).map(|i| format!("agent-{i}")).collect();
+        let rotator = UserAgentRotator::new(agents);
+        let urls: Vec<String> = (0..64)
+            .map(|i| format!("https://example.com/page/{i}"))
+            .collect();
+        let differing = urls
+            .iter()
+            .filter(|u| rotator.ua_for_url(u, 1) != rotator.ua_for_url(u, 2))
+            .count();
+        // With a 64-bit hash over an 8-agent pool, seeds 1 and 2 must
+        // disagree on the large majority of URLs; require at least half.
+        assert!(
+            differing >= urls.len() / 2,
+            "seeds 1 and 2 agreed on {differing}/{} URLs",
+            urls.len()
+        );
+    }
+
+    #[test]
+    fn test_ua_for_url_uses_default_hasher_seed_then_url_ordering() {
+        // The selection must be the documented stable hash: seed first,
+        // then url bytes, via DefaultHasher.
+        let agents: Vec<String> = (1..=3).map(|i| format!("agent-{i}")).collect();
+        let rotator = UserAgentRotator::new(agents.clone());
+        let mut hasher = DefaultHasher::new();
+        hasher.write_u64(7);
+        hasher.write(b"https://example.com/x".as_slice());
+        let expected = &agents[(hasher.finish() % 3) as usize];
+        assert_eq!(rotator.ua_for_url("https://example.com/x", 7), expected);
+    }
+
+    #[test]
+    fn test_http_client_config_with_seed() {
+        let config = HttpClientConfig::from(&CrawlConfig::default());
+        assert_eq!(config.seed, None);
+        let seeded = config.with_seed(1234);
+        assert_eq!(seeded.seed, Some(1234));
+        // Builder must preserve the other fields.
+        assert_eq!(seeded.timeout, Duration::from_secs(30));
+        assert_eq!(seeded.max_body_size, 10 * 1024 * 1024);
     }
 
     #[test]

@@ -14,9 +14,27 @@ libfuzzer-sys = "0.4"
 [dependencies.crawlkit-engine]
 path = ".."
 
+# Keep the fuzz package out of the parent workspace so cargo-fuzz can
+# build it with its own (nightly sanitizer) flags.
+[workspace]
+
 [[bin]]
 name = "fuzz_parser"
 path = "fuzz_targets/fuzz_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_robots"
+path = "fuzz_targets/fuzz_robots.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "fuzz_sitemap"
+path = "fuzz_targets/fuzz_sitemap.rs"
 test = false
 doc = false
 bench = false

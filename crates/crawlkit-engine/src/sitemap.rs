@@ -97,8 +97,14 @@ impl SitemapCache {
 }
 
 /// Parsed sitemap content.
-enum SitemapContent {
+///
+/// Returned by [`parse_sitemap`]. A `<urlset>` yields page entries; a
+/// `<sitemapindex>` yields child sitemap URLs to fetch recursively.
+#[derive(Debug)]
+pub enum SitemapContent {
+    /// Entries from a `<urlset>` sitemap.
     UrlSet(Vec<SitemapEntry>),
+    /// Child sitemap URLs from a `<sitemapindex>` document.
     SitemapIndex(Vec<String>),
 }
 
@@ -107,7 +113,10 @@ enum SitemapContent {
 /// Detects `<urlset>` vs `<sitemapindex>` root element and dispatches
 /// accordingly. Falls back to regex-based parsing when XML parsing fails
 /// (e.g., namespace-qualified tag names from default XML namespaces).
-fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
+///
+/// Pure function over the input string — never panics on arbitrary bytes,
+/// making it safe to fuzz and to run on untrusted sitemap bodies.
+pub fn parse_sitemap(xml: &str) -> Result<SitemapContent, SitemapError> {
     let mut reader = Reader::from_str(xml);
     reader.config_mut().trim_text(true);
 

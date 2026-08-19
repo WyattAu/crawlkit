@@ -377,20 +377,26 @@ impl AnalyzerRegistry {
     ///
     /// Analyzers run in parallel via rayon when the `full` feature is enabled,
     /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
-    /// from all analyzers.
+    /// from all analyzers, canonically ordered by `(code, url)` so the
+    /// (potentially nondeterministic) analyzer completion order cannot
+    /// affect downstream output.
     pub fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         #[cfg(feature = "full")]
-        {
+        let mut findings: Vec<Finding> = {
             use rayon::prelude::*;
             self.analyzers
                 .par_iter()
                 .flat_map(|a| a.analyze(ctx))
                 .collect()
-        }
+        };
         #[cfg(not(feature = "full"))]
-        {
-            self.analyzers.iter().flat_map(|a| a.analyze(ctx)).collect()
-        }
+        let mut findings: Vec<Finding> =
+            self.analyzers.iter().flat_map(|a| a.analyze(ctx)).collect();
+
+        // Canonical ordering: stable sort by (code, url) so identical input
+        // always produces identical output regardless of parallel scheduling.
+        findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
+        findings
     }
 
     /// Returns the number of registered analyzers.
@@ -1238,6 +1244,65 @@ mod tests {
         let findings = registry.analyze(&ctx);
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].code, "DUMMY001");
+    }
+
+    #[test]
+    fn test_registry_analyze_sorts_findings_canonically() {
+        struct UnsortedAnalyzer;
+        impl Analyzer for UnsortedAnalyzer {
+            fn name(&self) -> &str {
+                "unsorted"
+            }
+            fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+                let finding = |code: &str, url: &str| Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Custom("test".to_string()),
+                    code: code.to_string(),
+                    title: format!("finding {code}"),
+                    description: "Test".to_string(),
+                    url: url.to_string(),
+                    recommendation: "None".to_string(),
+                };
+                // Deliberately unsorted by (code, url).
+                vec![
+                    finding("ZZZ001", ctx.page.url.as_str()),
+                    finding("AAA002", "https://example.com/b"),
+                    finding("AAA002", "https://example.com/a"),
+                    finding("AAA001", ctx.page.url.as_str()),
+                ]
+            }
+        }
+        let registry = AnalyzerRegistry::with_analyzers(vec![Box::new(UnsortedAnalyzer)]);
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = registry.analyze(&ctx);
+
+        let keys: Vec<(String, String)> = findings
+            .iter()
+            .map(|f| (f.code.clone(), f.url.clone()))
+            .collect();
+        let mut sorted_keys = keys.clone();
+        sorted_keys.sort();
+        assert_eq!(keys, sorted_keys, "findings must be ordered by (code, url)");
+    }
+
+    #[test]
+    fn test_registry_analyze_repeated_calls_identical_order() {
+        let config = default_config();
+        let registry = AnalyzerRegistry::new(&config);
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let first: Vec<(String, String)> = registry
+            .analyze(&ctx)
+            .iter()
+            .map(|f| (f.code.clone(), f.title.clone()))
+            .collect();
+        let second: Vec<(String, String)> = registry
+            .analyze(&ctx)
+            .iter()
+            .map(|f| (f.code.clone(), f.title.clone()))
+            .collect();
+        assert_eq!(first, second);
     }
 
     // ---- Edge cases for locale validation ----

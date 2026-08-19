@@ -510,12 +510,12 @@ fn test_determinism_produces_identical_results() {
     let hash3 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page2");
     assert_ne!(hash1, hash3);
 
-    // Derive seeds should be deterministic for the same controller state.
-    // Note: derive_seed increments an internal counter, so each call is unique.
-    // We verify determinism by checking different contexts produce different seeds.
+    // derive_seed is a pure hash of (seed, context): same context → same
+    // seed; different contexts produce different seeds.
     let seed1 = ctrl1.derive_seed("context_a");
     let seed2 = ctrl1.derive_seed("context_b");
     assert_ne!(seed1, seed2);
+    assert_eq!(seed1, ctrl1.derive_seed("context_a"));
 
     // A fresh controller with the same seed produces deterministic content hashes
     let hash4 = crawlkit_engine::DeterminismController::content_hash("https://example.com/page1");

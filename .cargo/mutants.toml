@@ -1,0 +1,21 @@
+# cargo-mutants configuration for this workspace.
+# Config only — do NOT run in CI (too slow for routine verification).
+#
+# Run with: cargo mutants
+# (docs: https://cargo-mutants.github.io/reference/config.html)
+
+# Exclude slow / out-of-scope crates from mutation testing:
+# - crawlkit-api: API server with network-bound integration tests
+# - fuzz package: not a test target (libFuzzer harnesses)
+exclude = [
+    "crates/crawlkit-api",
+    "crates/crawlkit-engine/fuzz",
+]
+
+# Default per-test timeout in seconds when the baseline run time can't be
+# measured. crawlkit-engine unit tests finish in <1s; this leaves headroom
+# for the heavier integration test binaries without letting mutants hang.
+default_timeout = 300
+
+# Cap the auto-scaled timeout so pathological tests can't dominate a run.
+maximum_timeout_per_test = 600

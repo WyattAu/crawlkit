@@ -44,10 +44,6 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz
-          - target: aarch64-unknown-linux-gnu
-            os: ubuntu-latest
-            archive: tar.gz
-            cross: true
           - target: x86_64-apple-darwin
             os: macos-latest
             archive: tar.gz
@@ -106,11 +102,11 @@ jobs:
       - name: Generate checksum
         shell: bash
         run: |
-          cd target/${{ matrix.target }}/release
+          cd target
           if [ "${{ matrix.archive }}" = "tar.gz" ]; then
-            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
+            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz > crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
           else
-            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip > ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
+            sha256sum crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip > crawlkit-${{ github.ref_name }}-${{ matrix.target }}.sha256
           fi
 
       - name: Upload artifact

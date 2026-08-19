@@ -5,7 +5,12 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.0.0] - 2026-08-19
+
+### Breaking Changes (engine API)
+- **BREAKING**: `Analyzer::analyze` no longer takes `&CrawlConfig` (zero of 33 implementations used it); `AnalyzerRegistry::analyze(&ctx)` follows — see `docs/MIGRATION.md`
+- **BREAKING**: `HtmlParser::parse` returns `ParsedPage` directly — the `ParseError` type is removed (the error-tolerant HTML5 parser made it infallible); `StreamingHtmlParser::parse` likewise — see `docs/MIGRATION.md`
+- **BREAKING**: `CrawlError::Storage` now carries the structured `StorageError` type (was `String`); new `CrawlError::Internal` for non-storage failures — see `docs/MIGRATION.md`
 
 ### Security
 - API: closed cross-tenant exposure in `GET /crawls/{id}/stats|findings|backlinks` — unknown crawl ids now default-deny instead of falling through to unscoped storage queries
@@ -21,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engine: WASM sandbox wall-clock timeout enforced via wasmtime epoch interruption (watchdog thread + `Trap::Interrupt` detection) — runaway plugins terminate at `max_analysis_timeout_ms` instead of running indefinitely
 - Engine: WASM capability enforcement is fail-closed — manifests requesting `network`, `filesystem`, or `env_vars` permissions are rejected at load (the sandbox grants none of them)
 - Audit: persistent tamper-evident audit trail (`AUDIT_LOG_PATH`, JSONL + SHA-256 chain, fsync per event, chain verification on open, head-anchor sidecar detects tail truncation); `AuditTrail::clear` refuses to clear persistent trails; `GET /audit` is admin-only with tenant filtering for non-admins
+- Release: artifacts are GPG-signed via a single `checksums.txt` signature covering all five platform archives and the SBOM
 
 ### Fixed
 - API/storage crawl-id dissociation: `CrawlResult::storage_crawl_id` now binds the public crawl id to the engine-owned storage row; stats/findings/backlinks resolve to the row that actually contains pages
@@ -31,34 +37,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - `crawlkit-api` restructured as lib + bin to enable integration testing of the router
-- Engine: `CrawlError::Storage` is now the structured `StorageError` type (was `String`); new `CrawlError::Internal` for non-storage subsystem failures
 - Engine: crawl-lifetime storage calls (`start_crawl`, incremental lookups, `finish_crawl`) moved off the async runtime onto the blocking pool
 - Engine: `run_with_callback` decomposed — queue prefill (seed + incremental + sitemaps) and finish/report extracted into `prefill_queue`/`finish_and_report`
 
 ### Added
-- Router-level API integration test suite (17 tests: auth gates, CSRF, lockout, tenant isolation, RBAC, session revocation, webhook SSRF validation, metrics auth)
+- OpenAPI documentation: 38 paths annotated via utoipa; OpenAPI JSON at `/api/v1/openapi.json` and Swagger UI at `/api/v1/docs` (gated by `DOCS_PUBLIC=false` → 404)
+- Persistent API-plane state: users, tenants, and API keys write-through to SQLite (`API_STATE_DB_PATH`, default `<db>.state`) and are restored on startup — a restart no longer loses accounts. Sessions remain in-memory by design (short-lived JWTs; documented trade-off)
+- Router-level API integration test suite (19 tests: auth gates, CSRF, lockout, tenant isolation, RBAC, session revocation, webhook SSRF validation, metrics auth, OpenAPI)
 - WASM ABI integration tests (7 tests) incl. full SDK→wasm32→wasmtime conformance run, wall-clock timeout kill, and capability fail-closed checks
 - Audit events recorded for login success/failure, session revocation, crawl lifecycle, and tenant mutations
 - Client SDK test suites: Go (httptest, table-driven), Python (unittest + httpx.MockTransport), Node (jest with committed toolchain) — 49 tests total; Python client gained an optional `transport` injection point for testing
+- Dashboard test suite grew 3 → 41 vitest tests (api_client method/auth/error coverage + use_auth hook store transitions); eslint + tsc clean
 - CI: bin-target unit tests (88 previously silently skipped), `property_tests` (21 previously excluded), `wasm_abi_tests`, and `router_tests` now run; fuzz job path fixed (was a guaranteed no-op); honest `cargo-machete` dependency check replaces the fake `^use ` grep; advisory `cargo-semver-checks` job
 - Dependabot, CODEOWNERS, PR/issue templates; ADR-001 numbering collision resolved (WASM error detection → ADR-005)
 - Version/test-count claims across README/VERSION/ROADMAP reconciled with reality; fabricated claims removed (Lean4 verification, aspirational docs now banner-marked)
 
-### API (Rust)
-- `crawlkit-engine`: `AuditTrail::open_persistent`, `record_tenant`, `events_for_tenant`; `AuditEvent.tenant_id`; new `AuditEventType` auth/tenant variants; `AuditError`; `CrawlError::Internal`
-- `crawlkit-plugin-sdk`: `crawlkit_plugin_sdk::exported::{alloc_raw, free_raw}` (macro-internal allocator, now sound via size headers)
-
-### Added
-- OpenAPI documentation: 38 paths annotated via utoipa; OpenAPI JSON at `/api/v1/openapi.json` and Swagger UI at `/api/v1/docs` (gated by `DOCS_PUBLIC=false` → 404)
-- Persistent API-plane state: users, tenants, and API keys write-through to SQLite (`API_STATE_DB_PATH`, default `<db>.state`) and are restored on startup — a restart no longer loses accounts. Sessions remain in-memory by design (short-lived JWTs; documented trade-off)
-- Dashboard test suite grew 3 → 41 vitest tests (api_client method/auth/error coverage + use_auth hook store transitions); eslint + tsc clean
-
-### Changed (breaking — engine API)
-- `Analyzer::analyze` no longer takes `&CrawlConfig` (zero of 33 implementations used it); `AnalyzerRegistry::analyze(&ctx)` follows
-- `HtmlParser::parse` returns `ParsedPage` directly — the dead `ParseError` type is removed (the HTML5 parser is error-tolerant by design); `StreamingHtmlParser::parse` likewise
-
 ### Removed
 - `parser::ParseError` (never constructed); `Analyzer` trait's unused config parameter
+
+### Rust API additions
+- `crawlkit-engine`: `AuditTrail::open_persistent`, `record_tenant`, `events_for_tenant`; `AuditEvent.tenant_id`; new `AuditEventType` auth/tenant variants; `AuditError`; `CrawlError::Internal`
+- `crawlkit-plugin-sdk`: `crawlkit_plugin_sdk::exported::{alloc_raw, free_raw}` (macro-internal allocator, now sound via size headers)
 
 ### Housekeeping
 - `clients/nodejs/node_modules`, `dashboard/dist` build outputs, and Python `__pycache__` untracked from git (files remain locally; ignored going forward)

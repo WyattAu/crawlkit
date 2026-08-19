@@ -516,6 +516,191 @@ impl AccessibilityAnalyzer {
         "go",
         "continue",
     ];
+    fn check_images_alt(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        let images_without_alt: Vec<&str> = ctx
+            .page.images.iter()
+            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
+            .map(|img| img.src.as_str())
+            .collect();
+        if !images_without_alt.is_empty() {
+            f.push(Finding {
+                severity: Severity::Error, category: IssueCategory::Accessibility,
+                code: "A11Y001".to_string(), title: "Images missing alt text".into(),
+                description: format!("{} image(s) missing alt attribute or empty alt text: {}.",
+                    images_without_alt.len(), images_without_alt.join(", ")),
+                url: url.to_string(),
+                recommendation: "Add descriptive alt text to all images. Use empty alt for decorative images.".into(),
+            });
+        }
+    }
+
+    fn check_headings(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        if ctx.page.headings.is_empty() {
+            f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Accessibility,
+                code: "A11Y002".to_string(), title: "No headings found".into(),
+                description: "The page has no heading elements. Headings provide structure for screen reader users.".into(),
+                url: url.to_string(), recommendation: "Add heading elements (H1-H6) to provide page structure.".into(),
+            });
+            return;
+        }
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count == 0 {
+            f.push(Finding {
+                severity: Severity::Error, category: IssueCategory::Accessibility,
+                code: "A11Y003".to_string(), title: "Missing H1 heading".into(),
+                description: "No H1 heading found. Screen readers use H1 to identify the main page topic.".into(),
+                url: url.to_string(), recommendation: "Add exactly one H1 heading per page.".into(),
+            });
+        } else if h1_count > 1 {
+            f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Accessibility,
+                code: "A11Y004".to_string(), title: "Multiple H1 headings".into(),
+                description: format!("Page has {h1_count} H1 headings. Use a single H1 for the main topic."),
+                url: url.to_string(), recommendation: "Use one H1 for the page title and H2+ for sections.".into(),
+            });
+        }
+        let mut prev_level: Option<u8> = None;
+        for heading in &ctx.page.headings {
+            if let Some(prev) = prev_level {
+                if heading.level > prev + 1 {
+                    f.push(Finding {
+                        severity: Severity::Warning, category: IssueCategory::Accessibility,
+                        code: "A11Y005".to_string(), title: "Skipped heading level".into(),
+                        description: format!("Heading jumps from H{prev} to H{}, skipping intermediate levels.", heading.level),
+                        url: url.to_string(), recommendation: format!("Use H{} after H{prev} to maintain document outline.", prev + 1),
+                    });
+                    break;
+                }
+            }
+            prev_level = Some(heading.level);
+        }
+    }
+
+    fn check_landmarks(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        if !ctx.page.has_main_landmark {
+            f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Accessibility,
+                code: "A11Y006".to_string(), title: "Missing main landmark".into(),
+                description: "No main element or role=main found. Screen readers use landmarks for page navigation.".into(),
+                url: url.to_string(), recommendation: "Wrap primary content in a <main> element.".into(),
+            });
+        }
+        if !ctx.page.has_nav_landmark {
+            f.push(Finding {
+                severity: Severity::Info, category: IssueCategory::Accessibility,
+                code: "A11Y007".to_string(), title: "No navigation landmark".into(),
+                description: "No nav element or role=navigation found.".into(),
+                url: url.to_string(), recommendation: "Wrap navigation links in a <nav> element.".into(),
+            });
+        }
+    }
+
+    fn check_skip_link(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        if !ctx.page.has_skip_link && ctx.page.has_nav_landmark {
+            f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Accessibility,
+                code: "A11Y008".to_string(), title: "Missing skip navigation link".into(),
+                description: "No skip-to-content link found. Keyboard users must tab through all navigation links to reach main content.".into(),
+                url: url.to_string(), recommendation: "Add a skip link as the first focusable element pointing to the main content area.".into(),
+            });
+        }
+    }
+
+    fn check_link_text(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        for link in &ctx.page.links {
+            let text_lower = link.text.trim().to_lowercase();
+            let has_accessible_name = !text_lower.is_empty()
+                || link.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+            if !has_accessible_name {
+                f.push(Finding {
+                    severity: Severity::Error, category: IssueCategory::Accessibility,
+                    code: "A11Y009".to_string(), title: "Empty link text".into(),
+                    description: format!("Link to {} has no text. Screen readers announce the URL, which is not descriptive.", link.href),
+                    url: url.to_string(), recommendation: "Add descriptive text or an aria-label to the link.".into(),
+                });
+            } else if Self::VAGUE_LINK_TEXTS.contains(&text_lower.as_str()) {
+                f.push(Finding {
+                    severity: Severity::Warning, category: IssueCategory::Accessibility,
+                    code: "A11Y010".to_string(), title: "Non-descriptive link text".into(),
+                    description: format!("Link text {} is vague and does not describe the destination.", link.text),
+                    url: url.to_string(), recommendation: "Use descriptive text that explains the link purpose.".into(),
+                });
+            }
+        }
+    }
+
+    fn check_form_labels(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if !input.has_label {
+                    let desc = match (&input.name, &input.input_type) {
+                        (Some(n), Some(t)) => format!("input (name={n}, type={t})"),
+                        (Some(n), None) => format!("input (name={n})"),
+                        (None, Some(t)) => format!("input (type={t})"),
+                        (None, None) => "input".to_string(),
+                    };
+                    f.push(Finding {
+                        severity: Severity::Error, category: IssueCategory::Accessibility,
+                        code: "A11Y011".to_string(), title: "Form input missing label".into(),
+                        description: format!("{desc} has no associated label, aria-label, or aria-labelledby."),
+                        url: url.to_string(), recommendation: "Add a label element or an aria-label attribute to the input.".into(),
+                    });
+                }
+            }
+        }
+    }
+
+    fn check_keyboard_aria(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        if ctx.page.has_positive_tabindex {
+            f.push(Finding {
+                severity: Severity::Error, category: IssueCategory::Accessibility,
+                code: "A11Y012".to_string(), title: "Positive tabindex values detected".into(),
+                description: "Elements with tabindex > 0 alter the natural tab order, making keyboard navigation unpredictable.".into(),
+                url: url.to_string(), recommendation: "Use tabindex=0 to add elements to the natural tab order or tabindex=-1 for programmatic focus only.".into(),
+            });
+        }
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            f.push(Finding {
+                severity: Severity::Warning, category: IssueCategory::Accessibility,
+                code: "A11Y013".to_string(), title: "ARIA roles without labels".into(),
+                description: format!("{} ARIA role(s) found but no aria-label or aria-labelledby attributes. Custom roles require accessible names.", ctx.page.aria_role_count),
+                url: url.to_string(), recommendation: "Add aria-label or aria-labelledby to elements with custom ARIA roles.".into(),
+            });
+        }
+    }
+
+    fn check_tables_lang(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        if ctx.page.tables_total > 0 {
+            let without_headers = ctx.page.tables_total - ctx.page.tables_with_headers;
+            if without_headers > 0 {
+                f.push(Finding {
+                    severity: Severity::Warning, category: IssueCategory::Accessibility,
+                    code: "A11Y014".to_string(), title: "Table missing header cells".into(),
+                    description: format!("{without_headers} of {} table(s) have no <th> header cells.", ctx.page.tables_total),
+                    url: url.to_string(), recommendation: "Use <th> elements for header cells and add scope attributes for complex tables.".into(),
+                });
+            }
+            let without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
+            if without_captions > 0 {
+                f.push(Finding {
+                    severity: Severity::Info, category: IssueCategory::Accessibility,
+                    code: "A11Y015".to_string(), title: "Table missing caption".into(),
+                    description: format!("{without_captions} of {} table(s) have no <caption> element.", ctx.page.tables_total),
+                    url: url.to_string(), recommendation: "Add a <caption> to describe the table purpose.".into(),
+                });
+            }
+        }
+        if !ctx.page.has_lang_attribute {
+            f.push(Finding {
+                severity: Severity::Error, category: IssueCategory::Accessibility,
+                code: "A11Y016".to_string(), title: "Missing html lang attribute".into(),
+                description: "The html element has no lang attribute. Screen readers use this to select the correct pronunciation engine.".into(),
+                url: url.to_string(), recommendation: "Add lang=en (or the appropriate language code) to the html element.".into(),
+            });
+        }
+    }
 }
 
 impl Default for AccessibilityAnalyzer {
@@ -530,312 +715,17 @@ impl Analyzer for AccessibilityAnalyzer {
     }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
+        let mut f = Vec::new();
         let url = &ctx.page.url;
-
-        // --- WCAG 1.1.1: Image alt text ---
-        let images_without_alt: Vec<&str> = ctx
-            .page
-            .images
-            .iter()
-            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
-            .map(|img| img.src.as_str())
-            .collect();
-        if !images_without_alt.is_empty() {
-            findings.push(Finding {
-                severity: Severity::Error,
-                category: IssueCategory::Accessibility,
-                code: "A11Y001".to_string(),
-                title: "Images missing alt text".to_string(),
-                description: format!(
-                    "{} image(s) missing alt attribute or have empty alt text: {}.",
-                    images_without_alt.len(),
-                    images_without_alt.join(", ")
-                ),
-                url: url.clone(),
-                recommendation: "Add descriptive alt text to all images. Use alt=\"\" for \
-                                 decorative images."
-                    .to_string(),
-            });
-        }
-
-        // --- WCAG 1.3.1: Heading hierarchy ---
-        if ctx.page.headings.is_empty() {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Accessibility,
-                code: "A11Y002".to_string(),
-                title: "No headings found".to_string(),
-                description: "The page has no heading elements. Headings provide structure \
-                              for screen reader users."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Add heading elements (H1-H6) to provide page structure."
-                    .to_string(),
-            });
-        } else {
-            let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
-            if h1_count == 0 {
-                findings.push(Finding {
-                    severity: Severity::Error,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y003".to_string(),
-                    title: "Missing H1 heading".to_string(),
-                    description: "No H1 heading found. Screen readers use H1 to identify \
-                                  the main page topic."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Add exactly one H1 heading per page.".to_string(),
-                });
-            } else if h1_count > 1 {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y004".to_string(),
-                    title: "Multiple H1 headings".to_string(),
-                    description: format!(
-                        "Page has {h1_count} H1 headings. Use a single H1 for the main topic."
-                    ),
-                    url: url.clone(),
-                    recommendation: "Use one H1 for the page title and H2+ for sections."
-                        .to_string(),
-                });
-            }
-
-            // Skipped heading levels
-            let mut prev_level: Option<u8> = None;
-            for heading in &ctx.page.headings {
-                if let Some(prev) = prev_level {
-                    if heading.level > prev + 1 {
-                        findings.push(Finding {
-                            severity: Severity::Warning,
-                            category: IssueCategory::Accessibility,
-                            code: "A11Y005".to_string(),
-                            title: "Skipped heading level".to_string(),
-                            description: format!(
-                                "Heading jumps from H{prev} to H{}, skipping intermediate \
-                                 levels.",
-                                heading.level
-                            ),
-                            url: url.clone(),
-                            recommendation: format!(
-                                "Use H{} after H{prev} to maintain document outline.",
-                                prev + 1
-                            ),
-                        });
-                        break; // Report first skip only
-                    }
-                }
-                prev_level = Some(heading.level);
-            }
-        }
-
-        // --- WCAG 1.3.1: Landmark roles ---
-        if !ctx.page.has_main_landmark {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Accessibility,
-                code: "A11Y006".to_string(),
-                title: "Missing main landmark".to_string(),
-                description: "No <main> element or role=\"main\" found. Screen readers use \
-                              landmarks for page navigation."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Wrap primary content in a <main> element.".to_string(),
-            });
-        }
-
-        if !ctx.page.has_nav_landmark {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Accessibility,
-                code: "A11Y007".to_string(),
-                title: "No navigation landmark".to_string(),
-                description: "No <nav> element or role=\"navigation\" found.".to_string(),
-                url: url.clone(),
-                recommendation: "Wrap navigation links in a <nav> element.".to_string(),
-            });
-        }
-
-        // --- WCAG 2.4.1: Skip navigation ---
-        if !ctx.page.has_skip_link && ctx.page.has_nav_landmark {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Accessibility,
-                code: "A11Y008".to_string(),
-                title: "Missing skip navigation link".to_string(),
-                description: "No skip-to-content link found. Keyboard users must tab through \
-                              all navigation links to reach main content."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Add a skip link as the first focusable element: \
-                                 <a href=\"#main\" class=\"skip-link\">Skip to content</a>."
-                    .to_string(),
-            });
-        }
-
-        // --- WCAG 2.4.4: Link text quality ---
-        for link in &ctx.page.links {
-            let text_lower = link.text.trim().to_lowercase();
-            // Check for accessible name: text content, aria-label, or img alt
-            let has_accessible_name = !text_lower.is_empty()
-                || link
-                    .aria_label
-                    .as_ref()
-                    .is_some_and(|l| !l.trim().is_empty())
-                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
-            if !has_accessible_name {
-                findings.push(Finding {
-                    severity: Severity::Error,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y009".to_string(),
-                    title: "Empty link text".to_string(),
-                    description: format!(
-                        "Link to \"{}\" has no text. Screen readers announce the URL, \
-                         which is not descriptive.",
-                        link.href
-                    ),
-                    url: url.clone(),
-                    recommendation: "Add descriptive text or an aria-label to the link."
-                        .to_string(),
-                });
-            } else if Self::VAGUE_LINK_TEXTS.contains(&text_lower.as_str()) {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y010".to_string(),
-                    title: "Non-descriptive link text".to_string(),
-                    description: format!(
-                        "Link text \"{}\" is vague and does not describe the destination.",
-                        link.text
-                    ),
-                    url: url.clone(),
-                    recommendation: "Use descriptive text that explains the link purpose \
-                                     (e.g., \"View pricing details\" instead of \"click here\")."
-                        .to_string(),
-                });
-            }
-        }
-
-        // --- WCAG 1.3.1: Form label association ---
-        for form in &ctx.page.forms {
-            for input in &form.inputs {
-                if !input.has_label {
-                    let desc = match (&input.name, &input.input_type) {
-                        (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
-                        (Some(n), None) => format!("input (name=\"{n}\")"),
-                        (None, Some(t)) => format!("input (type=\"{t}\")"),
-                        (None, None) => "input".to_string(),
-                    };
-                    findings.push(Finding {
-                        severity: Severity::Error,
-                        category: IssueCategory::Accessibility,
-                        code: "A11Y011".to_string(),
-                        title: "Form input missing label".to_string(),
-                        description: format!(
-                            "{desc} has no associated <label>, aria-label, or aria-labelledby."
-                        ),
-                        url: url.clone(),
-                        recommendation: "Add a <label for=\"id\"> element or an aria-label \
-                                         attribute to the input."
-                            .to_string(),
-                    });
-                }
-            }
-        }
-
-        // --- WCAG 2.1.1: Keyboard navigation (tabindex) ---
-        if ctx.page.has_positive_tabindex {
-            findings.push(Finding {
-                severity: Severity::Error,
-                category: IssueCategory::Accessibility,
-                code: "A11Y012".to_string(),
-                title: "Positive tabindex values detected".to_string(),
-                description: "Elements with tabindex > 0 alter the natural tab order, \
-                              making keyboard navigation unpredictable."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Use tabindex=\"0\" to add elements to the natural tab order \
-                                 or tabindex=\"-1\" for programmatic focus only."
-                    .to_string(),
-            });
-        }
-
-        // --- WCAG 4.1.2: ARIA usage ---
-        if ctx.page.aria_role_count == 0 && !ctx.page.landmarks.is_empty() {
-            // No ARIA roles used but landmarks exist via HTML — that's fine
-        } else if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Accessibility,
-                code: "A11Y013".to_string(),
-                title: "ARIA roles without labels".to_string(),
-                description: format!(
-                    "{} ARIA role(s) found but no aria-label or aria-labelledby attributes. \
-                     Custom roles require accessible names.",
-                    ctx.page.aria_role_count
-                ),
-                url: url.clone(),
-                recommendation: "Add aria-label or aria-labelledby to elements with custom \
-                                 ARIA roles."
-                    .to_string(),
-            });
-        }
-
-        // --- WCAG 1.3.1: Table accessibility ---
-        if ctx.page.tables_total > 0 {
-            let tables_without_headers = ctx.page.tables_total - ctx.page.tables_with_headers;
-            if tables_without_headers > 0 {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y014".to_string(),
-                    title: "Table missing header cells".to_string(),
-                    description: format!(
-                        "{} of {} table(s) have no <th> header cells.",
-                        tables_without_headers, ctx.page.tables_total
-                    ),
-                    url: url.clone(),
-                    recommendation: "Use <th> elements for header cells and add scope \
-                                     attributes for complex tables."
-                        .to_string(),
-                });
-            }
-
-            let tables_without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
-            if tables_without_captions > 0 {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Accessibility,
-                    code: "A11Y015".to_string(),
-                    title: "Table missing caption".to_string(),
-                    description: format!(
-                        "{} of {} table(s) have no <caption> element.",
-                        tables_without_captions, ctx.page.tables_total
-                    ),
-                    url: url.clone(),
-                    recommendation: "Add a <caption> to describe the table purpose.".to_string(),
-                });
-            }
-        }
-
-        // --- WCAG 1.4.4: Language attribute ---
-        if !ctx.page.has_lang_attribute {
-            findings.push(Finding {
-                severity: Severity::Error,
-                category: IssueCategory::Accessibility,
-                code: "A11Y016".to_string(),
-                title: "Missing html lang attribute".to_string(),
-                description: "The <html> element has no lang attribute. Screen readers use \
-                              this to select the correct pronunciation engine."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Add lang=\"en\" (or the appropriate language code) to the \
-                                 <html> element."
-                    .to_string(),
-            });
-        }
-
-        findings
+        self.check_images_alt(ctx, url, &mut f);
+        self.check_headings(ctx, url, &mut f);
+        self.check_landmarks(ctx, url, &mut f);
+        self.check_skip_link(ctx, url, &mut f);
+        self.check_link_text(ctx, url, &mut f);
+        self.check_form_labels(ctx, url, &mut f);
+        self.check_keyboard_aria(ctx, url, &mut f);
+        self.check_tables_lang(ctx, url, &mut f);
+        f
     }
 }
+

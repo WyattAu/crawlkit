@@ -277,8 +277,9 @@ async fn test_fetches_overlap_under_concurrency() {
     // parallelism; the timing assertion is relaxed for slow CI runners.
     assert!(
         server.max_concurrent.load(Ordering::SeqCst) >= 2,
-        "server must observe overlapping requests (saw {})",
-        server.max_concurrent.load(Ordering::SeqCst)
+        "server must observe overlapping requests (saw {}, elapsed: {:?})",
+        server.max_concurrent.load(Ordering::SeqCst),
+        elapsed
     );
 }
 

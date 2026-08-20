@@ -16,7 +16,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # Advisory (non-blocking): cargo-deny is the enforcing advisory gate
+      # (deny.toml carries the documented ignore list with rationale).
       - uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
+        continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 

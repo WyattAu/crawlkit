@@ -647,7 +647,7 @@ impl StorageBackend for PgStorage {
             .await?;
 
             let total_body: (Option<i64>,) = sqlx::query_as(
-                "SELECT SUM(body_size) FROM pages WHERE crawl_id = $1 AND body_size IS NOT NULL",
+                "SELECT SUM(body_size)::BIGINT FROM pages WHERE crawl_id = $1 AND body_size IS NOT NULL",
             )
             .bind(&crawl_id)
             .fetch_one(&pool)
@@ -835,13 +835,33 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_start_and_finish_crawl() {
+    /// Sync bootstrap for `#[ignore]`d service-backed tests.
+    ///
+    /// The `StorageBackend` trait is synchronous by contract; its callers
+    /// are expected to be plain threads or `spawn_blocking` workers. These
+    /// tests therefore run WITHOUT a `#[tokio::test]` context (block_on
+    /// inside a tokio worker panics — the very bug this suite once had) and
+    /// build their storage handle via the module's blocking runtime.
+    /// Run-unique id so parallel tests and repeated suite runs never
+    /// collide on primary keys.
+    fn unique(prefix: &str) -> String {
+        format!("{prefix}-{}", uuid::Uuid::new_v4().simple())
+    }
+
+    fn sync_test_storage() -> PgStorage {
         let url = std::env::var("DATABASE_URL")
             .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+        blocking_runtime().block_on(async {
+            let storage = PgStorage::new(&url).await.unwrap();
+            storage.migrate().await.unwrap();
+            storage
+        })
+    }
+
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_start_and_finish_crawl() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         assert!(!crawl_id.is_empty());
@@ -849,39 +869,34 @@ mod tests {
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_insert_and_get_page() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_insert_and_get_page() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
-        let page = test_page("p1", "https://example.com/", 200);
+        let page = test_page(&unique("p"), "https://example.com/", 200);
+        let expected_id = page.id.clone();
         storage.insert_page(&crawl_id, &page).unwrap();
 
         let retrieved = storage.get_page(&crawl_id, "https://example.com/").unwrap();
         assert!(retrieved.is_some());
         let p = retrieved.unwrap();
-        assert_eq!(p.id, "p1");
+        assert_eq!(p.id, expected_id);
         assert_eq!(p.status_code, 200);
 
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_insert_pages_batch() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_insert_pages_batch() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
         let pages = vec![
-            test_page("p1", "https://example.com/", 200),
-            test_page("p2", "https://example.com/about", 200),
+            test_page(&unique("p"), "https://example.com/", 200),
+            test_page(&unique("p"), "https://example.com/about", 200),
         ];
         storage.insert_pages_batch(&crawl_id, &pages).unwrap();
 
@@ -890,21 +905,20 @@ mod tests {
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_tenant_isolation() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_tenant_isolation() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
 
-        let mut page_a = test_page("p1", "https://example.com/a", 200);
+        let mut page_a = test_page(&unique("p"), "https://example.com/a", 200);
+        let id_a = page_a.id.clone();
         page_a.tenant_id = Some("tenant_a".to_string());
-        let mut page_b = test_page("p2", "https://example.com/b", 200);
+        let mut page_b = test_page(&unique("p"), "https://example.com/b", 200);
         page_b.tenant_id = Some("tenant_b".to_string());
-        let page_shared = test_page("p3", "https://example.com/c", 200);
+        let page_shared = test_page(&unique("p"), "https://example.com/c", 200);
+        let id_shared = page_shared.id.clone();
 
         storage.insert_page(&crawl_id, &page_a).unwrap();
         storage.insert_page(&crawl_id, &page_b).unwrap();
@@ -914,34 +928,32 @@ mod tests {
             .get_pages_for_tenant(&crawl_id, "tenant_a", 10)
             .unwrap();
         assert_eq!(pages_a.len(), 2);
-        assert!(pages_a.iter().any(|p| p.id == "p1"));
-        assert!(pages_a.iter().any(|p| p.id == "p3"));
+        assert!(pages_a.iter().any(|p| p.id == id_a));
+        assert!(pages_a.iter().any(|p| p.id == id_shared));
 
         let pages_b = storage
             .get_pages_for_tenant(&crawl_id, "tenant_b", 10)
             .unwrap();
         assert_eq!(pages_b.len(), 2);
-        assert!(pages_b.iter().any(|p| p.id == "p2"));
-        assert!(pages_b.iter().any(|p| p.id == "p3"));
+        assert!(pages_b.iter().any(|p| p.id == page_b.id));
+        assert!(pages_b.iter().any(|p| p.id == id_shared));
 
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_insert_and_get_issues() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_insert_and_get_issues() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
-        let page = test_page("p1", "https://example.com/", 200);
+        let page = test_page(&unique("p"), "https://example.com/", 200);
         storage.insert_page(&crawl_id, &page).unwrap();
 
+        let pid = page.id.as_str();
         let issues = vec![
-            test_issue("i1", "p1", IssueCategory::Seo, Severity::Error),
-            test_issue("i2", "p1", IssueCategory::Images, Severity::Warning),
+            test_issue(&unique("i"), pid, IssueCategory::Seo, Severity::Error),
+            test_issue(&unique("i"), pid, IssueCategory::Images, Severity::Warning),
         ];
         storage.insert_issues_batch(&issues).unwrap();
 
@@ -952,18 +964,20 @@ mod tests {
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_stats() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_stats() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
-        let page = test_page("p1", "https://example.com/", 200);
+        let page = test_page(&unique("p"), "https://example.com/", 200);
         storage.insert_page(&crawl_id, &page).unwrap();
-        let issue = test_issue("i1", "p1", IssueCategory::Seo, Severity::Error);
+        let issue = test_issue(
+            &unique("i"),
+            page.id.as_str(),
+            IssueCategory::Seo,
+            Severity::Error,
+        );
         storage.insert_issue(&issue).unwrap();
 
         let stats = storage.get_stats(&crawl_id).unwrap();
@@ -972,16 +986,14 @@ mod tests {
         storage.finish().unwrap();
     }
 
-    #[tokio::test]
-    #[ignore] // Requires a running PostgreSQL instance
-    async fn test_pg_conditional_requests() {
-        let url = std::env::var("DATABASE_URL")
-            .unwrap_or_else(|_| "postgres://localhost/crawlkit_test".to_string());
-        let storage = PgStorage::new(&url).await.unwrap();
-        storage.migrate().await.unwrap();
+    #[test]
+    #[ignore] // Requires a running PostgreSQL instance (DATABASE_URL)
+    fn test_pg_conditional_requests() {
+        let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
-        let mut page = test_page("p1", "https://example.com/", 200);
+        let mut page = test_page(&unique("p"), "https://example.com/", 200);
+        let expected_page_id = page.id.clone();
         page.etag = Some("\"abc123\"".to_string());
         page.last_modified = Some("Wed, 21 Oct 2024 07:28:00 GMT".to_string());
         storage.insert_page(&crawl_id, &page).unwrap();
@@ -991,7 +1003,7 @@ mod tests {
             .unwrap();
         assert!(result.is_some());
         let (page_id, etag, last_modified) = result.unwrap();
-        assert_eq!(page_id, "p1");
+        assert_eq!(page_id, expected_page_id);
         assert_eq!(etag.as_deref(), Some("\"abc123\""));
         assert_eq!(
             last_modified.as_deref(),

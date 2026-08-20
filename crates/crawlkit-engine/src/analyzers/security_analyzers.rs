@@ -518,18 +518,27 @@ impl AccessibilityAnalyzer {
     ];
     fn check_images_alt(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
         let images_without_alt: Vec<&str> = ctx
-            .page.images.iter()
+            .page
+            .images
+            .iter()
             .filter(|img| !img.has_alt || img.alt.trim().is_empty())
             .map(|img| img.src.as_str())
             .collect();
         if !images_without_alt.is_empty() {
             f.push(Finding {
-                severity: Severity::Error, category: IssueCategory::Accessibility,
-                code: "A11Y001".to_string(), title: "Images missing alt text".into(),
-                description: format!("{} image(s) missing alt attribute or empty alt text: {}.",
-                    images_without_alt.len(), images_without_alt.join(", ")),
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "A11Y001".to_string(),
+                title: "Images missing alt text".into(),
+                description: format!(
+                    "{} image(s) missing alt attribute or empty alt text: {}.",
+                    images_without_alt.len(),
+                    images_without_alt.join(", ")
+                ),
                 url: url.to_string(),
-                recommendation: "Add descriptive alt text to all images. Use empty alt for decorative images.".into(),
+                recommendation:
+                    "Add descriptive alt text to all images. Use empty alt for decorative images."
+                        .into(),
             });
         }
     }
@@ -547,17 +556,27 @@ impl AccessibilityAnalyzer {
         let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
         if h1_count == 0 {
             f.push(Finding {
-                severity: Severity::Error, category: IssueCategory::Accessibility,
-                code: "A11Y003".to_string(), title: "Missing H1 heading".into(),
-                description: "No H1 heading found. Screen readers use H1 to identify the main page topic.".into(),
-                url: url.to_string(), recommendation: "Add exactly one H1 heading per page.".into(),
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "A11Y003".to_string(),
+                title: "Missing H1 heading".into(),
+                description:
+                    "No H1 heading found. Screen readers use H1 to identify the main page topic."
+                        .into(),
+                url: url.to_string(),
+                recommendation: "Add exactly one H1 heading per page.".into(),
             });
         } else if h1_count > 1 {
             f.push(Finding {
-                severity: Severity::Warning, category: IssueCategory::Accessibility,
-                code: "A11Y004".to_string(), title: "Multiple H1 headings".into(),
-                description: format!("Page has {h1_count} H1 headings. Use a single H1 for the main topic."),
-                url: url.to_string(), recommendation: "Use one H1 for the page title and H2+ for sections.".into(),
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "A11Y004".to_string(),
+                title: "Multiple H1 headings".into(),
+                description: format!(
+                    "Page has {h1_count} H1 headings. Use a single H1 for the main topic."
+                ),
+                url: url.to_string(),
+                recommendation: "Use one H1 for the page title and H2+ for sections.".into(),
             });
         }
         let mut prev_level: Option<u8> = None;
@@ -565,10 +584,19 @@ impl AccessibilityAnalyzer {
             if let Some(prev) = prev_level {
                 if heading.level > prev + 1 {
                     f.push(Finding {
-                        severity: Severity::Warning, category: IssueCategory::Accessibility,
-                        code: "A11Y005".to_string(), title: "Skipped heading level".into(),
-                        description: format!("Heading jumps from H{prev} to H{}, skipping intermediate levels.", heading.level),
-                        url: url.to_string(), recommendation: format!("Use H{} after H{prev} to maintain document outline.", prev + 1),
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "A11Y005".to_string(),
+                        title: "Skipped heading level".into(),
+                        description: format!(
+                            "Heading jumps from H{prev} to H{}, skipping intermediate levels.",
+                            heading.level
+                        ),
+                        url: url.to_string(),
+                        recommendation: format!(
+                            "Use H{} after H{prev} to maintain document outline.",
+                            prev + 1
+                        ),
                     });
                     break;
                 }
@@ -588,10 +616,13 @@ impl AccessibilityAnalyzer {
         }
         if !ctx.page.has_nav_landmark {
             f.push(Finding {
-                severity: Severity::Info, category: IssueCategory::Accessibility,
-                code: "A11Y007".to_string(), title: "No navigation landmark".into(),
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "A11Y007".to_string(),
+                title: "No navigation landmark".into(),
                 description: "No nav element or role=navigation found.".into(),
-                url: url.to_string(), recommendation: "Wrap navigation links in a <nav> element.".into(),
+                url: url.to_string(),
+                recommendation: "Wrap navigation links in a <nav> element.".into(),
             });
         }
     }
@@ -611,7 +642,10 @@ impl AccessibilityAnalyzer {
         for link in &ctx.page.links {
             let text_lower = link.text.trim().to_lowercase();
             let has_accessible_name = !text_lower.is_empty()
-                || link.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                || link
+                    .aria_label
+                    .as_ref()
+                    .is_some_and(|l| !l.trim().is_empty())
                 || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
             if !has_accessible_name {
                 f.push(Finding {
@@ -622,10 +656,16 @@ impl AccessibilityAnalyzer {
                 });
             } else if Self::VAGUE_LINK_TEXTS.contains(&text_lower.as_str()) {
                 f.push(Finding {
-                    severity: Severity::Warning, category: IssueCategory::Accessibility,
-                    code: "A11Y010".to_string(), title: "Non-descriptive link text".into(),
-                    description: format!("Link text {} is vague and does not describe the destination.", link.text),
-                    url: url.to_string(), recommendation: "Use descriptive text that explains the link purpose.".into(),
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y010".to_string(),
+                    title: "Non-descriptive link text".into(),
+                    description: format!(
+                        "Link text {} is vague and does not describe the destination.",
+                        link.text
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Use descriptive text that explains the link purpose.".into(),
                 });
             }
         }
@@ -642,10 +682,16 @@ impl AccessibilityAnalyzer {
                         (None, None) => "input".to_string(),
                     };
                     f.push(Finding {
-                        severity: Severity::Error, category: IssueCategory::Accessibility,
-                        code: "A11Y011".to_string(), title: "Form input missing label".into(),
-                        description: format!("{desc} has no associated label, aria-label, or aria-labelledby."),
-                        url: url.to_string(), recommendation: "Add a label element or an aria-label attribute to the input.".into(),
+                        severity: Severity::Error,
+                        category: IssueCategory::Accessibility,
+                        code: "A11Y011".to_string(),
+                        title: "Form input missing label".into(),
+                        description: format!(
+                            "{desc} has no associated label, aria-label, or aria-labelledby."
+                        ),
+                        url: url.to_string(),
+                        recommendation:
+                            "Add a label element or an aria-label attribute to the input.".into(),
                     });
                 }
             }
@@ -685,10 +731,16 @@ impl AccessibilityAnalyzer {
             let without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
             if without_captions > 0 {
                 f.push(Finding {
-                    severity: Severity::Info, category: IssueCategory::Accessibility,
-                    code: "A11Y015".to_string(), title: "Table missing caption".into(),
-                    description: format!("{without_captions} of {} table(s) have no <caption> element.", ctx.page.tables_total),
-                    url: url.to_string(), recommendation: "Add a <caption> to describe the table purpose.".into(),
+                    severity: Severity::Info,
+                    category: IssueCategory::Accessibility,
+                    code: "A11Y015".to_string(),
+                    title: "Table missing caption".into(),
+                    description: format!(
+                        "{without_captions} of {} table(s) have no <caption> element.",
+                        ctx.page.tables_total
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Add a <caption> to describe the table purpose.".into(),
                 });
             }
         }
@@ -728,4 +780,3 @@ impl Analyzer for AccessibilityAnalyzer {
         f
     }
 }
-

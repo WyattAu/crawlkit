@@ -111,8 +111,9 @@ impl DistributedQueue {
 
     /// Pop the highest-priority URL from the queue.
     ///
-    /// Uses Redis ZPOPMAX to atomically retrieve and remove the entry
-    /// with the lowest score (highest priority).
+    /// Uses Redis ZPOPMIN to atomically retrieve and remove the entry
+    /// with the lowest score. This matches the engine-wide convention
+    /// (`queue::Priority`): lower score = higher priority.
     ///
     /// # Errors
     ///
@@ -123,11 +124,13 @@ impl DistributedQueue {
             .get_connection()
             .map_err(|e| RedisQueueError::ConnectionFailed(e.to_string()))?;
 
-        let result: Option<(String, i64)> = conn
-            .zpopmax(&self.prefix, 1)
+        // ZPOPMIN returns a flat [member, score, ...] array; decoding as a
+        // vec handles the empty-set case cleanly (empty vec -> None).
+        let results: Vec<(String, i64)> = conn
+            .zpopmin(&self.prefix, 1)
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
 
-        match result {
+        match results.into_iter().next() {
             Some((entry_json, _)) => {
                 let entry = serde_json::from_str(&entry_json)
                     .map_err(|e| RedisQueueError::SerializationError(e.to_string()))?;

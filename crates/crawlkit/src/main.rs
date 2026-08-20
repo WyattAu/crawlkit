@@ -23,19 +23,17 @@ use cli::{Cli, Commands, Config};
 async fn main() -> Result<()> {
     // Initialize Sentry error tracking
     let _sentry_guard = std::env::var("SENTRY_DSN").ok().map(|dsn| {
-        sentry::init((
-            dsn,
-            sentry::ClientOptions {
-                release: sentry::release_name!(),
-                environment: Some(
-                    std::env::var("ENVIRONMENT")
-                        .unwrap_or_else(|_| "development".into())
-                        .into(),
-                ),
-                traces_sample_rate: 0.1,
-                ..Default::default()
-            },
-        ))
+        sentry::init((dsn, {
+            let mut opts = sentry::ClientOptions::default();
+            opts.release = sentry::release_name!();
+            opts.environment = Some(
+                std::env::var("ENVIRONMENT")
+                    .unwrap_or_else(|_| "development".into())
+                    .into(),
+            );
+            opts.traces_sampling_strategy = sentry::TracesSamplingStrategy::FixedRate(0.1);
+            opts
+        }))
     });
 
     // Initialize dhat profiling if enabled

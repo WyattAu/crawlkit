@@ -66,4 +66,4 @@ node_modules/
 clients/nodejs/node_modules/
 
 # Fuzz build artifacts
-fuzz/target/
+**/fuzz/target/

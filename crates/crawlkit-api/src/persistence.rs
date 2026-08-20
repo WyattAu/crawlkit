@@ -130,7 +130,7 @@ impl SqliteStateStore {
                 key TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                requests_per_minute INTEGER NOT NULL
+                requests_per_minute BIGINT NOT NULL
             );",
         )?;
         Ok(Self {
@@ -332,7 +332,8 @@ impl PgStateStore {
     /// Returns [`PersistenceError`] on connection or DDL failure.
     pub async fn open(database_url: &str) -> Result<Self, PersistenceError> {
         let pool = sqlx::PgPool::connect(database_url).await?;
-        sqlx::query(
+        // raw_sql: multi-statement DDL is rejected in prepared statements.
+        sqlx::raw_sql(
             "CREATE TABLE IF NOT EXISTS api_users (
                 id TEXT PRIMARY KEY,
                 email TEXT NOT NULL UNIQUE,
@@ -351,7 +352,7 @@ impl PgStateStore {
                 key TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL,
-                requests_per_minute INTEGER NOT NULL
+                requests_per_minute BIGINT NOT NULL
             );",
         )
         .execute(&pool)

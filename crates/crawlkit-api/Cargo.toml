@@ -53,8 +53,8 @@ parking_lot.workspace = true
 urlencoding = "2.1"
 thiserror.workspace = true
 hex = "0.4"
-sentry = "0.34"
-rusqlite = "0.31"
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "contexts", "panic", "tracing", "rustls"] }
+rusqlite = "0.32"
 async-trait = "0.1"
 sqlx = { version = "0.8", features = ["runtime-tokio", "postgres"] }
 utoipa = { version = "5", features = ["axum_extras", "chrono"] }

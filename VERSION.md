@@ -3,7 +3,7 @@
 **Project:** crawlkit
 **Current Phase:** Phase 17 (v3.0.0 Release)
 **Version:** 3.0.0
-**Status:** Release
+**Status:** Released (3-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
 

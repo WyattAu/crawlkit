@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.85+-orange.svg)](https://www.rust-lang.org/)
+[![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
 [![Tests](https://img.shields.io/badge/tests-736--passing-green.svg)](https://github.com/WyattAu/crawlkit)
 [![Analyzers](https://img.shields.io/badge/analyzers-31-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
@@ -203,4 +203,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 3.0.0 | Last updated: 2026-08-19*
+*Version: 3.0.0 | Last updated: 2026-08-21*

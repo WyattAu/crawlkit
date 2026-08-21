@@ -55,9 +55,17 @@ pub struct ExtractedImage {
     /// Height attribute (if specified).
     pub height: Option<u32>,
     /// Whether the image has an alt attribute.
+    ///
+    /// An image with `alt=""` (present but empty) is deliberately
+    /// decorative per WCAG technique H67 and must NOT be flagged;
+    /// only a missing alt attribute is an accessibility failure.
     pub has_alt: bool,
     /// Whether the image uses lazy loading (`loading="lazy"` or `data-src`).
     pub is_lazy_loaded: bool,
+    /// Whether the image carries `aria-hidden="true"` — author-declared
+    /// decorative (hidden from the accessibility tree entirely).
+    #[serde(default)]
+    pub aria_hidden: bool,
 }
 
 /// A link extracted from the page.

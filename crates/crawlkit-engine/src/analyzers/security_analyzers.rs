@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use crate::types::{IssueCategory, Severity};
 
 use super::{AnalysisContext, Analyzer, Finding};
+use crate::parser::ExtractedImage;
 
 // ---------------------------------------------------------------------------
 // 14. Security Header Analyzer
@@ -516,31 +517,41 @@ impl AccessibilityAnalyzer {
         "go",
         "continue",
     ];
+    /// WCAG 1.1.1: only a MISSING alt attribute is a failure.
+    ///
+    /// `alt=""` (present but empty) is the WCAG H67 mechanism for
+    /// decorative images and must not be flagged — axe-core and Lighthouse
+    /// treat it identically. `aria-hidden="true"` further removes the
+    /// image from the accessibility tree (common trust-badge pattern
+    /// where adjacent text carries the meaning).
     fn check_images_alt(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
-        let images_without_alt: Vec<&str> = ctx
-            .page
-            .images
+        let images_without_alt: Vec<&ExtractedImage> =
+            ctx.page.images.iter().filter(|img| !img.has_alt).collect();
+        if images_without_alt.is_empty() {
+            return;
+        }
+        let srcs: Vec<&str> = images_without_alt
             .iter()
-            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
             .map(|img| img.src.as_str())
             .collect();
-        if !images_without_alt.is_empty() {
-            f.push(Finding {
-                severity: Severity::Error,
-                category: IssueCategory::Accessibility,
-                code: "A11Y001".to_string(),
-                title: "Images missing alt text".into(),
-                description: format!(
-                    "{} image(s) missing alt attribute or empty alt text: {}.",
-                    images_without_alt.len(),
-                    images_without_alt.join(", ")
-                ),
-                url: url.to_string(),
-                recommendation:
-                    "Add descriptive alt text to all images. Use empty alt for decorative images."
-                        .into(),
-            });
-        }
+        f.push(Finding {
+            severity: Severity::Error,
+            category: IssueCategory::Accessibility,
+            code: "A11Y001".to_string(),
+            title: "Images missing alt attribute".into(),
+            description: format!(
+                "{} image(s) have no alt attribute at all: {}. Decorative \
+                 images should use alt=\"\" (and optionally aria-hidden); \
+                 meaningful images need descriptive alt text.",
+                images_without_alt.len(),
+                srcs.join(", ")
+            ),
+            url: url.to_string(),
+            recommendation: "Add an alt attribute to every img. Use descriptive \
+                             text for meaningful images and alt=\"\" for \
+                             decorative ones."
+                .into(),
+        });
     }
 
     fn check_headings(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {

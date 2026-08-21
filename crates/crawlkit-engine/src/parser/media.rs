@@ -30,6 +30,11 @@ impl HtmlParser {
                     .map(|l| l == "lazy")
                     .unwrap_or(false)
                     || el.value().attr("data-src").is_some();
+                let aria_hidden = el
+                    .value()
+                    .attr("aria-hidden")
+                    .map(|v| v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
 
                 ExtractedImage {
                     src,
@@ -38,6 +43,7 @@ impl HtmlParser {
                     height,
                     has_alt,
                     is_lazy_loaded,
+                    aria_hidden,
                 }
             })
             .collect()

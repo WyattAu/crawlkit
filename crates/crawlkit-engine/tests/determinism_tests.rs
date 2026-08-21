@@ -413,3 +413,108 @@ fn analyzer_registry_orders_findings_canonically_and_repeatably() {
     assert_eq!(first, second);
     assert_eq!(first.len(), 5);
 }
+
+// ---------------------------------------------------------------------------
+// A11Y001 decorative-image regression (WCAG H67)
+// ---------------------------------------------------------------------------
+
+/// Real-world pattern from kingstonpeptides.com: trust badges with
+/// `alt=""` + `aria-hidden="true"` and adjacent text carrying the meaning.
+/// This is the textbook H67 decorative-image technique and must NOT be
+/// flagged by A11Y001.
+#[test]
+fn decorative_badges_with_empty_alt_and_aria_hidden_are_not_flagged() {
+    use crawlkit_engine::parser::HtmlParser;
+    use crawlkit_engine::{AccessibilityAnalyzer, AnalysisContext, Analyzer};
+
+    let html = r#"<!DOCTYPE html>
+<html lang="en"><head><title>KP</title></head><body>
+  <div class="trust-badges">
+    <div><img src="/images/badges/coa-badge.svg" alt="" class="h-4 w-4" aria-hidden="true" />
+      <span>HPLC Certified</span></div>
+    <div><img src="/images/badges/verified-badge.svg" alt="" aria-hidden="true" />
+      <span>99%+ Purity Guaranteed</span></div>
+    <div><img src="/images/badges/ssl-badge.svg" alt="" aria-hidden="true" />
+      <span>SSL Secured</span></div>
+  </div>
+  <img src="/images/product.png" alt="BPC-157 peptide vial" />
+</body></html>"#;
+
+    let url = url::Url::parse("https://kingstonpeptides.com/").unwrap();
+    let page = HtmlParser::parse(html, &url);
+
+    // Parser extracted the decorative semantics correctly.
+    let badge = page
+        .images
+        .iter()
+        .find(|i| i.src.contains("coa-badge"))
+        .unwrap();
+    assert!(
+        badge.has_alt,
+        "alt=\"\" must count as having an alt attribute"
+    );
+    assert!(badge.aria_hidden, "aria-hidden=true must be parsed");
+
+    let ctx = AnalysisContext {
+        page: &page,
+        body: Some(html),
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+    };
+    let findings = AccessibilityAnalyzer::new().analyze(&ctx);
+    assert!(
+        findings.iter().all(|f| f.code != "A11Y001"),
+        "decorative badges must not trigger A11Y001; got: {:?}",
+        findings.iter().map(|f| f.code.as_str()).collect::<Vec<_>>()
+    );
+}
+
+/// Empty alt WITHOUT aria-hidden is still valid H67 (axe-core semantics):
+/// the author has explicitly declared the image decorative.
+#[test]
+fn empty_alt_alone_is_not_flagged() {
+    use crawlkit_engine::parser::HtmlParser;
+    use crawlkit_engine::{AccessibilityAnalyzer, AnalysisContext, Analyzer};
+
+    let html = r#"<html><body><img src="/divider.png" alt="" /></body></html>"#;
+    let url = url::Url::parse("https://example.com/").unwrap();
+    let page = HtmlParser::parse(html, &url);
+    let ctx = AnalysisContext {
+        page: &page,
+        body: Some(html),
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+    };
+    let findings = AccessibilityAnalyzer::new().analyze(&ctx);
+    assert!(findings.iter().all(|f| f.code != "A11Y001"));
+}
+
+/// A missing alt attribute entirely remains a genuine WCAG 1.1.1 failure.
+#[test]
+fn missing_alt_attribute_is_still_flagged() {
+    use crawlkit_engine::parser::HtmlParser;
+    use crawlkit_engine::{AccessibilityAnalyzer, AnalysisContext, Analyzer};
+
+    let html = r#"<html><body><img src="/photo.jpg" /></body></html>"#;
+    let url = url::Url::parse("https://example.com/").unwrap();
+    let page = HtmlParser::parse(html, &url);
+    assert!(!page.images[0].has_alt);
+
+    let ctx = AnalysisContext {
+        page: &page,
+        body: Some(html),
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+    };
+    let findings = AccessibilityAnalyzer::new().analyze(&ctx);
+    assert!(findings.iter().any(|f| f.code == "A11Y001"));
+}

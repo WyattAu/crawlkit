@@ -1653,6 +1653,7 @@ mod tests {
             height: None,
             has_alt: false,
             is_lazy_loaded: false,
+            aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = ImageAnalyzer::new().analyze(&ctx);
@@ -1669,6 +1670,7 @@ mod tests {
             height: Some(200),
             has_alt: true,
             is_lazy_loaded: false,
+            aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = ImageAnalyzer::new().analyze(&ctx);
@@ -1686,6 +1688,7 @@ mod tests {
                 height: None,
                 has_alt: true,
                 is_lazy_loaded: true,
+                aria_hidden: false,
             },
             ExtractedImage {
                 src: "/b.png".to_string(),
@@ -1694,6 +1697,7 @@ mod tests {
                 height: None,
                 has_alt: true,
                 is_lazy_loaded: true,
+                aria_hidden: false,
             },
             ExtractedImage {
                 src: "/c.png".to_string(),
@@ -1702,6 +1706,7 @@ mod tests {
                 height: None,
                 has_alt: true,
                 is_lazy_loaded: false,
+                aria_hidden: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200));
@@ -1721,6 +1726,7 @@ mod tests {
             height: None,
             has_alt: true,
             is_lazy_loaded: false,
+            aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = ImageAnalyzer::new().analyze(&ctx);
@@ -2668,6 +2674,7 @@ mod tests {
                 height: None,
                 has_alt: false,
                 is_lazy_loaded: false,
+                aria_hidden: false,
             },
             ExtractedImage {
                 src: "/b.jpg".to_string(),
@@ -2676,6 +2683,7 @@ mod tests {
                 height: None,
                 has_alt: true,
                 is_lazy_loaded: false,
+                aria_hidden: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200));
@@ -2695,6 +2703,7 @@ mod tests {
             height: None,
             has_alt: true,
             is_lazy_loaded: false,
+            aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = AccessibilityAnalyzer::new().analyze(&ctx);

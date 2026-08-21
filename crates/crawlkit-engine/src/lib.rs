@@ -454,6 +454,7 @@ pub enum CrawlError {
     OutOfScope(String),
 
     /// A storage/database error occurred.
+    #[cfg(feature = "full")]
     #[error("storage error: {0}")]
     Storage(#[from] crate::storage::StorageError),
 

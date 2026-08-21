@@ -366,7 +366,7 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
         return None;
     }
     // `as_chunks` (clippy 1.98+ suggestion) requires Rust 1.88; MSRV is 1.85.
-    #[allow(clippy::chunks_exact_to_as_chunks)]
+    #[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
     let bytes = s
         .as_bytes()
         .chunks_exact(2)

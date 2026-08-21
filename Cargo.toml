@@ -22,7 +22,7 @@ too_many_arguments = "warn"
 [workspace.package]
 version = "3.0.0"
 edition = "2021"
-rust-version = "1.85.0"
+rust-version = "1.94.0"
 authors = ["Wyatt Au"]
 license = "Apache-2.0"
 description = "High-performance Rust web crawler and SEO analysis toolkit with 31 analyzers, WASM plugin system, and enterprise features"

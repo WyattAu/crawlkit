@@ -173,6 +173,7 @@ fn hex_encode(bytes: &[u8]) -> String {
 }
 
 /// Decode a hex string; `None` on malformed input.
+#[allow(unknown_lints, clippy::chunks_exact_to_as_chunks)]
 fn hex_decode(s: &str) -> Option<Vec<u8>> {
     if s.len() & 1 != 0 {
         return None;

@@ -5,7 +5,7 @@
 **Version:** 3.0.0
 **Status:** Release
 **Last Updated:** 2026-08-19
-**MSRV:** 1.85.0
+**MSRV:** 1.94.0
 
 ---
 

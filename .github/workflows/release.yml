@@ -155,6 +155,7 @@ jobs:
 
       - name: Generate SBOM
         run: |
+          mkdir -p sbom
           cargo install cargo-cyclonedx --locked
           cargo cyclonedx --format json > sbom/crawlkit-sbom.json
 

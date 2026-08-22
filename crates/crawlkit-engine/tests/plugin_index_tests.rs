@@ -82,10 +82,27 @@ struct LocalIndex {
     dir: std::path::PathBuf,
 }
 
+/// Panic-free fixture creation: skips the test when the wasm32 target
+/// (or cargo sub-build) is unavailable in this environment.
+macro_rules! local_index {
+    ($base:expr, $seed:expr) => {
+        match LocalIndex::try_create($base, $seed) {
+            Some(f) => f,
+            None => {
+                eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+                return;
+            }
+        }
+    };
+}
+
 impl LocalIndex {
-    fn create(base: &std::path::Path, seed_hex: &str) -> (Self, String, String, String) {
+    fn try_create(
+        base: &std::path::Path,
+        seed_hex: &str,
+    ) -> Option<(Self, String, String, String)> {
         let target_dir = base.join("target");
-        let wasm_path = build_example_plugin(&target_dir).expect("wasm32 build");
+        let wasm_path = build_example_plugin(&target_dir)?;
         let wasm_bytes = std::fs::read(&wasm_path).unwrap();
         let (wasm_hash, signature, signed_by) = sign_plugin_wasm(&wasm_bytes, &seed(seed_hex));
 
@@ -108,7 +125,7 @@ impl LocalIndex {
              signed_by = \"{signed_by}\"\n"
         );
         std::fs::write(dir.join("plugin-index.toml"), &index).unwrap();
-        (Self { dir }, wasm_hash, signature, signed_by)
+        Some((Self { dir }, wasm_hash, signature, signed_by))
     }
 
     fn path(&self) -> String {
@@ -128,7 +145,7 @@ impl LocalIndex {
 #[test]
 fn index_parses_and_roundtrips_fields() {
     let tmp = tempfile::tempdir().unwrap();
-    let (index, wasm_hash, _sig, signed_by) = LocalIndex::create(tmp.path(), TRUSTED_SEED_HEX);
+    let (index, wasm_hash, _sig, signed_by) = local_index!(tmp.path(), TRUSTED_SEED_HEX);
     let entry = index.entry();
     assert_eq!(entry.name, "title-length");
     assert_eq!(entry.version, "1.0.0");
@@ -141,7 +158,7 @@ fn index_parses_and_roundtrips_fields() {
 #[test]
 fn install_and_load_full_chain() {
     let tmp = tempfile::tempdir().unwrap();
-    let (index, _, _, _) = LocalIndex::create(tmp.path(), TRUSTED_SEED_HEX);
+    let (index, _, _, _) = local_index!(tmp.path(), TRUSTED_SEED_HEX);
     let install_root = tmp.path().join("installed");
 
     let plugin_dir = install_plugin(&index.path(), "title-length", &install_root).expect("install");
@@ -162,7 +179,7 @@ fn install_and_load_full_chain() {
 #[test]
 fn tampered_artifact_is_rejected_and_installs_nothing() {
     let tmp = tempfile::tempdir().unwrap();
-    let (index, _, _, _) = LocalIndex::create(tmp.path(), TRUSTED_SEED_HEX);
+    let (index, _, _, _) = local_index!(tmp.path(), TRUSTED_SEED_HEX);
     // Flip a byte in the published artifact after signing.
     let artifact = index.dir.join("artifacts/title-length.wasm");
     let mut bytes = std::fs::read(&artifact).unwrap();
@@ -181,7 +198,7 @@ fn tampered_artifact_is_rejected_and_installs_nothing() {
 #[test]
 fn untrusted_signer_is_rejected() {
     let tmp = tempfile::tempdir().unwrap();
-    let (index, _, _, attacker_key_id) = LocalIndex::create(tmp.path(), ATTACKER_SEED_HEX);
+    let (index, _, _, attacker_key_id) = local_index!(tmp.path(), ATTACKER_SEED_HEX);
     let install_root = tmp.path().join("installed");
     let err = install_plugin(&index.path(), "title-length", &install_root)
         .expect_err("untrusted signer must be rejected");
@@ -194,7 +211,7 @@ fn untrusted_signer_is_rejected() {
 #[test]
 fn unknown_plugin_name_is_reported() {
     let tmp = tempfile::tempdir().unwrap();
-    let (index, _, _, _) = LocalIndex::create(tmp.path(), TRUSTED_SEED_HEX);
+    let (index, _, _, _) = local_index!(tmp.path(), TRUSTED_SEED_HEX);
     let install_root = tmp.path().join("installed");
     let err =
         install_plugin(&index.path(), "does-not-exist", &install_root).expect_err("unknown name");
@@ -215,7 +232,9 @@ fn malformed_index_is_a_parse_error() {
 fn dump_smoke_index() {
     let dir = std::env::var("SMOKE_INDEX_DIR").expect("SMOKE_INDEX_DIR not set");
     let tmp = tempfile::tempdir().unwrap();
-    let (index, wasm_hash, signature, signed_by) = LocalIndex::create(tmp.path(), TRUSTED_SEED_HEX);
+    let (index, wasm_hash, signature, signed_by) =
+        LocalIndex::try_create(tmp.path(), TRUSTED_SEED_HEX)
+            .expect("manual helper: wasm32 build required");
     let dest = std::path::Path::new(&dir);
     std::fs::create_dir_all(dest.join("artifacts")).unwrap();
     std::fs::copy(

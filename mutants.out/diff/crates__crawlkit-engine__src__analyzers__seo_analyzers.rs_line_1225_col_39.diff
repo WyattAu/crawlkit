@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in InternationalSeoAnalyzer::detect_locale_from_url
+@@ -1217,17 +1217,17 @@
+     pub fn with_known_hrefs(known_hrefs: HashMap<String, Vec<String>>) -> Self {
+         Self { known_hrefs }
+     }
+ 
+     pub(crate) fn detect_locale_from_url(url: &str) -> Option<String> {
+         if let Ok(parsed) = Url::parse(url) {
+             let segments: Vec<&str> = parsed
+                 .path_segments()
+-                .map(|s| s.filter(|s| !s.is_empty()).collect())
++                .map(|s| s.filter(|s|  /* ~ changed by cargo-mutants ~ */s.is_empty()).collect())
+                 .unwrap_or_default();
+             if let Some(first) = segments.first() {
+                 if Self::is_locale_segment(first) {
+                     return Some(first.to_string());
+                 }
+             }
+         }
+         None

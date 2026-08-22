@@ -3,22 +3,4 @@ crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:27:43: replace != with == 
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with ""
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with "xyzzy"
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:76:58: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:151:21: replace && with || in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:150:21: replace && with || in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:21: replace && with || in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:151:43: replace && with || in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:152:46: replace && with || in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:152:41: replace == with != in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:167:9: replace <impl Analyzer for HreflangValidator>::name -> &str with ""
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:167:9: replace <impl Analyzer for HreflangValidator>::name -> &str with "xyzzy"
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:287:24: replace < with == in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:287:24: replace < with <= in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:298:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:297:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:296:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:294:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:293:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:293:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:294:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:169:9: replace <impl Analyzer for HreflangValidator>::name -> &str with ""

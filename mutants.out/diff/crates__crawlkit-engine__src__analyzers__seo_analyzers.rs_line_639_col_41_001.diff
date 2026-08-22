@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace + with * in <impl Analyzer for HeadingHierarchyAnalyzer>::analyze
+@@ -631,17 +631,17 @@
+                     .to_string(),
+             });
+         }
+ 
+         // Check for skipped heading levels
+         let mut prev_level: Option<u8> = None;
+         for heading in headings {
+             if let Some(prev) = prev_level {
+-                if heading.level > prev + 1 {
++                if heading.level > prev * /* ~ changed by cargo-mutants ~ */ 1 {
+                     findings.push(Finding {
+                         severity: Severity::Warning,
+                         category: IssueCategory::Content,
+                         code: "HEAD004".to_string(),
+                         title: "Skipped heading level".to_string(),
+                         description: format!(
+                             "Heading level jumps from H{prev} to H{}, skipping intermediate \
+                              levels.",

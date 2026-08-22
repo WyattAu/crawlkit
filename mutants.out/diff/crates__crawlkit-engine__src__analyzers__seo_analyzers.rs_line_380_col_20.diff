@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for SitemapAnalyzer>::analyze
+@@ -372,17 +372,17 @@
+                         recommendation: "Use ISO 8601 format for lastmod (e.g., \
+                                          2024-01-15T10:30:00Z)."
+                             .to_string(),
+                     });
+                 }
+             }
+ 
+             if let Some(ref freq) = entry.changefreq {
+-                if !Self::is_valid_changefreq(freq) {
++                if  /* ~ changed by cargo-mutants ~ */Self::is_valid_changefreq(freq) {
+                     findings.push(Finding {
+                         severity: Severity::Warning,
+                         category: IssueCategory::Seo,
+                         code: "SITEMAP004".to_string(),
+                         title: "Invalid changefreq value".to_string(),
+                         description: format!(
+                             "The changefreq value \"{freq}\" is not a recognized value."
+                         ),

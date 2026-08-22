@@ -1,0 +1,32 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace InternationalSeoAnalyzer::detect_locale_from_url -> Option<String> with Some("xyzzy".into())
+@@ -1214,28 +1214,17 @@
+         }
+     }
+ 
+     pub fn with_known_hrefs(known_hrefs: HashMap<String, Vec<String>>) -> Self {
+         Self { known_hrefs }
+     }
+ 
+     pub(crate) fn detect_locale_from_url(url: &str) -> Option<String> {
+-        if let Ok(parsed) = Url::parse(url) {
+-            let segments: Vec<&str> = parsed
+-                .path_segments()
+-                .map(|s| s.filter(|s| !s.is_empty()).collect())
+-                .unwrap_or_default();
+-            if let Some(first) = segments.first() {
+-                if Self::is_locale_segment(first) {
+-                    return Some(first.to_string());
+-                }
+-            }
+-        }
+-        None
++        Some("xyzzy".into()) /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub(crate) fn is_locale_segment(s: &str) -> bool {
+         let parts: Vec<&str> = s.split('-').collect();
+         match parts.len() {
+             1 => {
+                 let lang = parts[0];
+                 lang.len() >= 2 && lang.len() <= 3 && lang.chars().all(|c| c.is_ascii_alphabetic())

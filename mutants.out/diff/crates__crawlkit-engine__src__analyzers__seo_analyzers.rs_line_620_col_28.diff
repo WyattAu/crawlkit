@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace > with == in <impl Analyzer for HeadingHierarchyAnalyzer>::analyze
+@@ -612,17 +612,17 @@
+                 code: "HEAD002".to_string(),
+                 title: "Missing H1 heading".to_string(),
+                 description: "The page has headings but no H1 tag.".to_string(),
+                 url: url.clone(),
+                 recommendation: "Add exactly one H1 heading that describes the main topic of \
+                                  the page."
+                     .to_string(),
+             });
+-        } else if h1_count > 1 {
++        } else if h1_count == /* ~ changed by cargo-mutants ~ */ 1 {
+             findings.push(Finding {
+                 severity: Severity::Warning,
+                 category: IssueCategory::Seo,
+                 code: "HEAD003".to_string(),
+                 title: "Multiple H1 headings".to_string(),
+                 description: format!(
+                     "The page has {h1_count} H1 headings. Best practice is to have exactly one."
+                 ),

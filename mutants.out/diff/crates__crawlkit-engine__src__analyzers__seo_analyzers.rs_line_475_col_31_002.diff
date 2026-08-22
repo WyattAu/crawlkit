@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace > with >= in <impl Analyzer for MetaTagAnalyzer>::analyze
+@@ -467,17 +467,17 @@
+                         description: format!(
+                             "Title is {len} characters, below the recommended minimum of 30."
+                         ),
+                         url: url.clone(),
+                         recommendation: "Expand the title to 30-60 characters to improve \
+                                          search snippet quality."
+                             .to_string(),
+                     });
+-                } else if len > 60 {
++                } else if len >= /* ~ changed by cargo-mutants ~ */ 60 {
+                     findings.push(Finding {
+                         severity: Severity::Warning,
+                         category: IssueCategory::Seo,
+                         code: "META003".to_string(),
+                         title: "Title too long".to_string(),
+                         description: format!(
+                             "Title is {len} characters, exceeding the recommended maximum of 60."
+                         ),

@@ -13,26 +13,18 @@ crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:52: replace && with ||
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:33: replace && with || in HreflangValidator::is_valid_locale
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:28: replace >= with < in HreflangValidator::is_valid_locale
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:47: replace <= with > in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:153:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:150:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:21: replace && with || in HreflangValidator::is_valid_locale
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:148:28: replace >= with < in HreflangValidator::is_valid_locale
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:35: replace <= with > in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:152:25: replace || with && in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:151:38: replace == with != in HreflangValidator::is_valid_locale
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:171:9: replace <impl Analyzer for HreflangValidator>::analyze -> Vec<Finding> with vec![]
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:180:65: replace == with != in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:181:12: delete ! in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:197:16: delete ! in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:226:31: replace && with || in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:226:27: replace > with == in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:226:27: replace > with < in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:226:27: replace > with >= in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:226:39: replace != with == in <impl Analyzer for HreflangValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:277:9: replace SitemapAnalyzer::empty -> Self with Default::default()
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:286:9: replace SitemapAnalyzer::is_valid_lastmod -> bool with true
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:286:9: replace SitemapAnalyzer::is_valid_lastmod -> bool with false
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:287:24: replace < with > in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:293:28: replace + with - in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:294:28: replace + with - in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:28: replace + with - in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:296:33: replace == with != in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:296:28: replace + with - in SitemapAnalyzer::is_valid_lastmod
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:296:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:25: replace || with && in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:47: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:42: replace == with != in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:173:9: replace <impl Analyzer for HreflangValidator>::analyze -> Vec<Finding> with vec![]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:182:65: replace == with != in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:183:12: delete ! in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:27: replace > with < in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:27: replace > with >= in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:39: replace != with == in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:279:9: replace SitemapAnalyzer::empty -> Self with Default::default()

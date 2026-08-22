@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace && with || in HreflangValidator::is_valid_locale
+@@ -145,17 +145,17 @@
+                 // Language-Region
+                 let lang = parts[0];
+                 let region = parts[1];
+                 lang.len() >= 2
+                     && lang.len() <= 3
+                     && lang.chars().all(|c| c.is_ascii_alphabetic())
+                     // Region: ISO 3166-1 alpha-2 ("US") or UN M49 numeric-3
+                     // ("419" = Latin America) — both canonical in hreflang.
+-                    && ((region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
++                    && ((region.len() == 2 || /* ~ changed by cargo-mutants ~ */ region.chars().all(|c| c.is_ascii_alphabetic()))
+                         || (region.len() == 3 && region.chars().all(|c| c.is_ascii_digit())))
+             }
+             _ => false,
+         }
+     }
+ }
+ 
+ impl Default for HreflangValidator {

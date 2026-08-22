@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace < with <= in <impl Analyzer for MetaTagAnalyzer>::analyze
+@@ -453,17 +453,17 @@
+                     title: "Missing page title".to_string(),
+                     description: "No <title> tag was found on this page.".to_string(),
+                     url: url.clone(),
+                     recommendation: "Add a descriptive title tag (30-60 characters).".to_string(),
+                 });
+             }
+             Some(title) => {
+                 let len = title.len();
+-                if len < 30 {
++                if len <= /* ~ changed by cargo-mutants ~ */ 30 {
+                     findings.push(Finding {
+                         severity: Severity::Warning,
+                         category: IssueCategory::Seo,
+                         code: "META002".to_string(),
+                         title: "Title too short".to_string(),
+                         description: format!(
+                             "Title is {len} characters, below the recommended minimum of 30."
+                         ),

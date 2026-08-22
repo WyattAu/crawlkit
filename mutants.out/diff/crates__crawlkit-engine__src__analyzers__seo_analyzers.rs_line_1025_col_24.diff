@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace == with != in KeywordAnalyzer::keyword_density
+@@ -1017,17 +1017,17 @@
+                     1.0
+                 };
+                 (term.clone(), tf_val * idf)
+             })
+             .collect()
+     }
+ 
+     pub(crate) fn keyword_density(tokens: &[String], total_words: usize) -> HashMap<String, f64> {
+-        if total_words == 0 {
++        if total_words != /* ~ changed by cargo-mutants ~ */ 0 {
+             return HashMap::new();
+         }
+         let mut freq: HashMap<String, usize> = HashMap::new();
+         for token in tokens {
+             *freq.entry(token.clone()).or_default() += 1;
+         }
+         freq.into_iter()
+             .map(|(term, count)| (term, count as f64 / total_words as f64 * 100.0))

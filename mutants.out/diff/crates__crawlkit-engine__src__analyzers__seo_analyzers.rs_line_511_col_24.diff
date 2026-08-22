@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for MetaTagAnalyzer>::analyze
+@@ -503,17 +503,17 @@
+                     recommendation: "Add a meta description (120-160 characters) to control \
+                                      how your page appears in search results."
+                         .to_string(),
+                 });
+             }
+             Some(desc) => {
+                 let len = desc.len();
+                 if len < 120 {
+-                    if !is_utility_page(url) {
++                    if  /* ~ changed by cargo-mutants ~ */is_utility_page(url) {
+                         findings.push(Finding {
+                             severity: Severity::Warning,
+                             category: IssueCategory::Seo,
+                             code: "META005".to_string(),
+                             title: "Meta description too short".to_string(),
+                             description: format!(
+                                 "Description is {len} characters, below the recommended minimum \
+                                  of 120."

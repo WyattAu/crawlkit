@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for KeywordAnalyzer>::analyze
+@@ -1105,17 +1105,17 @@
+         let mut tfidf_sorted: Vec<(&String, &f64)> = tfidf.iter().collect();
+         tfidf_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+         let top_tfidf: Vec<String> = tfidf_sorted
+             .iter()
+             .take(10)
+             .map(|(k, v)| format!("{k} ({v:.2})"))
+             .collect();
+ 
+-        if !top_tfidf.is_empty() {
++        if  /* ~ changed by cargo-mutants ~ */top_tfidf.is_empty() {
+             findings.push(Finding {
+                 severity: Severity::Info,
+                 category: IssueCategory::Content,
+                 code: "KW001".to_string(),
+                 title: "Top TF-IDF keywords".to_string(),
+                 description: format!("Top keywords by TF-IDF score: {}.", top_tfidf.join(", ")),
+                 url: url.clone(),
+                 recommendation: "TF-IDF highlights the most distinctive terms on this page. \

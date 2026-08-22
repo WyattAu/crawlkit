@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace > with < in <impl Analyzer for WordCountAnalyzer>::analyze
+@@ -934,17 +934,17 @@
+                         "Page has only {word_count} words. This is very thin content."
+                     ),
+                     url: url.clone(),
+                     recommendation: "Add more substantive content to the page.".to_string(),
+                 });
+             }
+         }
+ 
+-        if avg_words_per_sentence > 25.0 {
++        if avg_words_per_sentence < /* ~ changed by cargo-mutants ~ */ 25.0 {
+             findings.push(Finding {
+                 severity: Severity::Info,
+                 category: IssueCategory::Content,
+                 code: "WC004".to_string(),
+                 title: "Long average sentence length".to_string(),
+                 description: format!(
+                     "Average sentence length is {avg_words_per_sentence:.1} words. Sentences \
+                      longer than 25 words may be difficult to read."

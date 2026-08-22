@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for LinkAnalyzer>::analyze
+@@ -725,17 +725,17 @@
+     fn name(&self) -> &str {
+         "link-analyzer"
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+ 
+-        let internal_count = ctx.page.links.iter().filter(|l| !l.is_external).count();
++        let internal_count = ctx.page.links.iter().filter(|l|  /* ~ changed by cargo-mutants ~ */l.is_external).count();
+         let external_count = ctx.page.links.iter().filter(|l| l.is_external).count();
+         let nofollow_count = ctx
+             .page
+             .links
+             .iter()
+             .filter(|l| l.rel.contains(&"nofollow".to_string()))
+             .count();
+ 

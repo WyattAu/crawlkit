@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for LinkAnalyzer>::analyze
+@@ -802,17 +802,17 @@
+         for link in &ctx.page.links {
+             // Check for accessible name: text content, aria-label, or img alt
+             let has_accessible_name = !link.text.trim().is_empty()
+                 || link
+                     .aria_label
+                     .as_ref()
+                     .is_some_and(|l| !l.trim().is_empty())
+                 || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+-            if !has_accessible_name {
++            if  /* ~ changed by cargo-mutants ~ */has_accessible_name {
+                 findings.push(Finding {
+                     severity: Severity::Warning,
+                     category: IssueCategory::Links,
+                     code: "LINK004".to_string(),
+                     title: "Empty anchor text".to_string(),
+                     description: format!("Link to \"{}\" has no visible anchor text.", link.href),
+                     url: url.clone(),
+                     recommendation: "Add descriptive anchor text to help users and search engines \

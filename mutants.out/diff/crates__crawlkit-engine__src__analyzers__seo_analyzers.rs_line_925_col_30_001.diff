@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace < with > in <impl Analyzer for WordCountAnalyzer>::analyze
+@@ -917,17 +917,17 @@
+                 description: "The page has no detectable words. This may indicate a rendering \
+                              issue or an empty page."
+                     .to_string(),
+                 url: url.clone(),
+                 recommendation: "Verify the page content is visible and not hidden behind \
+                                  JavaScript or CSS."
+                     .to_string(),
+             });
+-        } else if word_count < 100 {
++        } else if word_count > /* ~ changed by cargo-mutants ~ */ 100 {
+             // Skip very low word count warning for utility pages
+             if !is_utility_page(url) {
+                 findings.push(Finding {
+                     severity: Severity::Warning,
+                     category: IssueCategory::Content,
+                     code: "WC003".to_string(),
+                     title: "Very low word count".to_string(),
+                     description: format!(

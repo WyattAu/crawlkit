@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for HeadingHierarchyAnalyzer>::name -> &str with "xyzzy"
+@@ -577,17 +577,17 @@
+ impl Default for HeadingHierarchyAnalyzer {
+     fn default() -> Self {
+         Self::new()
+     }
+ }
+ 
+ impl Analyzer for HeadingHierarchyAnalyzer {
+     fn name(&self) -> &str {
+-        "heading-hierarchy"
++        "xyzzy" /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+         let headings = &ctx.page.headings;
+ 
+         if headings.is_empty() {

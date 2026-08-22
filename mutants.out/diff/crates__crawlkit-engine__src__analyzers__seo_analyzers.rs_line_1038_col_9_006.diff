@@ -1,0 +1,27 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace KeywordAnalyzer::detect_prominent_keywords -> Vec<(String, f64)> with vec![("xyzzy".into(), -1.0)]
+@@ -1030,23 +1030,17 @@
+             *freq.entry(token.clone()).or_default() += 1;
+         }
+         freq.into_iter()
+             .map(|(term, count)| (term, count as f64 / total_words as f64 * 100.0))
+             .collect()
+     }
+ 
+     pub(crate) fn detect_prominent_keywords(density: &HashMap<String, f64>) -> Vec<(String, f64)> {
+-        let mut prominent: Vec<(String, f64)> = density
+-            .iter()
+-            .filter(|(_, &d)| d >= 1.5)
+-            .map(|(k, &v)| (k.clone(), v))
+-            .collect();
+-        prominent.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+-        prominent
++        vec![("xyzzy".into(), -1.0)] /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     pub(crate) fn cooccurrence(tokens: &[String], window: usize) -> Vec<((String, String), usize)> {
+         let mut pairs: HashMap<(String, String), usize> = HashMap::new();
+         for i in 0..tokens.len() {
+             let end = (i + window + 1).min(tokens.len());
+             for j in (i + 1)..end {
+                 let mut pair = [tokens[i].clone(), tokens[j].clone()];

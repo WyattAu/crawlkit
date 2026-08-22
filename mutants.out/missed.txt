@@ -4,3 +4,52 @@ crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyz
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with "xyzzy"
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:76:58: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:169:9: replace <impl Analyzer for HreflangValidator>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:169:9: replace <impl Analyzer for HreflangValidator>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:330:9: replace <impl Analyzer for SitemapAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:330:9: replace <impl Analyzer for SitemapAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:438:9: replace <impl Analyzer for MetaTagAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:438:9: replace <impl Analyzer for MetaTagAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:461:24: replace < with <= in <impl Analyzer for MetaTagAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:475:31: replace > with >= in <impl Analyzer for MetaTagAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:510:24: replace < with <= in <impl Analyzer for MetaTagAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:526:31: replace > with >= in <impl Analyzer for MetaTagAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:585:9: replace <impl Analyzer for HeadingHierarchyAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:585:9: replace <impl Analyzer for HeadingHierarchyAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:620:28: replace > with >= in <impl Analyzer for HeadingHierarchyAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:726:9: replace <impl Analyzer for LinkAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:726:9: replace <impl Analyzer for LinkAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:809:17: replace || with && in <impl Analyzer for LinkAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:808:38: delete ! in <impl Analyzer for LinkAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:809:58: delete ! in <impl Analyzer for LinkAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:822:50: replace && with || in <impl Analyzer for LinkAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:822:46: replace < with <= in <impl Analyzer for LinkAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:882:9: replace <impl Analyzer for WordCountAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:882:9: replace <impl Analyzer for WordCountAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:925:30: replace < with <= in <impl Analyzer for WordCountAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:942:35: replace > with >= in <impl Analyzer for WordCountAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:980:9: replace KeywordAnalyzer::with_corpus_tf -> Self with Default::default()
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:991:46: replace && with || in KeywordAnalyzer::tokenize
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:991:42: replace > with >= in KeywordAnalyzer::tokenize
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1002:54: replace / with % in KeywordAnalyzer::compute_tf
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1002:54: replace / with * in KeywordAnalyzer::compute_tf
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![((String::new(), String::new()), 0)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![((String::new(), String::new()), 1)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![((String::new(), "xyzzy".into()), 0)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![((String::new(), "xyzzy".into()), 1)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![(("xyzzy".into(), String::new()), 0)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![(("xyzzy".into(), String::new()), 1)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![(("xyzzy".into(), "xyzzy".into()), 0)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1048:9: replace KeywordAnalyzer::cooccurrence -> Vec<((String, String), usize)> with vec![(("xyzzy".into(), "xyzzy".into()), 1)]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1050:35: replace + with * in KeywordAnalyzer::cooccurrence
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1050:26: replace + with * in KeywordAnalyzer::cooccurrence
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1051:25: replace + with * in KeywordAnalyzer::cooccurrence
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1054:79: replace += with *= in KeywordAnalyzer::cooccurrence
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1071:9: replace <impl Analyzer for KeywordAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1071:9: replace <impl Analyzer for KeywordAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1159:63: replace > with >= in <impl Analyzer for KeywordAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1169:69: replace > with == in <impl Analyzer for KeywordAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1169:69: replace > with < in <impl Analyzer for KeywordAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1169:69: replace > with >= in <impl Analyzer for KeywordAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1179:12: delete ! in <impl Analyzer for KeywordAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1218:9: replace InternationalSeoAnalyzer::with_known_hrefs -> Self with Default::default()

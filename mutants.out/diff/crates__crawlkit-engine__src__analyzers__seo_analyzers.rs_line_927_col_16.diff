@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for WordCountAnalyzer>::analyze
+@@ -919,17 +919,17 @@
+                     .to_string(),
+                 url: url.clone(),
+                 recommendation: "Verify the page content is visible and not hidden behind \
+                                  JavaScript or CSS."
+                     .to_string(),
+             });
+         } else if word_count < 100 {
+             // Skip very low word count warning for utility pages
+-            if !is_utility_page(url) {
++            if  /* ~ changed by cargo-mutants ~ */is_utility_page(url) {
+                 findings.push(Finding {
+                     severity: Severity::Warning,
+                     category: IssueCategory::Content,
+                     code: "WC003".to_string(),
+                     title: "Very low word count".to_string(),
+                     description: format!(
+                         "Page has only {word_count} words. This is very thin content."
+                     ),

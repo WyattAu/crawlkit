@@ -1,0 +1,24 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace SitemapAnalyzer::is_valid_changefreq -> bool with true
+@@ -302,20 +302,17 @@
+                 return true;
+             }
+         }
+         false
+     }
+ 
+     /// Validate changefreq value.
+     pub(crate) fn is_valid_changefreq(freq: &str) -> bool {
+-        matches!(
+-            freq,
+-            "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never"
+-        )
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Validate priority value (0.0 - 1.0).
+     pub(crate) fn is_valid_priority(p: f64) -> bool {
+         (0.0..=1.0).contains(&p)
+     }
+ }
+ 

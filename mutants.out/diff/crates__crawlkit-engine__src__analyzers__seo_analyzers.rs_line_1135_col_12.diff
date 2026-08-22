@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for KeywordAnalyzer>::analyze
+@@ -1127,17 +1127,17 @@
+         let mut density_sorted: Vec<(&String, &f64)> = density.iter().collect();
+         density_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+         let top_density: Vec<String> = density_sorted
+             .iter()
+             .take(10)
+             .map(|(k, v)| format!("{k} ({v:.1}%)"))
+             .collect();
+ 
+-        if !top_density.is_empty() {
++        if  /* ~ changed by cargo-mutants ~ */top_density.is_empty() {
+             findings.push(Finding {
+                 severity: Severity::Info,
+                 category: IssueCategory::Content,
+                 code: "KW002".to_string(),
+                 title: "Keyword density".to_string(),
+                 description: format!(
+                     "Top keyword densities (of {} words): {}.",
+                     ctx.page.word_count,

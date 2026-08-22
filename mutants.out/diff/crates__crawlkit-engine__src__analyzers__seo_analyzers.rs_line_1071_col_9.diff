@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for KeywordAnalyzer>::name -> &str with ""
+@@ -1063,17 +1063,17 @@
+ impl Default for KeywordAnalyzer {
+     fn default() -> Self {
+         Self::new()
+     }
+ }
+ 
+ impl Analyzer for KeywordAnalyzer {
+     fn name(&self) -> &str {
+-        "keyword-analyzer"
++        "" /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+ 
+         if ctx.page.word_count == 0 {
+             return findings;

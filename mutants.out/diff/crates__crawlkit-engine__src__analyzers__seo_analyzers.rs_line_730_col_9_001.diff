@@ -1,0 +1,149 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for LinkAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]
+@@ -722,145 +722,17 @@
+ }
+ 
+ impl Analyzer for LinkAnalyzer {
+     fn name(&self) -> &str {
+         "link-analyzer"
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+-        let mut findings = Vec::new();
+-        let url = &ctx.page.url;
+-
+-        let internal_count = ctx.page.links.iter().filter(|l| !l.is_external).count();
+-        let external_count = ctx.page.links.iter().filter(|l| l.is_external).count();
+-        let nofollow_count = ctx
+-            .page
+-            .links
+-            .iter()
+-            .filter(|l| l.rel.contains(&"nofollow".to_string()))
+-            .count();
+-
+-        // 2.1 — Internal vs external link counts
+-        findings.push(Finding {
+-            severity: Severity::Info,
+-            category: IssueCategory::Links,
+-            code: "LINK001".to_string(),
+-            title: "Link counts".to_string(),
+-            description: format!(
+-                "Internal: {}, External: {}, Nofollow: {}",
+-                internal_count, external_count, nofollow_count
+-            ),
+-            url: url.clone(),
+-            recommendation: String::new(),
+-        });
+-
+-        // 2.2 — Flag broken links (4xx/5xx) when status code is available
+-        for link in &ctx.page.links {
+-            let resolved = Url::parse(url)
+-                .ok()
+-                .and_then(|base| base.join(&link.href).ok());
+-            let target = resolved.as_ref().map(|u| u.as_str()).unwrap_or(&link.href);
+-            if let Some(status) = ctx.status_code {
+-                if (400..=599).contains(&status) {
+-                    // The page itself is broken — all outbound links are suspect
+-                    findings.push(Finding {
+-                        severity: Severity::Error,
+-                        category: IssueCategory::Links,
+-                        code: "LINK002".to_string(),
+-                        title: "Link on broken page".to_string(),
+-                        description: format!(
+-                            "Link \"{}\" points to \"{}\" but the current page itself returned \
+-                             HTTP {status}.",
+-                            link.text, target,
+-                        ),
+-                        url: url.clone(),
+-                        recommendation: "Fix the broken page or remove links from it.".to_string(),
+-                    });
+-                }
+-            }
+-        }
+-
+-        // 2.2 — Nofollow detection
+-        if nofollow_count > 0 {
+-            findings.push(Finding {
+-                severity: Severity::Info,
+-                category: IssueCategory::Links,
+-                code: "LINK003".to_string(),
+-                title: "Nofollow links present".to_string(),
+-                description: format!(
+-                    "{} link(s) have rel=\"nofollow\". This tells search engines not to pass \
+-                     PageRank.",
+-                    nofollow_count
+-                ),
+-                url: url.clone(),
+-                recommendation: "Ensure nofollow is used intentionally (e.g., paid links, \
+-                                 untrusted user content)."
+-                    .to_string(),
+-            });
+-        }
+-
+-        // 2.3 — Anchor text quality
+-        for link in &ctx.page.links {
+-            // Check for accessible name: text content, aria-label, or img alt
+-            let has_accessible_name = !link.text.trim().is_empty()
+-                || link
+-                    .aria_label
+-                    .as_ref()
+-                    .is_some_and(|l| !l.trim().is_empty())
+-                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+-            if !has_accessible_name {
+-                findings.push(Finding {
+-                    severity: Severity::Warning,
+-                    category: IssueCategory::Links,
+-                    code: "LINK004".to_string(),
+-                    title: "Empty anchor text".to_string(),
+-                    description: format!("Link to \"{}\" has no visible anchor text.", link.href),
+-                    url: url.clone(),
+-                    recommendation: "Add descriptive anchor text to help users and search engines \
+-                                     understand the link destination."
+-                        .to_string(),
+-                });
+-            } else if link.text.trim().len() < 3 && !link.text.trim().is_empty() {
+-                findings.push(Finding {
+-                    severity: Severity::Info,
+-                    category: IssueCategory::Links,
+-                    code: "LINK005".to_string(),
+-                    title: "Very short anchor text".to_string(),
+-                    description: format!(
+-                        "Link \"{}\" has very short anchor text ({} chars).",
+-                        link.text,
+-                        link.text.len()
+-                    ),
+-                    url: url.clone(),
+-                    recommendation: "Use more descriptive anchor text for better usability."
+-                        .to_string(),
+-                });
+-            }
+-        }
+-
+-        // 2.3 — Orphan page detection (0 inbound links)
+-        if let Some(&count) = self.inbound_links.get(url) {
+-            if count == 0 {
+-                findings.push(Finding {
+-                    severity: Severity::Warning,
+-                    category: IssueCategory::Links,
+-                    code: "LINK006".to_string(),
+-                    title: "Orphan page".to_string(),
+-                    description: "This page has no inbound links from other pages on the site."
+-                        .to_string(),
+-                    url: url.clone(),
+-                    recommendation:
+-                        "Add internal links from other pages to improve discoverability."
+-                            .to_string(),
+-                });
+-            }
+-        }
+-
+-        findings
++        vec![Default::default()] /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // 13. Word Count Analyzer
+ // ---------------------------------------------------------------------------
+ 
+ pub struct WordCountAnalyzer;

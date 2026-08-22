@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace == with != in <impl Analyzer for WordCountAnalyzer>::analyze
+@@ -903,17 +903,17 @@
+             description: format!(
+                 "Words: {word_count}, Sentences: {sentence_count}, \
+                  Avg words/sentence: {avg_words_per_sentence:.1}."
+             ),
+             url: url.clone(),
+             recommendation: String::new(),
+         });
+ 
+-        if word_count == 0 {
++        if word_count != /* ~ changed by cargo-mutants ~ */ 0 {
+             findings.push(Finding {
+                 severity: Severity::Warning,
+                 category: IssueCategory::Content,
+                 code: "WC002".to_string(),
+                 title: "Zero word count".to_string(),
+                 description: "The page has no detectable words. This may indicate a rendering \
+                              issue or an empty page."
+                     .to_string(),

@@ -1,0 +1,101 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for SitemapAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]
+@@ -326,97 +326,17 @@
+ }
+ 
+ impl Analyzer for SitemapAnalyzer {
+     fn name(&self) -> &str {
+         "sitemap"
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+-        let mut findings = Vec::new();
+-        let url = &ctx.page.url;
+-
+-        if self.known_urls.is_empty() {
+-            // No sitemap data was loaded for this crawl; sitemap validation
+-            // is a silent no-op rather than a per-page informational finding.
+-            return Vec::new();
+-        }
+-
+-        // Check if this page URL is in the sitemap
+-        if !self.known_urls.contains(url) {
+-            findings.push(Finding {
+-                severity: Severity::Warning,
+-                category: IssueCategory::Seo,
+-                code: "SITEMAP002".to_string(),
+-                title: "Page not found in sitemap".to_string(),
+-                description: "This page URL was not found in any loaded sitemap.".to_string(),
+-                url: url.clone(),
+-                recommendation: "Add this page to your sitemap.xml to ensure it is crawled and \
+-                                 indexed."
+-                    .to_string(),
+-            });
+-        }
+-
+-        // Validate sitemap entry metadata
+-        if let Some(entry) = self.entries.iter().find(|e| e.url == *url) {
+-            if let Some(ref lastmod) = entry.lastmod {
+-                if !Self::is_valid_lastmod(lastmod) {
+-                    findings.push(Finding {
+-                        severity: Severity::Warning,
+-                        category: IssueCategory::Seo,
+-                        code: "SITEMAP003".to_string(),
+-                        title: "Invalid lastmod format".to_string(),
+-                        description: format!(
+-                            "The lastmod value \"{lastmod}\" does not appear to be a valid \
+-                             ISO 8601 date."
+-                        ),
+-                        url: url.clone(),
+-                        recommendation: "Use ISO 8601 format for lastmod (e.g., \
+-                                         2024-01-15T10:30:00Z)."
+-                            .to_string(),
+-                    });
+-                }
+-            }
+-
+-            if let Some(ref freq) = entry.changefreq {
+-                if !Self::is_valid_changefreq(freq) {
+-                    findings.push(Finding {
+-                        severity: Severity::Warning,
+-                        category: IssueCategory::Seo,
+-                        code: "SITEMAP004".to_string(),
+-                        title: "Invalid changefreq value".to_string(),
+-                        description: format!(
+-                            "The changefreq value \"{freq}\" is not a recognized value."
+-                        ),
+-                        url: url.clone(),
+-                        recommendation: "Use one of: always, hourly, daily, weekly, monthly, \
+-                                         yearly, never."
+-                            .to_string(),
+-                    });
+-                }
+-            }
+-
+-            if let Some(priority) = entry.priority {
+-                if !Self::is_valid_priority(priority) {
+-                    findings.push(Finding {
+-                        severity: Severity::Warning,
+-                        category: IssueCategory::Seo,
+-                        code: "SITEMAP005".to_string(),
+-                        title: "Invalid priority value".to_string(),
+-                        description: format!(
+-                            "The priority value {priority} is outside the valid range (0.0-1.0)."
+-                        ),
+-                        url: url.clone(),
+-                        recommendation: "Set priority to a value between 0.0 and 1.0.".to_string(),
+-                    });
+-                }
+-            }
+-        }
+-
+-        findings
++        vec![Default::default()] /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ // ---------------------------------------------------------------------------
+ // 7. Meta Tag Analyzer
+ // ---------------------------------------------------------------------------
+ 
+ pub struct MetaTagAnalyzer;

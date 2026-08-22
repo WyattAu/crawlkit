@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace > with == in <impl Analyzer for KeywordAnalyzer>::analyze
+@@ -1161,17 +1161,17 @@
+                 } else {
+                     Severity::Info
+                 },
+                 category: IssueCategory::Content,
+                 code: "KW003".to_string(),
+                 title: "Prominent keywords detected".to_string(),
+                 description: format!("Keywords with density >= 1.5%: {}.", display.join(", ")),
+                 url: url.clone(),
+-                recommendation: if prominent.iter().any(|(_, d)| *d > 3.0) {
++                recommendation: if prominent.iter().any(|(_, d)| *d == /* ~ changed by cargo-mutants ~ */ 3.0) {
+                     "Some keywords exceed 3% density. This may be flagged as keyword \
+                      stuffing by search engines."
+                         .to_string()
+                 } else {
+                     "Keyword densities are within acceptable range.".to_string()
+                 },
+             });
+         }

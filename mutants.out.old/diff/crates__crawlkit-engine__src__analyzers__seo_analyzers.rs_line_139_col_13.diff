@@ -22,4 +22,4 @@
                  lang.len() >= 2
                      && lang.len() <= 3
                      && lang.chars().all(|c| c.is_ascii_alphabetic())
-                     && (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic())
+                     // Region: ISO 3166-1 alpha-2 ("US") or UN M49 numeric-3

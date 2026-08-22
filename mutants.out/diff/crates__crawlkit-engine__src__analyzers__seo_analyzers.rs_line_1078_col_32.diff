@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace == with != in <impl Analyzer for KeywordAnalyzer>::analyze
+@@ -1070,17 +1070,17 @@
+     fn name(&self) -> &str {
+         "keyword-analyzer"
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+ 
+-        if ctx.page.word_count == 0 {
++        if ctx.page.word_count != /* ~ changed by cargo-mutants ~ */ 0 {
+             return findings;
+         }
+ 
+         let text = ctx
+             .page
+             .headings
+             .iter()
+             .map(|h| h.text.as_str())

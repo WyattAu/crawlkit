@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace > with == in <impl Analyzer for KeywordAnalyzer>::analyze
+@@ -1151,17 +1151,17 @@
+         }
+ 
+         if !prominent.is_empty() {
+             let display: Vec<String> = prominent
+                 .iter()
+                 .map(|(k, v)| format!("\"{k}\" ({v:.1}%)"))
+                 .collect();
+             findings.push(Finding {
+-                severity: if prominent.iter().any(|(_, d)| *d > 3.0) {
++                severity: if prominent.iter().any(|(_, d)| *d == /* ~ changed by cargo-mutants ~ */ 3.0) {
+                     Severity::Warning
+                 } else {
+                     Severity::Info
+                 },
+                 category: IssueCategory::Content,
+                 code: "KW003".to_string(),
+                 title: "Prominent keywords detected".to_string(),
+                 description: format!("Keywords with density >= 1.5%: {}.", display.join(", ")),

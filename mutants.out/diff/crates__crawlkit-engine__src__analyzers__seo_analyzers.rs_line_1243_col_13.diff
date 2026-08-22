@@ -1,0 +1,29 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete match arm 2 in InternationalSeoAnalyzer::is_locale_segment
+@@ -1235,25 +1235,17 @@
+ 
+     pub(crate) fn is_locale_segment(s: &str) -> bool {
+         let parts: Vec<&str> = s.split('-').collect();
+         match parts.len() {
+             1 => {
+                 let lang = parts[0];
+                 lang.len() >= 2 && lang.len() <= 3 && lang.chars().all(|c| c.is_ascii_alphabetic())
+             }
+-            2 => {
+-                let lang = parts[0];
+-                let region = parts[1];
+-                lang.len() >= 2
+-                    && lang.len() <= 3
+-                    && lang.chars().all(|c| c.is_ascii_alphabetic())
+-                    && ((region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
+-                        || (region.len() == 4 && region.chars().all(|c| c.is_ascii_digit())))
+-            }
++             /* ~ changed by cargo-mutants ~ */
+             _ => false,
+         }
+     }
+ }
+ 
+ impl Default for InternationalSeoAnalyzer {
+     fn default() -> Self {
+         Self::new()

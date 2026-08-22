@@ -60,7 +60,7 @@ lru = "0.18"
 sha2 = "0.10"
 redis = { version = "0.25", features = ["tokio-comp"] }
 criterion = { version = "0.5", features = ["html_reports"] }
-sqlx = { version = "0.8", features = ["runtime-tokio", "postgres", "migrate", "chrono"] }
+sqlx = { version = "0.9", features = ["runtime-tokio", "postgres", "migrate", "chrono"] }
 dhat = "0.3"
 
 [profile.release]

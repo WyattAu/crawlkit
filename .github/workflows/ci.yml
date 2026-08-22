@@ -199,16 +199,16 @@ jobs:
       - uses: taiki-e/install-action@7b3141c02ccd63ffd04dda9b44d78b19bfe3d00a # v2
         with:
           tool: cargo-semver-checks
-      # Enforcing against the latest tag, but cargo-semver-checks has
-      # intermittent baseline-rustdoc loading failures (tooling issue, not
-      # code issue). Advisory until the tool stabilizes.
+      # Enforcing against the latest tag. Breaking API changes require a
+      # major-version bump; this gate makes that contract real.
+      # (--baseline-rev is the correct flag: --baseline is not a valid
+      # argument and previously caused a misleading rustdoc-file error.)
       - name: cargo-semver-checks-lint
-        continue-on-error: true
         run: |
           BASE=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -n "$BASE" ]; then
             echo "Semver baseline: $BASE"
-            cargo semver-checks check-release --baseline "$BASE"
+            cargo semver-checks check-release --baseline-rev "$BASE"
           else
             echo "::error::No tags found; refusing to run without a semver baseline"
             exit 1

@@ -1,0 +1,24 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace flesch_kincaid_grade -> f64 with 0.0
+@@ -108,20 +108,17 @@
+         count -= 1;
+     }
+ 
+     count.max(1)
+ }
+ 
+ /// Flesch-Kincaid grade level.
+ fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {
+-    if words == 0 || sentences == 0 {
+-        return 0.0;
+-    }
+-    0.39 * (words as f64 / sentences as f64) + 11.8 * (syllables as f64 / words as f64) - 15.59
++    0.0 /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Flesch Reading Ease score (0-100, higher = easier).
+ fn flesch_reading_ease(words: usize, sentences: usize, syllables: usize) -> f64 {
+     if words == 0 || sentences == 0 {
+         return 0.0;
+     }
+     let score = 206.835

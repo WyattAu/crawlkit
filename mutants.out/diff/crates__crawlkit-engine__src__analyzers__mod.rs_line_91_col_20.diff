@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace <= with > in count_syllables
+@@ -83,17 +83,17 @@
+ 
+ /// Count syllables in a word (approximate heuristic).
+ fn count_syllables(word: &str) -> usize {
+     let word = word.to_lowercase();
+     let chars: Vec<char> = word.chars().collect();
+     if chars.is_empty() {
+         return 0;
+     }
+-    if chars.len() <= 2 {
++    if chars.len() > /* ~ changed by cargo-mutants ~ */ 2 {
+         return 1;
+     }
+ 
+     let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+     let mut count = 0;
+     let mut prev_vowel = false;
+ 
+     for &c in &chars {

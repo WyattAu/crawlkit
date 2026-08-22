@@ -1,0 +1,36 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace AnalyzerRegistry::analyze -> Vec<Finding> with vec![Default::default()]
+@@ -376,32 +376,17 @@
+     /// Run all analyzers on a page and collect findings.
+     ///
+     /// Analyzers run in parallel via rayon when the `full` feature is enabled,
+     /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
+     /// from all analyzers, canonically ordered by `(code, url)` so the
+     /// (potentially nondeterministic) analyzer completion order cannot
+     /// affect downstream output.
+     pub fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+-        #[cfg(feature = "full")]
+-        let mut findings: Vec<Finding> = {
+-            use rayon::prelude::*;
+-            self.analyzers
+-                .par_iter()
+-                .flat_map(|a| a.analyze(ctx))
+-                .collect()
+-        };
+-        #[cfg(not(feature = "full"))]
+-        let mut findings: Vec<Finding> =
+-            self.analyzers.iter().flat_map(|a| a.analyze(ctx)).collect();
+-
+-        // Canonical ordering: stable sort by (code, url) so identical input
+-        // always produces identical output regardless of parallel scheduling.
+-        findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
+-        findings
++        vec![Default::default()] /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Returns the number of registered analyzers.
+     pub fn len(&self) -> usize {
+         self.analyzers.len()
+     }
+ 
+     /// Returns true if no analyzers are registered.

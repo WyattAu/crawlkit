@@ -14,13 +14,6 @@ ignore = [
     # paste (transitive via sqlx-macros): unmaintained; build-time only,
     # never linked into release binaries.
     { id = "RUSTSEC-2024-0436" },
-    # wasmtime 47.0.2: store type-index mixing (low severity, CVSS 3.1 L/H/H).
-    # Cannot upgrade to 47.0.3+ without raising MSRV from 1.85 to 1.94;
-    # cranelift 0.134.4 (wasmtime dep) requires rustc 1.94.
-    { id = "RUSTSEC-2026-0222" },
-    # wasmtime 47.0.2: preemption during bulk ops (very low severity, CVSS 4.0).
-    # Blocked by same MSRV constraint as above.
-    { id = "RUSTSEC-2026-0223" },
 ]
 
 [licenses]

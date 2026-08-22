@@ -1,0 +1,4 @@
+crates/crawlkit-engine/src/analyzers/mod.rs:294:9: replace AnalyzerRegistry::with_feature_flags -> Self with Default::default()
+crates/crawlkit-engine/src/analyzers/mod.rs:305:9: replace AnalyzerRegistry::build_registry -> Self with Default::default()
+crates/crawlkit-engine/src/analyzers/mod.rs:365:9: replace AnalyzerRegistry::with_analyzers -> Self with Default::default()
+crates/crawlkit-engine/src/analyzers/mod.rs:384:9: replace AnalyzerRegistry::analyze -> Vec<Finding> with vec![Default::default()]

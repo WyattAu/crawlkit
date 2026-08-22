@@ -212,7 +212,9 @@ impl PgStorage {
 
             query.push_str(" ORDER BY f.id ASC");
 
-            let mut q = sqlx::query(&query).bind(&crawl_id);
+            // AssertSqlSafe (audit annotation): the only dynamic parts are
+            // positional placeholders ($2..$n) — values flow through .bind().
+            let mut q = sqlx::query(sqlx::AssertSqlSafe(query)).bind(&crawl_id);
             if let Some(ref tid) = tenant_id {
                 q = q.bind(tid);
             }

@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace AnalyzerRegistry::is_empty -> bool with true
+@@ -401,17 +401,17 @@
+ 
+     /// Returns the number of registered analyzers.
+     pub fn len(&self) -> usize {
+         self.analyzers.len()
+     }
+ 
+     /// Returns true if no analyzers are registered.
+     pub fn is_empty(&self) -> bool {
+-        self.analyzers.is_empty()
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ #[cfg(test)]
+ mod tests {
+     use super::*;
+     use crate::meta::MetaTags;
+     use crate::parser::{ExtractedImage, ExtractedLink, Heading, StructuredData};

@@ -5,6 +5,22 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.2.0] - 2026-08-23
+
+### Added — Marketplace day-one content
+- **First-party plugin index** seeded in-repo at `plugins/index/` (ADR-010): `title-length` and `viewport-checker`, git-versioned, content-addressed, signed. Install straight from the raw GitHub URL — zero server infrastructure
+- New SDK example plugin `viewport-checker` (missing/fixed-width viewport detection) with functional host-ABI tests (VP001/VP002/clean)
+- `scripts/build-plugin-index.sh` — rebuild + re-sign the index (deliberate release events per ADR-010)
+- README marketplace section with install-from-GitHub instructions
+
+### Fixed
+- **Remote-index artifact resolution** (`plugin_index`): relative `wasm_path` entries under an `https://` index now resolve against the index URL base (previously fell through to local filesystem). Resolution matrix unit-tested; `resolve_artifact_source` public
+- **UN M49 region bug** (found by new fixtures for the mutants pass): `is_valid_locale` required 4-digit numeric regions; correct is 3-digit (`es-419` Spanish-Latin America is a canonical hreflang value that was wrongly rejected)
+
+### Quality
+- Direct fixtures for `KeywordAnalyzer::compute_tfidf`/`keyword_density` (hand-computed idf/density math) and `HreflangValidator::is_valid_locale` / `SitemapAnalyzer::is_valid_lastmod` (full branch coverage) — closes the arithmetic-mutant survival gaps found in the seo_analyzers mutants pass
+- Dogfood gate wired into `verify-release-readiness.sh` (opt-in via `DOGFOOD=1`, per ADR-009)
+
 ## [4.1.0] - 2026-08-22
 
 ### Added — Plugin marketplace (B3, ADR-006/009 lineage)

@@ -29,9 +29,9 @@ fn seed(hex: &str) -> [u8; 32] {
         .unwrap()
 }
 
-/// Build the SDK basic-plugin example to wasm32 (same pattern as the
-/// wasm_abi_tests conformance suite; skipped if the target is missing).
-fn build_example_plugin(target_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+/// Build an SDK example to wasm32 (same pattern as the wasm_abi_tests
+/// conformance suite; skipped if the target is missing).
+fn build_example(target_dir: &std::path::Path, example: &str) -> Option<std::path::PathBuf> {
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
     let workspace_root = std::path::Path::new(&manifest_dir)
         .ancestors()
@@ -57,7 +57,7 @@ fn build_example_plugin(target_dir: &std::path::Path) -> Option<std::path::PathB
             "-p",
             "crawlkit-plugin-sdk",
             "--example",
-            "basic-plugin",
+            example,
             "--target",
             "wasm32-unknown-unknown",
             "--target-dir",
@@ -73,8 +73,13 @@ fn build_example_plugin(target_dir: &std::path::Path) -> Option<std::path::PathB
             .join("wasm32-unknown-unknown")
             .join("debug")
             .join("examples")
-            .join("basic-plugin.wasm"),
+            .join(format!("{example}.wasm")),
     )
+}
+
+/// Build the SDK basic-plugin example to wasm32.
+fn build_example_plugin(target_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    build_example(target_dir, "basic-plugin")
 }
 
 /// A local index fixture directory: index.toml + signed artifact.
@@ -250,4 +255,187 @@ fn dump_smoke_index() {
     )
     .unwrap();
     println!("smoke index written to {dir}");
+}
+
+#[test]
+fn artifact_source_resolution_matrix() {
+    use crawlkit_engine::plugin_index::resolve_artifact_source;
+
+    // Absolute artifact URL: used verbatim regardless of index type.
+    assert_eq!(
+        resolve_artifact_source(
+            "https://example.com/index/plugin-index.toml",
+            "https://cdn.example.org/p.wasm"
+        ),
+        "https://cdn.example.org/p.wasm"
+    );
+    assert_eq!(
+        resolve_artifact_source("/local/index.toml", "https://cdn.example.org/p.wasm"),
+        "https://cdn.example.org/p.wasm"
+    );
+
+    // Remote index + relative artifact: joins against the URL base.
+    assert_eq!(
+        resolve_artifact_source(
+            "https://example.com/index/plugin-index.toml",
+            "artifacts/p.wasm"
+        ),
+        "https://example.com/index/artifacts/p.wasm"
+    );
+    assert_eq!(
+        resolve_artifact_source("https://example.com/plugin-index.toml", "artifacts/p.wasm"),
+        "https://example.com/artifacts/p.wasm"
+    );
+
+    // Local index + relative artifact: returned verbatim (the caller joins
+    // it against the filesystem parent of the index path).
+    assert_eq!(
+        resolve_artifact_source("/local/dir/plugin-index.toml", "artifacts/p.wasm"),
+        "artifacts/p.wasm"
+    );
+
+    // http:// indexes are treated like https for base joining.
+    assert_eq!(
+        resolve_artifact_source("http://localhost:8000/plugin-index.toml", "a/b.wasm"),
+        "http://localhost:8000/a/b.wasm"
+    );
+}
+
+/// Builds and signs the first-party plugin index into
+/// `$FIRST_PARTY_INDEX_DIR` (repository path: plugins/index). Artifacts
+/// are release-built wasm32 and signed with the trusted dev key.
+///
+/// Run via `scripts/build-plugin-index.sh`. Not part of CI: commits to the
+/// repository are deliberate release events.
+#[test]
+#[ignore = "manual: requires FIRST_PARTY_INDEX_DIR"]
+fn dump_first_party_index() {
+    use crawlkit_engine::plugin::sign_plugin_wasm;
+
+    let dir = std::env::var("FIRST_PARTY_INDEX_DIR").expect("FIRST_PARTY_INDEX_DIR not set");
+    let tmp = tempfile::tempdir().unwrap();
+
+    // (example name, published name, version, description, categories)
+    let specs: &[(&str, &str, &str, &str, &str)] = &[
+        (
+            "basic-plugin",
+            "title-length",
+            "1.0.0",
+            "Flags missing and oversized <title> elements",
+            "seo",
+        ),
+        (
+            "viewport-checker",
+            "viewport-checker",
+            "1.0.0",
+            "Flags missing viewport meta tags and fixed-width viewports",
+            "mobile",
+        ),
+    ];
+
+    let dest = std::path::Path::new(&dir);
+    std::fs::create_dir_all(dest.join("artifacts")).unwrap();
+
+    let mut index = String::new();
+    for (example, name, version, description, category) in specs {
+        let target_dir = tmp.path().join(*example);
+        let built = build_example(&target_dir, example).expect("wasm32 build");
+        // Rebuild in release profile for the published artifact.
+        let workspace_root =
+            std::path::Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str())
+                .ancestors()
+                .nth(2)
+                .unwrap()
+                .to_path_buf();
+        let status = std::process::Command::new("cargo")
+            .current_dir(&workspace_root)
+            .args([
+                "build",
+                "-p",
+                "crawlkit-plugin-sdk",
+                "--release",
+                "--example",
+                example,
+                "--target",
+                "wasm32-unknown-unknown",
+                "--target-dir",
+            ])
+            .arg(&target_dir)
+            .status()
+            .unwrap();
+        assert!(status.success(), "release build failed for {example}");
+        let release_wasm = target_dir
+            .join("wasm32-unknown-unknown")
+            .join("release")
+            .join("examples")
+            .join(format!("{example}.wasm"));
+        let wasm_bytes = std::fs::read(&release_wasm).unwrap();
+        let (wasm_hash, signature, signed_by) =
+            sign_plugin_wasm(&wasm_bytes, &seed(TRUSTED_SEED_HEX));
+
+        let artifact_name = format!("{name}-{version}.wasm");
+        std::fs::write(dest.join("artifacts").join(&artifact_name), &wasm_bytes).unwrap();
+        index.push_str(&format!(
+            "[[plugin]]\n\
+             name = \"{name}\"\n\
+             version = \"{version}\"\n\
+             api_version = \"1.0\"\n\
+             author = \"crawlkit\"\n\
+             description = \"{description}\"\n\
+             license = \"Apache-2.0\"\n\
+             categories = [\"{category}\"]\n\
+             wasm_path = \"artifacts/{artifact_name}\"\n\
+             wasm_hash = \"{wasm_hash}\"\n\
+             signature = \"{signature}\"\n\
+             signed_by = \"{signed_by}\"\n\n"
+        ));
+        println!("signed {name} {version}: {wasm_hash}");
+        let _ = built;
+    }
+    std::fs::write(
+        dest.join("plugin-index.toml"),
+        index.trim_end().to_string() + "\n",
+    )
+    .unwrap();
+    println!("first-party index written to {dir}");
+}
+
+/// Functional check of the second first-party plugin: viewport-checker
+/// must report VP001 (missing viewport) / VP002 (fixed width) / clean as
+/// appropriate, through the real host ABI.
+#[test]
+fn viewport_checker_plugin_functional() {
+    let target_dir = std::env::temp_dir().join("crawlkit-vp-test");
+    let Some(wasm_path) = build_example(&target_dir, "viewport-checker") else {
+        eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+        return;
+    };
+    let wasm_bytes = std::fs::read(&wasm_path).unwrap();
+    let (wasm_hash, signature, signed_by) = sign_plugin_wasm(&wasm_bytes, &seed(TRUSTED_SEED_HEX));
+
+    let dir = tempfile::tempdir().unwrap();
+    let plugin_dir = dir.path().join("viewport-checker");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    std::fs::write(plugin_dir.join("plugin.wasm"), &wasm_bytes).unwrap();
+    std::fs::write(
+        plugin_dir.join("crawlkit-plugin.toml"),
+        format!(
+            "[plugin]\nname = \"viewport-checker\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"test\"\ndescription = \"functional fixture\"\nlicense = \"Apache-2.0\"\nwasm_hash = \"{wasm_hash}\"\nsignature = \"{signature}\"\nsigned_by = \"{signed_by}\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"viewport-checker\"\ncategories = [\"mobile\"]\n"
+        ),
+    )
+    .unwrap();
+
+    let mut plugin = WasmPlugin::load(&plugin_dir).expect("load under Required policy");
+
+    let no_viewport = "<html><head><title>x</title></head><body></body></html>";
+    let r = plugin.analyze(no_viewport, "https://example.com").unwrap();
+    assert!(r.contains("VP001"), "missing viewport must fire VP001: {r}");
+
+    let fixed_width = "<html><head><meta name=\"viewport\" content=\"width=980\"></head></html>";
+    let r = plugin.analyze(fixed_width, "https://example.com").unwrap();
+    assert!(r.contains("VP002"), "fixed width must fire VP002: {r}");
+
+    let responsive = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head></html>";
+    let r = plugin.analyze(responsive, "https://example.com").unwrap();
+    assert_eq!(r, "[]", "responsive viewport must be clean: {r}");
 }

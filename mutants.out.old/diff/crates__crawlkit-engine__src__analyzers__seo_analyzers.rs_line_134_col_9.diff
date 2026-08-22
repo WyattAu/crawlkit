@@ -1,0 +1,42 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace HreflangValidator::is_valid_locale -> bool with true
+@@ -126,38 +126,17 @@
+ 
+ impl HreflangValidator {
+     pub fn new() -> Self {
+         Self
+     }
+ 
+     /// Check if a locale code looks valid (language[-region] format).
+     pub(crate) fn is_valid_locale(code: &str) -> bool {
+-        if code == "x-default" {
+-            return true;
+-        }
+-        let parts: Vec<&str> = code.split('-').collect();
+-        match parts.len() {
+-            1 => {
+-                // Language-only: 2-3 letter code
+-                let lang = parts[0];
+-                lang.len() >= 2 && lang.len() <= 3 && lang.chars().all(|c| c.is_ascii_alphabetic())
+-            }
+-            2 => {
+-                // Language-Region
+-                let lang = parts[0];
+-                let region = parts[1];
+-                lang.len() >= 2
+-                    && lang.len() <= 3
+-                    && lang.chars().all(|c| c.is_ascii_alphabetic())
+-                    && (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic())
+-                        || region.len() == 4 && region.chars().all(|c| c.is_ascii_digit()))
+-            }
+-            _ => false,
+-        }
++        true /* ~ changed by cargo-mutants ~ */
+     }
+ }
+ 
+ impl Default for HreflangValidator {
+     fn default() -> Self {
+         Self::new()
+     }
+ }

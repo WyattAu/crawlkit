@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for HreflangValidator>::analyze
+@@ -173,17 +173,17 @@
+         let hreflang_tags = &ctx.page.meta.hreflang;
+ 
+         if hreflang_tags.is_empty() {
+             return findings; // No hreflang — not an error (just not implemented)
+         }
+ 
+         // Check for x-default
+         let has_x_default = hreflang_tags.iter().any(|t| t.lang == "x-default");
+-        if !has_x_default {
++        if  /* ~ changed by cargo-mutants ~ */has_x_default {
+             findings.push(Finding {
+                 severity: Severity::Warning,
+                 category: IssueCategory::Seo,
+                 code: "HREF001".to_string(),
+                 title: "Missing x-default hreflang".to_string(),
+                 description: "No hreflang tag with lang=\"x-default\" was found.".to_string(),
+                 url: url.clone(),
+                 recommendation: "Add an x-default hreflang tag to specify the fallback URL for \

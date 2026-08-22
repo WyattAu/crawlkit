@@ -1,0 +1,38 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace SitemapAnalyzer::is_valid_lastmod -> bool with false
+@@ -278,34 +278,17 @@
+             known_urls: HashSet::new(),
+             entries: Vec::new(),
+         }
+     }
+ 
+     /// Validate a lastmod date format (ISO 8601).
+     pub(crate) fn is_valid_lastmod(lastmod: &str) -> bool {
+         // Simple check: must contain YYYY-MM (at minimum) with valid separators
+-        let bytes = lastmod.as_bytes();
+-        if bytes.len() < 7 {
+-            return false;
+-        }
+-        // Look for a 4-digit year followed by -MM
+-        for i in 0..=bytes.len().saturating_sub(7) {
+-            if bytes[i].is_ascii_digit()
+-                && bytes[i + 1].is_ascii_digit()
+-                && bytes[i + 2].is_ascii_digit()
+-                && bytes[i + 3].is_ascii_digit()
+-                && bytes[i + 4] == b'-'
+-                && bytes[i + 5].is_ascii_digit()
+-                && bytes[i + 6].is_ascii_digit()
+-            {
+-                return true;
+-            }
+-        }
+-        false
++        false /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Validate changefreq value.
+     pub(crate) fn is_valid_changefreq(freq: &str) -> bool {
+         matches!(
+             freq,
+             "always" | "hourly" | "daily" | "weekly" | "monthly" | "yearly" | "never"
+         )

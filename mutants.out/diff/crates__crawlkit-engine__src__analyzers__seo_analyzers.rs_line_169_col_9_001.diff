@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for HreflangValidator>::name -> &str with "xyzzy"
+@@ -161,17 +161,17 @@
+ impl Default for HreflangValidator {
+     fn default() -> Self {
+         Self::new()
+     }
+ }
+ 
+ impl Analyzer for HreflangValidator {
+     fn name(&self) -> &str {
+-        "hreflang"
++        "xyzzy" /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+         let hreflang_tags = &ctx.page.meta.hreflang;
+ 
+         if hreflang_tags.is_empty() {

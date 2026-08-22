@@ -1,30 +1,24 @@
-crates/crawlkit-engine/src/analyzers/mod.rs:40:5: replace is_utility_page -> bool with false
-crates/crawlkit-engine/src/analyzers/mod.rs:107:44: replace > with == in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:107:44: replace > with < in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:107:44: replace > with >= in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:108:15: replace -= with += in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:108:15: replace -= with /= in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with 0.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with 1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with -1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:19: replace || with && in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:116:14: replace == with != in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:116:32: replace == with != in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:89: replace - with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:89: replace - with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:46: replace + with - in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:46: replace + with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:10: replace * with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:10: replace * with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:26: replace / with % in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:26: replace / with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:53: replace * with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:53: replace * with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:73: replace / with % in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:73: replace / with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:124:19: replace || with && in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:9: replace - with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:17: replace * with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:17: replace * with / in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:33: replace / with % in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:409:9: replace AnalyzerRegistry::is_empty -> bool with false
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:27:29: replace && with || in CanonicalUrlValidator::normalize_url
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:27:43: replace != with == in CanonicalUrlValidator::normalize_url
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:76:58: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:151:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:150:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:151:43: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:152:46: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:152:41: replace == with != in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:167:9: replace <impl Analyzer for HreflangValidator>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:167:9: replace <impl Analyzer for HreflangValidator>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:287:24: replace < with == in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:287:24: replace < with <= in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:298:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:297:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:296:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:294:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:293:17: replace && with || in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:293:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:294:28: replace + with * in SitemapAnalyzer::is_valid_lastmod
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:295:28: replace + with * in SitemapAnalyzer::is_valid_lastmod

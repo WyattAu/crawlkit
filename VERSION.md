@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 19 (v4.1.0 Plugin Marketplace)
-**Version:** 4.1.0
+**Current Phase:** Phase 20 (v4.2.0 Marketplace Content)
+**Version:** 4.2.0
 **Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
@@ -48,6 +48,7 @@
 | 3.0.1 | 2026-08-22 | 5-platform binaries; wasmtime 47.0.4 + sqlx 0.9 (deny ignores 5->3); semver gate enforcing; dogfood protocol; mutants baseline |
 | 4.0.0 | 2026-08-22 | WC004 corpus-consistency fix (dogfood-found); ParsedPage.sentence_count (major); ISEO006/AI-AB007 noise removal; IMG004 offenders named; mutants 53.6%->87.7% |
 | 4.1.0 | 2026-08-22 | Plugin marketplace (git-based index, install/list/remove, pre-install trust verification); llvm-cov coverage gate (71% floor); seo-wasm crate removed |
+| 4.2.0 | 2026-08-23 | First-party index seeded (title-length, viewport-checker; ADR-010); remote-index URL resolution fixed; UN M49 region bug fixed; analyzer fixture coverage |
 
 ---
 

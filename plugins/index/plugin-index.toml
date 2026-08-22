@@ -1,0 +1,25 @@
+[[plugin]]
+name = "title-length"
+version = "1.0.0"
+api_version = "1.0"
+author = "crawlkit"
+description = "Flags missing and oversized <title> elements"
+license = "Apache-2.0"
+categories = ["seo"]
+wasm_path = "artifacts/title-length-1.0.0.wasm"
+wasm_hash = "4f9ef6c9c5a593882fff9af41d9b0ba14effee5dd08fa9512afc0e1aedf8e4e4"
+signature = "8516e99682424de4bb2cf28343cdb9a72f74817d511b44b7ea9ebdc7331690a49c2aaa1d8adb65d0a1b8633ee2babe9a3cdc5e23fb9c452fa3ce1e1492531102"
+signed_by = "1f299a0020f6ae90"
+
+[[plugin]]
+name = "viewport-checker"
+version = "1.0.0"
+api_version = "1.0"
+author = "crawlkit"
+description = "Flags missing viewport meta tags and fixed-width viewports"
+license = "Apache-2.0"
+categories = ["mobile"]
+wasm_path = "artifacts/viewport-checker-1.0.0.wasm"
+wasm_hash = "e298eaf4884323824a7d5f21572dd52cf537357870f4bf6d56e06114aa946c74"
+signature = "d98ba79d1410638f3fcfdd03081905e2b3762b192d97ca52027592543c1865f338f15cc52f0df9c72a3dd1958344f4b3d18a43334e35509047d70cff8343f304"
+signed_by = "1f299a0020f6ae90"

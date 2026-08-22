@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace == with != in HreflangValidator::is_valid_locale
+@@ -143,17 +143,17 @@
+             }
+             2 => {
+                 // Language-Region
+                 let lang = parts[0];
+                 let region = parts[1];
+                 lang.len() >= 2
+                     && lang.len() <= 3
+                     && lang.chars().all(|c| c.is_ascii_alphabetic())
+-                    && (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic())
++                    && (region.len() != /* ~ changed by cargo-mutants ~ */ 2 && region.chars().all(|c| c.is_ascii_alphabetic())
+                         || region.len() == 4 && region.chars().all(|c| c.is_ascii_digit()))
+             }
+             _ => false,
+         }
+     }
+ }
+ 
+ impl Default for HreflangValidator {

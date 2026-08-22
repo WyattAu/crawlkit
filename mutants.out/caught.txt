@@ -1,57 +1,30 @@
-crates/crawlkit-engine/src/analyzers/mod.rs:40:5: replace is_utility_page -> bool with true
-crates/crawlkit-engine/src/analyzers/mod.rs:75:5: replace count_sentences -> usize with 0
-crates/crawlkit-engine/src/analyzers/mod.rs:75:5: replace count_sentences -> usize with 1
-crates/crawlkit-engine/src/analyzers/mod.rs:79:43: replace || with && in count_sentences
-crates/crawlkit-engine/src/analyzers/mod.rs:79:31: replace || with && in count_sentences
-crates/crawlkit-engine/src/analyzers/mod.rs:79:24: replace == with != in count_sentences
-crates/crawlkit-engine/src/analyzers/mod.rs:79:36: replace == with != in count_sentences
-crates/crawlkit-engine/src/analyzers/mod.rs:79:48: replace == with != in count_sentences
-crates/crawlkit-engine/src/analyzers/mod.rs:86:5: replace count_syllables -> usize with 0
-crates/crawlkit-engine/src/analyzers/mod.rs:86:5: replace count_syllables -> usize with 1
-crates/crawlkit-engine/src/analyzers/mod.rs:91:20: replace <= with > in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:101:21: replace && with || in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:101:24: delete ! in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:102:19: replace += with -= in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:102:19: replace += with *= in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:107:35: replace && with || in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:107:21: replace == with != in count_syllables
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with 0.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with 1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:5: replace flesch_kincaid_grade -> f64 with -1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:116:19: replace || with && in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:116:14: replace == with != in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:116:32: replace == with != in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:89: replace - with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:89: replace - with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:46: replace + with - in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:46: replace + with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:10: replace * with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:10: replace * with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:26: replace / with % in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:26: replace / with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:53: replace * with + in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:53: replace * with / in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:73: replace / with % in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:119:73: replace / with * in flesch_kincaid_grade
-crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with 0.0
-crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with 1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with -1.0
-crates/crawlkit-engine/src/analyzers/mod.rs:124:14: replace == with != in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:124:32: replace == with != in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:9: replace - with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:9: replace - with / in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:9: replace - with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:9: replace - with / in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:17: replace * with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:17: replace * with / in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:33: replace / with % in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:128:33: replace / with * in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:16: replace * with + in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:16: replace * with / in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:36: replace / with % in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:129:36: replace / with * in flesch_reading_ease
-crates/crawlkit-engine/src/analyzers/mod.rs:373:9: replace AnalyzerRegistry::register with ()
-crates/crawlkit-engine/src/analyzers/mod.rs:384:9: replace AnalyzerRegistry::analyze -> Vec<Finding> with vec![]
-crates/crawlkit-engine/src/analyzers/mod.rs:404:9: replace AnalyzerRegistry::len -> usize with 0
-crates/crawlkit-engine/src/analyzers/mod.rs:404:9: replace AnalyzerRegistry::len -> usize with 1
-crates/crawlkit-engine/src/analyzers/mod.rs:409:9: replace AnalyzerRegistry::is_empty -> bool with true
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:21:9: replace CanonicalUrlValidator::normalize_url -> String with String::new()
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:21:9: replace CanonicalUrlValidator::normalize_url -> String with "xyzzy".into()
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:46:9: replace <impl Analyzer for CanonicalUrlValidator>::analyze -> Vec<Finding> with vec![]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:72:34: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:77:54: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:79:34: replace && with || in <impl Analyzer for CanonicalUrlValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:134:9: replace HreflangValidator::is_valid_locale -> bool with true
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:134:9: replace HreflangValidator::is_valid_locale -> bool with false
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:134:17: replace == with != in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:139:13: delete match arm 1 in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:144:13: delete match arm 2 in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:52: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:33: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:28: replace >= with < in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:142:47: replace <= with > in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:153:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:150:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:21: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:148:28: replace >= with < in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:149:35: replace <= with > in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:25: replace || with && in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:47: replace && with || in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:154:42: replace == with != in HreflangValidator::is_valid_locale
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:173:9: replace <impl Analyzer for HreflangValidator>::analyze -> Vec<Finding> with vec![]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:182:65: replace == with != in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:183:12: delete ! in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:27: replace > with < in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:27: replace > with >= in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:228:39: replace != with == in <impl Analyzer for HreflangValidator>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:279:9: replace SitemapAnalyzer::empty -> Self with Default::default()

@@ -1,4 +1,2 @@
-crates/crawlkit-engine/src/analyzers/mod.rs:294:9: replace AnalyzerRegistry::with_feature_flags -> Self with Default::default()
-crates/crawlkit-engine/src/analyzers/mod.rs:305:9: replace AnalyzerRegistry::build_registry -> Self with Default::default()
-crates/crawlkit-engine/src/analyzers/mod.rs:365:9: replace AnalyzerRegistry::with_analyzers -> Self with Default::default()
-crates/crawlkit-engine/src/analyzers/mod.rs:384:9: replace AnalyzerRegistry::analyze -> Vec<Finding> with vec![Default::default()]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:46:9: replace <impl Analyzer for CanonicalUrlValidator>::analyze -> Vec<Finding> with vec![Default::default()]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:171:9: replace <impl Analyzer for HreflangValidator>::analyze -> Vec<Finding> with vec![Default::default()]

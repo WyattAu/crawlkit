@@ -182,6 +182,22 @@ Pre-commit hooks enforce:
 10. MSRV check (Rust 1.94.0)
 11. Dead code detection
 
+## Plugins
+
+Signed WASM analyzers with a zero-infrastructure marketplace (v4.1.0+):
+
+```bash
+crawlkit plugin install title-length \
+  --index https://raw.githubusercontent.com/WyattAu/crawlkit/main/plugins/index/plugin-index.toml
+crawlkit plugin list
+crawlkit plugin remove title-length
+```
+
+Artifacts are content-addressed (sha256) and ed25519-verified against the
+built-in trust store BEFORE installation. Build your own:
+[PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md) and
+[docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md).
+
 ## Documentation
 
 | Document | Path |
@@ -203,4 +219,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 4.0.0 | Last updated: 2026-08-22*
+*Version: 4.2.0 | Last updated: 2026-08-23*

@@ -1,0 +1,24 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace SitemapAnalyzer::empty -> Self with Default::default()
+@@ -269,20 +269,17 @@
+     pub fn new(known_urls: HashSet<String>, entries: Vec<SitemapEntry>) -> Self {
+         Self {
+             known_urls,
+             entries,
+         }
+     }
+ 
+     pub fn empty() -> Self {
+-        Self {
+-            known_urls: HashSet::new(),
+-            entries: Vec::new(),
+-        }
++        Default::default() /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Validate a lastmod date format (ISO 8601).
+     pub(crate) fn is_valid_lastmod(lastmod: &str) -> bool {
+         // Simple check: must contain YYYY-MM (at minimum) with valid separators
+         let bytes = lastmod.as_bytes();
+         if bytes.len() < 7 {
+             return false;

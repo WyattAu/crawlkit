@@ -81,6 +81,19 @@ ok "cargo clippy -D warnings"
 cargo test --workspace --lib --bins
 ok "cargo test (lib+bins)"
 
+# --- 5. Dogfood gate (ADR-009) -------------------------------------------
+# Network-gated: skipped unless DOGFOOD=1. Runs the production-site crawl
+# and prints the triage summary; a human eyeballs severity codes before
+# tagging (findings are triaged, not pass/fail — see ADR-009).
+if [ "${DOGFOOD:-0}" = "1" ]; then
+    echo "-- dogfood crawl (ADR-009) --"
+    bash scripts/dogfood.sh || fail "dogfood crawl failed"
+    echo "  -> review the findings summary above: warnings are site-side (or new"
+    echo "     engine bugs); unexpected new codes block the release."
+else
+    echo "  skip: dogfood crawl not run (set DOGFOOD=1 to run it)"
+fi
+
 echo
 echo "READY: v${VERSION} is consistent and the quality gate passes."
 echo "Manual steps remaining before tagging:"

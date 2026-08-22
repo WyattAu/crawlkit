@@ -108,21 +108,43 @@ fn http_get(url: &str) -> Result<Vec<u8>, PluginIndexError> {
     })
 }
 
+/// Resolve an entry's artifact source against its index.
+///
+/// - Absolute `https://`/`http://` artifact paths are used verbatim.
+/// - Relative paths resolve against the index file's directory: for a
+///   remote index that means joining against the URL's base (dropping the
+///   file name); for a local index the caller resolves against the
+///   filesystem parent of the index path.
+pub fn resolve_artifact_source(index_source: &str, wasm_path: &str) -> String {
+    if wasm_path.starts_with("https://") || wasm_path.starts_with("http://") {
+        return wasm_path.to_string();
+    }
+    if index_source.starts_with("https://") || index_source.starts_with("http://") {
+        let base = match index_source.rfind('/') {
+            Some(i) => &index_source[..i],
+            None => return wasm_path.to_string(),
+        };
+        return format!("{base}/{wasm_path}");
+    }
+    wasm_path.to_string()
+}
+
 /// Read the index and resolve an artifact's bytes for `entry`.
 fn fetch_artifact(
     index_source: &str,
     entry: &PluginIndexEntry,
 ) -> Result<Vec<u8>, PluginIndexError> {
-    if entry.wasm_path.starts_with("https://") || entry.wasm_path.starts_with("http://") {
-        return http_get(&entry.wasm_path);
+    let resolved = resolve_artifact_source(index_source, &entry.wasm_path);
+    if resolved.starts_with("https://") || resolved.starts_with("http://") {
+        return http_get(&resolved);
     }
-    // Path relative to the index file's directory.
+    // Relative to the index file's directory.
     let index_dir = Path::new(index_source)
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
-    let artifact = index_dir.join(&entry.wasm_path);
+    let artifact = index_dir.join(&resolved);
     std::fs::read(&artifact)
         .map_err(|e| PluginIndexError::Fetch(format!("{}: {e}", artifact.display())))
 }

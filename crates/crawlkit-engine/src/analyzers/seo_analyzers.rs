@@ -148,8 +148,10 @@ impl HreflangValidator {
                 lang.len() >= 2
                     && lang.len() <= 3
                     && lang.chars().all(|c| c.is_ascii_alphabetic())
-                    && (region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic())
-                        || region.len() == 4 && region.chars().all(|c| c.is_ascii_digit()))
+                    // Region: ISO 3166-1 alpha-2 ("US") or UN M49 numeric-3
+                    // ("419" = Latin America) — both canonical in hreflang.
+                    && ((region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
+                        || (region.len() == 3 && region.chars().all(|c| c.is_ascii_digit())))
             }
             _ => false,
         }
@@ -1001,7 +1003,7 @@ impl KeywordAnalyzer {
             .collect()
     }
 
-    fn compute_tfidf(
+    pub(crate) fn compute_tfidf(
         tf: &HashMap<String, f64>,
         corpus_tf: &HashMap<String, f64>,
     ) -> HashMap<String, f64> {

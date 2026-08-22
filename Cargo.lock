@@ -937,20 +937,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crawlkit-seo-wasm"
-version = "4.0.0"
-dependencies = [
- "crawlkit-engine",
- "js-sys",
- "scraper",
- "serde",
- "serde_json",
- "url",
- "wasm-bindgen",
- "web-sys",
-]
-
-[[package]]
 name = "crc"
 version = "3.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

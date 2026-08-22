@@ -161,12 +161,17 @@ jobs:
         with:
           key: coverage
       - uses: taiki-e/install-action@cargo-llvm-cov
-      # Measured baseline 2026-08-23: 71.62% lines locally (workspace --lib);
-      # CI toolchain instrumentation runs ~0.5-1pt lower, so the floor sits
-      # at 70 to stay outside measurement noise. Ratchet upward only —
-      # lower it never. Raise toward the measured value as tests grow.
+      # Measured baseline 2026-08-23: 71.6% lines locally (workspace --lib).
+      # The gate prints the measured TOTAL before enforcing, so any failure
+      # shows its number in the log. Floor ratchets upward only.
       - name: Generate coverage report
-        run: cargo llvm-cov --workspace --lib --lcov --output-path coverage.lcov --fail-under-lines 70
+        run: |
+          cargo llvm-cov --workspace --lib --summary-only 2>&1 | tee cov-summary.txt
+          TOTAL_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' cov-summary.txt)
+          echo "Measured line coverage: ${TOTAL_PCT}%"
+          awk -v pct="$TOTAL_PCT" -v floor=70 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
+            || { echo "::error::coverage ${TOTAL_PCT}% is below the 70% floor"; exit 1; }
+          cargo llvm-cov --workspace --lib --lcov --output-path coverage.lcov
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:

@@ -85,10 +85,12 @@ jobs:
           OPENSSL_NO_VENDOR: "1"
         run: cross build --release --target ${{ matrix.target }}
 
-      - name: Run tests (native)
-        if: ${{ !matrix.cross }}
-        run: cargo test --release --target ${{ matrix.target }}
-
+      # NOTE: tests intentionally NOT run here. The full suite is gated twice
+      # elsewhere — CI on main (ubuntu, incl. service containers) and the
+      # release preflight (cargo test --workspace). Running the suite again
+      # per-platform triple-tests and caused Windows timeouts: wasm_abi_tests
+      # triggers a second full wasm32 dependency compile (~20+ min on a
+      # Windows runner). Matrix jobs build + package only.
       - name: Package (Unix)
         if: matrix.archive == 'tar.gz'
         run: |

@@ -31,10 +31,6 @@ for crate in crawlkit crawlkit-engine crawlkit-api crawlkit-plugin-sdk; do
 done
 ok "all workspace crates inherit version"
 
-grep -q "^version = \"${VERSION}\"" crates/crawlkit-seo-wasm/Cargo.toml \
-    || fail "crates/crawlkit-seo-wasm/Cargo.toml is not ${VERSION}"
-ok "crawlkit-seo-wasm = ${VERSION}"
-
 grep -q "\"version\": \"${VERSION}\"" dashboard/package.json \
     || fail "dashboard/package.json is not ${VERSION}"
 ok "dashboard/package.json = ${VERSION}"

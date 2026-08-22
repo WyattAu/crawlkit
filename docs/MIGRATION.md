@@ -1,3 +1,61 @@
+# Migrating to crawlkit 4.0
+
+Version 4.0.0 contains one breaking Rust API change and two finding-output
+changes, all surfaced by the dogfood validation protocol. For 3.0.0 changes,
+see the second half of this document.
+
+## 1. `ParsedPage` gains `sentence_count` (4.0.0)
+
+`ParsedPage` is an exhaustively-constructible struct, so adding a field is a
+breaking change (enforced by the `cargo-semver-checks` gate). The new field
+is deserialized via `#[serde(default)]`, so stored/serialized pages remain
+compatible.
+
+**Before (3.x)**
+
+```rust
+let page = ParsedPage {
+    url: /* ... */,
+    // ... all existing fields ...
+    word_count: count_words(&document),
+};
+```
+
+**After (4.0.0)**
+
+```rust
+let page = ParsedPage {
+    url: /* ... */,
+    // ... all existing fields ...
+    word_count,
+    sentence_count, // NEW: same visible-text corpus as word_count
+};
+```
+
+Callers using `HtmlParser::parse` are unaffected — only manual struct
+construction breaks.
+
+## 2. Finding codes removed (4.0.0)
+
+Consuming pipelines that switch on finding codes must handle the removals:
+
+- `ISEO006` ("Multi-language content detected") — hreflang presence is
+  correct i18n configuration, not a defect; the finding fired on 100% of
+  pages on properly configured multilingual sites. hreflang *validation*
+  findings (ISEO001-005) remain.
+- `AI-AB007` ("Missing speakable schema") — speakable is an optional,
+  niche enhancement; its absence fired on essentially every page of every
+  site.
+
+## 3. `WC001`/`WC004` semantics corrected (4.0.0)
+
+`WC001` statistics now report word/sentence averages over one consistent
+visible-text corpus (previously: full-page words divided by a headings-only
+sentence count, producing impossible values). `WC004` thresholds are
+unchanged (25 words/sentence) but the measurement is now meaningful.
+
+---
+
 # Migrating to crawlkit 3.0
 
 Version 3.0.0 contains three breaking changes to the `crawlkit-engine`

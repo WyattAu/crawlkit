@@ -47,6 +47,7 @@
 | 3.0.0 | 2026-08-19 | Breaking: infallible parser, lean Analyzer trait, structured errors; security hardening arc; signed releases |
 | 3.0.1 | 2026-08-22 | 5-platform binaries; wasmtime 47.0.4 + sqlx 0.9 (deny ignores 5->3); semver gate enforcing; dogfood protocol; mutants baseline |
 | 4.0.0 | 2026-08-22 | WC004 corpus-consistency fix (dogfood-found); ParsedPage.sentence_count (major); ISEO006/AI-AB007 noise removal; IMG004 offenders named; mutants 53.6%->87.7% |
+| 4.1.0 | 2026-08-22 | Plugin marketplace (git-based index, install/list/remove, pre-install trust verification); llvm-cov coverage gate (71% floor); seo-wasm crate removed |
 
 ---
 

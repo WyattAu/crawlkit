@@ -160,16 +160,15 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: coverage
-      - uses: taiki-e/install-action@cargo-tarpaulin
-      # Informational only: tarpaulin 0.37+ includes dependency build-script
-      # output in its denominator, making a percentage gate meaningless.
-      # Re-enable --fail-under after migrating to cargo-llvm-cov (tracked).
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      # Measured baseline 2026-08-22: 71.54% lines (workspace --lib).
+      # The floor ratchets upward only — lower it never.
       - name: Generate coverage report
-        run: cargo tarpaulin --workspace --lib --out Xml --skip-clean || true
+        run: cargo llvm-cov --workspace --lib --lcov --output-path coverage.lcov --fail-under-lines 71
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
-          file: coverage.xml
+          file: coverage.lcov
           flags: unittests
 
   msrv:

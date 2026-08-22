@@ -5,6 +5,18 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.1.0] - 2026-08-22
+
+### Added — Plugin marketplace (B3, ADR-006/009 lineage)
+- **`crawlkit plugin install/list/remove`**: git/file-based plugin distribution with zero server infrastructure. An index is one versioned TOML file (`plugin-index.toml`); artifacts are content-addressed (sha256) and ed25519-signed against the built-in trust store
+- Engine: `plugin_index` module — `parse_plugin_index`, `install_plugin`, `list_installed_plugins`, `PluginIndexEntry`, `PluginIndexError`; `verify_plugin_artifact` (public in-memory trust verification, used pre-install). Installed layout loads directly under the default Required policy
+- Security ordering: hash + signature verified BEFORE anything is written to the install root; tampered/untrusted/unknown entries install nothing (tested)
+- 6-test conformance suite: index parse roundtrip; full wasm32 build → sign → index → install → load → analyze chain; tamper rejection; untrusted-signer rejection; unknown-name error; malformed index
+- `docs/PLUGIN_MARKETPLACE.md` rewritten with shipped-reality banner
+
+### Changed
+- `crawlkit-seo-wasm` crate removed (dead legacy wasm_bindgen experiment, zero dependents/tests); readiness script updated
+
 ## [4.0.0] - 2026-08-22
 
 ### Breaking Changes

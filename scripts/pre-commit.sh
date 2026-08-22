@@ -69,8 +69,8 @@ check "Unit tests (cargo test --lib --workspace)" cargo test --lib --workspace
 check "Doc tests (cargo test --doc --workspace)" cargo test --doc --workspace
 
 # 6. Integration tests
-check "Integration tests (cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test router_tests)" \
-    cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test router_tests
+check "Integration tests (cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests)" \
+    cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests
 
 # 7. Security audit -- warn only
 warn "Security audit (cargo audit)" cargo audit

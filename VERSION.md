@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 18 (v4.0.0 Release)
-**Version:** 4.0.0
+**Current Phase:** Phase 19 (v4.1.0 Plugin Marketplace)
+**Version:** 4.1.0
 **Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0

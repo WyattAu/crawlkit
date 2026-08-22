@@ -208,11 +208,15 @@ pub mod playwright;
 /// ABI (`crawlkit_plugin_init`, `crawlkit_plugin_analyze`, `crawlkit_plugin_alloc/free`).
 #[cfg(feature = "full")]
 pub mod plugin;
+pub mod plugin_index;
 
 #[cfg(feature = "full")]
 pub use plugin::{
     ManifestError, PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig,
     WasmPlugin,
+};
+pub use plugin_index::{
+    install_plugin, list_installed_plugins, parse_plugin_index, PluginIndexEntry, PluginIndexError,
 };
 /// PostgreSQL-backed storage for crawl data.
 ///

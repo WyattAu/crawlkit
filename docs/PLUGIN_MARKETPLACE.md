@@ -1,5 +1,24 @@
 # Plugin Marketplace
 
+> **SHIPPED (v4.1.0) — the git-based index.** Plugin distribution works
+> today with zero server infrastructure:
+>
+> ```bash
+> crawlkit plugin install <name> --index <path-or-URL to plugin-index.toml>
+> crawlkit plugin list          # ~/.crawlkit/plugins
+> crawlkit plugin remove <name>
+> ```
+>
+> Artifacts are content-addressed (sha256) and ed25519-signed against the
+> engine's built-in trust store; verification happens BEFORE installation
+> writes anything (ADR-006). The index is a single versioned TOML file —
+> host it in any git repository. Index format and guarantees:
+> `crates/crawlkit-engine/src/plugin_index.rs`; end-to-end tests:
+> `crates/crawlkit-engine/tests/plugin_index_tests.rs`.
+>
+> The hosted-registry architecture below (ratings, CDN, gateway) remains
+> the future evolution once distribution volume justifies it.
+
 The crawlkit plugin marketplace is a central registry for discovering, installing,
 and sharing WASM plugins.
 

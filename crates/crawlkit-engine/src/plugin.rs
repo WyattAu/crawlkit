@@ -387,7 +387,10 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
 /// missing `wasm_hash` or missing signature pair, while
 /// [`PluginVerification::AllowUnsigned`] logs a warning and continues.
 fn verify_plugin_trust(
-    metadata: &PluginMetadata,
+    plugin_name: &str,
+    wasm_hash: Option<&str>,
+    signature: Option<&str>,
+    signed_by: Option<&str>,
     wasm_bytes: &[u8],
     policy: &PluginVerification,
 ) -> Result<(), PluginError> {
@@ -396,21 +399,19 @@ fn verify_plugin_trust(
 
     // Any declared wasm_hash must match the bytes on disk — a mismatch
     // means the binary was tampered with (or the manifest is stale).
-    if let Some(declared) = metadata.wasm_hash.as_deref() {
+    if let Some(declared) = wasm_hash {
         if !declared.eq_ignore_ascii_case(&actual_hash) {
             return Err(PluginError::InvalidManifest(format!(
-                "wasm_hash mismatch for plugin '{}': manifest declares {declared} but the .wasm hashes to {actual_hash}",
-                metadata.name
+                "wasm_hash mismatch for plugin '{}': index declares {declared} but the .wasm hashes to {actual_hash}",
+                plugin_name
             )));
         }
     }
 
-    let signature = metadata.signature.as_deref();
-    let signed_by = metadata.signed_by.as_deref();
     if signature.is_some() != signed_by.is_some() {
         return Err(PluginError::InvalidManifest(format!(
             "plugin '{}' declares signature and signed_by individually; both must be present together",
-            metadata.name
+            plugin_name
         )));
     }
 
@@ -418,7 +419,7 @@ fn verify_plugin_trust(
         match (signature, signed_by) {
             (Some(sig), Some(signer)) => verify_ed25519_signature(&digest, sig, signer),
             _ => {
-                tracing::warn!("unsigned plugin loaded: {}", metadata.name);
+                tracing::warn!("unsigned plugin loaded: {plugin_name}");
                 Ok(())
             }
         }
@@ -426,32 +427,58 @@ fn verify_plugin_trust(
 
     match policy {
         PluginVerification::Required => {
-            if metadata.wasm_hash.is_none() {
+            if wasm_hash.is_none() {
                 return Err(PluginError::InvalidManifest(format!(
                     "missing wasm_hash for plugin '{}' (verification policy: required)",
-                    metadata.name
+                    plugin_name
                 )));
             }
             if signature.is_none() {
                 return Err(PluginError::InvalidManifest(format!(
                     "missing signature/signed_by for plugin '{}' (verification policy: required)",
-                    metadata.name
+                    plugin_name
                 )));
             }
             verify().map_err(|reason| {
                 PluginError::InvalidManifest(format!(
                     "signature verification failed for plugin '{}': {reason}",
-                    metadata.name
+                    plugin_name
                 ))
             })
         }
         PluginVerification::AllowUnsigned => verify().map_err(|reason| {
             PluginError::InvalidManifest(format!(
                 "signature verification failed for plugin '{}': {reason}",
-                metadata.name
+                plugin_name
             ))
         }),
     }
+}
+
+/// Verify an in-memory plugin artifact's trust chain against the built-in
+/// trust store under the strictest ([`PluginVerification::Required`])
+/// policy. Used by plugin installation: artifacts are verified BEFORE
+/// anything is written to the install root.
+///
+/// # Errors
+///
+/// Returns [`PluginError::InvalidManifest`] on hash mismatch, missing
+/// trust fields, unknown signer, or invalid signature.
+pub fn verify_plugin_artifact(
+    plugin_name: &str,
+    wasm_bytes: &[u8],
+    wasm_hash: &str,
+    signature: &str,
+    signed_by: &str,
+) -> Result<(), PluginError> {
+    verify_plugin_trust(
+        plugin_name,
+        Some(wasm_hash),
+        Some(signature),
+        Some(signed_by),
+        wasm_bytes,
+        &PluginVerification::Required,
+    )
 }
 
 /// Verify a hex ed25519 signature over a digest against the trust store.
@@ -551,7 +578,14 @@ pub fn verify_plugin_dir(plugin_dir: &Path) -> Result<PluginMetadata, PluginErro
     let wasm_bytes = std::fs::read(plugin_dir.join(wasm_file))
         .map_err(|e| PluginError::LoadFailed(format!("Failed to read WASM file: {e}")))?;
 
-    verify_plugin_trust(&manifest.plugin, &wasm_bytes, &PluginVerification::Required)?;
+    verify_plugin_trust(
+        &manifest.plugin.name,
+        manifest.plugin.wasm_hash.as_deref(),
+        manifest.plugin.signature.as_deref(),
+        manifest.plugin.signed_by.as_deref(),
+        &wasm_bytes,
+        &PluginVerification::Required,
+    )?;
     Ok(manifest.plugin)
 }
 
@@ -614,7 +648,7 @@ fn is_public_http_url(url: &str) -> bool {
 /// same pattern as [`PgStorage`](crate::pg_storage::BLOCKING_RUNTIME)).
 static FETCH_RUNTIME: std::sync::OnceLock<tokio::runtime::Runtime> = std::sync::OnceLock::new();
 
-fn fetch_runtime() -> &'static tokio::runtime::Runtime {
+pub(crate) fn fetch_runtime() -> &'static tokio::runtime::Runtime {
     #[allow(clippy::panic)]
     FETCH_RUNTIME.get_or_init(|| {
         tokio::runtime::Builder::new_multi_thread()
@@ -701,7 +735,14 @@ impl WasmPlugin {
         // reach the compiler.
         let wasm_bytes = std::fs::read(&wasm_path)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to read WASM file: {e}")))?;
-        verify_plugin_trust(&manifest.plugin, &wasm_bytes, &config.plugin_verification)?;
+        verify_plugin_trust(
+            &manifest.plugin.name,
+            manifest.plugin.wasm_hash.as_deref(),
+            manifest.plugin.signature.as_deref(),
+            manifest.plugin.signed_by.as_deref(),
+            &wasm_bytes,
+            &config.plugin_verification,
+        )?;
 
         // Configure wasmtime with fuel limits to prevent infinite loops and
         // epoch interruption to enforce wall-clock timeouts.

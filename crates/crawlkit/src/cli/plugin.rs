@@ -10,6 +10,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crawlkit_engine::plugin::{sign_plugin_wasm, verify_plugin_dir, PluginManifest};
+use crawlkit_engine::{install_plugin, list_installed_plugins, PluginIndexError};
 
 #[derive(Subcommand)]
 pub enum PluginCommands {
@@ -39,6 +40,34 @@ pub enum PluginCommands {
         #[arg(long)]
         plugin: PathBuf,
     },
+    /// Install a plugin from an index (verifies hash + signature first)
+    Install {
+        /// Plugin name as listed in the index
+        name: String,
+
+        /// Path or https URL to plugin-index.toml (or CRAWLKIT_PLUGIN_INDEX)
+        #[arg(long, short = 'i')]
+        index: Option<String>,
+
+        /// Install root (default: ~/.crawlkit/plugins)
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// List installed plugins (default root: ~/.crawlkit/plugins)
+    List {
+        /// Install root to list
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
+    /// Remove an installed plugin
+    Remove {
+        /// Plugin name to remove
+        name: String,
+
+        /// Install root (default: ~/.crawlkit/plugins)
+        #[arg(long)]
+        root: Option<PathBuf>,
+    },
 }
 
 /// Entry point for `crawlkit plugin <command>`.
@@ -47,6 +76,9 @@ pub fn run(command: PluginCommands) -> Result<()> {
         PluginCommands::Keygen { out, force } => keygen(&out, force),
         PluginCommands::Sign { plugin, key } => sign(&plugin, &key),
         PluginCommands::Verify { plugin } => verify(&plugin),
+        PluginCommands::Install { name, index, root } => install(&name, index.as_deref(), root),
+        PluginCommands::List { root } => list(root),
+        PluginCommands::Remove { name, root } => remove(&name, root),
     }
 }
 
@@ -182,4 +214,83 @@ fn hex_decode(s: &str) -> Option<Vec<u8>> {
         .chunks_exact(2)
         .map(|pair| u8::from_str_radix(std::str::from_utf8(pair).ok()?, 16).ok())
         .collect()
+}
+
+/// Default install root: ~/.crawlkit/plugins
+fn default_install_root() -> Result<PathBuf> {
+    let home = dirs::home_dir().ok_or_else(|| anyhow!("cannot determine home directory"))?;
+    Ok(home.join(".crawlkit").join("plugins"))
+}
+
+/// `crawlkit plugin install`
+fn install(name: &str, index: Option<&str>, root: Option<PathBuf>) -> Result<()> {
+    let index_source = index
+        .map(str::to_string)
+        .or_else(|| std::env::var("CRAWLKIT_PLUGIN_INDEX").ok())
+        .ok_or_else(|| {
+            anyhow!("no index specified: pass --index <path-or-url> or set CRAWLKIT_PLUGIN_INDEX")
+        })?;
+    let root = match root {
+        Some(r) => r,
+        None => default_install_root()?,
+    };
+
+    println!("Installing plugin '{name}' from {index_source}...");
+    let plugin_dir =
+        install_plugin(&index_source, name, &root).map_err(|e| anyhow!("install failed: {e}"))?;
+
+    // Post-install proof: the loader must accept what we just wrote under
+    // the strictest policy.
+    let metadata = verify_plugin_dir(&plugin_dir)
+        .map_err(|e| anyhow!("post-install verification failed (removing): {e}"))?;
+
+    println!(
+        "Installed '{name}' {} to {}",
+        metadata.version,
+        plugin_dir.display()
+    );
+    println!(
+        "  signed_by: {}",
+        metadata.signed_by.as_deref().unwrap_or("(unsigned)")
+    );
+    Ok(())
+}
+
+/// `crawlkit plugin list`
+fn list(root: Option<PathBuf>) -> Result<()> {
+    let root = match root {
+        Some(r) => r,
+        None => default_install_root()?,
+    };
+    let installed = list_installed_plugins(&root);
+    if installed.is_empty() {
+        println!("No plugins installed under {}", root.display());
+        return Ok(());
+    }
+    println!("Installed plugins ({}):", root.display());
+    for (name, version) in installed {
+        println!("  {name} {version}");
+    }
+    Ok(())
+}
+
+/// `crawlkit plugin remove`
+fn remove(name: &str, root: Option<PathBuf>) -> Result<()> {
+    let root = match root {
+        Some(r) => r,
+        None => default_install_root()?,
+    };
+    let dir = root.join(name);
+    if !dir.join("crawlkit-plugin.toml").exists() {
+        return Err(anyhow!("no plugin '{name}' under {}", root.display()));
+    }
+    std::fs::remove_dir_all(&dir).with_context(|| format!("failed to remove {}", dir.display()))?;
+    println!("Removed '{name}'");
+    Ok(())
+}
+
+/// Convert index errors with context (kept for future richer handling).
+#[allow(dead_code)]
+fn explain(e: PluginIndexError) -> String {
+    e.to_string()
 }

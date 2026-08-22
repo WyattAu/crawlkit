@@ -327,6 +327,7 @@ fn minimal_page(url: &str) -> ParsedPage {
         styles: Vec::new(),
         structured_data: Vec::new(),
         word_count: 10,
+        sentence_count: 0,
         landmarks: Vec::new(),
         has_skip_link: false,
         has_main_landmark: false,

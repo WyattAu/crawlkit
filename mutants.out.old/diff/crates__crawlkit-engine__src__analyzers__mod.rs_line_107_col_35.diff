@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace && with || in count_syllables
+@@ -99,17 +99,17 @@
+     for &c in &chars {
+         let is_vowel = vowels.contains(&c);
+         if is_vowel && !prev_vowel {
+             count += 1;
+         }
+         prev_vowel = is_vowel;
+     }
+ 
+-    if chars.last() == Some(&'e') && count > 1 {
++    if chars.last() == Some(&'e') || /* ~ changed by cargo-mutants ~ */ count > 1 {
+         count -= 1;
+     }
+ 
+     count.max(1)
+ }
+ 
+ /// Flesch-Kincaid grade level.
+ fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {

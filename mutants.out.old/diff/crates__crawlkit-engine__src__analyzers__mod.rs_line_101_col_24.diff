@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ delete ! in count_syllables
+@@ -93,17 +93,17 @@
+     }
+ 
+     let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+     let mut count = 0;
+     let mut prev_vowel = false;
+ 
+     for &c in &chars {
+         let is_vowel = vowels.contains(&c);
+-        if is_vowel && !prev_vowel {
++        if is_vowel &&  /* ~ changed by cargo-mutants ~ */prev_vowel {
+             count += 1;
+         }
+         prev_vowel = is_vowel;
+     }
+ 
+     if chars.last() == Some(&'e') && count > 1 {
+         count -= 1;
+     }

@@ -867,16 +867,6 @@ impl WordCountAnalyzer {
     pub fn new() -> Self {
         Self
     }
-
-    /// Extract visible text from headings (proxy for page text).
-    fn visible_text(ctx: &AnalysisContext) -> String {
-        ctx.page
-            .headings
-            .iter()
-            .map(|h| h.text.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
-    }
 }
 
 impl Default for WordCountAnalyzer {
@@ -894,25 +884,14 @@ impl Analyzer for WordCountAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let text = Self::visible_text(ctx);
+        // Both stats come from the parser's single visible-text walk, so
+        // the average is over a consistent corpus. (The previous heading-
+        // only sentence proxy divided full-page words by heading sentence
+        // counts, producing impossible averages like 173 words/sentence.)
         let word_count = ctx.page.word_count;
-        let char_count = text.chars().count();
-
-        // Count sentences
-        let sentence_count = if text.trim().is_empty() {
-            0
-        } else {
-            text.chars()
-                .filter(|&c| c == '.' || c == '!' || c == '?')
-                .count()
-                .max(1)
-        };
-
-        let avg_words_per_sentence = if sentence_count > 0 {
-            word_count as f64 / sentence_count as f64
-        } else {
-            0.0
-        };
+        let sentence_count = ctx.page.sentence_count;
+        let sentences_for_average = sentence_count.max(1);
+        let avg_words_per_sentence = word_count as f64 / sentences_for_average as f64;
 
         findings.push(Finding {
             severity: Severity::Info,
@@ -920,7 +899,7 @@ impl Analyzer for WordCountAnalyzer {
             code: "WC001".to_string(),
             title: "Word count statistics".to_string(),
             description: format!(
-                "Words: {word_count}, Characters: {char_count}, Sentences: {sentence_count}, \
+                "Words: {word_count}, Sentences: {sentence_count}, \
                  Avg words/sentence: {avg_words_per_sentence:.1}."
             ),
             url: url.clone(),
@@ -1271,22 +1250,6 @@ impl InternationalSeoAnalyzer {
             _ => false,
         }
     }
-
-    pub(crate) fn detect_multilang_content(
-        hreflang: &[crate::meta::HreflangTag],
-        html_lang: &Option<String>,
-    ) -> bool {
-        if !hreflang.is_empty() {
-            return true;
-        }
-        if let Some(lang) = html_lang {
-            let parts: Vec<&str> = lang.split('-').collect();
-            if parts.len() >= 2 {
-                return true;
-            }
-        }
-        false
-    }
 }
 
 impl Default for InternationalSeoAnalyzer {
@@ -1430,22 +1393,11 @@ impl Analyzer for InternationalSeoAnalyzer {
             }
         }
 
-        let is_multilang = Self::detect_multilang_content(hreflang_tags, &ctx.page.html_lang);
-        if is_multilang {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Seo,
-                code: "ISEO006".to_string(),
-                title: "Multi-language content detected".to_string(),
-                description: "Page appears to be part of a multilingual setup. Ensure all \
-                              language variants cross-reference each other via hreflang."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Each language version should have reciprocal hreflang tags \
-                                 pointing to all other versions."
-                    .to_string(),
-            });
-        }
+        // NOTE: multilingual presence (hreflang tags / regional html lang) is
+        // deliberately NOT emitted as a finding. Correct i18n configuration
+        // is a best practice, not a defect — reporting it fired on 100% of
+        // pages on properly configured multilingual sites (pure noise). The
+        // hreflang *validation* findings above remain.
 
         findings
     }

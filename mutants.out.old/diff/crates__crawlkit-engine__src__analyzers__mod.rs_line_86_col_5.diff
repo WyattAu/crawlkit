@@ -1,0 +1,46 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace count_syllables -> usize with 0
+@@ -78,42 +78,17 @@
+     text.chars()
+         .filter(|&c| c == '.' || c == '!' || c == '?')
+         .count()
+         .max(1)
+ }
+ 
+ /// Count syllables in a word (approximate heuristic).
+ fn count_syllables(word: &str) -> usize {
+-    let word = word.to_lowercase();
+-    let chars: Vec<char> = word.chars().collect();
+-    if chars.is_empty() {
+-        return 0;
+-    }
+-    if chars.len() <= 2 {
+-        return 1;
+-    }
+-
+-    let vowels = ['a', 'e', 'i', 'o', 'u', 'y'];
+-    let mut count = 0;
+-    let mut prev_vowel = false;
+-
+-    for &c in &chars {
+-        let is_vowel = vowels.contains(&c);
+-        if is_vowel && !prev_vowel {
+-            count += 1;
+-        }
+-        prev_vowel = is_vowel;
+-    }
+-
+-    if chars.last() == Some(&'e') && count > 1 {
+-        count -= 1;
+-    }
+-
+-    count.max(1)
++    0 /* ~ changed by cargo-mutants ~ */
+ }
+ 
+ /// Flesch-Kincaid grade level.
+ fn flesch_kincaid_grade(words: usize, sentences: usize, syllables: usize) -> f64 {
+     if words == 0 || sentences == 0 {
+         return 0.0;
+     }
+     0.39 * (words as f64 / sentences as f64) + 11.8 * (syllables as f64 / words as f64) - 15.59

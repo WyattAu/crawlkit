@@ -1,0 +1,35 @@
+crates/crawlkit-engine/src/analyzers/mod.rs:40:5: replace is_utility_page -> bool with true
+crates/crawlkit-engine/src/analyzers/mod.rs:75:5: replace count_sentences -> usize with 0
+crates/crawlkit-engine/src/analyzers/mod.rs:75:5: replace count_sentences -> usize with 1
+crates/crawlkit-engine/src/analyzers/mod.rs:79:43: replace || with && in count_sentences
+crates/crawlkit-engine/src/analyzers/mod.rs:79:31: replace || with && in count_sentences
+crates/crawlkit-engine/src/analyzers/mod.rs:79:24: replace == with != in count_sentences
+crates/crawlkit-engine/src/analyzers/mod.rs:79:36: replace == with != in count_sentences
+crates/crawlkit-engine/src/analyzers/mod.rs:79:48: replace == with != in count_sentences
+crates/crawlkit-engine/src/analyzers/mod.rs:86:5: replace count_syllables -> usize with 0
+crates/crawlkit-engine/src/analyzers/mod.rs:86:5: replace count_syllables -> usize with 1
+crates/crawlkit-engine/src/analyzers/mod.rs:91:20: replace <= with > in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:101:21: replace && with || in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:101:24: delete ! in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:102:19: replace += with -= in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:102:19: replace += with *= in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:107:35: replace && with || in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:107:21: replace == with != in count_syllables
+crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with 0.0
+crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with 1.0
+crates/crawlkit-engine/src/analyzers/mod.rs:124:5: replace flesch_reading_ease -> f64 with -1.0
+crates/crawlkit-engine/src/analyzers/mod.rs:124:14: replace == with != in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:124:32: replace == with != in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:9: replace - with + in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:9: replace - with / in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:128:9: replace - with / in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:128:33: replace / with * in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:16: replace * with + in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:16: replace * with / in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:36: replace / with % in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:129:36: replace / with * in flesch_reading_ease
+crates/crawlkit-engine/src/analyzers/mod.rs:373:9: replace AnalyzerRegistry::register with ()
+crates/crawlkit-engine/src/analyzers/mod.rs:384:9: replace AnalyzerRegistry::analyze -> Vec<Finding> with vec![]
+crates/crawlkit-engine/src/analyzers/mod.rs:404:9: replace AnalyzerRegistry::len -> usize with 0
+crates/crawlkit-engine/src/analyzers/mod.rs:404:9: replace AnalyzerRegistry::len -> usize with 1
+crates/crawlkit-engine/src/analyzers/mod.rs:409:9: replace AnalyzerRegistry::is_empty -> bool with true

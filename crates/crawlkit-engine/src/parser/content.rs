@@ -116,9 +116,15 @@ impl HtmlParser {
     }
 
     // ---------------------------------------------------------------------------
-    // Word count
+    // Text statistics
     // ---------------------------------------------------------------------------
-    pub(super) fn count_words(document: &Html) -> usize {
+    /// Word and sentence counts over the same visible-text corpus.
+    ///
+    /// Both values come from a single tree walk (body text minus
+    /// script/style/noscript/svg) so they are consistent by construction —
+    /// averaging words by sentences from different corpora produces
+    /// meaningless ratios.
+    pub(super) fn count_text_stats(document: &Html) -> (usize, usize) {
         let body = selectors::body();
         let script = selectors::script();
         let style = selectors::style();
@@ -173,6 +179,30 @@ impl HtmlParser {
 
         collect_text(tree, root, &skip_ids, &mut text);
 
-        text.split_whitespace().filter(|w| !w.is_empty()).count()
+        let words = text.split_whitespace().filter(|w| !w.is_empty()).count();
+        let sentences = count_sentence_runs(&text);
+        (words, sentences)
     }
+}
+
+/// Count sentence-ending runs in visible text.
+///
+/// A run of consecutive `.`, `!`, or `?` characters (e.g. `...`, `!?`)
+/// counts as a single sentence terminator; a trailing run only counts if
+/// the text actually ends with one.
+fn count_sentence_runs(text: &str) -> usize {
+    let mut count = 0usize;
+    let mut in_terminator = false;
+    for c in text.chars() {
+        if c == '.' || c == '!' || c == '?' {
+            in_terminator = true;
+        } else if in_terminator {
+            count += 1;
+            in_terminator = false;
+        }
+    }
+    if in_terminator {
+        count += 1;
+    }
+    count
 }

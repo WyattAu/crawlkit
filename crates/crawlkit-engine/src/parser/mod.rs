@@ -209,6 +209,13 @@ pub struct ParsedPage {
     pub structured_data: Vec<StructuredData>,
     /// Word count of visible text content.
     pub word_count: usize,
+    /// Sentence count of visible text (runs of `.`, `!`, `?` terminators).
+    ///
+    /// Computed over the same corpus as [`ParsedPage::word_count`] so the
+    /// two are always consistent; consecutive terminators (e.g. `...`,
+    /// `!?`) count as one sentence end.
+    #[serde(default)]
+    pub sentence_count: usize,
 
     // Accessibility fields
     /// Landmark roles found on the page (e.g. "banner", "main", "navigation").
@@ -288,7 +295,7 @@ impl HtmlParser {
         let scripts = Self::extract_scripts(&document);
         let styles = Self::extract_styles(&document);
         let structured_data = Self::extract_structured_data(&document);
-        let word_count = Self::count_words(&document);
+        let (word_count, sentence_count) = Self::count_text_stats(&document);
 
         let accessibility = Self::extract_accessibility(&document, Some(html));
         let social = Self::extract_social(&document);
@@ -304,6 +311,7 @@ impl HtmlParser {
             styles,
             structured_data,
             word_count,
+            sentence_count,
             landmarks: accessibility.0,
             has_skip_link: accessibility.1,
             has_main_landmark: accessibility.2,

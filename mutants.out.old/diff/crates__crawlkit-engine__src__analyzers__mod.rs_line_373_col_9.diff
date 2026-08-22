@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace AnalyzerRegistry::register with ()
+@@ -365,17 +365,17 @@
+         Self { analyzers }
+     }
+ 
+     /// Add an analyzer to the registry.
+     ///
+     /// Custom analyzers are appended to the end and run after all
+     /// previously registered analyzers.
+     pub fn register(&mut self, analyzer: Box<dyn Analyzer>) {
+-        self.analyzers.push(analyzer);
++        () /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     /// Run all analyzers on a page and collect findings.
+     ///
+     /// Analyzers run in parallel via rayon when the `full` feature is enabled,
+     /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
+     /// from all analyzers, canonically ordered by `(code, url)` so the
+     /// (potentially nondeterministic) analyzer completion order cannot

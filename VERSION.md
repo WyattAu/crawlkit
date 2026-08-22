@@ -2,7 +2,7 @@
 
 **Project:** crawlkit
 **Current Phase:** Phase 17 (v3.0.0 Release)
-**Version:** 3.0.0
+**Version:** 4.0.0
 **Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
@@ -46,6 +46,7 @@
 | 2.3.0 | 2026-07-27 | Distributed queue, PostgreSQL backend, Core Web Vitals |
 | 3.0.0 | 2026-08-19 | Breaking: infallible parser, lean Analyzer trait, structured errors; security hardening arc; signed releases |
 | 3.0.1 | 2026-08-22 | 5-platform binaries; wasmtime 47.0.4 + sqlx 0.9 (deny ignores 5->3); semver gate enforcing; dogfood protocol; mutants baseline |
+| 4.0.0 | 2026-08-22 | WC004 corpus-consistency fix (dogfood-found); ParsedPage.sentence_count (major); ISEO006/AI-AB007 noise removal; IMG004 offenders named; mutants 53.6%->87.7% |
 
 ---
 

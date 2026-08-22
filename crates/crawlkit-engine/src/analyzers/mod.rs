@@ -435,6 +435,7 @@ mod tests {
             styles: Vec::new(),
             structured_data: Vec::new(),
             word_count: 0,
+            sentence_count: 0,
             landmarks: Vec::new(),
             has_skip_link: false,
             has_main_landmark: false,
@@ -1980,6 +1981,57 @@ mod tests {
         assert_eq!(count_syllables(""), 0);
     }
 
+    /// Direct fixtures for flesch_kincaid_grade — hand-computed from the
+    /// formula 0.39*(w/s) + 11.8*(syl/w) - 15.59. Added after the
+    /// cargo-mutants baseline showed arithmetic-operator mutants surviving
+    /// in these functions (53.6% kill score).
+    #[test]
+    fn test_flesch_kincaid_grade_fixtures() {
+        let close = |a: f64, b: f64| assert!((a - b).abs() < 0.01, "{a} vs {b}");
+
+        // Degenerate inputs short-circuit to 0.0
+        assert_eq!(flesch_kincaid_grade(0, 0, 0), 0.0);
+        assert_eq!(flesch_kincaid_grade(100, 0, 50), 0.0);
+        assert_eq!(flesch_kincaid_grade(0, 5, 50), 0.0);
+
+        // 100 words, 5 sentences, 150 syllables:
+        // 0.39*20 + 11.8*1.5 - 15.59 = 7.8 + 17.7 - 15.59 = 9.91
+        close(flesch_kincaid_grade(100, 5, 150), 9.91);
+
+        // 30 words, 2 sentences, 45 syllables:
+        // 0.39*15 + 11.8*1.5 - 15.59 = 5.85 + 17.7 - 15.59 = 7.96
+        close(flesch_kincaid_grade(30, 2, 45), 7.96);
+
+        // Monosyllabic short sentences: 10 words, 1 sentence, 10 syllables:
+        // 3.9 + 11.8 - 15.59 = 0.11
+        close(flesch_kincaid_grade(10, 1, 10), 0.11);
+    }
+
+    /// Direct fixtures for flesch_reading_ease — hand-computed from
+    /// 206.835 - 1.015*(w/s) - 84.6*(syl/w), clamped to [0, 100].
+    #[test]
+    fn test_flesch_reading_ease_fixtures() {
+        let close = |a: f64, b: f64| assert!((a - b).abs() < 0.01, "{a} vs {b}");
+
+        assert_eq!(flesch_reading_ease(0, 0, 0), 0.0);
+
+        // 100 words, 5 sentences, 150 syllables:
+        // 206.835 - 20.3 - 126.9 = 59.635 (standard difficulty)
+        close(flesch_reading_ease(100, 5, 150), 59.635);
+
+        // Easy monosyllabic prose: 60 words, 2 sentences, 60 syllables:
+        // 206.835 - 30.45 - 84.6 = 91.785
+        close(flesch_reading_ease(60, 2, 60), 91.785);
+
+        // Clamp at floor: 2 words, 1 sentence, 12 syllables:
+        // 206.835 - 2.03 - 507.6 = -302.795 → 0.0
+        assert_eq!(flesch_reading_ease(2, 1, 12), 0.0);
+
+        // Clamp at ceiling: 50 words, 50 sentences, 50 syllables:
+        // 206.835 - 1.015 - 84.6 = 121.22 → 100.0
+        assert_eq!(flesch_reading_ease(50, 50, 50), 100.0);
+    }
+
     #[test]
     fn test_content_quality_sentence_counting() {
         assert_eq!(count_sentences("Hello world."), 1);
@@ -2050,17 +2102,47 @@ mod tests {
     #[test]
     fn test_word_count_analyzer_long_sentences() {
         let mut page = make_page("https://example.com");
+        // 100 words in 2 sentences = 50 avg → fires (>25)
         page.word_count = 100;
-        page.headings = vec![Heading {
-            level: 1,
-            text: "This is a very long sentence that contains many words and should trigger \
-                   the long sentence warning because it has more than twenty five words on average"
-                .to_string(),
-            length: 150,
-        }];
+        page.sentence_count = 2;
         let ctx = make_ctx(&page, Some(200));
         let findings = WordCountAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "WC004"));
+    }
+
+    /// Regression (kingstonpeptides.com dogfood): the old implementation
+    /// divided full-page words by heading-only sentence counts, reporting
+    /// absurd averages (147-190 "words/sentence") on every page. With a
+    /// consistent corpus, a chrome-heavy 150-word page across ~12 short
+    /// sentences averages ~12.5 and must NOT fire.
+    #[test]
+    fn test_word_count_analyzer_consistent_corpus_no_false_positive() {
+        let mut page = make_page("https://example.com");
+        page.word_count = 150;
+        page.sentence_count = 12;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
+        assert!(
+            findings.iter().all(|f| f.code != "WC004"),
+            "150 words / 12 sentences (avg 12.5) must not be a long-sentence page: {:?}",
+            findings.iter().map(|f| f.code.as_str()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn test_word_count_analyzer_zero_sentences_treated_as_one() {
+        let mut page = make_page("https://example.com");
+        // Label-style page: words but no sentence terminators → one
+        // implicit sentence, so the average equals the word count.
+        page.word_count = 30;
+        page.sentence_count = 0;
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WordCountAnalyzer::new().analyze(&ctx);
+        let wc001 = findings
+            .iter()
+            .find(|f| f.code == "WC001")
+            .expect("stats finding");
+        assert!(wc001.description.contains("Avg words/sentence: 30.0"));
     }
 
     #[test]
@@ -3718,6 +3800,9 @@ mod tests {
 
     #[test]
     fn test_iseo_multilang_content() {
+        // Multilingual presence is deliberately NOT a finding (noise on
+        // correctly configured sites); only hreflang *validation* findings
+        // fire.
         let mut page = make_page("https://example.com/en");
         page.meta.hreflang = vec![
             crate::meta::HreflangTag {
@@ -3732,7 +3817,7 @@ mod tests {
         page.html_lang = Some("en".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "ISEO006"));
+        assert!(findings.iter().all(|f| f.code != "ISEO006"));
     }
 
     #[test]
@@ -3772,24 +3857,5 @@ mod tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "ISEO004"));
-    }
-
-    #[test]
-    fn test_iseo_multilang_detect() {
-        assert!(InternationalSeoAnalyzer::detect_multilang_content(
-            &[crate::meta::HreflangTag {
-                lang: "en".to_string(),
-                url: Url::parse("https://example.com/en").unwrap(),
-            }],
-            &None,
-        ));
-        assert!(InternationalSeoAnalyzer::detect_multilang_content(
-            &[],
-            &Some("en-US".to_string()),
-        ));
-        assert!(!InternationalSeoAnalyzer::detect_multilang_content(
-            &[],
-            &Some("en".to_string()),
-        ));
     }
 }

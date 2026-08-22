@@ -356,28 +356,10 @@ impl Analyzer for AiAnswerBoxAnalyzer {
             });
         }
 
-        // AI-AB007: Missing speakable schema
-        let has_speakable = ctx
-            .page
-            .structured_data
-            .iter()
-            .any(|sd| sd.data.get("speakable").is_some());
-
-        if !has_speakable {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Seo,
-                code: "AI-AB007".to_string(),
-                title: "Missing speakable schema".to_string(),
-                description: "No speakable property in structured data. speakable marks \
-                    content for voice AI assistants (Siri, Alexa, Google Assistant)."
-                    .to_string(),
-                url: url.to_string(),
-                recommendation: "Add speakable property to JSON-LD schema for \
-                    voice-friendly content."
-                    .to_string(),
-            });
-        }
+        // NOTE: absent `speakable` schema is deliberately NOT a finding.
+        // speakable is an optional, niche voice-assistant enhancement; its
+        // absence fired on essentially every page of every site (pure
+        // noise), per the kingstonpeptides.com dogfood validation.
 
         findings
     }
@@ -418,6 +400,7 @@ mod tests {
             styles: Vec::new(),
             structured_data: Vec::new(),
             word_count: 0,
+            sentence_count: 0,
             landmarks: Vec::new(),
             has_skip_link: false,
             has_main_landmark: false,

@@ -5,6 +5,23 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.0.0] - 2026-08-22
+
+### Breaking Changes
+- **BREAKING**: `ParsedPage` gains `sentence_count: usize` (exhaustively-constructible struct adds a field; semver-checks gate enforced the major bump). Stored/serialized pages deserialize via `#[serde(default)]`
+- Finding codes removed (output data changes): `ISEO006` "multi-language content detected" (hreflang presence is correct i18n, not a defect — fired on 100% of properly configured multilingual pages), `AI-AB007` "missing speakable schema" (optional niche enhancement, pure noise)
+
+### Fixed
+- **WC004 sentence-length bug** (found by the kingstonpeptides.com dogfood validation): the old implementation divided full-page `word_count` by a headings-only sentence count, reporting impossible averages (147-190 "words/sentence"). Both stats now come from the parser's single visible-text walk (consistent corpus by construction); terminator runs (`...`, `!?`) collapse to one sentence end; a corpus with words but no terminators counts as one implicit sentence
+
+### Improved
+- `IMG004` now names up to 3 offending image `src`s (e.g. the repeated footer badges) — actionable without re-inspection
+- WC001 stats drop the misleading headings-based character count
+
+### Quality
+- cargo-mutants kill score on `analyzers/mod.rs`: 53.6% → **87.7%** after direct hand-computed fixtures for `flesch_kincaid_grade`/`flesch_reading_ease` (remaining misses include a provably-equivalent mutant)
+- Live re-validation against kingstonpeptides.com: warning set unchanged (both true positives), noise findings eliminated, WC004 averages now plausible (23-37)
+
 ## [3.0.1] - 2026-08-22
 
 ### Security

@@ -575,4 +575,52 @@ mod streaming_tests {
         assert_eq!(external.len(), 1);
         assert_eq!(internal.len(), 1);
     }
+
+    // -----------------------------------------------------------------------
+    // Sentence counting (consistent corpus with word_count)
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_sentence_count_multiple_sentences() {
+        let html = r#"<html><body>
+            <p>First sentence here. Second sentence follows! Does a third one matter?</p>
+        </body></html>"#;
+        let page = HtmlParser::parse(html, &test_url());
+        assert_eq!(page.sentence_count, 3);
+        assert!(page.word_count >= 11); // 11 words across the three sentences
+    }
+
+    #[test]
+    fn test_sentence_count_collapses_terminator_runs() {
+        // "..." and "?!" are single sentence ends, not 3 + 2.
+        let html = r#"<html><body><p>Wait... really?! Yes.</p></body></html>"#;
+        let page = HtmlParser::parse(html, &test_url());
+        assert_eq!(page.sentence_count, 3);
+    }
+
+    #[test]
+    fn test_sentence_count_zero_without_terminators() {
+        let html = r#"<html><body><nav>Home Products About Contact</nav></body></html>"#;
+        let page = HtmlParser::parse(html, &test_url());
+        assert_eq!(page.sentence_count, 0);
+        assert!(page.word_count > 0);
+    }
+
+    #[test]
+    fn test_sentence_count_excludes_scripts() {
+        let html = r#"<html><body><p>One sentence.</p>
+            <script>var a = "not. counted!";</script></body></html>"#;
+        let page = HtmlParser::parse(html, &test_url());
+        assert_eq!(page.sentence_count, 1);
+    }
+
+    #[test]
+    fn test_word_and_sentence_counts_share_corpus() {
+        // The consistency invariant the WC004 fix depends on: both stats
+        // come from the same visible-text walk.
+        let html = r#"<html><body><p>Alpha beta gamma. Delta epsilon.</p></body></html>"#;
+        let page = HtmlParser::parse(html, &test_url());
+        assert_eq!(page.word_count, 5);
+        assert_eq!(page.sentence_count, 2);
+    }
 }

@@ -62,6 +62,7 @@ impl Analyzer for ImageAnalyzer {
         let mut total_lazy = 0u32;
         let mut total_with_dimensions = 0u32;
         let mut non_modern_formats = Vec::new();
+        let mut missing_dimension_srcs = Vec::new();
 
         for img in &ctx.page.images {
             // 2.4 — Missing alt text
@@ -92,6 +93,8 @@ impl Analyzer for ImageAnalyzer {
 
             if img.width.is_some() && img.height.is_some() {
                 total_with_dimensions += 1;
+            } else {
+                missing_dimension_srcs.push(img.src.as_str());
             }
         }
 
@@ -137,13 +140,22 @@ impl Analyzer for ImageAnalyzer {
         // Dimension summary
         let missing_dimensions = ctx.page.images.len() as u32 - total_with_dimensions;
         if missing_dimensions > 0 {
+            // Name up to 3 offenders so the fix is actionable without a
+            // re-inspection; repeated template images (footer badges etc.)
+            // are immediately identifiable.
+            let examples: Vec<&str> = missing_dimension_srcs.iter().copied().take(3).collect();
+            let example_suffix = if missing_dimension_srcs.len() > 3 {
+                format!(" e.g., {}, …", examples.join(", "))
+            } else {
+                format!(" e.g., {}", examples.join(", "))
+            };
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Performance,
                 code: "IMG004".to_string(),
                 title: "Images missing dimensions".to_string(),
                 description: format!(
-                    "{} of {} images are missing width/height attributes.",
+                    "{} of {} images are missing width/height attributes.{example_suffix}",
                     missing_dimensions,
                     ctx.page.images.len()
                 ),

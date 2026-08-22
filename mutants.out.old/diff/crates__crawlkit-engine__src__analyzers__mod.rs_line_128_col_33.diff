@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/mod.rs
++++ replace / with % in flesch_reading_ease
+@@ -120,17 +120,17 @@
+ }
+ 
+ /// Flesch Reading Ease score (0-100, higher = easier).
+ fn flesch_reading_ease(words: usize, sentences: usize, syllables: usize) -> f64 {
+     if words == 0 || sentences == 0 {
+         return 0.0;
+     }
+     let score = 206.835
+-        - 1.015 * (words as f64 / sentences as f64)
++        - 1.015 * (words as f64 % /* ~ changed by cargo-mutants ~ */ sentences as f64)
+         - 84.6 * (syllables as f64 / words as f64);
+     score.clamp(0.0, 100.0)
+ }
+ 
+ /// Pre-fetched TLS certificate information for offline validation.
+ #[derive(Debug, Clone)]
+ pub struct SslCertificateInfo {
+     /// The subject Common Name (CN) or first SAN entry.

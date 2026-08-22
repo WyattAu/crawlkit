@@ -1,10 +1,12 @@
 # cargo-mutants configuration for this workspace.
 # Config only — do NOT run in CI (too slow for routine verification).
 #
-# Baseline (2026-08-22): analyzers/mod.rs — 69 mutants, 35 caught,
-# 30 missed, 4 unviable = 53.6% kill score. Test gaps are concentrated
-# in flesch_kincaid_grade / flesch_reading_ease (readability math has
-# no direct unit assertions) — see content quality analyzer tests.
+# Baseline (2026-08-22): analyzers/mod.rs — 69 mutants, 57 caught,
+# 8 missed, 4 unviable = 87.7% kill score (target >=60% met).
+# History: 53.6% before direct flesch_* fixtures were added.
+# Remaining misses include an equivalent mutant: the
+# flesch_reading_ease zero-guard (|| -> &&) is redundant because the
+# clamp maps inf to the same 0.0 result.
 #
 # Reproduce:
 #   cargo mutants -p crawlkit-engine --file crates/crawlkit-engine/src/analyzers/mod.rs -t 60 -- --lib

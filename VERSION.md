@@ -3,7 +3,7 @@
 **Project:** crawlkit
 **Current Phase:** Phase 17 (v3.0.0 Release)
 **Version:** 3.0.0
-**Status:** Released (3-platform binaries + SBOMs attached)
+**Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
 
@@ -45,6 +45,7 @@
 | 2.2.0 | 2026-07-26 | Streaming parser, native plugins, webhooks, schedules, SSO |
 | 2.3.0 | 2026-07-27 | Distributed queue, PostgreSQL backend, Core Web Vitals |
 | 3.0.0 | 2026-08-19 | Breaking: infallible parser, lean Analyzer trait, structured errors; security hardening arc; signed releases |
+| 3.0.1 | 2026-08-22 | 5-platform binaries; wasmtime 47.0.4 + sqlx 0.9 (deny ignores 5->3); semver gate enforcing; dogfood protocol; mutants baseline |
 
 ---
 

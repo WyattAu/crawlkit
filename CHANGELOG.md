@@ -5,6 +5,21 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.1] - 2026-08-22
+
+### Security
+- wasmtime 47.0.2 → 47.0.4 (RUSTSEC-2026-0222/0223 cleared; MSRV 1.94 unlocked)
+- sqlx 0.8.6 → 0.9.0 (RUSTSEC-2024-0363 cleared); dynamic tenant query now carries audited `AssertSqlSafe` annotation; direct `rand` stays 0.8
+
+### CI / Release
+- cargo-semver-checks gate ENFORCING on main (prior failures were an invalid `--baseline` flag; correct: `--baseline-rev`; all 4 crates pass vs v3.0.0)
+- Release matrix: build+package only (tests gated in CI main + release preflight); fixes Windows cancellations (wasm_abi_tests triggers a second full wasm32 compile on runners)
+- 5-platform binaries shipped (Windows + macOS-ARM64 restored)
+
+### Added
+- `scripts/dogfood.sh` — standing pre-release production-site crawl with triage summary (protocol born from the KP WCAG-H67 bug)
+- cargo-mutants baseline: analyzers/mod.rs 53.6% kill score, gaps documented in `.cargo/mutants.toml`
+
 ## [3.0.0] - 2026-08-19
 
 ### Breaking Changes (engine API)

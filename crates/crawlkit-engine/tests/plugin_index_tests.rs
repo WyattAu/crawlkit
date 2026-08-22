@@ -9,7 +9,7 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use crawlkit_engine::plugin::sign_plugin_wasm;
-use crawlkit_engine::plugin::WasmPlugin;
+use crawlkit_engine::plugin::{PluginVerification, WasmConfig, WasmPlugin};
 use crawlkit_engine::plugin_index::{install_plugin, list_installed_plugins, parse_plugin_index};
 use crawlkit_engine::PluginIndexError;
 
@@ -438,4 +438,124 @@ fn viewport_checker_plugin_functional() {
     let responsive = "<html><head><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"></head></html>";
     let r = plugin.analyze(responsive, "https://example.com").unwrap();
     assert_eq!(r, "[]", "responsive viewport must be clean: {r}");
+}
+
+/// B4: a guest importing `crawlkit_host.get_context` receives the JSON
+/// context set via `analyze_with_context`; without one it gets null (0).
+#[test]
+fn get_context_host_function_end_to_end() {
+    // Guest: allocates nothing itself; calls get_context and returns its
+    // pointer directly (NUL-terminated host-written string).
+    const CTX_WAT: &str = r#"
+(module
+  (import "crawlkit_host" "get_context" (func $get_context (result i32)))
+  (memory (export "memory") 1)
+  (data (i32.const 1024) "null-result\00")
+  (global $heap (mut i32) (i32.const 2048))
+  (func (export "crawlkit_plugin_init") (param i32) (result i32) i32.const 0)
+  (func (export "crawlkit_plugin_alloc") (param $size i32) (result i32)
+    (local $ptr i32)
+    (local.set $ptr (global.get $heap))
+    (global.set $heap (i32.add (global.get $heap) (local.get $size)))
+    (local.get $ptr))
+  (func (export "crawlkit_plugin_free") (param i32))
+  (func (export "crawlkit_plugin_analyze")
+        (param i32 i32 i32 i32) (result i32)
+    ;; With context: return get_context()'s pointer; null falls back to
+    ;; the static marker so the host read_string distinguishes them.
+    (local $r i32)
+    (local.set $r (call $get_context))
+    (if (result i32) (i32.eqz (local.get $r))
+      (then (i32.const 1024))
+      (else (local.get $r))))
+)
+"#;
+
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("plugin.wasm"), CTX_WAT).unwrap();
+    std::fs::write(
+        dir.path().join("crawlkit-plugin.toml"),
+        "[plugin]\nname = \"ctx-probe\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"t\"\ndescription = \"context probe\"\nlicense = \"Apache-2.0\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"ctx-probe\"\ncategories = [\"test\"]\n",
+    )
+    .unwrap();
+
+    let config = WasmConfig {
+        plugin_verification: PluginVerification::AllowUnsigned,
+        ..WasmConfig::default()
+    };
+    let mut plugin = WasmPlugin::load_with_config(dir.path(), &config).unwrap();
+
+    // No context set: get_context returns 0 -> guest's static marker.
+    let r = plugin
+        .analyze("<html></html>", "https://example.com")
+        .unwrap();
+    assert_eq!(r, "null-result");
+
+    // With context: the guest returns the host-written JSON verbatim.
+    let ctx_json = r#"{"url":"https://example.com/a","status_code":200,"headers":[["x","y"]]}"#;
+    let r = plugin
+        .analyze_with_context("<html></html>", "https://example.com/a", Some(ctx_json))
+        .unwrap();
+    let parsed: serde_json::Value = serde_json::from_str(&r).expect("guest echoed host JSON");
+    assert_eq!(parsed["url"], "https://example.com/a");
+    assert_eq!(parsed["status_code"], 200);
+
+    // Context does not leak into a subsequent plain analyze call.
+    let r = plugin
+        .analyze("<html></html>", "https://example.com")
+        .unwrap();
+    assert_eq!(r, "null-result");
+}
+
+/// Full B4 conformance: the soft-404 SDK example consumes
+/// `crawlkit_host.get_context` through the real wasm32 ABI — findings
+/// fire on 404 context, stay clean on 200, and degrade to no-op without
+/// context.
+#[test]
+fn soft404_plugin_uses_host_context_end_to_end() {
+    let target_dir = std::env::temp_dir().join("crawlkit-soft404-test");
+    let Some(wasm_path) = build_example(&target_dir, "soft-404") else {
+        eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+        return;
+    };
+    let wasm_bytes = std::fs::read(&wasm_path).unwrap();
+    let (wasm_hash, signature, signed_by) = sign_plugin_wasm(&wasm_bytes, &seed(TRUSTED_SEED_HEX));
+
+    let dir = tempfile::tempdir().unwrap();
+    let plugin_dir = dir.path().join("soft-404");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    std::fs::write(plugin_dir.join("plugin.wasm"), &wasm_bytes).unwrap();
+    std::fs::write(
+        plugin_dir.join("crawlkit-plugin.toml"),
+        format!(
+            "[plugin]\nname = \"soft-404\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"test\"\ndescription = \"context conformance\"\nlicense = \"Apache-2.0\"\nwasm_hash = \"{wasm_hash}\"\nsignature = \"{signature}\"\nsigned_by = \"{signed_by}\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"soft-404\"\ncategories = [\"seo\"]\n"
+        ),
+    )
+    .unwrap();
+
+    let mut plugin = WasmPlugin::load(&plugin_dir).expect("load under Required policy");
+
+    // 404 context -> SOFT404 finding.
+    let ctx404 = r#"{"url":"https://example.com/missing","status_code":404,"headers":[]}"#;
+    let r = plugin
+        .analyze_with_context(
+            "<html>gone</html>",
+            "https://example.com/missing",
+            Some(ctx404),
+        )
+        .unwrap();
+    assert!(r.contains("SOFT404"), "404 context must fire: {r}");
+
+    // 200 context -> clean.
+    let ctx200 = r#"{"url":"https://example.com/","status_code":200,"headers":[]}"#;
+    let r = plugin
+        .analyze_with_context("<html>home</html>", "https://example.com/", Some(ctx200))
+        .unwrap();
+    assert_eq!(r, "[]", "200 context must be clean: {r}");
+
+    // No context -> graceful no-op (v1 behavior preserved).
+    let r = plugin
+        .analyze("<html>whatever</html>", "https://example.com")
+        .unwrap();
+    assert_eq!(r, "[]", "no context must degrade cleanly: {r}");
 }

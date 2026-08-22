@@ -590,11 +590,20 @@ pub fn verify_plugin_dir(plugin_dir: &Path) -> Result<PluginMetadata, PluginErro
 }
 
 /// Loaded WASM plugin instance.
+/// Per-plugin host state readable by guest `crawlkit_host.get_context`.
+#[derive(Debug, Default, Clone)]
+pub struct HostState {
+    /// JSON blob of the analysis context (url, status, headers, parsed
+    /// page summary) set by [`WasmPlugin::analyze_with_context`] before
+    /// each analyze call. `None` for plain [`WasmPlugin::analyze`].
+    context_json: Option<String>,
+}
+
 pub struct WasmPlugin {
     pub manifest: PluginMetadata,
     config: WasmConfig,
     engine: wasmtime::Engine,
-    store: wasmtime::Store<()>,
+    store: wasmtime::Store<HostState>,
     instance: wasmtime::Instance,
     memory: wasmtime::Memory,
 }
@@ -755,7 +764,7 @@ impl WasmPlugin {
         let module = wasmtime::Module::from_file(&engine, &wasm_path)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to compile WASM: {}", e)))?;
 
-        let mut store = wasmtime::Store::new(&engine, ());
+        let mut store = wasmtime::Store::new(&engine, HostState::default());
         store
             .set_fuel(config.max_fuel)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to set fuel: {}", e)))?;
@@ -783,7 +792,10 @@ impl WasmPlugin {
                 .func_wrap(
                     "crawlkit_host",
                     "fetch",
-                    |mut caller: wasmtime::Caller<'_, ()>, url_ptr: i32, url_len: i32| -> i32 {
+                    |mut caller: wasmtime::Caller<'_, HostState>,
+                     url_ptr: i32,
+                     url_len: i32|
+                     -> i32 {
                         // Read URL bytes from guest memory
                         let url_bytes = {
                             let memory = match caller.get_export("memory") {
@@ -894,6 +906,62 @@ impl WasmPlugin {
                 })?;
         }
 
+        // Structured context access (B4): always linked — it exposes nothing
+        // beyond what the raw HTML input already conveys; it is pure
+        // precomputed convenience for guests. Returns 0 (null) when no
+        // context was set for this analyze call (plain `analyze`).
+        linker
+            .func_wrap(
+                "crawlkit_host",
+                "get_context",
+                |mut caller: wasmtime::Caller<'_, HostState>| -> i32 {
+                    let Some(json) = caller.data().context_json.clone() else {
+                        return 0;
+                    };
+                    let bytes = json.as_bytes();
+                    let alloc_len = bytes.len() + 1; // NUL terminator
+                    let Some(alloc_fn) = caller
+                        .get_export("crawlkit_plugin_alloc")
+                        .and_then(|e| e.into_func())
+                    else {
+                        return 0;
+                    };
+                    let mut result = [wasmtime::Val::I32(0)];
+                    if alloc_fn
+                        .call(
+                            &mut caller,
+                            &[wasmtime::Val::I32(alloc_len as i32)],
+                            &mut result,
+                        )
+                        .is_err()
+                    {
+                        return 0;
+                    }
+                    let wasmtime::Val::I32(ptr) = result[0] else {
+                        return 0;
+                    };
+                    if ptr == 0 {
+                        return 0;
+                    }
+                    if let Some(wasmtime::Extern::Memory(memory)) = caller.get_export("memory") {
+                        let data = memory.data_mut(&mut caller);
+                        let start = ptr as usize;
+                        if start + alloc_len <= data.len() {
+                            data[start..start + bytes.len()].copy_from_slice(bytes);
+                            data[start + bytes.len()] = 0;
+                        } else {
+                            return 0;
+                        }
+                    } else {
+                        return 0;
+                    }
+                    ptr
+                },
+            )
+            .map_err(|e| {
+                PluginError::LoadFailed(format!("Failed to link crawlkit_host.get_context: {e}"))
+            })?;
+
         let instance = linker
             .instantiate(&mut store, &module)
             .map_err(|e| PluginError::LoadFailed(format!("Failed to instantiate WASM: {}", e)))?;
@@ -942,6 +1010,28 @@ impl WasmPlugin {
     /// a watchdog thread increments the engine epoch when the deadline
     /// passes, trapping execution inside the guest.
     pub fn analyze(&mut self, html: &str, url: &str) -> Result<String, PluginError> {
+        self.analyze_with_context(html, url, None)
+    }
+
+    /// Analyze with a structured context available to the guest.
+    ///
+    /// `context_json` (a serialized [`crate::analyzers::AnalysisContext`]
+    /// summary) is stored in the host state before the guest runs; guests
+    /// that import `crawlkit_host.get_context` receive it as a
+    /// NUL-terminated JSON string. Guests that do not import it are
+    /// unaffected — the v1 ABI is unchanged.
+    ///
+    /// # Errors
+    ///
+    /// Same failure modes as [`WasmPlugin::analyze`].
+    pub fn analyze_with_context(
+        &mut self,
+        html: &str,
+        url: &str,
+        context_json: Option<&str>,
+    ) -> Result<String, PluginError> {
+        self.store.data_mut().context_json = context_json.map(str::to_string);
+
         let analyze_func = self
             .instance
             .get_typed_func::<(i32, i32, i32, i32), i32>(&mut self.store, "crawlkit_plugin_analyze")

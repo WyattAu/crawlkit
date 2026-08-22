@@ -273,3 +273,45 @@ crawlkit plugin test ./my-seo-plugin/ --url https://example.com
 - Verify analyzer is registered
 - Check finding serialization
 - Test with known-good HTML
+
+## Structured context (B4)
+
+Beyond the raw HTML string, your analyzer can read the page's structured
+context — status code, headers, response time, and a parsed summary —
+through the host function `crawlkit_host.get_context`. The SDK wraps it:
+
+```rust
+use crawlkit_plugin_sdk::host::{self, HostContext};
+
+fn analyze_response(ctx: &HostContext) -> Vec<Finding> {
+    match ctx.status_code {
+        Some(404) => { /* soft-404 handling */ }
+        Some(code @ 500..=599) => { /* server error page */ }
+        _ => {}
+    }
+    if let Some(parsed) = &ctx.parsed {
+        // parsed.title / parsed.description / parsed.word_count /
+        // parsed.headings / parsed.link_count / parsed.image_count / parsed.lang
+    }
+    vec![]
+}
+
+// inside impl Analyzer::analyze:
+if let Some(Ok(host_ctx)) = host::context() {
+    return analyze_response(&host_ctx);
+}
+```
+
+Guarantees:
+
+- **No manifest declaration needed** — the context exposes nothing the
+  raw HTML input doesn't already convey; it is precomputed convenience.
+- **Graceful degradation** — `host::context()` returns `None` when the
+  plugin is run without context (e.g. via a plain loader), so plugins
+  work in both modes.
+- **Find the JSON shape** in `crawlkit_plugin_sdk::host::HostContext`;
+  the engine writes it before each `analyze_with_context` call.
+
+A complete example ships as
+`crates/crawlkit-plugin-sdk/examples/soft-404.rs` (flags error pages
+that were still analyzed).

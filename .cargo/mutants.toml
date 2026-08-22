@@ -11,3 +11,9 @@
 # Reproduce:
 #   cargo mutants -p crawlkit-engine --file crates/crawlkit-engine/src/analyzers/mod.rs -t 60 -- --lib
 # Full engine run: ~39853 mutants (~14 days) — scope per-file only.
+
+# seo_analyzers.rs baseline (2026-08-23): 285 mutants, 209 caught,
+# 67 missed, 9 unviable = 73.3% kill score. Remaining gaps: analyzer
+# `name()` returns unasserted; locale/lastmod boundary flips partially
+# covered by the new fixtures. Reproduce:
+#   cargo mutants -p crawlkit-engine --file crates/crawlkit-engine/src/analyzers/seo_analyzers.rs -t 60 -- --lib

@@ -6,3 +6,4 @@ crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:589:9: replace <impl Analy
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:730:9: replace <impl Analyzer for LinkAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:886:9: replace <impl Analyzer for WordCountAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1075:9: replace <impl Analyzer for KeywordAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1269:9: replace <impl Analyzer for InternationalSeoAnalyzer>::analyze -> Vec<Finding> with vec![Default::default()]

@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+@@ -1300,17 +1300,17 @@
+                                              the language code in the hreflang tag."
+                                 .to_string(),
+                         });
+                     }
+                 }
+             }
+ 
+             let has_x_default = hreflang_tags.iter().any(|t| t.lang == "x-default");
+-            if !has_x_default {
++            if  /* ~ changed by cargo-mutants ~ */has_x_default {
+                 findings.push(Finding {
+                     severity: Severity::Warning,
+                     category: IssueCategory::Seo,
+                     code: "ISEO002".to_string(),
+                     title: "Missing x-default in enhanced hreflang".to_string(),
+                     description: "No x-default hreflang found. This tag specifies the fallback \
+                                   page for unmatched locales."
+                         .to_string(),

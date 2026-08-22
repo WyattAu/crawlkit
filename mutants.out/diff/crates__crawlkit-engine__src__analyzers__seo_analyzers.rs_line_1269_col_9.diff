@@ -1,0 +1,150 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for InternationalSeoAnalyzer>::analyze -> Vec<Finding> with vec![]
+@@ -1261,146 +1261,11 @@
+ }
+ 
+ impl Analyzer for InternationalSeoAnalyzer {
+     fn name(&self) -> &str {
+         "international-seo"
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+-        let mut findings = Vec::new();
+-        let url = &ctx.page.url;
+-
+-        let hreflang_tags = &ctx.page.meta.hreflang;
+-
+-        if !hreflang_tags.is_empty() {
+-            for tag in hreflang_tags {
+-                // Skip locale mismatch check for x-default — it's a special fallback
+-                // that doesn't correspond to a specific locale segment in the URL.
+-                if tag.lang.to_lowercase() == "x-default" {
+-                    continue;
+-                }
+-                if let Some(locale) = Self::detect_locale_from_url(tag.url.as_str()) {
+-                    let locale_lower = locale.to_lowercase();
+-                    let tag_lang_lower = tag.lang.to_lowercase();
+-                    if locale_lower != tag_lang_lower
+-                        && !tag_lang_lower.starts_with(&locale_lower)
+-                        && !locale_lower.starts_with(&tag_lang_lower)
+-                    {
+-                        findings.push(Finding {
+-                            severity: Severity::Warning,
+-                            category: IssueCategory::Seo,
+-                            code: "ISEO001".to_string(),
+-                            title: "Hreflang URL locale mismatch".to_string(),
+-                            description: format!(
+-                                "Hreflang tag lang=\"{}\" points to URL \"{}\" which has \
+-                                 locale segment \"{}\".",
+-                                tag.lang, tag.url, locale
+-                            ),
+-                            url: url.clone(),
+-                            recommendation: "Ensure the hreflang URL path segment matches \
+-                                             the language code in the hreflang tag."
+-                                .to_string(),
+-                        });
+-                    }
+-                }
+-            }
+-
+-            let has_x_default = hreflang_tags.iter().any(|t| t.lang == "x-default");
+-            if !has_x_default {
+-                findings.push(Finding {
+-                    severity: Severity::Warning,
+-                    category: IssueCategory::Seo,
+-                    code: "ISEO002".to_string(),
+-                    title: "Missing x-default in enhanced hreflang".to_string(),
+-                    description: "No x-default hreflang found. This tag specifies the fallback \
+-                                  page for unmatched locales."
+-                        .to_string(),
+-                    url: url.clone(),
+-                    recommendation: "Add <link rel=\"alternate\" hreflang=\"x-default\" \
+-                                     href=\"...\"> pointing to the default language version."
+-                        .to_string(),
+-                });
+-            }
+-
+-            let lang_count: HashMap<String, usize> =
+-                hreflang_tags.iter().fold(HashMap::new(), |mut acc, t| {
+-                    *acc.entry(t.lang.clone()).or_insert(0) += 1;
+-                    acc
+-                });
+-            for (lang, count) in &lang_count {
+-                if *count > 1 && lang != "x-default" {
+-                    findings.push(Finding {
+-                        severity: Severity::Error,
+-                        category: IssueCategory::Seo,
+-                        code: "ISEO003".to_string(),
+-                        title: "Duplicate hreflang language".to_string(),
+-                        description: format!(
+-                            "Language \"{lang}\" appears {count} times. Each language code \
+-                             must be unique per page."
+-                        ),
+-                        url: url.clone(),
+-                        recommendation: "Remove duplicate hreflang tags for the same language."
+-                            .to_string(),
+-                    });
+-                }
+-            }
+-        }
+-
+-        let locale_in_url = Self::detect_locale_from_url(url);
+-        if locale_in_url.is_none()
+-            && ctx.page.meta.hreflang.is_empty()
+-            && ctx.page.html_lang.is_some()
+-        {
+-            findings.push(Finding {
+-                severity: Severity::Info,
+-                category: IssueCategory::Seo,
+-                code: "ISEO004".to_string(),
+-                title: "Single-language page without hreflang".to_string(),
+-                description: "Page has a lang attribute but no hreflang tags. If this \
+-                                  site serves multiple languages, add hreflang annotations."
+-                    .to_string(),
+-                url: url.clone(),
+-                recommendation: "For multilingual sites, add hreflang tags to all language \
+-                                     variants of each page."
+-                    .to_string(),
+-            });
+-        }
+-
+-        if let Some(canonical) = &ctx.page.meta.canonical {
+-            if let Some(hop_from) = self.known_hrefs.get(url) {
+-                for hop_url in hop_from {
+-                    if let Some(target_canonical) = self.known_hrefs.get(hop_url.as_str()) {
+-                        if !target_canonical.is_empty() {
+-                            let canonical_str = canonical.to_string();
+-                            if target_canonical.iter().any(|c| c == &canonical_str) {
+-                                findings.push(Finding {
+-                                    severity: Severity::Info,
+-                                    category: IssueCategory::Seo,
+-                                    code: "ISEO005".to_string(),
+-                                    title: "Canonical chain detected".to_string(),
+-                                    description: format!(
+-                                        "URL \"{url}\" canonical points to \"{}\", which is \
+-                                         itself canonicalized. This forms a chain.",
+-                                        canonical
+-                                    ),
+-                                    url: url.clone(),
+-                                    recommendation: "Ensure all pages point to the same \
+-                                                     final canonical URL to avoid crawl \
+-                                                     confusion."
+-                                        .to_string(),
+-                                });
+-                            }
+-                        }
+-                    }
+-                }
+-            }
+-        }
+-
+-        // NOTE: multilingual presence (hreflang tags / regional html lang) is
+-        // deliberately NOT emitted as a finding. Correct i18n configuration
+-        // is a best practice, not a defect — reporting it fired on 100% of
+-        // pages on properly configured multilingual sites (pure noise). The
+-        // hreflang *validation* findings above remain.
+-
+-        findings
++        vec![] /* ~ changed by cargo-mutants ~ */
+     }
+ }

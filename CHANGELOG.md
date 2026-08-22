@@ -5,6 +5,15 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.0] - 2026-08-23
+
+### Added — Structured guest context (B4)
+- Host function `crawlkit_host.get_context`: plugins receive the analysis context (url, status_code, response_time_ms, headers, parsed-page summary) as a NUL-terminated JSON string, precomputed by the host — no more inferring everything from raw HTML
+- `WasmPlugin::analyze_with_context(html, url, ctx_json)` — context stored in host state per call; plain `analyze` unchanged (v1 ABI intact: guests opt in by importing the function; the host always links it since it leaks nothing beyond the HTML input)
+- SDK module `crawlkit_plugin_sdk::host`: typed `HostContext`/`ParsedSummary` with safe wrappers `host::context()` / `host::context_json()`; graceful `None` degradation without context
+- New example plugin `soft-404` (flags error pages that were still analyzed) demonstrating the context API
+- Conformance: WAT guest verifying the JSON round-trip + null-without-context + no-leak-between-calls; full wasm32 soft-404 test (404 fires / 200 clean / no-context no-op)
+
 ## [4.2.0] - 2026-08-23
 
 ### Added — Marketplace day-one content

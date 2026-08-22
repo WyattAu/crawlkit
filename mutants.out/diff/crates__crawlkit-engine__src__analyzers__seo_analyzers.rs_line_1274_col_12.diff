@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ delete ! in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+@@ -1266,17 +1266,17 @@
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+ 
+         let hreflang_tags = &ctx.page.meta.hreflang;
+ 
+-        if !hreflang_tags.is_empty() {
++        if  /* ~ changed by cargo-mutants ~ */hreflang_tags.is_empty() {
+             for tag in hreflang_tags {
+                 // Skip locale mismatch check for x-default — it's a special fallback
+                 // that doesn't correspond to a specific locale segment in the URL.
+                 if tag.lang.to_lowercase() == "x-default" {
+                     continue;
+                 }
+                 if let Some(locale) = Self::detect_locale_from_url(tag.url.as_str()) {
+                     let locale_lower = locale.to_lowercase();

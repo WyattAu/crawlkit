@@ -53,3 +53,15 @@ crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1169:69: replace > with < 
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1169:69: replace > with >= in <impl Analyzer for KeywordAnalyzer>::analyze
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1179:12: delete ! in <impl Analyzer for KeywordAnalyzer>::analyze
 crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1218:9: replace InternationalSeoAnalyzer::with_known_hrefs -> Self with Default::default()
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1249:21: replace && with || in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1248:21: replace && with || in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1247:21: replace && with || in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1249:44: replace && with || in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1250:47: replace && with || in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1250:42: replace == with != in InternationalSeoAnalyzer::is_locale_segment
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1265:9: replace <impl Analyzer for InternationalSeoAnalyzer>::name -> &str with ""
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1265:9: replace <impl Analyzer for InternationalSeoAnalyzer>::name -> &str with "xyzzy"
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1286:25: replace && with || in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1285:25: replace && with || in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1372:28: delete ! in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:1374:66: replace == with != in <impl Analyzer for InternationalSeoAnalyzer>::analyze

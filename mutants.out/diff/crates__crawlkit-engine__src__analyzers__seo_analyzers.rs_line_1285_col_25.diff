@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace && with || in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+@@ -1277,17 +1277,17 @@
+                 // that doesn't correspond to a specific locale segment in the URL.
+                 if tag.lang.to_lowercase() == "x-default" {
+                     continue;
+                 }
+                 if let Some(locale) = Self::detect_locale_from_url(tag.url.as_str()) {
+                     let locale_lower = locale.to_lowercase();
+                     let tag_lang_lower = tag.lang.to_lowercase();
+                     if locale_lower != tag_lang_lower
+-                        && !tag_lang_lower.starts_with(&locale_lower)
++                        || /* ~ changed by cargo-mutants ~ */ !tag_lang_lower.starts_with(&locale_lower)
+                         && !locale_lower.starts_with(&tag_lang_lower)
+                     {
+                         findings.push(Finding {
+                             severity: Severity::Warning,
+                             category: IssueCategory::Seo,
+                             code: "ISEO001".to_string(),
+                             title: "Hreflang URL locale mismatch".to_string(),
+                             description: format!(

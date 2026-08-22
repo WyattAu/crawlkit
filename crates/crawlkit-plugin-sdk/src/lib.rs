@@ -49,6 +49,9 @@ pub use analyzer::Analyzer;
 pub use context::AnalysisContext;
 pub use finding::{Finding, Severity};
 
+/// Host-provided structured context (see the `host` module docs).
+pub mod host;
+
 /// Host-ABI allocator internals used by the `export_analyzer!` macro.
 ///
 /// Not intended for direct use by plugin authors.

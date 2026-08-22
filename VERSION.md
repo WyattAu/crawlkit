@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 20 (v4.2.0 Marketplace Content)
-**Version:** 4.2.0
+**Current Phase:** Phase 21 (v4.3.0 Guest Context API)
+**Version:** 4.3.0
 **Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
@@ -49,6 +49,7 @@
 | 4.0.0 | 2026-08-22 | WC004 corpus-consistency fix (dogfood-found); ParsedPage.sentence_count (major); ISEO006/AI-AB007 noise removal; IMG004 offenders named; mutants 53.6%->87.7% |
 | 4.1.0 | 2026-08-22 | Plugin marketplace (git-based index, install/list/remove, pre-install trust verification); llvm-cov coverage gate (71% floor); seo-wasm crate removed |
 | 4.2.0 | 2026-08-23 | First-party index seeded (title-length, viewport-checker; ADR-010); remote-index URL resolution fixed; UN M49 region bug fixed; analyzer fixture coverage |
+| 4.3.0 | 2026-08-23 | Structured guest context (B4): crawlkit_host.get_context + analyze_with_context + SDK host module; soft-404 example |
 
 ---
 

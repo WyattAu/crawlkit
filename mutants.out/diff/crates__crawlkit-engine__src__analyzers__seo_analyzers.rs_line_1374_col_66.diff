@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace == with != in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+@@ -1366,17 +1366,17 @@
+         }
+ 
+         if let Some(canonical) = &ctx.page.meta.canonical {
+             if let Some(hop_from) = self.known_hrefs.get(url) {
+                 for hop_url in hop_from {
+                     if let Some(target_canonical) = self.known_hrefs.get(hop_url.as_str()) {
+                         if !target_canonical.is_empty() {
+                             let canonical_str = canonical.to_string();
+-                            if target_canonical.iter().any(|c| c == &canonical_str) {
++                            if target_canonical.iter().any(|c| c != /* ~ changed by cargo-mutants ~ */ &canonical_str) {
+                                 findings.push(Finding {
+                                     severity: Severity::Info,
+                                     category: IssueCategory::Seo,
+                                     code: "ISEO005".to_string(),
+                                     title: "Canonical chain detected".to_string(),
+                                     description: format!(
+                                         "URL \"{url}\" canonical points to \"{}\", which is \
+                                          itself canonicalized. This forms a chain.",

@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace <impl Analyzer for InternationalSeoAnalyzer>::name -> &str with ""
+@@ -1257,17 +1257,17 @@
+ impl Default for InternationalSeoAnalyzer {
+     fn default() -> Self {
+         Self::new()
+     }
+ }
+ 
+ impl Analyzer for InternationalSeoAnalyzer {
+     fn name(&self) -> &str {
+-        "international-seo"
++        "" /* ~ changed by cargo-mutants ~ */
+     }
+ 
+     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+         let mut findings = Vec::new();
+         let url = &ctx.page.url;
+ 
+         let hreflang_tags = &ctx.page.meta.hreflang;
+ 

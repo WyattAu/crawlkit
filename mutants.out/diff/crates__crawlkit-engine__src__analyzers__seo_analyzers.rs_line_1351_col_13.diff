@@ -1,0 +1,21 @@
+--- crates/crawlkit-engine/src/analyzers/seo_analyzers.rs
++++ replace && with || in <impl Analyzer for InternationalSeoAnalyzer>::analyze
+@@ -1343,17 +1343,17 @@
+                     });
+                 }
+             }
+         }
+ 
+         let locale_in_url = Self::detect_locale_from_url(url);
+         if locale_in_url.is_none()
+             && ctx.page.meta.hreflang.is_empty()
+-            && ctx.page.html_lang.is_some()
++            || /* ~ changed by cargo-mutants ~ */ ctx.page.html_lang.is_some()
+         {
+             findings.push(Finding {
+                 severity: Severity::Info,
+                 category: IssueCategory::Seo,
+                 code: "ISEO004".to_string(),
+                 title: "Single-language page without hreflang".to_string(),
+                 description: "Page has a lang attribute but no hreflang tags. If this \
+                                   site serves multiple languages, add hreflang annotations."

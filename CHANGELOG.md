@@ -5,6 +5,18 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.1] - 2026-08-23
+
+### Security — release integrity
+- **GPG-signed `checksums.txt`** on this and all future releases (single detached signature covers all artifacts + SBOMs); signing is unconditional now that secrets exist; public key attached to the release (`release-public-key-0F8C446E31A16C97.asc`)
+
+### Added
+- ADR-011: WASI Preview 2 evaluation — five adoption gates with hard criteria; gate 2 (toolchain/MSRV) already passed via a wasmtime 47.0.4 component-model spike
+- `scripts/oss-fuzz/`: ready-to-submit OSS-Fuzz integration (project.yaml, Dockerfile, build.sh) + submission instructions in docs/OSS_FUZZ.md
+
+### Validation
+- Dogfood run with in-crawl plugins against kingstonpeptides.com: soft-404 plugin active (count=1), 0 findings — correct, all 100 pages HTTP 200; a11y canary still 0; warning set unchanged
+
 ## [4.4.0] - 2026-08-23
 
 ### Added — Plugins run during crawls

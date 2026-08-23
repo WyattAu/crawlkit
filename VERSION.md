@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 22 (v4.4.0 Plugins-in-Crawls)
-**Version:** 4.4.0
+**Current Phase:** Phase 23 (v4.4.1 Signed Releases)
+**Version:** 4.4.1
 **Status:** Released (5-platform binaries + SBOMs attached)
 **Last Updated:** 2026-08-19
 **MSRV:** 1.94.0
@@ -51,6 +51,7 @@
 | 4.2.0 | 2026-08-23 | First-party index seeded (title-length, viewport-checker; ADR-010); remote-index URL resolution fixed; UN M49 region bug fixed; analyzer fixture coverage |
 | 4.3.0 | 2026-08-23 | Structured guest context (B4): crawlkit_host.get_context + analyze_with_context + SDK host module; soft-404 example |
 | 4.4.0 | 2026-08-23 | Plugins execute during crawls (plugin_dirs config, --plugins CLI, default ~/.crawlkit/plugins; trap-safe, E2E-tested) |
+| 4.4.1 | 2026-08-23 | GPG-signed checksums (first signed release); ADR-011 WASI eval; OSS-Fuzz submission kit |
 
 ---
 

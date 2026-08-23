@@ -79,10 +79,25 @@ Note: the exact cargo-fuzz target paths may differ from the above (cargo-fuzz
 uses `target/release/` without the triple under some configs); adjust in the
 PR to match what `cargo fuzz build --target <name>` actually produces.
 
+## Ready-to-Submit Files
+
+The exact submission files are staged at `scripts/oss-fuzz/` in this
+repository (`project.yaml`, `Dockerfile`, `build.sh`). The submission
+PR adds them under `projects/crawlkit/` in the oss-fuzz fork:
+
+```bash
+# from a fork of google/oss-fuzz:
+mkdir -p projects/crawlkit
+cp <crawlkit-repo>/scripts/oss-fuzz/* projects/crawlkit/
+git checkout -b add-crawlkit
+git add projects/crawlkit && git commit -m "Add crawlkit"
+# then open the PR against google/oss-fuzz main
+```
+
 ## Application Process
 
 1. Fork https://github.com/google/oss-fuzz.
-2. Add the three files above under `projects/crawlkit/`.
+2. Copy `scripts/oss-fuzz/*` to `projects/crawlkit/` (as above).
 3. Submit a Pull Request to google/oss-fuzz.
 4. On approval: OSS-Fuzz runs all three targets continuously (24/7
    infrastructure, libFuzzer + AFL++, coverage tracking).

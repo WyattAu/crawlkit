@@ -1,0 +1,8 @@
+homepage: "https://github.com/WyattAu/crawlkit"
+language: rust
+primary_contact: "wyatt_au@protonmail.com"
+main_repo: "https://github.com/WyattAu/crawlkit"
+sanitizers:
+  - address
+fuzzing_engines:
+  - libfuzzer

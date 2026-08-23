@@ -225,4 +225,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 4.4.0 | Last updated: 2026-08-23*
+*Version: 4.4.1 | Last updated: 2026-08-23*

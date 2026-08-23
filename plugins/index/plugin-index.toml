@@ -23,3 +23,16 @@ wasm_path = "artifacts/viewport-checker-1.0.0.wasm"
 wasm_hash = "e298eaf4884323824a7d5f21572dd52cf537357870f4bf6d56e06114aa946c74"
 signature = "d98ba79d1410638f3fcfdd03081905e2b3762b192d97ca52027592543c1865f338f15cc52f0df9c72a3dd1958344f4b3d18a43334e35509047d70cff8343f304"
 signed_by = "1f299a0020f6ae90"
+
+[[plugin]]
+name = "soft-404"
+version = "1.0.0"
+api_version = "1.0"
+author = "crawlkit"
+description = "Flags error pages that were still analyzed (host context API)"
+license = "Apache-2.0"
+categories = ["seo"]
+wasm_path = "artifacts/soft-404-1.0.0.wasm"
+wasm_hash = "506a644e8bbc5deabe7e3e776d1a515d067dca37fb02b291761039eceb850666"
+signature = "b73b88cf9bc56cd4eb09aeda781f38c4e0b9d41a96e983fbe756e18fb5d290e362664965ca6a63b3363503a1141504ad6271c39c04f09520a26b8a5d9499f602"
+signed_by = "1f299a0020f6ae90"

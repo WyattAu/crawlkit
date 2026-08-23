@@ -25,6 +25,7 @@ install location: `~/.crawlkit/plugins`.
 |---|---|---|
 | title-length | 1.0.0 | Flags missing and oversized `<title>` elements |
 | viewport-checker | 1.0.0 | Flags missing viewport meta tags and fixed-width viewports |
+| soft-404 | 1.0.0 | Flags error pages that were still analyzed (host context API) |
 
 ## Maintenance
 

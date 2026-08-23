@@ -331,6 +331,13 @@ fn dump_first_party_index() {
             "Flags missing viewport meta tags and fixed-width viewports",
             "mobile",
         ),
+        (
+            "soft-404",
+            "soft-404",
+            "1.0.0",
+            "Flags error pages that were still analyzed (host context API)",
+            "seo",
+        ),
     ];
 
     let dest = std::path::Path::new(&dir);

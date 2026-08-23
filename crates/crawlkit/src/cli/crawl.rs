@@ -115,6 +115,11 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         None
     };
 
+    let plugin_dirs = match &params.plugins {
+        Some(dirs) => dirs.clone(),
+        None => crawlkit_engine::plugin_runtime::default_plugin_dirs(),
+    };
+
     let engine_config = CrawlEngineConfig {
         crawl_config: crawlkit_engine::CrawlConfig {
             respect_robots_txt: params.respect_robots.unwrap_or(true),
@@ -145,6 +150,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         incremental: params.incremental,
         force: params.force,
         allow_http: false,
+        plugin_dirs,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

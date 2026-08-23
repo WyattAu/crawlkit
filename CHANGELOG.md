@@ -5,6 +5,15 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] - 2026-08-23
+
+### Added — Plugins run during crawls
+- **Installed plugins execute automatically on every fetched page**, alongside built-in analyzers, with the B4 structured context (url/status/headers/parsed summary). Findings flow into storage/exports under `plugin:<category>` categories
+- `CrawlEngineConfig::plugin_dirs` (empty = disabled; opt-in for embedders); CLI `--plugins <dir>` (repeatable); default roots `~/.crawlkit/plugins` + `$CRAWLKIT_PLUGIN_DIRS`
+- Engine `plugin_runtime` module: `load_plugins_from_dir`, `CrawlPlugin`, `parse_plugin_findings` (malformed third-party JSON degrades to empty), `build_context_json`, `default_plugin_dirs`
+- Failure semantics: unloadable plugins are skipped with a logged error; per-page plugin errors (incl. traps) contribute no findings and NEVER abort the crawl — both E2E-tested against a real wasm32 plugin and a trapping WAT module
+- CLI smoke-verified end to end: `plugin install` → `crawl` → "crawl plugins active count=1" in logs, findings persisted
+
 ## [4.3.0] - 2026-08-23
 
 ### Added — Structured guest context (B4)

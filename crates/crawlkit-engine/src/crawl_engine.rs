@@ -126,6 +126,11 @@ pub struct CrawlEngineConfig {
 
     /// Whether to force a full re-crawl, ignoring cached ETag/Last-Modified conditions.
     pub force: bool,
+
+    /// Directories to load crawl plugins from (the
+    /// `install_plugin` layout). Empty disables plugin execution during
+    /// crawls.
+    pub plugin_dirs: Vec<std::path::PathBuf>,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -143,6 +148,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("user_agent", &self.user_agent)
             .field("encryption", &self.encryption.is_some())
             .field("timeout_secs", &self.timeout_secs)
+            .field("plugin_dirs", &self.plugin_dirs)
             .field("delay_ms", &self.delay_ms)
             .field("concurrency", &self.concurrency)
             .field("incremental", &self.incremental)
@@ -172,6 +178,7 @@ impl Default for CrawlEngineConfig {
             incremental: false,
             force: false,
             allow_http: false,
+            plugin_dirs: Vec::new(),
         }
     }
 }
@@ -323,6 +330,7 @@ struct CrawlRun<'a> {
     metrics: Metrics,
     resource_monitor: ResourceMonitor,
     queue: Arc<Mutex<UrlQueue>>,
+    plugins: Vec<crate::plugin_runtime::CrawlPlugin>,
 }
 
 impl CrawlRun<'_> {
@@ -477,7 +485,24 @@ impl CrawlRun<'_> {
             robots_txt: robots_ref,
         };
         let analysis_start = std::time::Instant::now();
-        let findings = self.analyzer_registry.analyze(&ctx);
+        let mut findings = self.analyzer_registry.analyze(&ctx);
+
+        // Crawl plugins run after the built-ins, with the B4 structured
+        // context; failures degrade to no findings (never abort a crawl).
+        if !self.plugins.is_empty() {
+            let url_str = fetched.entry.url.to_string();
+            let context_json = crate::plugin_runtime::build_context_json(
+                &url_str,
+                Some(result.status_code),
+                &headers_vec,
+                fetched.fetch_time.as_millis().try_into().ok(),
+                Some(parsed),
+            );
+            for plugin in &self.plugins {
+                findings.extend(plugin.analyze(body_text, &url_str, Some(&context_json)));
+            }
+        }
+
         (findings, analysis_start.elapsed())
     }
 
@@ -863,6 +888,22 @@ impl CrawlEngine {
             .prefill_queue(&queue, &seed_url, &crawl_id, &robots_cache, &sitemap_cache)
             .await;
 
+        // Crawl plugins: loaded once per crawl from the configured dirs
+        // (empty by default — opt-in via CrawlEngineConfig::plugin_dirs).
+        let plugins = cfg
+            .plugin_dirs
+            .iter()
+            .flat_map(|dir| {
+                crate::plugin_runtime::load_plugins_from_dir(
+                    dir,
+                    &crate::plugin::WasmConfig::default(),
+                )
+            })
+            .collect::<Vec<_>>();
+        if !plugins.is_empty() {
+            tracing::info!(count = plugins.len(), "crawl plugins active");
+        }
+
         let run = CrawlRun {
             counters: CrawlCounters::default(),
             visited: DashSet::new(),
@@ -880,6 +921,7 @@ impl CrawlEngine {
             metrics,
             resource_monitor,
             queue: queue.clone(),
+            plugins,
         };
         let crawl_start = std::time::Instant::now();
 

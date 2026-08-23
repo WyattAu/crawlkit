@@ -209,6 +209,7 @@ pub mod playwright;
 #[cfg(feature = "full")]
 pub mod plugin;
 pub mod plugin_index;
+pub mod plugin_runtime;
 
 #[cfg(feature = "full")]
 pub use plugin::{

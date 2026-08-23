@@ -180,6 +180,12 @@ pub enum Commands {
         /// Force a full re-crawl, ignoring cached ETag/Last-Modified conditions
         #[arg(long)]
         force: bool,
+
+        /// Directories to load crawl plugins from (repeatable). Omit to
+        /// use the default install roots (~/.crawlkit/plugins +
+        /// $CRAWLKIT_PLUGIN_DIRS); pass an empty value to disable.
+        #[arg(long)]
+        plugins: Option<Vec<PathBuf>>,
     },
 
     /// Compare two crawl results
@@ -290,4 +296,8 @@ pub struct CrawlParams {
     pub incremental: bool,
     pub force: bool,
     pub feature_flags: crawlkit_engine::FeatureFlags,
+    /// Run installed plugins during the crawl. `None` = default dirs
+    /// (~/.crawlkit/plugins + CRAWLKIT_PLUGIN_DIRS); `Some(dirs)` =
+    /// explicit; empty = disabled.
+    pub plugins: Option<Vec<PathBuf>>,
 }

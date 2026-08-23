@@ -353,3 +353,155 @@ async fn test_robots_txt_uses_non_standard_port_and_blocks_seed() {
     assert_eq!(output.pages_stored, 0);
     assert_eq!(output.skipped_robots, 1);
 }
+
+// ---------------------------------------------------------------------------
+// Crawl-plugin execution (plugins run during real crawls)
+// ---------------------------------------------------------------------------
+
+/// Build the soft-404 SDK example to wasm32; `None` when the target is
+/// unavailable (graceful skip, matching the conformance suites).
+fn build_soft404(target_dir: &std::path::Path) -> Option<std::path::PathBuf> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let workspace_root = std::path::Path::new(&manifest_dir)
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_path_buf();
+    let installed = std::process::Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .ok()?;
+    if !String::from_utf8_lossy(&installed.stdout)
+        .lines()
+        .any(|l| l.starts_with("wasm32-unknown-unknown"))
+    {
+        return None;
+    }
+    let status = std::process::Command::new("cargo")
+        .current_dir(&workspace_root)
+        .args([
+            "build",
+            "-p",
+            "crawlkit-plugin-sdk",
+            "--example",
+            "soft-404",
+            "--target",
+            "wasm32-unknown-unknown",
+            "--target-dir",
+        ])
+        .arg(target_dir)
+        .status()
+        .ok()?;
+    if !status.success() {
+        return None;
+    }
+    Some(
+        target_dir
+            .join("wasm32-unknown-unknown")
+            .join("debug")
+            .join("examples")
+            .join("soft-404.wasm"),
+    )
+}
+
+/// A crawl with `plugin_dirs` populated runs the installed plugin on every
+/// fetched page: the local 200-page server produces no SOFT404 findings,
+/// and the plugin-loaded engine completes a normal crawl end to end.
+#[tokio::test]
+async fn crawl_runs_plugins_against_fetched_pages() {
+    let target_dir = std::env::temp_dir().join("crawl-plugin-e2e");
+    let Some(wasm) = build_soft404(&target_dir) else {
+        eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+        return;
+    };
+
+    // Sign + stage the plugin in the install layout.
+    let wasm_bytes = std::fs::read(&wasm).unwrap();
+    let seed: [u8; 32] = "92bb3bc94dc375ea2c3111e1636511a8c0b22995437ee0338f4d21cdb9bfdd4d"
+        .as_bytes()
+        .chunks(2)
+        .map(|p| u8::from_str_radix(std::str::from_utf8(p).unwrap(), 16).unwrap())
+        .collect::<Vec<u8>>()
+        .try_into()
+        .unwrap();
+    let (hash, sig, signer) = crawlkit_engine::plugin::sign_plugin_wasm(&wasm_bytes, &seed);
+    let plugins_root = std::env::temp_dir().join(format!("crawl-plugins-{}", std::process::id()));
+    let plugin_dir = plugins_root.join("soft-404");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    std::fs::write(plugin_dir.join("plugin.wasm"), &wasm_bytes).unwrap();
+    std::fs::write(
+        plugin_dir.join("crawlkit-plugin.toml"),
+        format!(
+            "[plugin]\nname = \"soft-404\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"e2e\"\ndescription = \"plugin execution during crawls\"\nlicense = \"Apache-2.0\"\nwasm_hash = \"{hash}\"\nsignature = \"{sig}\"\nsigned_by = \"{signer}\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"soft-404\"\ncategories = [\"seo\"]\n"
+        ),
+    )
+    .unwrap();
+
+    let server = TestServer::start(
+        3,
+        ServerConfig {
+            per_request_delay: Duration::from_millis(10),
+            support_etag: false,
+            deny_crawl: false,
+        },
+    );
+    let mut config = engine_config(10, 2);
+    config.plugin_dirs = vec![plugins_root.clone()];
+    let engine = CrawlEngine::new_shared(config, shared_storage());
+
+    let output = engine.run(&server.index_url()).await.unwrap();
+    assert_eq!(output.pages_crawled, 4); // index + 3 pages
+    assert!(output.issues_found > 0, "built-in analyzers still run");
+
+    // Clean-up signed fixture.
+    let _ = std::fs::remove_dir_all(&plugins_root);
+}
+
+/// A plugin that errors on every page must never abort the crawl.
+#[tokio::test]
+async fn failing_plugin_does_not_abort_crawl() {
+    // A "plugin" whose analyze traps: valid module, garbage analyze body.
+    const TRAP_WAT: &str = r#"
+(module
+  (memory (export "memory") 1)
+  (global $heap (mut i32) (i32.const 1024))
+  (func (export "crawlkit_plugin_init") (param i32) (result i32) i32.const 0)
+  (func (export "crawlkit_plugin_alloc") (param $size i32) (result i32)
+    (local $p i32)
+    (local.set $p (global.get $heap))
+    (global.set $heap (i32.add (global.get $heap) (local.get $size)))
+    (local.get $p))
+  (func (export "crawlkit_plugin_free") (param i32))
+  (func (export "crawlkit_plugin_analyze") (param i32 i32 i32 i32) (result i32)
+    unreachable)
+)
+"#;
+    let plugins_root = std::env::temp_dir().join(format!("crawl-trap-{}", std::process::id()));
+    let plugin_dir = plugins_root.join("trap");
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    std::fs::write(plugin_dir.join("plugin.wasm"), TRAP_WAT).unwrap();
+    std::fs::write(
+        plugin_dir.join("crawlkit-plugin.toml"),
+        "[plugin]\nname = \"trap\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"e2e\"\ndescription = \"always traps\"\nlicense = \"Apache-2.0\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"trap\"\ncategories = [\"test\"]\n",
+    )
+    .unwrap();
+
+    let server = TestServer::start(
+        2,
+        ServerConfig {
+            per_request_delay: Duration::from_millis(10),
+            support_etag: false,
+            deny_crawl: false,
+        },
+    );
+    let mut config = engine_config(10, 2);
+    config.plugin_dirs = vec![plugins_root.clone()];
+    let engine = CrawlEngine::new_shared(config, shared_storage());
+
+    let Ok(output) = engine.run(&server.index_url()).await else {
+        unreachable!("crawl aborted despite trapping plugin")
+    };
+    assert_eq!(output.pages_crawled, 3);
+
+    let _ = std::fs::remove_dir_all(&plugins_root);
+}

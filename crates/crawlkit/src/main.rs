@@ -76,6 +76,7 @@ async fn main() -> Result<()> {
             tenant,
             incremental,
             force,
+            plugins,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -110,6 +111,7 @@ async fn main() -> Result<()> {
                 tenant,
                 incremental,
                 force,
+                plugins,
                 feature_flags,
             };
             cli::crawl::run(&params).await

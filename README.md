@@ -198,6 +198,12 @@ built-in trust store BEFORE installation. Build your own:
 [PLUGIN_ARCHITECTURE.md](PLUGIN_ARCHITECTURE.md) and
 [docs/PLUGIN_DEVELOPMENT.md](docs/PLUGIN_DEVELOPMENT.md).
 
+Installed plugins run automatically during every crawl (default roots:
+`~/.crawlkit/plugins` + `$CRAWLKIT_PLUGIN_DIRS`; override with
+`--plugins <dir>`). Plugin findings appear alongside built-in analyzer
+results with `plugin:<category>` categories — and plugin failures never
+abort a crawl.
+
 ## Documentation
 
 | Document | Path |
@@ -219,4 +225,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 4.2.0 | Last updated: 2026-08-23*
+*Version: 4.4.0 | Last updated: 2026-08-23*

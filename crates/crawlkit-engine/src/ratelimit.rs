@@ -472,4 +472,56 @@ mod tests {
         assert!(buckets.peek("second.com").is_some());
         assert!(buckets.peek("first.com").is_none());
     }
+
+    #[test]
+    fn test_lru_eviction_at_capacity() {
+        let capacity = 5;
+        let limiter = RateLimiter::with_max_domains(10.0, 100.0, capacity);
+
+        // Fill to capacity
+        for i in 0..capacity {
+            limiter.domain_tokens(&format!("domain{i}.com"));
+        }
+
+        {
+            let buckets = limiter.domain_buckets.lock();
+            assert_eq!(buckets.len(), capacity);
+        }
+
+        // Access domain0 to make it most recently used
+        limiter.domain_tokens("domain0.com");
+
+        // Insert beyond capacity — should evict domain1 (LRU)
+        limiter.domain_tokens("overflow.com");
+
+        {
+            let buckets = limiter.domain_buckets.lock();
+            assert_eq!(buckets.len(), capacity);
+            assert!(buckets.peek("domain0.com").is_some());
+            assert!(buckets.peek("domain1.com").is_none());
+            assert!(buckets.peek("overflow.com").is_some());
+        }
+    }
+
+    #[test]
+    fn test_acquire_updates_lru_order() {
+        let limiter = RateLimiter::with_max_domains(1000.0, 10000.0, 3);
+
+        limiter.domain_tokens("a.com");
+        limiter.domain_tokens("b.com");
+        limiter.domain_tokens("c.com");
+
+        // Acquire on a.com promotes it in LRU order
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        rt.block_on(limiter.acquire("a.com")).unwrap();
+
+        // Insert d.com — evicts b.com (LRU)
+        limiter.domain_tokens("d.com");
+
+        let buckets = limiter.domain_buckets.lock();
+        assert!(buckets.peek("a.com").is_some());
+        assert!(buckets.peek("b.com").is_none());
+        assert!(buckets.peek("c.com").is_some());
+        assert!(buckets.peek("d.com").is_some());
+    }
 }

@@ -8,8 +8,8 @@ license = "Apache-2.0"
 categories = ["seo"]
 wasm_path = "artifacts/title-length-1.0.0.wasm"
 wasm_hash = "4f9ef6c9c5a593882fff9af41d9b0ba14effee5dd08fa9512afc0e1aedf8e4e4"
-signature = "8516e99682424de4bb2cf28343cdb9a72f74817d511b44b7ea9ebdc7331690a49c2aaa1d8adb65d0a1b8633ee2babe9a3cdc5e23fb9c452fa3ce1e1492531102"
-signed_by = "1f299a0020f6ae90"
+signature = "c8078cf711ab4efbe05376fced027e9dfe49875661d585ece58a2acce213e78ad7b5d42194ec43dfd381571b8942bf6d22b64c37f47c6419c7c92d120e72c70b"
+signed_by = "12a7a8db5aabb20b"
 
 [[plugin]]
 name = "viewport-checker"
@@ -21,8 +21,8 @@ license = "Apache-2.0"
 categories = ["mobile"]
 wasm_path = "artifacts/viewport-checker-1.0.0.wasm"
 wasm_hash = "e298eaf4884323824a7d5f21572dd52cf537357870f4bf6d56e06114aa946c74"
-signature = "d98ba79d1410638f3fcfdd03081905e2b3762b192d97ca52027592543c1865f338f15cc52f0df9c72a3dd1958344f4b3d18a43334e35509047d70cff8343f304"
-signed_by = "1f299a0020f6ae90"
+signature = "83d4b91ff191efe57193cc53e5998ec5e48048da26a8b204a73e94ed7e4483cffc36df80ca159ea0733576b62fb1d91a26e59ead1fe1bf247f772976ebcb6f02"
+signed_by = "12a7a8db5aabb20b"
 
 [[plugin]]
 name = "soft-404"
@@ -34,5 +34,5 @@ license = "Apache-2.0"
 categories = ["seo"]
 wasm_path = "artifacts/soft-404-1.0.0.wasm"
 wasm_hash = "506a644e8bbc5deabe7e3e776d1a515d067dca37fb02b291761039eceb850666"
-signature = "b73b88cf9bc56cd4eb09aeda781f38c4e0b9d41a96e983fbe756e18fb5d290e362664965ca6a63b3363503a1141504ad6271c39c04f09520a26b8a5d9499f602"
-signed_by = "1f299a0020f6ae90"
+signature = "f1130ca56d5607afb64343d5f5095299e6a2ace9dabdba854eff8c52fa6cca4f6f0cbf51c783fa5ab1b28bca8e2d1306d0840ad48b6289042a5206f0c176e10c"
+signed_by = "12a7a8db5aabb20b"

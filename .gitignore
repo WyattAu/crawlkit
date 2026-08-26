@@ -64,6 +64,15 @@ node_modules/
 
 # Client SDKs
 clients/nodejs/node_modules/
+__pycache__/
+*.pyc
 
 # Fuzz build artifacts
 **/fuzz/target/
+
+# cargo-mutants output
+mutants.out/
+mutants.out.old/
+
+# Coverage reports
+cobertura.xml

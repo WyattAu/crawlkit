@@ -1,6 +1,0 @@
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:27:29: replace && with || in CanonicalUrlValidator::normalize_url
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:27:43: replace != with == in CanonicalUrlValidator::normalize_url
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with ""
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:42:9: replace <impl Analyzer for CanonicalUrlValidator>::name -> &str with "xyzzy"
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:76:58: replace == with != in <impl Analyzer for CanonicalUrlValidator>::analyze
-crates/crawlkit-engine/src/analyzers/seo_analyzers.rs:169:9: replace <impl Analyzer for HreflangValidator>::name -> &str with ""

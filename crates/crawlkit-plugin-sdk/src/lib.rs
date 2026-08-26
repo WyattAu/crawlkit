@@ -10,7 +10,7 @@
 //! ## Quick Start
 //!
 //! ```rust,no_run
-//! use crawlkit_plugin_sdk::{Analyzer, Finding, Severity, AnalysisContext};
+//! use crawlkit_plugin_sdk::{Analyzer, Finding, IssueCategory, Severity, AnalysisContext};
 //!
 //! pub struct MyAnalyzer;
 //! impl MyAnalyzer { pub fn new() -> Self { Self } }
@@ -23,7 +23,7 @@
 //!         if ctx.html.contains("something") {
 //!             findings.push(Finding {
 //!                 severity: Severity::Warning,
-//!                 category: "custom".into(),
+//!                 category: IssueCategory::Custom("custom".into()),
 //!                 code: "CUSTOM001".into(),
 //!                 title: "Something detected".into(),
 //!                 description: "The page contains something".into(),
@@ -47,7 +47,7 @@ mod finding;
 
 pub use analyzer::Analyzer;
 pub use context::AnalysisContext;
-pub use finding::{Finding, Severity};
+pub use finding::{Finding, IssueCategory, Severity};
 
 /// Host-provided structured context (see the `host` module docs).
 pub mod host;
@@ -67,7 +67,7 @@ mod tests {
     fn re_exports_are_accessible() {
         let _f = Finding {
             severity: Severity::Info,
-            category: "c".into(),
+            category: IssueCategory::Custom("c".into()),
             code: "C".into(),
             title: "t".into(),
             description: "d".into(),
@@ -97,7 +97,7 @@ mod tests {
                 if !ctx.html.contains("<title>") {
                     findings.push(Finding {
                         severity: Severity::Warning,
-                        category: "seo".into(),
+                        category: IssueCategory::Seo,
                         code: "SEO001".into(),
                         title: "Missing title tag".into(),
                         description: "The page does not have a <title> tag".into(),
@@ -109,7 +109,7 @@ mod tests {
                 } else {
                     findings.push(Finding {
                         severity: Severity::Info,
-                        category: "seo".into(),
+                        category: IssueCategory::Seo,
                         code: "SEO002".into(),
                         title: "Missing meta description".into(),
                         description: "No meta description found".into(),
@@ -141,7 +141,7 @@ mod tests {
     fn finding_severity_roundtrip_json() {
         let f = Finding {
             severity: Severity::Critical,
-            category: "sec".into(),
+            category: IssueCategory::Security,
             code: "S1".into(),
             title: "Critical issue".into(),
             description: "Bad".into(),

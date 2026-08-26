@@ -22,12 +22,15 @@ harness = false
 [features]
 default = ["full"]
 full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek"]
+unstable = ["full"]
 wasm = []
 postgres = ["sqlx", "tokio"]
 profiling = ["dhat"]
+observability = ["opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk"]
 
 [dependencies]
 # Always available
+crawlkit-types = { path = "../crawlkit-types" }
 serde.workspace = true
 serde_json.workspace = true
 scraper.workspace = true
@@ -65,6 +68,9 @@ libloading = { version = "0.8", optional = true }
 redis = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry-otlp = { version = "0.32", features = ["trace", "grpc-tonic"], optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["trace", "rt-tokio"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

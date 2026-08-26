@@ -44,7 +44,7 @@ impl Analyzer for AiCrawlerAccessibilityAnalyzer {
             for bot in self.registry.bots() {
                 if crate::ai_bots::robots_txt_disallows_bot(txt, bot.name) {
                     findings.push(Finding {
-                        severity: bot.severity.clone(),
+                        severity: bot.severity,
                         category: IssueCategory::Seo,
                         code: format!("AI-ACC{:03}", bot.ordinal()),
                         title: format!("AI bot '{}' blocked by robots.txt", bot.name),

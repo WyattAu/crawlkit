@@ -17,7 +17,7 @@ use parking_lot::Mutex;
 
 use crate::analyzers::Finding;
 use crate::plugin::{PluginError, WasmConfig, WasmPlugin};
-use crate::types::{IssueCategory, Severity};
+use crate::types::IssueCategory;
 
 /// A plugin loaded and ready to execute during a crawl.
 pub struct CrawlPlugin {
@@ -77,29 +77,12 @@ pub fn load_plugins_from_dir(dir: &Path, config: &WasmConfig) -> Vec<CrawlPlugin
     out
 }
 
-/// The plugin-side finding JSON shape (mirrors `crawlkit_plugin_sdk::Finding`).
-#[derive(serde::Deserialize)]
-struct PluginFindingJson {
-    severity: String,
-    #[serde(default = "default_category")]
-    category: String,
-    code: String,
-    title: String,
-    description: String,
-    url: String,
-    recommendation: String,
-}
-
-fn default_category() -> String {
-    "plugin".to_string()
-}
-
 /// Convert a plugin's JSON findings payload into engine findings.
 /// Malformed entries are skipped; an invalid payload as a whole yields
 /// an empty vec (never panics on third-party output).
 #[must_use]
 pub fn parse_plugin_findings(json: &str) -> Vec<Finding> {
-    let parsed: Vec<PluginFindingJson> = match serde_json::from_str(json) {
+    let parsed: Vec<Finding> = match serde_json::from_str(json) {
         Ok(p) => p,
         Err(e) => {
             tracing::warn!(error = %e, "plugin returned malformed findings JSON");
@@ -109,14 +92,8 @@ pub fn parse_plugin_findings(json: &str) -> Vec<Finding> {
     parsed
         .into_iter()
         .map(|f| Finding {
-            severity: Severity::parse_severity(&f.severity.to_ascii_lowercase())
-                .unwrap_or(Severity::Info),
-            category: IssueCategory::Custom(format!("plugin:{}", f.category)),
-            code: f.code,
-            title: f.title,
-            description: f.description,
-            url: f.url,
-            recommendation: f.recommendation,
+            category: IssueCategory::Custom(format!("plugin:{}", f.category.as_str())),
+            ..f
         })
         .collect()
 }

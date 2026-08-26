@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use crate::parser::ParsedPage;
-use crate::types::{IssueCategory, Severity};
 use crate::{CrawlConfig, RedirectHop};
 
 /// Content quality analyzers for readability, entity extraction, and structured data.
@@ -63,8 +62,6 @@ fn is_utility_page(url: &str) -> bool {
         "/forgot",
         "/contact",
         "/about",
-        "/certifications",
-        "/research-use",
     ]
     .iter()
     .any(|p| lower.contains(p))
@@ -178,23 +175,7 @@ pub struct AnalysisContext<'a> {
 /// Represents a single SEO or technical issue found during page analysis.
 /// Each finding has a severity, category, machine-readable code, and
 /// a human-readable recommendation for fixing the issue.
-#[derive(Debug, Clone)]
-pub struct Finding {
-    /// Issue severity (Critical, Error, Warning, Info).
-    pub severity: Severity,
-    /// Issue category (SEO, HTTP, Links, etc.).
-    pub category: IssueCategory,
-    /// Machine-readable issue code (e.g., "META001", "HTTP005").
-    pub code: String,
-    /// Short human-readable title.
-    pub title: String,
-    /// Detailed description of the issue.
-    pub description: String,
-    /// URL of the page where the issue was found.
-    pub url: String,
-    /// Recommendation for fixing the issue.
-    pub recommendation: String,
-}
+pub use crawlkit_types::Finding;
 
 /// Trait for page analyzers.
 ///
@@ -244,7 +225,7 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-/// in parallel using rayon. The default registry includes 28+ analyzers
+/// in parallel using rayon. The default registry includes 31 analyzers
 /// covering HTTP, SEO, content, links, images, security, accessibility,
 /// and AI-specific checks.
 ///
@@ -263,7 +244,7 @@ pub struct AnalyzerRegistry {
 impl AnalyzerRegistry {
     /// Create a registry with all default analyzers.
     ///
-    /// Registers 28+ built-in analyzers covering HTTP status, redirects,
+    /// Registers 31 built-in analyzers covering HTTP status, redirects,
     /// canonical URLs, meta tags, headings, links, images, structured data,
     /// security, accessibility, social media, AI crawlers, and WASM patterns.
     pub fn new(_config: &CrawlConfig) -> Self {

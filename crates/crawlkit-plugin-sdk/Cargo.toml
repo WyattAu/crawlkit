@@ -26,6 +26,7 @@ unused_async = "warn"
 if_not_else = "warn"
 
 [dependencies]
+crawlkit-types = { path = "../crawlkit-types" }
 serde.workspace = true
 serde_json.workspace = true
 

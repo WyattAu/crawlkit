@@ -58,7 +58,7 @@ pub async fn run(
     pb.set_message("Parsing HTML...");
     let parsed = HtmlParser::parse(&result.body, &url);
 
-    pb.set_message("Running 28 analyzers...");
+    pb.set_message("Running 31 analyzers...");
     let headers_vec: Vec<(String, String)> = result.headers.clone();
     let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
     let ctx = crawlkit_engine::analyzers::AnalysisContext {

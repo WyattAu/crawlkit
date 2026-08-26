@@ -14,6 +14,7 @@ use crawlkit_api::handlers::schedules::run_scheduler;
 use crawlkit_api::router;
 use crawlkit_api::types::{ssrf_safe_redirect_policy, ApiKey, AppState, MarketplaceState, Metrics};
 use crawlkit_api::{auth, auth::AuthManager, oidc};
+use crawlkit_engine::storage_trait::StorageBackend;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -133,7 +134,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Build application state
     let state = AppState {
-        storage: Arc::new(storage),
+        storage: Arc::new(storage) as Arc<dyn StorageBackend>,
         api_keys,
         rate_limits: Arc::new(DashMap::new()),
         crawl_results: Arc::new(DashMap::new()),
@@ -243,14 +244,15 @@ fn init_tracing() {
     use tracing_subscriber::util::SubscriberInitExt;
     use tracing_subscriber::Layer;
 
-    let use_otel = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
+    let use_otel_stdout = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
+    let otel_endpoint = std::env::var("OTEL_ENDPOINT").ok().filter(|e| !e.is_empty());
 
     let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
         tracing_subscriber::EnvFilter::try_from_default_env()
             .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("crawlkit_api=info")),
     );
 
-    if use_otel {
+    if use_otel_stdout {
         use opentelemetry::trace::TracerProvider;
         use tracing_opentelemetry::OpenTelemetryLayer;
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
@@ -262,6 +264,48 @@ fn init_tracing() {
             .with(fmt_layer)
             .with(otel_layer)
             .init();
+    } else if let Some(endpoint) = otel_endpoint {
+        use opentelemetry::trace::TracerProvider;
+        use opentelemetry_otlp::WithExportConfig;
+        use tracing_opentelemetry::OpenTelemetryLayer;
+
+        let exporter = match opentelemetry_otlp::SpanExporter::builder()
+            .with_tonic()
+            .with_endpoint(&endpoint)
+            .build()
+        {
+            Ok(e) => e,
+            Err(e) => {
+                eprintln!("Warning: Failed to create OTLP span exporter: {e}");
+                return;
+            }
+        };
+
+        let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
+            .with_resource(
+                opentelemetry_sdk::Resource::builder()
+                    .with_attributes([opentelemetry::KeyValue::new(
+                        "service.name",
+                        "crawlkit-api",
+                    )])
+                    .build(),
+            )
+            .with_batch_exporter(exporter)
+            .build();
+
+        let tracer = provider.tracer("crawlkit-api");
+        let otel_layer = OpenTelemetryLayer::new(tracer);
+        tracing_subscriber::registry()
+            .with(fmt_layer)
+            .with(otel_layer)
+            .init();
+
+        // Keep provider alive for the process lifetime.
+        // Store in a static so it is never dropped.
+        use std::sync::OnceLock;
+        static OTEL_PROVIDER: OnceLock<opentelemetry_sdk::trace::SdkTracerProvider> =
+            OnceLock::new();
+        let _ = OTEL_PROVIDER.set(provider);
     } else {
         tracing_subscriber::registry().with(fmt_layer).init();
     }

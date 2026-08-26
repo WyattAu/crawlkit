@@ -1363,6 +1363,113 @@ impl crate::storage_trait::StorageBackend for Storage {
         self.get_latest_conditional(url)
     }
 
+    fn update_page_fetched_at(
+        &self,
+        page_id: &str,
+        fetched_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError> {
+        Storage::update_page_fetched_at(self, page_id, fetched_at)
+    }
+
+    fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
+        Storage::get_latest_crawl_id(self)
+    }
+
+    fn get_previous_crawl_id(&self, exclude_id: &str) -> Result<Option<String>, StorageError> {
+        Storage::get_previous_crawl_id(self, exclude_id)
+    }
+
+    fn get_page_urls(&self, crawl_id: &str) -> Result<Vec<String>, StorageError> {
+        Storage::get_page_urls(self, crawl_id)
+    }
+
+    fn get_links_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<(String, Vec<String>)>, StorageError> {
+        Storage::get_links_for_crawl(self, crawl_id)
+    }
+
+    fn get_external_links(&self, crawl_id: &str) -> Result<Vec<(String, String)>, StorageError> {
+        Storage::get_external_links(self, crawl_id)
+    }
+
+    fn get_crawl_meta(
+        &self,
+        crawl_id: &str,
+    ) -> Result<crate::storage_trait::CrawlMeta, StorageError> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT id, target_url, start_time, end_time, pages_crawled, total_issues FROM crawls WHERE id = ?1",
+            params![crawl_id],
+            |row| {
+                Ok(crate::storage_trait::CrawlMeta {
+                    id: row.get(0)?,
+                    target_url: row.get(1)?,
+                    start_time: row.get(2)?,
+                    end_time: row.get(3)?,
+                    pages_crawled: row.get::<_, i64>(4)? as usize,
+                    total_issues: row.get::<_, i64>(5)? as usize,
+                })
+            },
+        )
+        .map_err(StorageError::from)
+    }
+
+    fn get_top_issues(
+        &self,
+        crawl_id: &str,
+        limit: usize,
+    ) -> Result<Vec<crate::storage_trait::TopIssue>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT f.severity, f.code, f.title, COUNT(DISTINCT f.page_id) as affected_pages
+             FROM findings f
+             JOIN pages p ON f.page_id = p.id
+             WHERE p.crawl_id = ?1
+             GROUP BY f.severity, f.code, f.title
+             ORDER BY
+               CASE f.severity WHEN 'critical' THEN 0 WHEN 'error' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
+               affected_pages DESC
+             LIMIT ?2",
+        )?;
+
+        let rows = stmt
+            .query_map(params![crawl_id, limit as i64], |row| {
+                Ok(crate::storage_trait::TopIssue {
+                    severity: row.get(0)?,
+                    code: row.get(1)?,
+                    title: row.get(2)?,
+                    affected_pages: row.get::<_, i64>(3)? as usize,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let severity_rank = |s: &str| match s {
+            "critical" => 0,
+            "error" => 1,
+            "warning" => 2,
+            _ => 3,
+        };
+        let mut rows = rows;
+        rows.sort_by(|a, b| {
+            severity_rank(&a.severity)
+                .cmp(&severity_rank(&b.severity))
+                .then_with(|| b.affected_pages.cmp(&a.affected_pages))
+                .then_with(|| a.code.cmp(&b.code))
+                .then_with(|| a.title.cmp(&b.title))
+        });
+        rows.truncate(limit);
+        Ok(rows)
+    }
+
+    fn get_crux_metrics_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<CruxMetrics>, StorageError> {
+        Storage::get_crux_metrics_for_crawl(self, crawl_id)
+    }
+
     fn finish(&self) -> Result<(), StorageError> {
         self.clear_cache();
         Ok(())

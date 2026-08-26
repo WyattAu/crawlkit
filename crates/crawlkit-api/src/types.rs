@@ -15,7 +15,7 @@ use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crawlkit_engine::storage::Storage;
+use crawlkit_engine::storage_trait::StorageBackend;
 use crawlkit_engine::AuditTrail;
 use crawlkit_engine::CrawlConfig;
 
@@ -226,7 +226,7 @@ pub struct CreateTenantRequest {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub storage: Arc<Storage>,
+    pub storage: Arc<dyn StorageBackend>,
     pub api_keys: Arc<DashMap<String, ApiKey>>,
     pub rate_limits: Arc<DashMap<String, RateLimitBucket>>,
     pub crawl_results: Arc<DashMap<String, CrawlResult>>,
@@ -769,7 +769,11 @@ pub fn validate_url(url: &str) -> Result<(), ApiError> {
             "URL must use http or https scheme".to_string(),
         ));
     }
-    reject_private_target(&parsed)?;
+    if !crawlkit_engine::ssrf::is_public_url(url) {
+        return Err(ApiError::BadRequest(
+            "URL targets a reserved internal hostname or private IP address".to_string(),
+        ));
+    }
     Ok(())
 }
 
@@ -778,49 +782,6 @@ pub fn validate_url(url: &str) -> Result<(), ApiError> {
 /// also enforce redirect and resolver policy at connection time.
 pub fn validate_public_url(url: &str) -> Result<(), ApiError> {
     validate_url(url)
-}
-
-fn reject_private_target(parsed: &url::Url) -> Result<(), ApiError> {
-    let Some(host) = parsed.host_str() else {
-        return Err(ApiError::BadRequest("URL must include a host".to_string()));
-    };
-    let normalized = host.trim_end_matches('.').to_ascii_lowercase();
-    if matches!(
-        normalized.as_str(),
-        "localhost" | "localhost.localdomain" | "metadata.google.internal"
-    ) {
-        return Err(ApiError::BadRequest(
-            "URL targets a reserved internal hostname".to_string(),
-        ));
-    }
-    let ip_host = host.trim_matches(['[', ']']);
-    if let Ok(ip) = ip_host.parse::<std::net::IpAddr>() {
-        let blocked = match ip {
-            std::net::IpAddr::V4(ip) => {
-                ip.is_private()
-                    || ip.is_loopback()
-                    || ip.is_link_local()
-                    || ip.is_broadcast()
-                    || ip.is_unspecified()
-                    || ip.is_multicast()
-                    || (ip.octets()[0] == 100 && (64..=127).contains(&ip.octets()[1]))
-                    || (ip.octets()[0] == 192 && ip.octets()[1] == 0 && ip.octets()[2] == 0)
-            }
-            std::net::IpAddr::V6(ip) => {
-                ip.is_loopback()
-                    || ip.is_unspecified()
-                    || ip.is_unique_local()
-                    || ip.is_unicast_link_local()
-                    || ip.is_multicast()
-            }
-        };
-        if blocked {
-            return Err(ApiError::BadRequest(
-                "URL targets a reserved or private IP address".to_string(),
-            ));
-        }
-    }
-    Ok(())
 }
 
 pub fn validate_max_pages(n: usize) -> Result<(), ApiError> {

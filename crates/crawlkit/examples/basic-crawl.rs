@@ -202,7 +202,7 @@ async fn main() -> Result<()> {
                 id: uuid::Uuid::new_v4().to_string(),
                 page_id: page_data.id.clone(),
                 category: finding.category.clone(),
-                severity: finding.severity.clone(),
+                severity: finding.severity,
                 code: finding.code.clone(),
                 title: finding.title.clone(),
                 description: finding.description.clone(),
@@ -254,8 +254,7 @@ async fn main() -> Result<()> {
         issue_count: true,
         ..Default::default()
     };
-    let conn = &*storage.conn();
-    let csv_bytes = export_csv(conn, &crawl_id, &selector)?;
+    let csv_bytes = export_csv(&storage, &crawl_id, &selector)?;
     let csv_path = output_dir.join("results.csv");
     std::fs::write(&csv_path, &csv_bytes)?;
     println!("CSV  → {}", csv_path.display());

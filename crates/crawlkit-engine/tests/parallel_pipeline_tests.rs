@@ -14,6 +14,7 @@ use std::time::{Duration, Instant};
 use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 use crawlkit_engine::http::{HttpClient, HttpClientConfig, UserAgentRotator};
 use crawlkit_engine::storage::Storage;
+use crawlkit_engine::storage_trait::StorageBackend;
 use crawlkit_engine::CrawlConfig;
 
 /// Behavior knobs for the local test server.
@@ -216,8 +217,8 @@ fn engine_config(max_pages: usize, concurrency: usize) -> CrawlEngineConfig {
     }
 }
 
-fn shared_storage() -> Arc<Storage> {
-    Arc::new(Storage::new_in_memory().unwrap())
+fn shared_storage() -> Arc<dyn StorageBackend> {
+    Arc::new(Storage::new_in_memory().unwrap()) as Arc<dyn StorageBackend>
 }
 
 #[tokio::test]

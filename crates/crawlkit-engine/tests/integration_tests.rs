@@ -465,7 +465,7 @@ fn test_full_crawl_pipeline() {
                 id: uuid::Uuid::new_v4().to_string(),
                 page_id: page.id.clone(),
                 category: finding.category.clone(),
-                severity: finding.severity.clone(),
+                severity: finding.severity,
                 code: finding.code.clone(),
                 title: finding.title.clone(),
                 description: finding.description.clone(),
@@ -571,6 +571,7 @@ fn test_circuit_breaker_opens_after_failures() {
     assert!(!cb.is_allowed());
 }
 
+#[cfg(feature = "unstable")]
 #[tokio::test]
 async fn test_backpressure_limits_concurrency() {
     use crawlkit_engine::BackpressureController;

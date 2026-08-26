@@ -1,4 +1,37 @@
-use crate::storage::{CrawlStats, Issue, IssueFilter, PageData, StorageError};
+use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
+
+/// Metadata about a single crawl, returned by [`StorageBackend::get_crawl_meta`].
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct CrawlMeta {
+    /// Unique crawl identifier.
+    pub id: String,
+    /// The seed / target URL of the crawl.
+    pub target_url: String,
+    /// When the crawl started (RFC 3339 string).
+    pub start_time: Option<String>,
+    /// When the crawl finished (RFC 3339 string).
+    pub end_time: Option<String>,
+    /// Number of pages successfully crawled.
+    pub pages_crawled: usize,
+    /// Total issues discovered.
+    pub total_issues: usize,
+}
+
+/// An aggregated issue row for the "top issues" section of export reports.
+///
+/// Each row represents a unique `(severity, code, title)` tuple with the
+/// count of distinct pages it affects.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TopIssue {
+    /// Issue severity (`critical`, `error`, `warning`, `info`).
+    pub severity: String,
+    /// Machine-readable issue code (e.g. `SEO001`).
+    pub code: String,
+    /// Human-readable issue title.
+    pub title: String,
+    /// Number of distinct pages affected.
+    pub affected_pages: usize,
+}
 
 /// A trait abstracting storage backends for crawl data.
 ///
@@ -67,6 +100,48 @@ pub trait StorageBackend: Send + Sync {
         &self,
         url: &str,
     ) -> Result<Option<(Option<String>, Option<String>)>, StorageError>;
+
+    /// Update the `fetched_at` timestamp of an existing page (304 Not Modified path).
+    fn update_page_fetched_at(
+        &self,
+        page_id: &str,
+        fetched_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError>;
+
+    /// Get the most recent crawl ID.
+    fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError>;
+
+    /// Get the most recent crawl other than `exclude_id`.
+    fn get_previous_crawl_id(&self, exclude_id: &str) -> Result<Option<String>, StorageError>;
+
+    /// Get all page URLs for a crawl.
+    fn get_page_urls(&self, crawl_id: &str) -> Result<Vec<String>, StorageError>;
+
+    /// Get all links for a crawl, grouped by source URL.
+    fn get_links_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<(String, Vec<String>)>, StorageError>;
+
+    /// Get all external links for a crawl.
+    fn get_external_links(&self, crawl_id: &str) -> Result<Vec<(String, String)>, StorageError>;
+
+    /// Get metadata for a single crawl (target URL, timestamps, counts).
+    fn get_crawl_meta(&self, crawl_id: &str) -> Result<CrawlMeta, StorageError>;
+
+    /// Get the top issues for a crawl, ordered by severity rank (critical
+    /// first) then by number of affected pages descending.
+    fn get_top_issues(
+        &self,
+        crawl_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TopIssue>, StorageError>;
+
+    /// Get CrUX field metrics for all pages in a crawl.
+    fn get_crux_metrics_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<CruxMetrics>, StorageError>;
 
     /// Release any resources held by the backend (connections, caches, etc.).
     fn finish(&self) -> Result<(), StorageError>;

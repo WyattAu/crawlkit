@@ -1,6 +1,7 @@
 // Post-crawl analysis for cross-page SEO checks.
 
-use crate::storage::{IssueCategory, Severity, Storage};
+use crate::storage::{IssueCategory, Severity};
+use crate::storage_trait::StorageBackend;
 use std::collections::{HashMap, HashSet};
 
 pub struct PostCrawlAnalysis {
@@ -25,7 +26,10 @@ pub struct PostCrawlStats {
     pub sitemap_issues: usize,
 }
 
-pub fn run_post_crawl_analysis(storage: &Storage, crawl_id: &str) -> PostCrawlAnalysis {
+pub fn run_post_crawl_analysis(
+    storage: &dyn StorageBackend,
+    crawl_id: &str,
+) -> PostCrawlAnalysis {
     let mut findings = Vec::new();
     let mut stats = PostCrawlStats::default();
 

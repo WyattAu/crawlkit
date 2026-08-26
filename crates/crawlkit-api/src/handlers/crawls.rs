@@ -41,6 +41,12 @@ pub async fn start_crawl(
     validate_concurrency(req.concurrency)?;
     validate_delay(req.request_delay_ms)?;
 
+    if !crawlkit_engine::ssrf::is_public_url(&req.start_url) {
+        return Err(ApiError::BadRequest(
+            "URL targets a reserved internal hostname or private IP address".to_string(),
+        ));
+    }
+
     // Idempotent replay: a known key within the dedupe window returns the
     // original crawl instead of starting a duplicate.
     let idempotency_key = headers
@@ -253,9 +259,11 @@ pub async fn get_crawl_stats(
 ) -> Result<Json<CrawlStatsResponse>, ApiError> {
     let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
-    let stats = state
-        .storage
-        .get_stats(&storage_crawl_id)
+    let storage = state.storage.clone();
+    let cid = storage_crawl_id.clone();
+    let stats = tokio::task::spawn_blocking(move || storage.get_stats(&cid))
+        .await
+        .map_err(|e| ApiError::Internal(format!("Blocking task failed: {e}")))?
         .map_err(|e| ApiError::Internal(format!("Failed to get stats: {e}")))?;
 
     Ok(Json(CrawlStatsResponse {
@@ -295,9 +303,11 @@ pub async fn get_crawl_findings(
     let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
     let filter = crawlkit_engine::storage::IssueFilter::default();
-    let issues = state
-        .storage
-        .get_issues(&storage_crawl_id, &filter)
+    let storage = state.storage.clone();
+    let cid = storage_crawl_id.clone();
+    let issues = tokio::task::spawn_blocking(move || storage.get_issues(&cid, &filter))
+        .await
+        .map_err(|e| ApiError::Internal(format!("Blocking task failed: {e}")))?
         .map_err(|e| ApiError::Internal(format!("Failed to get findings: {e}")))?;
 
     let findings: Vec<serde_json::Value> = issues
@@ -387,15 +397,18 @@ pub async fn get_crawl_backlinks(
 ) -> Result<Json<BacklinksResponse>, ApiError> {
     let storage_crawl_id = authorize_crawl_access(&state, &claims, &crawl_id)?;
 
-    let link_pairs = state
-        .storage
-        .get_links_for_crawl(&storage_crawl_id)
-        .map_err(|e| ApiError::Internal(format!("Failed to get links: {e}")))?;
-
-    let external_links = state
-        .storage
-        .get_external_links(&storage_crawl_id)
-        .map_err(|e| ApiError::Internal(format!("Failed to get external links: {e}")))?;
+    let storage1 = state.storage.clone();
+    let storage2 = state.storage.clone();
+    let cid1 = storage_crawl_id.clone();
+    let cid2 = storage_crawl_id.clone();
+    let (link_pairs, external_links) = tokio::task::spawn_blocking(move || {
+        let links = storage1.get_links_for_crawl(&cid1)?;
+        let external = storage2.get_external_links(&cid2)?;
+        Ok::<_, crawlkit_engine::storage::StorageError>((links, external))
+    })
+    .await
+    .map_err(|e| ApiError::Internal(format!("Blocking task failed: {e}")))?
+    .map_err(|e| ApiError::Internal(format!("Failed to get links: {e}")))?;
 
     let mut analyzer = crawlkit_engine::BacklinkAnalyzer::new();
     analyzer.load_from_crawl_data(&link_pairs);

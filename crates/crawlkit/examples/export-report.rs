@@ -157,8 +157,7 @@ fn main() -> Result<()> {
         issue_count: true,
         ..Default::default()
     };
-    let conn = &*storage.conn();
-    let csv_bytes = export_csv(conn, &crawl_id, &selector)?;
+    let csv_bytes = export_csv(&storage, &crawl_id, &selector)?;
     let csv_path = Path::new("crawl-output/export.csv");
     std::fs::write(csv_path, &csv_bytes)?;
     println!("Written to {csv_path:?} ({} bytes)\n", csv_bytes.len());

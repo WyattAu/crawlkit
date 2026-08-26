@@ -233,7 +233,7 @@ fn exports_are_byte_identical_across_runs() {
         let json_pretty = export_json(&storage, &crawl_id, true).unwrap();
         let markdown = export_markdown(&storage, &crawl_id).unwrap();
         let html = export_html(&storage, &crawl_id).unwrap();
-        let csv = export_csv(&storage.conn(), &crawl_id, &CsvColumnSelector::all()).unwrap();
+        let csv = export_csv(&storage, &crawl_id, &CsvColumnSelector::all()).unwrap();
 
         std::fs::write(dir.join("report.json"), &json).unwrap();
         std::fs::write(dir.join("report-pretty.json"), &json_pretty).unwrap();

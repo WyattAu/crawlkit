@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.lints.rust]
-unsafe_code = "deny"           # Zero unsafe in library crates (FAANG/HFT/Defence standard)
+unsafe_code = "deny"           # Zero unsafe in library crates (FFI crates override to allow with SAFETY comments)
 
 [workspace.lints.clippy]
 # Lints enforced at workspace level — defence-grade enforcement

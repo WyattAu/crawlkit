@@ -3,11 +3,11 @@
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-736--passing-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Tests](https://img.shields.io/badge/tests-795--passing-green.svg)](https://github.com/WyattAu/crawlkit)
 [![Analyzers](https://img.shields.io/badge/analyzers-31-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
 
-High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings, zero unsafe code.
+High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings.
 
 ## Architecture
 
@@ -156,10 +156,9 @@ Covers: HTML parser, analyzer execution, registry lookup, queue operations, stor
 ## Security Model
 
 - HTTP/2 with TLS via rustls (no OpenSSL dependency)
-- `unsafe_code = "forbid"` at workspace level
+- `unsafe_code = "deny"` at workspace level (forbidden in library crates; FFI crates override to `allow` with SAFETY comments)
 - robots.txt compliance by default
 - Rate limiting with configurable delay
-- SSL certificate chain validation
 - Content Security Policy header scoring
 - Supply chain audit via `cargo audit` and `cargo deny`
 - API key redaction in list endpoints

@@ -1275,7 +1275,7 @@ Crawlkit targets production-grade engineering rigor expected in large-scale dist
 | Standard | Status | Implementation |
 |----------|--------|----------------|
 | **Design review process** | Planned | ADR-001 established; requires peer review before merging architecture changes |
-| **Feature flags** | Planned | `--feature-flags` config file; runtime toggle for JS rendering, API mode, RUM integration |
+| **Feature flags** | Partial | `--feature-flags` config file; runtime toggle for JS rendering, API mode, RUM integration |
 | **Rollback strategy** | Planned | Crawl snapshots are immutable; `compare` command enables before/after diff; SQLite backups before migration |
 | **Observability** | Planned | `tracing` crate with structured logs; `metrics` crate for Prometheus export; OpenTelemetry traces for crawl pipeline |
 | **Code review** | Planned | All PRs require ≥ 1 approval; security-sensitive changes require ≥ 2 |
@@ -1353,7 +1353,7 @@ While crawlkit is a batch crawler (not latency-sensitive), HFT-inspired reliabil
 
 | Standard | Status | Implementation |
 |----------|--------|----------------|
-| **Deterministic behavior** | Planned | Same URL + same config → same output; seed-based PRNG for any randomized components |
+| **Deterministic behavior** | Active | Same URL + same config → same output; seed-based PRNG for any randomized components |
 | **Reliability targets** | Planned | 99.9% crawl completion rate (excluding target site errors); circuit breaker prevents cascade failures |
 | **Resource isolation** | Planned | Per-crawl memory budgets; browser context isolation for JS rendering; bounded channel capacities |
 | **Memory safety** | Active | Rust ownership model; `unsafe_code = "deny"` in `clippy.toml`; no GC pauses |
@@ -1607,10 +1607,10 @@ impl IdempotencyKey {
 
 | Domain | Current Score | Target Score | Critical Gaps |
 |--------|--------------|--------------|---------------|
-| **FAANG** | 40% | 90% | Code review process, feature flags, rollback strategy, observability |
-| **HFT** | 30% | 85% | Deterministic behavior, reliability targets, resource isolation |
-| **Defense** | 30% | 85% | Audit trail, input validation, encryption at rest |
-| **ECN** | 50% | 90% | Backpressure, circuit breaker, idempotency |
+| **FAANG** | 55% | 90% | Code review process, feature flags, rollback strategy, observability |
+| **HFT** | 40% | 85% | Deterministic behavior, reliability targets, resource isolation |
+| **Defense** | 50% | 85% | Audit trail, input validation, encryption at rest |
+| **ECN** | 60% | 90% | Backpressure, circuit breaker, idempotency |
 
 ---
 

@@ -176,3 +176,26 @@ type SubmitPluginRequest struct {
 	Repository  *string  `json:"repository,omitempty"`
 	Homepage    *string  `json:"homepage,omitempty"`
 }
+
+type UpdateScheduleRequest struct {
+	StartURL     *string `json:"start_url,omitempty"`
+	MaxPages     *int    `json:"max_pages,omitempty"`
+	IntervalSecs *uint64 `json:"interval_secs,omitempty"`
+	Enabled      *bool   `json:"enabled,omitempty"`
+}
+
+type Session struct {
+	ID           string    `json:"id"`
+	UserID       string    `json:"user_id"`
+	TenantID     string    `json:"tenant_id"`
+	IPAddress    string    `json:"ip_address"`
+	UserAgent    string    `json:"user_agent"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastActiveAt time.Time `json:"last_active_at"`
+	ExpiresAt    time.Time `json:"expires_at"`
+}
+
+type PluginTestResult struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}

@@ -1,7 +1,7 @@
 """Data models for the crawlkit API."""
 
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from enum import Enum
 
 
@@ -78,3 +78,72 @@ class Tenant:
     plan: str = "free"
     max_users: int = 10
     max_crawls_per_month: int = 100
+
+
+@dataclass
+class Backlink:
+    """A backlink entry."""
+    source_url: str
+    target_url: str
+    anchor_text: str = ""
+    rel: str = ""
+
+
+@dataclass
+class ApiKey:
+    """An API key."""
+    key: str
+    name: str
+    created_at: str = ""
+
+
+@dataclass
+class Webhook:
+    """A webhook subscription."""
+    id: str
+    url: str
+    events: List[str] = field(default_factory=list)
+    secret: str = ""
+    enabled: bool = True
+
+
+@dataclass
+class Schedule:
+    """A scheduled crawl."""
+    id: str
+    crawl_id: str
+    cron_expression: str
+    enabled: bool = True
+    last_run: Optional[str] = None
+    next_run: Optional[str] = None
+
+
+@dataclass
+class AuditEvent:
+    """An audit log event."""
+    id: str
+    action: str
+    user_id: str
+    resource_type: str
+    resource_id: str = ""
+    details: Optional[Dict[str, Any]] = None
+    timestamp: str = ""
+
+
+@dataclass
+class MarketplacePlugin:
+    """A marketplace plugin."""
+    name: str
+    description: str = ""
+    version: str = ""
+    author: str = ""
+
+
+@dataclass
+class Session:
+    """An active session."""
+    id: str
+    user_id: str
+    created_at: str = ""
+    expires_at: str = ""
+    ip_address: str = ""

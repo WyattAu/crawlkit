@@ -10,7 +10,7 @@
 //!
 //! ## Features
 //!
-//! - **28 SEO analyzers** covering meta tags, content quality, security, accessibility
+//! - **31 SEO analyzers** covering meta tags, content quality, security, accessibility
 //! - **Async HTTP/2** fetching with retry, redirect tracking, rate limiting
 //! - **HTML parsing** with link, heading, image, and structured data extraction
 //! - **SQLite storage** with WAL mode and batch operations
@@ -68,6 +68,12 @@ pub mod ai_bots;
 /// covering HTTP status, redirects, canonical URLs, meta tags, headings, links,
 /// images, structured data, security, accessibility, and more.
 pub mod analyzers;
+/// SSRF (Server-Side Request Forgery) validation for URLs.
+///
+/// Shared validation used by both the plugin network guard and the API
+/// crawl-submission endpoint to ensure URLs point to public, routable
+/// HTTP(S) targets.
+pub mod ssrf;
 /// Article content generation from crawled page data.
 ///
 /// Extracts and formats article content from web pages for
@@ -96,7 +102,7 @@ pub mod backlinks;
 ///
 /// Uses tokio semaphores and bounded channels to limit concurrent tasks,
 /// ensuring the crawler stays within resource budgets.
-#[cfg(feature = "full")]
+#[cfg(feature = "unstable")]
 pub mod backpressure;
 /// Circuit breaker for failing HTTP endpoints to avoid cascading failures.
 ///
@@ -130,7 +136,7 @@ pub mod determinism;
 /// Provides [`DistributedQueue`] for sharing crawl queues across multiple
 /// crawler instances via Redis sorted sets. Each queue is namespaced by
 /// a crawl ID to prevent collisions between different crawl sessions.
-#[cfg(feature = "full")]
+#[cfg(feature = "unstable")]
 pub mod distributed_queue;
 /// DNS resolution cache and prefetching.
 ///
@@ -145,7 +151,7 @@ pub mod dns;
 #[cfg(feature = "full")]
 pub mod encryption;
 /// Enterprise feature gating and licensing utilities.
-#[cfg(feature = "full")]
+#[cfg(feature = "unstable")]
 pub mod enterprise;
 /// Export of crawl data to JSON, CSV, HTML, and Markdown formats.
 ///
@@ -188,7 +194,7 @@ pub mod query_tracker;
 ///
 /// Provides [`NativePlugin`](native_plugin::NativePlugin) for loading
 /// shared libraries that implement the crawlkit native plugin ABI.
-#[cfg(feature = "full")]
+#[cfg(feature = "unstable")]
 pub mod native_plugin;
 /// Metrics collection and observability hooks.
 ///
@@ -231,6 +237,12 @@ pub mod pg_storage;
 /// and configurable scope control (allowed/blocked domains and paths).
 #[cfg(feature = "full")]
 pub mod queue;
+/// Shared queue trait for pluggable queue backends.
+///
+/// Defines [`Queue`](queue_trait::Queue) for swapping between in-memory
+/// and distributed queue implementations.
+#[cfg(feature = "full")]
+pub mod queue_trait;
 /// Per-domain rate limiting to respect politeness constraints.
 ///
 /// Token-bucket rate limiter with per-domain and global buckets,
@@ -306,7 +318,7 @@ pub use backlink_adapters::{
 };
 #[cfg(feature = "full")]
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
-#[cfg(feature = "full")]
+#[cfg(feature = "unstable")]
 pub use backpressure::{BackpressureController, BackpressureError, BoundedPipeline};
 #[cfg(feature = "full")]
 pub use circuit_breaker::{
@@ -329,6 +341,8 @@ pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndica
 
 #[cfg(feature = "full")]
 pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
+#[cfg(all(feature = "full", feature = "observability"))]
+pub use observability::otel;
 #[cfg(feature = "postgres")]
 pub use pg_storage::PgStorage;
 #[cfg(feature = "full")]

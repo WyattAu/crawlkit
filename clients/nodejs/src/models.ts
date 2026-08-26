@@ -172,3 +172,26 @@ export interface SubmitPluginRequest {
   repository?: string;
   homepage?: string;
 }
+
+export interface UpdateScheduleRequest {
+  start_url?: string;
+  max_pages?: number;
+  interval_secs?: number;
+  enabled?: boolean;
+}
+
+export interface Session {
+  id: string;
+  user_id: string;
+  tenant_id: string;
+  ip_address: string;
+  user_agent: string;
+  created_at: string;
+  last_active_at: string;
+  expires_at: string;
+}
+
+export interface PluginTestResult {
+  success: boolean;
+  message: string;
+}

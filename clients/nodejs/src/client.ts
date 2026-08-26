@@ -20,6 +20,9 @@ import {
   LoginResponse,
   MarketplacePlugin,
   SubmitPluginRequest,
+  UpdateScheduleRequest,
+  Session,
+  PluginTestResult,
 } from "./models";
 import {
   CrawlkitError,
@@ -175,6 +178,25 @@ export class CrawlkitClient {
     await this.delete(`/api/v1/marketplace/plugins/${name}`);
   }
 
+  async testPlugin(name: string): Promise<PluginTestResult> {
+    return this.post(`/api/v1/marketplace/plugins/${name}/test`, {});
+  }
+
+  async updateSchedule(
+    scheduleId: string,
+    req: UpdateScheduleRequest
+  ): Promise<ScheduleResponse> {
+    return this.patch(`/api/v1/schedules/${scheduleId}`, req);
+  }
+
+  async listSessions(): Promise<Session[]> {
+    return this.get("/api/v1/sessions");
+  }
+
+  async revokeSession(sessionId: string): Promise<void> {
+    await this.post(`/api/v1/sessions/${sessionId}/revoke`, {});
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private async get<T>(path: string): Promise<T> {
     const headers: Record<string, string> = {};
@@ -198,6 +220,25 @@ export class CrawlkitClient {
 
     const response = await fetch(`${this.baseURL}${path}`, {
       method: "POST",
+      headers,
+      body: JSON.stringify(body as Record<string, unknown>),
+    });
+    if (!response.ok) {
+      throw await this.parseError(response);
+    }
+    return (await response.json()) as T;
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private async patch<T>(path: string, body: unknown): Promise<T> {
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
+    if (this.apiKey) headers["X-API-Key"] = this.apiKey;
+    if (this.jwtToken) headers["Authorization"] = `Bearer ${this.jwtToken}`;
+
+    const response = await fetch(`${this.baseURL}${path}`, {
+      method: "PATCH",
       headers,
       body: JSON.stringify(body as Record<string, unknown>),
     });

@@ -244,6 +244,28 @@ func (c *Client) DeleteMarketplacePlugin(ctx context.Context, name string) error
 	return c.delete(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s", name))
 }
 
+func (c *Client) TestPlugin(ctx context.Context, name string) (*PluginTestResult, error) {
+	var result PluginTestResult
+	err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/test", name), nil, &result)
+	return &result, err
+}
+
+func (c *Client) UpdateSchedule(ctx context.Context, scheduleID string, req UpdateScheduleRequest) (*ScheduleResponse, error) {
+	var result ScheduleResponse
+	err := c.patch(ctx, fmt.Sprintf("/api/v1/schedules/%s", scheduleID), req, &result)
+	return &result, err
+}
+
+func (c *Client) ListSessions(ctx context.Context) ([]Session, error) {
+	var result []Session
+	err := c.get(ctx, "/api/v1/sessions", &result)
+	return result, err
+}
+
+func (c *Client) RevokeSession(ctx context.Context, sessionID string) error {
+	return c.post(ctx, fmt.Sprintf("/api/v1/sessions/%s/revoke", sessionID), nil, nil)
+}
+
 func (c *Client) get(ctx context.Context, path string, result interface{}) error {
 	req, err := http.NewRequestWithContext(ctx, "GET", c.BaseURL+path, nil)
 	if err != nil {
@@ -318,6 +340,41 @@ func (c *Client) delete(ctx context.Context, path string) error {
 	}
 
 	return nil
+}
+
+func (c *Client) patch(ctx context.Context, path string, body interface{}, result interface{}) error {
+	var reqBody io.Reader
+	if body != nil {
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		reqBody = bytes.NewBuffer(jsonBody)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "PATCH", c.BaseURL+path, reqBody)
+	if err != nil {
+		return err
+	}
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	c.addHeaders(req)
+
+	resp, err := c.HTTPClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return parseErrorResponse(resp)
+	}
+
+	if result == nil {
+		return nil
+	}
+	return json.NewDecoder(resp.Body).Decode(result)
 }
 
 func (c *Client) addHeaders(req *http.Request) {

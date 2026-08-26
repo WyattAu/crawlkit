@@ -110,7 +110,7 @@ else
 fi
 
 # 10. MSRV check -- warn only
-warn "MSRV check (cargo +1.85.0 check --workspace)" cargo +1.85.0 check --workspace
+warn "MSRV check (cargo +1.94.0 check --workspace)" cargo +1.94.0 check --workspace
 
 # 11. Unused dependencies -- warn only (cargo-machete)
 printf "${CYAN}[%d/${total}]${NC} Unused dependencies (cargo machete) ... " "$((passed + failed + warnings + 1))"

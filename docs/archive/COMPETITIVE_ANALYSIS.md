@@ -1,3 +1,7 @@
+# COMPETITIVE_ANALYSIS.md
+
+> **Archived (2026-08-26)**: Written 2026-07-22. Competitor numbers are unsourced estimates. crawlkit self-assessment claims contradict README benchmarks (500+ vs >=50 pages/sec). Security score of 100 vs 0 for all competitors is marketing, not analysis. Kept as a starting point for a future rewrite with citations.
+
 # Competitive Analysis: crawlkit
 
 **Version**: 1.0

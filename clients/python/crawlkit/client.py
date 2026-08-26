@@ -11,6 +11,13 @@ from .models import (
     Finding,
     User,
     Tenant,
+    Backlink,
+    ApiKey,
+    Webhook,
+    Schedule,
+    AuditEvent,
+    MarketplacePlugin,
+    Session,
 )
 from .exceptions import (
     CrawlkitError,
@@ -195,6 +202,139 @@ class CrawlkitClient:
         """Get current user info."""
         result = self._request("GET", "/api/v1/auth/me")
         return User(**result)
+
+    # Crawl Findings & Backlinks
+
+    def get_crawl_findings(self, crawl_id: str) -> List[Finding]:
+        """Get findings for a crawl."""
+        result = self._request("GET", f"/api/v1/crawls/{crawl_id}/findings")
+        return [Finding(**f) for f in result]
+
+    def get_crawl_backlinks(self, crawl_id: str) -> List[Backlink]:
+        """Get backlinks for a crawl."""
+        result = self._request("GET", f"/api/v1/crawls/{crawl_id}/backlinks")
+        return [Backlink(**b) for b in result]
+
+    # Auth
+
+    def refresh_token(self) -> str:
+        """Refresh the current JWT token."""
+        result = self._request("POST", "/api/v1/auth/refresh")
+        return result["token"]
+
+    # API Keys
+
+    def create_api_key(self, name: str) -> ApiKey:
+        """Create a new API key."""
+        result = self._request("POST", "/api/v1/keys", json={"name": name})
+        return ApiKey(**result)
+
+    def list_api_keys(self) -> List[ApiKey]:
+        """List all API keys."""
+        result = self._request("GET", "/api/v1/keys")
+        return [ApiKey(**k) for k in result]
+
+    def delete_api_key(self, key: str) -> None:
+        """Delete an API key."""
+        self._request("DELETE", f"/api/v1/keys/{key}")
+
+    # Webhooks
+
+    def create_webhook(self, url: str, events: List[str]) -> Webhook:
+        """Create a new webhook subscription."""
+        result = self._request(
+            "POST", "/api/v1/webhooks", json={"url": url, "events": events}
+        )
+        return Webhook(**result)
+
+    def list_webhooks(self) -> List[Webhook]:
+        """List all webhook subscriptions."""
+        result = self._request("GET", "/api/v1/webhooks")
+        return [Webhook(**w) for w in result]
+
+    def delete_webhook(self, webhook_id: str) -> None:
+        """Delete a webhook subscription."""
+        self._request("DELETE", f"/api/v1/webhooks/{webhook_id}")
+
+    # Schedules
+
+    def create_schedule(self, crawl_id: str, cron_expression: str) -> Schedule:
+        """Create a new scheduled crawl."""
+        result = self._request(
+            "POST",
+            "/api/v1/schedules",
+            json={"crawl_id": crawl_id, "cron_expression": cron_expression},
+        )
+        return Schedule(**result)
+
+    def list_schedules(self) -> List[Schedule]:
+        """List all schedules."""
+        result = self._request("GET", "/api/v1/schedules")
+        return [Schedule(**s) for s in result]
+
+    def delete_schedule(self, schedule_id: str) -> None:
+        """Delete a schedule."""
+        self._request("DELETE", f"/api/v1/schedules/{schedule_id}")
+
+    def update_schedule(
+        self,
+        schedule_id: str,
+        cron_expression: Optional[str] = None,
+        enabled: Optional[bool] = None,
+    ) -> Schedule:
+        """Update a schedule."""
+        data: Dict[str, Any] = {}
+        if cron_expression is not None:
+            data["cron_expression"] = cron_expression
+        if enabled is not None:
+            data["enabled"] = enabled
+        result = self._request("PATCH", f"/api/v1/schedules/{schedule_id}", json=data)
+        return Schedule(**result)
+
+    # Audit
+
+    def list_audit_events(self) -> List[AuditEvent]:
+        """List audit log events."""
+        result = self._request("GET", "/api/v1/audit")
+        return [AuditEvent(**e) for e in result]
+
+    # Marketplace
+
+    def submit_plugin(
+        self, name: str, description: str, version: str
+    ) -> MarketplacePlugin:
+        """Submit a plugin to the marketplace."""
+        result = self._request(
+            "POST",
+            "/api/v1/marketplace/plugins",
+            json={"name": name, "description": description, "version": version},
+        )
+        return MarketplacePlugin(**result)
+
+    def list_marketplace_plugins(self) -> List[MarketplacePlugin]:
+        """List marketplace plugins."""
+        result = self._request("GET", "/api/v1/marketplace/plugins")
+        return [MarketplacePlugin(**p) for p in result]
+
+    def get_marketplace_plugin(self, name: str) -> MarketplacePlugin:
+        """Get a marketplace plugin by name."""
+        result = self._request("GET", f"/api/v1/marketplace/plugins/{name}")
+        return MarketplacePlugin(**result)
+
+    def delete_marketplace_plugin(self, name: str) -> None:
+        """Delete a marketplace plugin."""
+        self._request("DELETE", f"/api/v1/marketplace/plugins/{name}")
+
+    # Sessions
+
+    def list_sessions(self) -> List[Session]:
+        """List all active sessions."""
+        result = self._request("GET", "/api/v1/sessions")
+        return [Session(**s) for s in result]
+
+    def revoke_session(self, session_id: str) -> None:
+        """Revoke a session."""
+        self._request("POST", f"/api/v1/sessions/revoke", json={"session_id": session_id})
 
     # Metrics
 

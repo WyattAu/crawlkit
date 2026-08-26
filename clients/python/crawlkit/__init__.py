@@ -8,6 +8,13 @@ from .models import (
     User,
     Tenant,
     Finding,
+    Backlink,
+    ApiKey,
+    Webhook,
+    Schedule,
+    AuditEvent,
+    MarketplacePlugin,
+    Session,
 )
 from .exceptions import CrawlkitError, AuthenticationError, NotFoundError
 
@@ -20,6 +27,13 @@ __all__ = [
     "User",
     "Tenant",
     "Finding",
+    "Backlink",
+    "ApiKey",
+    "Webhook",
+    "Schedule",
+    "AuditEvent",
+    "MarketplacePlugin",
+    "Session",
     "CrawlkitError",
     "AuthenticationError",
     "NotFoundError",

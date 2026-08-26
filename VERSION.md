@@ -1,10 +1,10 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 23 (v4.4.1 Signed Releases)
-**Version:** 4.4.1
-**Status:** Released (5-platform binaries + SBOMs attached)
-**Last Updated:** 2026-08-19
+**Current Phase:** Phase 24 (v5.0.0 Ground Truth)
+**Version:** 5.0.0
+**Status:** In Development
+**Last Updated:** 2026-08-27
 **MSRV:** 1.94.0
 
 ---
@@ -21,6 +21,7 @@
 | 4 | Documentation Overhaul | Complete | 2026-07-26 | README rewritten, zero emojis, technical precision |
 | 16 | v2.1.0 Release | Complete | 2026-08-18 | Security hardening, WASM ABI conformance, persistent audit |
 | 17 | v3.0.0 Release | Complete | 2026-08-19 | Breaking engine API cleanup; plugin trust chain; determinism rails; API backpressure/idempotency; signed release artifacts |
+| 24 | v5.0.0 Ground Truth | In Progress | 2026-08-27 | Type unification (crawlkit-types); DIP fix (dyn StorageBackend); client library completion; doc reconciliation; SSRF dedup; dead code gating |
 
 ## Current State
 
@@ -28,10 +29,22 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 768 passing (unit+bins: 626, integration: 97 incl. 21 router + 13 WASM-ABI + 8 determinism tests, doc: 45; 14 service-gated ignored — PostgreSQL/Redis suites now run in CI via service containers) + 49 client-SDK tests (Go 27, Python 12, Node 10) + 44 dashboard tests
+- **Test Count:** 782 passing (unit/lib: 634, integration: 104, doc: 44; 9 ignored)
 - **Analyzer Count:** 31
 - **Clippy Warnings:** 0
-- **Unsafe Code:** Forbidden (workspace-level)
+- **Unsafe Code:** Denied (workspace-level); FFI crates override to allow with SAFETY comments
+- **Workspace Crates:** 5 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-types)
+- **Client Libraries:** Python 92%, Go 100%, Node.js 100%
+
+## Breaking Changes (v5.0.0)
+
+| Change | Migration |
+|--------|-----------|
+| `Finding.category` type: `String` → `IssueCategory` | Plugin authors: use `IssueCategory::Seo` etc. instead of `"seo".into()`. `From<&str>` provided for easy migration. |
+| `CrawlEngine::new()` accepts `impl StorageBackend` | Callers passing concrete `Storage` still work (coercion). Callers using `Arc<Storage>` must coerce to `Arc<dyn StorageBackend>`. |
+| `Severity` gains `Copy` | `.clone()` calls on `Severity` are now unnecessary (clippy will flag). |
+| `PluginFindingJson` removed | Internal to engine; no external impact. Plugin JSON now deserializes directly to `Finding`. |
+| Aspirational docs archived | `ENTERPRISE_ARCHITECTURE.md`, `WIRING_PLAN.md`, `COMPETITIVE_ANALYSIS.md` moved to `docs/archive/`. `PERFORMANCE_BENCHMARKS_FINAL.md` deleted. |
 
 ## Version History
 
@@ -52,7 +65,8 @@
 | 4.3.0 | 2026-08-23 | Structured guest context (B4): crawlkit_host.get_context + analyze_with_context + SDK host module; soft-404 example |
 | 4.4.0 | 2026-08-23 | Plugins execute during crawls (plugin_dirs config, --plugins CLI, default ~/.crawlkit/plugins; trap-safe, E2E-tested) |
 | 4.4.1 | 2026-08-23 | GPG-signed checksums (first signed release); ADR-011 WASI eval; OSS-Fuzz submission kit |
+| 5.0.0 | 2026-08-27 | Breaking: unified types (crawlkit-types crate); DIP fix (dyn StorageBackend); client library completion (Python 92%, Go/Node 100%); SSRF dedup; dead code gated; docs reconciled |
 
 ---
 
-*Generated: 2026-08-19 | Version: 3.0.0*
+*Generated: 2026-08-27 | Version: 5.0.0*

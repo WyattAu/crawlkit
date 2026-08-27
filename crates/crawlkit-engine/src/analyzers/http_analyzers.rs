@@ -7,6 +7,237 @@ use crate::types::{IssueCategory, Severity};
 use super::{AnalysisContext, Analyzer, Finding, SslCertificateInfo};
 
 // ---------------------------------------------------------------------------
+// HTTP Version Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct HttpVersionAnalyzer;
+
+impl HttpVersionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for HttpVersionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for HttpVersionAnalyzer {
+    fn name(&self) -> &str {
+        "http-version"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let version = Self::get_header(ctx.headers, "HTTP-Version")
+            .or_else(|| Self::get_header(ctx.headers, "X-Http-Version"));
+
+        // Also detect from Via header (e.g. "1.1 varnish")
+        let via = Self::get_header(ctx.headers, "Via");
+
+        let http_version = match version {
+            Some(v) => v.to_string(),
+            None => {
+                // Infer from Via header or server behavior
+                if let Some(via_val) = via {
+                    // Via header format: "1.1 varnish" or "2.0 google"
+                    if let Some(proto) = via_val.split_whitespace().next() {
+                        proto.to_string()
+                    } else {
+                        return findings;
+                    }
+                } else {
+                    return findings;
+                }
+            }
+        };
+
+        // HTTPVER001: HTTP/1.0 response when HTTP/2 is available
+        if http_version.starts_with("1.0") {
+            // Check if there are hints that HTTP/2 could be used
+            // (e.g., server supports h2 but responding with HTTP/1.0)
+            let server = ctx.server.unwrap_or("");
+            let has_h2_hints = server.contains("nginx/1.19")
+                || server.contains("nginx/1.20")
+                || server.contains("nginx/1.21")
+                || server.contains("nginx/1.22")
+                || server.contains("nginx/1.23")
+                || server.contains("nginx/1.24")
+                || server.contains("nginx/1.25")
+                || server.contains("nginx/1.26")
+                || server.contains("Apache/2.4")
+                || server.contains("cloudflare")
+                || server.contains("Google");
+
+            if has_h2_hints {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Http,
+                    code: "HTTPVER001".to_string(),
+                    title: "HTTP/1.0 response when HTTP/2 may be available".to_string(),
+                    description: format!(
+                        "Response uses HTTP/1.0 but the server ({server}) likely supports \
+                         HTTP/2. HTTP/2 provides multiplexing, header compression, and server push."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Enable HTTP/2 on the server. Most modern web servers \
+                                     support HTTP/2 with TLS."
+                        .to_string(),
+                });
+            }
+        }
+
+        // HTTPVER002: HTTP/1.1 response (INFO)
+        if http_version.starts_with("1.1") && !http_version.starts_with("1.0") {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Http,
+                code: "HTTPVER002".to_string(),
+                title: "HTTP/1.1 response".to_string(),
+                description: "Page is served over HTTP/1.1. While functional, HTTP/2 or HTTP/3 \
+                              offer significant performance improvements including multiplexing \
+                              and header compression."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Consider upgrading to HTTP/2 or HTTP/3 for better performance."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+impl HttpVersionAnalyzer {
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Server Header Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ServerHeaderAnalyzer;
+
+impl ServerHeaderAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Known version patterns that leak in Server headers.
+    const VERSION_PATTERNS: &[&str] = &[
+        "Apache/",
+        "nginx/",
+        "Microsoft-IIS/",
+        "LiteSpeed/",
+        "OpenResty/",
+        "Cloudflare",
+        "GWS/",
+        "gws/",
+        "AmazonS3",
+    ];
+
+    /// Known technology stack keywords.
+    const TECH_KEYWORDS: &[&str] = &[
+        "PHP",
+        "ASP.NET",
+        "Express",
+        "Django",
+        "Flask",
+        "Ruby on Rails",
+        "Laravel",
+        "Spring",
+        "WordPress",
+        "Drupal",
+        "Joomla",
+        "Varnish",
+        "squid",
+        "ATS",
+    ];
+}
+
+impl Default for ServerHeaderAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ServerHeaderAnalyzer {
+    fn name(&self) -> &str {
+        "server-header"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let server = match ctx.server {
+            Some(s) => s,
+            None => {
+                // No Server header found — that's good from a security perspective
+                return findings;
+            }
+        };
+
+        // SERVER001: Server header leaks version information
+        let server_lower = server.to_lowercase();
+        for pattern in Self::VERSION_PATTERNS {
+            if server_lower.contains(&pattern.to_lowercase()) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "SERVER001".to_string(),
+                    title: "Server header leaks version information".to_string(),
+                    description: format!(
+                        "Server header reveals version info: \"{server}\". Attackers can use \
+                         this to target known vulnerabilities for specific software versions."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Remove or obfuscate the Server header to hide version \
+                                     information. For nginx: server_tokens off; For Apache: \
+                                     ServerTokens Prod"
+                        .to_string(),
+                });
+                break;
+            }
+        }
+
+        // SERVER002: Server header reveals technology stack
+        for keyword in Self::TECH_KEYWORDS {
+            if server.to_lowercase().contains(&keyword.to_lowercase()) {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "SERVER002".to_string(),
+                    title: "Server header reveals technology stack".to_string(),
+                    description: format!(
+                        "Server header reveals technology: \"{server}\". This information \
+                         helps attackers understand the technology stack."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Remove the Server header or set it to a generic value to \
+                                     hide the underlying technology stack."
+                        .to_string(),
+                });
+                break;
+            }
+        }
+
+        findings
+    }
+}
+
+
+
+// ---------------------------------------------------------------------------
 // 1. HTTP Status Analyzer
 // ---------------------------------------------------------------------------
 
@@ -1275,5 +1506,344 @@ mod tests {
         let ctx = make_ctx(&page, Some(200), &headers, Some(0));
         let findings = CompressionAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
+    }
+
+    // ===== HttpVersionAnalyzer tests =====
+
+    #[test]
+    fn test_http_version_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_http_version_http10_with_modern_server() {
+        let headers = vec![("HTTP-Version".to_string(), "1.0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("nginx/1.24.0"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HTTPVER001"));
+    }
+
+    #[test]
+    fn test_http_version_http10_without_modern_server() {
+        let headers = vec![("HTTP-Version".to_string(), "1.0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("nginx/1.10.0"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        // Old nginx may not support h2, so no finding expected
+        assert!(!findings.iter().any(|f| f.code == "HTTPVER001"));
+    }
+
+    #[test]
+    fn test_http_version_http11_info() {
+        let headers = vec![("HTTP-Version".to_string(), "1.1".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HTTPVER002"));
+        let f = findings.iter().find(|f| f.code == "HTTPVER002").unwrap();
+        assert_eq!(f.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_http_version_http2_no_finding() {
+        let headers = vec![("HTTP-Version".to_string(), "2.0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_http_version_via_header_http11() {
+        let headers = vec![("Via".to_string(), "1.1 varnish".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HTTPVER002"));
+    }
+
+    #[test]
+    fn test_http_version_via_header_http2() {
+        let headers = vec![("Via".to_string(), "2.0 google".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_http_version_http10_cloudflare() {
+        let headers = vec![("HTTP-Version".to_string(), "1.0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("cloudflare"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HTTPVER001"));
+    }
+
+    #[test]
+    fn test_http_version_case_insensitive() {
+        let headers = vec![("http-version".to_string(), "1.1".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HttpVersionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HTTPVER002"));
+    }
+
+    // ===== ServerHeaderAnalyzer tests =====
+
+    #[test]
+    fn test_server_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_server_leaks_nginx_version() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("nginx/1.24.0"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
+    }
+
+    #[test]
+    fn test_server_leaks_apache_version() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("Apache/2.4.51 (Ubuntu)"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
+    }
+
+    #[test]
+    fn test_server_leaks_iis_version() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("Microsoft-IIS/10.0"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
+    }
+
+    #[test]
+    fn test_server_reveals_php() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("Apache"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SERVER001"));
+        assert!(!findings.iter().any(|f| f.code == "SERVER002"));
+    }
+
+    #[test]
+    fn test_server_reveals_wordpress() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("nginx/1.20.0 + WordPress"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
+        assert!(findings.iter().any(|f| f.code == "SERVER002"));
+    }
+
+    #[test]
+    fn test_server_generic_no_leak() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("WebServer"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_server_case_insensitive_tech_match() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("MyServer PHP/8.1"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER002"));
+    }
+
+    #[test]
+    fn test_server_cloudflare_no_version() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("cloudflare"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        // "cloudflare" matches VERSION_PATTERNS (SERVER001) but not TECH_KEYWORDS
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
+    }
+
+    #[test]
+    fn test_server_litespeed_version() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: Some("LiteSpeed/1.7.16"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SERVER001"));
     }
 }

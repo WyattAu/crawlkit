@@ -5,6 +5,680 @@ use crate::types::{IssueCategory, Severity};
 
 use super::{AnalysisContext, Analyzer, Finding};
 
+// ---------------------------------------------------------------------------
+// Preload Hint Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct PreloadHintAnalyzer;
+
+impl PreloadHintAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for PreloadHintAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for PreloadHintAnalyzer {
+    fn name(&self) -> &str {
+        "preload-hints"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body = ctx.body.unwrap_or("");
+
+        // Count preload hints
+        let preload_count = body.matches("rel=\"preload\"").count()
+            + body.matches("rel='preload'").count();
+
+        // PRELOAD002: Too many preload hints (>5)
+        if preload_count > 5 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "PRELOAD002".to_string(),
+                title: "Too many preload hints".to_string(),
+                description: format!(
+                    "Page has {preload_count} preload hints, exceeding the recommended \
+                     maximum of 5. Excessive preloading can actually slow down page load by \
+                     competing for bandwidth."
+                ),
+                url: url.clone(),
+                recommendation: "Reduce preload hints to only the most critical resources. \
+                                 Focus on above-the-fold fonts, hero images, and critical CSS."
+                    .to_string(),
+            });
+        }
+
+        // PRELOAD001: Critical resources missing preload hints
+        // Check for large images without preload
+        let has_critical_images = ctx
+            .page
+            .images
+            .iter()
+            .any(|img| !img.is_lazy_loaded && img.width.map_or(false, |w| w > 600));
+        let has_preconnect = body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
+        let has_dns_prefetch = body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
+
+        // Count external origins (same as CriticalResourceAnalyzer logic)
+        let origins: HashSet<String> = ctx
+            .page
+            .scripts
+            .iter()
+            .filter_map(|s| s.src.as_ref())
+            .filter_map(|src| url::Url::parse(src).ok())
+            .filter(|u| !u.cannot_be_a_base())
+            .map(|u| u.origin().ascii_serialization())
+            .collect();
+
+        let page_origin = url::Url::parse(url)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+        let external_origins: Vec<&str> = origins
+            .iter()
+            .filter(|o| *o != &page_origin)
+            .map(|s| s.as_str())
+            .collect();
+
+        if has_critical_images && preload_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "PRELOAD001".to_string(),
+                title: "Critical resources missing preload hints".to_string(),
+                description: "Large above-the-fold images were found but no preload hints are \
+                              specified. Without preload hints, the browser may discover these \
+                              resources late in the loading process."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"preload\" href=\"...\" as=\"image\"> for \
+                                 critical above-the-fold images."
+                    .to_string(),
+            });
+        } else if external_origins.len() >= 2 && !has_preconnect && !has_dns_prefetch && preload_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "PRELOAD001".to_string(),
+                title: "Missing resource hints for external origins".to_string(),
+                description: format!(
+                    "Page references {} external origin(s) without preload, preconnect, or \
+                     dns-prefetch hints.",
+                    external_origins.len()
+                ),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"preconnect\"> or <link rel=\"dns-prefetch\"> \
+                                 for critical third-party origins."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Async Script Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct AsyncScriptAnalyzer;
+
+impl AsyncScriptAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for AsyncScriptAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for AsyncScriptAnalyzer {
+    fn name(&self) -> &str {
+        "async-scripts"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body = ctx.body.unwrap_or("");
+
+        // ASYNC001: External scripts without async or defer
+        let blocking_external: Vec<&str> = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| {
+                s.script_type
+                    .as_deref()
+                    .map(|t| t != "application/ld+json")
+                    .unwrap_or(true)
+            })
+            .map(|s| s.src.as_deref().unwrap_or(""))
+            .collect();
+
+        if !blocking_external.is_empty() {
+            let examples = if blocking_external.len() > 3 {
+                format!(
+                    "{}, ...",
+                    blocking_external
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                blocking_external.join(", ")
+            };
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Performance,
+                code: "ASYNC001".to_string(),
+                title: "Render-blocking scripts without async/defer".to_string(),
+                description: format!(
+                    "{} external script(s) lack both async and defer attributes, blocking \
+                     page rendering: {}.",
+                    blocking_external.len(),
+                    examples
+                ),
+                url: url.clone(),
+                recommendation: "Add the async attribute to independent scripts or defer to \
+                                 scripts that must execute in order."
+                    .to_string(),
+            });
+        }
+
+        // ASYNC002: Inline scripts blocking render (without async/defer)
+        let inline_script_count = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| s.src.is_none())
+            .filter(|s| {
+                s.script_type
+                    .as_deref()
+                    .map(|t| t != "application/ld+json")
+                    .unwrap_or(true)
+            })
+            .count();
+
+        // Heuristic: check for large inline scripts by looking for patterns
+        // that suggest substantial inline JS
+        let has_inline_exec = body.contains("<script>")
+            || body.contains("<script type=\"text/javascript\">")
+            || body.contains("<script language=");
+
+        if inline_script_count > 3 || (inline_script_count > 0 && has_inline_exec) {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "ASYNC002".to_string(),
+                title: "Inline scripts may block rendering".to_string(),
+                description: format!(
+                    "Page has {inline_script_count} inline script(s). Inline scripts without \
+                     async/defer can block HTML parsing and delay First Contentful Paint."
+                ),
+                url: url.clone(),
+                recommendation: "Move inline scripts to external files and load them with \
+                                 defer, or add the async attribute to inline scripts where \
+                                 possible."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Image Lazy Load Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ImageLazyLoadAnalyzer;
+
+impl ImageLazyLoadAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ImageLazyLoadAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ImageLazyLoadAnalyzer {
+    fn name(&self) -> &str {
+        "image-lazy-load"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.images.is_empty() {
+            return findings;
+        }
+
+        // LAZYIMG001: Large images without lazy loading
+        // Only flag images without dimensions (unknown size) that aren't lazy-loaded
+        let unknown_size_no_lazy: Vec<&str> = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| !img.is_lazy_loaded)
+            .filter(|img| img.width.is_none() || img.height.is_none())
+            .map(|img| img.src.as_str())
+            .collect();
+
+        if !unknown_size_no_lazy.is_empty() && unknown_size_no_lazy.len() <= ctx.page.images.len() / 2 {
+            let examples = if unknown_size_no_lazy.len() > 3 {
+                format!(
+                    "{}, ...",
+                    unknown_size_no_lazy
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                unknown_size_no_lazy.join(", ")
+            };
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "LAZYIMG001".to_string(),
+                title: "Images without lazy loading or dimensions".to_string(),
+                description: format!(
+                    "{} image(s) lack lazy loading and have no explicit dimensions, which \
+                     may indicate they are above-the-fold but could also be large \
+                     below-the-fold images: {}.",
+                    unknown_size_no_lazy.len(),
+                    examples
+                ),
+                url: url.clone(),
+                recommendation: "Add loading=\"lazy\" to below-the-fold images. Ensure \
+                                 above-the-fold images have explicit width and height to \
+                                 prevent layout shifts."
+                    .to_string(),
+            });
+        }
+
+        // LAZYIMG002: Above-the-fold images with lazy loading
+        // Images in the first few positions are likely above-the-fold
+        let early_images: Vec<&str> = ctx
+            .page
+            .images
+            .iter()
+            .take(3)
+            .filter(|img| img.is_lazy_loaded)
+            .filter(|img| {
+                // Small images with known dimensions are likely above-the-fold
+                img.width
+                    .zip(img.height)
+                    .map_or(false, |(w, h)| w <= 600 && h <= 400)
+            })
+            .map(|img| img.src.as_str())
+            .collect();
+
+        if !early_images.is_empty() {
+            let examples = early_images.join(", ");
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "LAZYIMG002".to_string(),
+                title: "Above-the-fold images with lazy loading".to_string(),
+                description: format!(
+                    "Small image(s) at the top of the page use lazy loading, which may \
+                     delay their display: {examples}."
+                ),
+                url: url.clone(),
+                recommendation: "Remove loading=\"lazy\" from above-the-fold images. Lazy \
+                                 loading is intended for below-the-fold content."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Font Display Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct FontDisplayAnalyzer;
+
+impl FontDisplayAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for FontDisplayAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for FontDisplayAnalyzer {
+    fn name(&self) -> &str {
+        "font-display"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body = ctx.body.unwrap_or("");
+
+        // Count font files loaded (look for font URLs in stylesheets/scripts)
+        let font_extensions = [".woff2", ".woff", ".ttf", ".otf", ".eot"];
+        let font_count = ctx
+            .page
+            .styles
+            .iter()
+            .filter_map(|s| s.href.as_ref())
+            .filter(|href| {
+                let lower = href.to_lowercase();
+                font_extensions.iter().any(|ext| lower.contains(ext))
+            })
+            .count()
+            + ctx
+                .page
+                .scripts
+                .iter()
+                .filter_map(|s| s.src.as_ref())
+                .filter(|src| {
+                    let lower = src.to_lowercase();
+                    font_extensions.iter().any(|ext| lower.contains(ext))
+                })
+                .count();
+
+        // Also count fonts referenced in body content
+        let body_font_count = font_extensions
+            .iter()
+            .map(|ext| body.matches(ext).count())
+            .sum::<usize>();
+
+        let total_fonts = font_count + body_font_count;
+
+        // FONT002: Multiple font files loaded (>3)
+        if total_fonts > 3 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "FONT002".to_string(),
+                title: "Multiple font files loaded".to_string(),
+                description: format!(
+                    "Page loads {total_fonts} font file(s), exceeding the recommended \
+                     maximum of 3. Each font file requires a separate HTTP request and \
+                     increases page weight."
+                ),
+                url: url.clone(),
+                recommendation: "Reduce the number of font files. Use font subsetting to \
+                                 include only the characters needed, or use system fonts \
+                                 for body text."
+                    .to_string(),
+            });
+        }
+
+        // FONT001: Web fonts missing font-display:swap
+        // Check if fonts are loaded but font-display is not specified
+        let has_font_display = body.contains("font-display:")
+            || body.contains("font-display :")
+            || body.contains("font-display: ");
+
+        if total_fonts > 0 && !has_font_display {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "FONT001".to_string(),
+                title: "Web fonts missing font-display:swap".to_string(),
+                description: format!(
+                    "Page loads {total_fonts} font file(s) but no font-display property was \
+                     found. Without font-display:swap, text may be invisible while web fonts \
+                     load (Flash of Invisible Text)."
+                ),
+                url: url.clone(),
+                recommendation: "Add font-display:swap to @font-face declarations to ensure \
+                                 text remains visible during font loading."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Resource Size Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ResourceSizeAnalyzer;
+
+impl ResourceSizeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ResourceSizeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ResourceSizeAnalyzer {
+    fn name(&self) -> &str {
+        "resource-size"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // RESSIZE001: Single resource >500KB
+        if let Some(body_size) = ctx.body_size {
+            if body_size > 500 * 1024 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Performance,
+                    code: "RESSIZE001".to_string(),
+                    title: "Single resource exceeds 500KB".to_string(),
+                    description: format!(
+                        "Page HTML is {} bytes ({:.1} KB), exceeding the 500KB threshold. \
+                         Large HTML files slow down parsing and increase Time to Interactive.",
+                        body_size,
+                        body_size as f64 / 1024.0
+                    ),
+                    url: url.clone(),
+                    recommendation: "Reduce HTML size by removing unnecessary code, using \
+                                     server-side rendering for dynamic content, or implementing \
+                                     pagination."
+                        .to_string(),
+                });
+            }
+        }
+
+        // RESSIZE002: Total page size >5MB
+        if let Some(body_size) = ctx.body_size {
+            // Estimate total page size including resources
+            let estimated_resources = ctx.page.images.len() * 100 * 1024 // ~100KB per image
+                + ctx.page.scripts.len() * 50 * 1024 // ~50KB per script
+                + ctx.page.styles.len() * 20 * 1024; // ~20KB per stylesheet
+            let total_estimated = body_size + estimated_resources;
+
+            if total_estimated > 5 * 1024 * 1024 {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Performance,
+                    code: "RESSIZE002".to_string(),
+                    title: "Estimated total page size exceeds 5MB".to_string(),
+                    description: format!(
+                        "Based on HTML size ({:.1} KB) and {} resources, the estimated total \
+                         page size exceeds 5MB. Large pages consume excessive bandwidth and \
+                         slow down loading on mobile connections.",
+                        body_size as f64 / 1024.0,
+                        ctx.page.images.len() + ctx.page.scripts.len() + ctx.page.styles.len()
+                    ),
+                    url: url.clone(),
+                    recommendation: "Reduce page size by optimizing images, minifying \
+                                     code, implementing lazy loading, and using compression."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Connection Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ConnectionAnalyzer;
+
+impl ConnectionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ConnectionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ConnectionAnalyzer {
+    fn name(&self) -> &str {
+        "connection"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Collect unique origins from all external resources
+        let mut origins: HashSet<String> = HashSet::new();
+
+        for s in &ctx.page.scripts {
+            if let Some(src) = &s.src {
+                if let Ok(parsed) = url::Url::parse(src) {
+                    if !parsed.cannot_be_a_base() {
+                        origins.insert(parsed.origin().ascii_serialization());
+                    }
+                }
+            }
+        }
+
+        for s in &ctx.page.styles {
+            if let Some(href) = &s.href {
+                if let Ok(parsed) = url::Url::parse(href) {
+                    if !parsed.cannot_be_a_base() {
+                        origins.insert(parsed.origin().ascii_serialization());
+                    }
+                }
+            }
+        }
+
+        for img in &ctx.page.images {
+            if let Ok(parsed) = url::Url::parse(&img.src) {
+                if !parsed.cannot_be_a_base() {
+                    origins.insert(parsed.origin().ascii_serialization());
+                }
+            }
+        }
+
+        // Get the page origin
+        let page_origin = url::Url::parse(url)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+
+        // Remove the page's own origin
+        origins.remove(&page_origin);
+
+        // CONN001: Too many unique domains (>10)
+        if origins.len() > 10 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "CONN001".to_string(),
+                title: "Too many unique external domains".to_string(),
+                description: format!(
+                    "Page connects to {} unique external domains, exceeding the recommended \
+                     maximum of 10. Each new domain requires DNS lookup, TCP handshake, \
+                     and TLS negotiation.",
+                    origins.len()
+                ),
+                url: url.clone(),
+                recommendation: "Reduce the number of external domains. Consider self-hosting \
+                                 critical resources or using a CDN to consolidate origins."
+                    .to_string(),
+            });
+        }
+
+        // CONN002: Missing preconnect for external origins
+        let body = ctx.body.unwrap_or("");
+        let has_preconnect = body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
+        let has_dns_prefetch = body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
+
+        let external_origins: Vec<&str> = origins.iter().map(|s| s.as_str()).collect();
+
+        if external_origins.len() >= 2 && !has_preconnect && !has_dns_prefetch {
+            let examples = if external_origins.len() > 3 {
+                format!(
+                    "{}, ...",
+                    external_origins
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                external_origins.join(", ")
+            };
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "CONN002".to_string(),
+                title: "Missing preconnect for external origins".to_string(),
+                description: format!(
+                    "Page references {} external origin(s) ({}) without <link rel=\"preconnect\"> \
+                     or <link rel=\"dns-prefetch\"> hints.",
+                    external_origins.len(),
+                    examples
+                ),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"preconnect\" href=\"ORIGIN\"> for critical \
+                                 third-party origins to establish early connections."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
 /// Detailed image information for analysis.
 #[derive(Debug, Clone)]
 pub struct ImageInfo {
@@ -1104,5 +1778,1000 @@ impl Analyzer for CriticalResourceAnalyzer {
         self.check_blocking_stylesheets(ctx, url, &mut f);
         self.check_preconnect_hints(ctx, url, &mut f);
         f
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::{ExtractedImage, ParsedPage, ScriptInfo, StyleInfo};
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(
+        page: &'a ParsedPage,
+        status: Option<u16>,
+        body: Option<&'a str>,
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // ===== PreloadHintAnalyzer tests =====
+
+    #[test]
+    fn test_preload_no_resources() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_preload_too_many_hints() {
+        let body = r#"
+            <link rel="preload" href="/a.css" as="style">
+            <link rel="preload" href="/b.js" as="script">
+            <link rel="preload" href="/c.woff2" as="font">
+            <link rel="preload" href="/d.png" as="image">
+            <link rel="preload" href="/e.css" as="style">
+            <link rel="preload" href="/f.js" as="script">
+        "#;
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PRELOAD002"));
+    }
+
+    #[test]
+    fn test_preload_critical_images_missing_hints() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/hero.jpg".to_string(),
+            alt: "Hero".to_string(),
+            width: Some(1200),
+            height: Some(800),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(""));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PRELOAD001"));
+    }
+
+    #[test]
+    fn test_preload_critical_images_with_hints() {
+        let body = r#"<link rel="preload" href="/hero.jpg" as="image">"#;
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/hero.jpg".to_string(),
+            alt: "Hero".to_string(),
+            width: Some(1200),
+            height: Some(800),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        // Has preload hints now, so no PRELOAD001
+        assert!(!findings.iter().any(|f| f.code == "PRELOAD001"));
+    }
+
+    #[test]
+    fn test_preload_external_origins_missing_hints() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn1.example.com/app.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn2.example.com/lib.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some(""));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PRELOAD001"));
+    }
+
+    #[test]
+    fn test_preload_no_large_images_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/small.png".to_string(),
+            alt: "Small".to_string(),
+            width: Some(100),
+            height: Some(100),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(""));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PRELOAD001"));
+    }
+
+    #[test]
+    fn test_preload_exactly_5_hints_ok() {
+        let body = r#"
+            <link rel="preload" href="/a.css" as="style">
+            <link rel="preload" href="/b.js" as="script">
+            <link rel="preload" href="/c.woff2" as="font">
+            <link rel="preload" href="/d.png" as="image">
+            <link rel="preload" href="/e.css" as="style">
+        "#;
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PRELOAD002"));
+    }
+
+    #[test]
+    fn test_preload_single_hint_ok() {
+        let body = r#"<link rel="preload" href="/critical.css" as="style">"#;
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PRELOAD002"));
+    }
+
+    #[test]
+    fn test_preload_preconnect_present_no_finding() {
+        let body = r#"<link rel="preconnect" href="https://cdn.example.com">"#;
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/app.js".to_string()),
+            r#async: true,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = PreloadHintAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PRELOAD001"));
+    }
+
+    // ===== AsyncScriptAnalyzer tests =====
+
+    #[test]
+    fn test_async_no_scripts() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_async_blocking_scripts() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ASYNC001"));
+    }
+
+    #[test]
+    fn test_async_async_script_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/app.js".to_string()),
+            r#async: true,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ASYNC001"));
+    }
+
+    #[test]
+    fn test_async_defer_script_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/app.js".to_string()),
+            r#async: false,
+            defer: true,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ASYNC001"));
+    }
+
+    #[test]
+    fn test_async_ld_json_not_flagged() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/schema.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: Some("application/ld+json".to_string()),
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ASYNC001"));
+    }
+
+    #[test]
+    fn test_async_multiple_blocking_scripts() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn.example.com/a.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn.example.com/b.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ASYNC001"));
+        let f = findings.iter().find(|f| f.code == "ASYNC001").unwrap();
+        assert!(f.description.contains("2"));
+    }
+
+    #[test]
+    fn test_async_inline_scripts_warning() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: None,
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: None,
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: None,
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: None,
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some("<script>var x = 1;</script>"));
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ASYNC002"));
+    }
+
+    #[test]
+    fn test_async_one_inline_script_no_warning() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: None,
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ASYNC002"));
+    }
+
+    // ===== ImageLazyLoadAnalyzer tests =====
+
+    #[test]
+    fn test_lazy_load_no_images() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_lazy_load_images_without_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/img1.jpg".to_string(),
+                alt: "Img1".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/img2.jpg".to_string(),
+                alt: "Img2".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/img3.jpg".to_string(),
+                alt: "Img3".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/img4.jpg".to_string(),
+                alt: "Img4".to_string(),
+                width: Some(200),
+                height: Some(200),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LAZYIMG001"));
+    }
+
+    #[test]
+    fn test_lazy_load_all_images_with_dimensions_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/img1.jpg".to_string(),
+                alt: "Img1".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/img2.jpg".to_string(),
+                alt: "Img2".to_string(),
+                width: Some(200),
+                height: Some(150),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAZYIMG001"));
+    }
+
+    #[test]
+    fn test_lazy_load_early_images_with_lazy() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/hero.jpg".to_string(),
+            alt: "Hero".to_string(),
+            width: Some(100),
+            height: Some(100),
+            has_alt: true,
+            is_lazy_loaded: true,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LAZYIMG002"));
+    }
+
+    #[test]
+    fn test_lazy_load_early_images_not_lazy_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/hero.jpg".to_string(),
+            alt: "Hero".to_string(),
+            width: Some(100),
+            height: Some(100),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAZYIMG002"));
+    }
+
+    #[test]
+    fn test_lazy_load_mixed_scenario() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/hero.jpg".to_string(),
+                alt: "Hero".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: true,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/below-fold.jpg".to_string(),
+                alt: "Below".to_string(),
+                width: None,
+                height: None,
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        // Should have LAZYIMG001 for the second image and LAZYIMG002 for the first
+        assert!(findings.iter().any(|f| f.code == "LAZYIMG001"));
+        assert!(findings.iter().any(|f| f.code == "LAZYIMG002"));
+    }
+
+    #[test]
+    fn test_lazy_load_large_images_not_lazy_no_flag() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/big1.jpg".to_string(),
+                alt: "Big1".to_string(),
+                width: Some(800),
+                height: Some(600),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/big2.jpg".to_string(),
+                alt: "Big2".to_string(),
+                width: Some(1000),
+                height: Some(800),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ImageLazyLoadAnalyzer::new().analyze(&ctx);
+        // Large images with known dimensions should not trigger LAZYIMG001
+        assert!(!findings.iter().any(|f| f.code == "LAZYIMG001"));
+    }
+
+    // ===== FontDisplayAnalyzer tests =====
+
+    #[test]
+    fn test_font_no_fonts() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_font_missing_display() {
+        let body = r#"<link href="/fonts/roboto.woff2" rel="stylesheet">"#;
+        let mut page = make_page("https://example.com");
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/fonts/roboto.woff2".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FONT001"));
+    }
+
+    #[test]
+    fn test_font_with_display_swap() {
+        let body = r#"@font-face { font-display: swap; }"#;
+        let mut page = make_page("https://example.com");
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/fonts/roboto.woff2".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FONT001"));
+    }
+
+    #[test]
+    fn test_font_multiple_font_files() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/roboto.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/open-sans.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/lato.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/arial.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FONT002"));
+    }
+
+    #[test]
+    fn test_font_three_font_files_ok() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/roboto.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/open-sans.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/fonts/lato.woff2".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FONT002"));
+    }
+
+    #[test]
+    fn test_font_body_font_references() {
+        let body = r#"
+            <link href="/fonts/roboto.woff2" rel="stylesheet">
+            <link href="/fonts/opensans.woff" rel="stylesheet">
+            <style>src: url('/fonts/lato.ttf')</style>
+            <style>src: url('/fonts/arial.eot')</style>
+        "#;
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FONT002"));
+    }
+
+    #[test]
+    fn test_font_non_font_stylesheets_not_counted() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![
+            StyleInfo {
+                href: Some("https://cdn.example.com/main.css".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: Some("https://cdn.example.com/print.css".to_string()),
+                media: Some("print".to_string()),
+                is_inline: false,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = FontDisplayAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FONT001"));
+        assert!(!findings.iter().any(|f| f.code == "FONT002"));
+    }
+
+    // ===== ResourceSizeAnalyzer tests =====
+
+    #[test]
+    fn test_resource_size_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_resource_size_large_html() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(600 * 1024), // 600KB
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RESSIZE001"));
+    }
+
+    #[test]
+    fn test_resource_size_normal_html() {
+        let ctx = AnalysisContext {
+            page: &make_page("https://example.com"),
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(50 * 1024), // 50KB
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "RESSIZE001"));
+    }
+
+    #[test]
+    fn test_resource_size_estimated_large_page() {
+        let mut page = make_page("https://example.com");
+        // Add many resources to push total over 5MB
+        page.images = vec![ExtractedImage {
+            src: format!("https://example.com/img{}.jpg", 1),
+            alt: "Img".to_string(),
+            width: Some(100),
+            height: Some(100),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }; 40];
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://example.com/app.js".to_string()),
+            r#async: true,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }; 30];
+
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(100 * 1024), // 100KB HTML
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        // 40*100KB + 30*50KB + 100KB = 4000+1500+100 = 5600KB > 5MB
+        assert!(findings.iter().any(|f| f.code == "RESSIZE002"));
+    }
+
+    #[test]
+    fn test_resource_size_small_page_no_findings() {
+        let ctx = AnalysisContext {
+            page: &make_page("https://example.com"),
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(10 * 1024), // 10KB
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_resource_size_exactly_500kb() {
+        let ctx = AnalysisContext {
+            page: &make_page("https://example.com"),
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(500 * 1024), // Exactly 500KB
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        // Exactly 500KB is not > 500KB
+        assert!(!findings.iter().any(|f| f.code == "RESSIZE001"));
+    }
+
+    #[test]
+    fn test_resource_size_over_500kb() {
+        let ctx = AnalysisContext {
+            page: &make_page("https://example.com"),
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(500 * 1024 + 1), // Just over 500KB
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ResourceSizeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RESSIZE001"));
+    }
+
+    // ===== ConnectionAnalyzer tests =====
+
+    #[test]
+    fn test_connection_no_external() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_connection_too_many_domains() {
+        let mut page = make_page("https://example.com");
+        page.scripts = (1..=12)
+            .map(|i| ScriptInfo {
+                src: Some(format!("https://cdn{i}.example.com/app.js")),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CONN001"));
+    }
+
+    #[test]
+    fn test_connection_10_domains_ok() {
+        let mut page = make_page("https://example.com");
+        page.scripts = (1..=10)
+            .map(|i| ScriptInfo {
+                src: Some(format!("https://cdn{i}.example.com/app.js")),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CONN001"));
+    }
+
+    #[test]
+    fn test_connection_missing_preconnect() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn1.example.com/a.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn2.example.com/b.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some(""));
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CONN002"));
+    }
+
+    #[test]
+    fn test_connection_with_preconnect() {
+        let body = r#"<link rel="preconnect" href="https://cdn1.example.com">"#;
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn1.example.com/a.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn2.example.com/b.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CONN002"));
+    }
+
+    #[test]
+    fn test_connection_with_dns_prefetch() {
+        let body = r#"<link rel="dns-prefetch" href="https://cdn1.example.com">"#;
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn1.example.com/a.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn2.example.com/b.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CONN002"));
+    }
+
+    #[test]
+    fn test_connection_images_from_same_origin() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "https://example.com/a.jpg".to_string(),
+                alt: "A".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "https://example.com/b.jpg".to_string(),
+                alt: "B".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), None);
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        // Same origin, no external connections
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_connection_images_from_external_origins() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "https://img1.cdn.com/a.jpg".to_string(),
+                alt: "A".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "https://img2.cdn.com/b.jpg".to_string(),
+                alt: "B".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), Some(""));
+        let findings = ConnectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CONN002"));
     }
 }

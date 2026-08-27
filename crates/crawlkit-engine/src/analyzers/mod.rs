@@ -19,45 +19,57 @@ pub mod seo_analyzers;
 pub mod social_analyzers;
 
 pub use content_analyzers::{
-    ArticleSchemaValidator, BreadcrumbListDepthAnalyzer, BreadcrumbsValidator,
+    ActionSchemaValidator, AggregateOfferSchemaValidator, ArticleSchemaValidator,
+    BreadcrumbListDepthAnalyzer, BreadcrumbsValidator, BrandSchemaValidator,
     ContentFreshnessScorer, ContentThinAnalyzer, ContentQualityAnalyzer, CourseSchemaValidator,
     CouponSchemaValidator, DatasetSchemaValidator, DuplicateContentDetector,
     EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator,
-    FaqSchemaValidator, HowToSchemaValidator, JobPostingSchemaValidator, JsonLdValidator,
-    LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer, MetaDescriptionLengthAnalyzer, MicrodataValidator,
-    OfferAvailabilityAnalyzer, OrganizationSchemaValidator, PersonSchemaValidator,
-    RecipeSchemaValidator, ReviewSchemaValidator, RdfaValidator, ShippingSchemaValidator,
-    SoftwareApplicationValidator, SpeakableSchemaValidator,
+    FaqSchemaValidator, HowToSchemaValidator, ItemListSchemaValidator,
+    JobPostingSchemaValidator, JsonLdValidator,
+    LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer, MetaDescriptionLengthAnalyzer,
+    MicrodataValidator, OfferAvailabilityAnalyzer, OfferSchemaValidator,
+    OrganizationSchemaValidator, OccupationSchemaValidator, PersonSchemaValidator,
+    PlaybookSchemaValidator, QuestSchemaValidator,
+    RecipeSchemaValidator, ReviewSchemaValidator, RdfaValidator, ServiceSchemaValidator,
+    ShippingSchemaValidator, SoftwareApplicationValidator, SpeakableSchemaValidator,
     SpecialAnnouncementSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
-    TitleLengthAnalyzer, VideoSchemaValidator,
+    TitleLengthAnalyzer, VideoSchemaValidator, WebPageSchemaValidator,
 };
 pub use http_analyzers::{
-    CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, RedirectChainAnalyzer, ResponseSizeAnalyzer,
-    RobotsRule, RobotsTxtAnalyzer, SslCertificateValidator, TtfbAnalyzer,
+    CacheHeaderAnalyzer, CompressionAnalyzer, HttpVersionAnalyzer, HttpStatusAnalyzer,
+    RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
+    ServerHeaderAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
 pub use media_analyzers::{
-    AggregateRatingValidator, CriticalResourceAnalyzer, EcommerceSignalsAnalyzer, ImageAnalyzer,
-    ImageInfo, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
+    AggregateRatingValidator, AsyncScriptAnalyzer, ConnectionAnalyzer, CriticalResourceAnalyzer,
+    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, ImageAnalyzer, ImageInfo,
+    ImageLazyLoadAnalyzer, PreloadHintAnalyzer, PricingSchemaValidator,
+    ProductVariantAnalyzer, ResourceCountAnalyzer, ResourceSizeAnalyzer,
 };
 pub use security_analyzers::{
     AccessibilityAnalyzer, ColorContrastAnalyzer, ContentSecurityPolicyAnalyzer,
-    CrossOriginIsolationAnalyzer,
-    FocusOrderAnalyzer, FontSizeAnalyzer, HstsPreloadAnalyzer, MobileFriendlinessChecker,
-    PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer,
-    XFrameOptionsAnalyzer,
+    CookieAnalyzer, CrossOriginIsolationAnalyzer, CrossOriginResourcePolicyAnalyzer,
+    FocusOrderAnalyzer, FontSizeAnalyzer, HstsPreloadAnalyzer, MixedContentAnalyzer,
+    MobileFriendlinessChecker, PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer,
+    SecurityHeaderAnalyzer, SriAnalyzer, XContentTypeOptionsAnalyzer, XFrameOptionsAnalyzer,
+    XPermittedCrossDomainPoliciesAnalyzer,
 };
 pub use seo_analyzers::{
-    AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator,
-    HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer, HreflangValidator,
+    AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer,
+    CanonicalUrlValidator, CharsetValidator,
+    HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
+    HreflangValidator,
     InternalLinkAnchorAnalyzer, InternationalSeoAnalyzer, KeywordAnalyzer,
-    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileViewportAnalyzer,
-    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
+    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer,
+    MobileViewportAnalyzer, OpenSearchValidator,
+    PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
     SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
-    OpenGraphImageValidator, OpenGraphVideoAnalyzer, SocialMediaAnalyzer,
-    SocialPreviewOptimizer, TwitterCardTypeAnalyzer, TwitterPlayerValidator,
+    OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphVideoAnalyzer,
+    SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterCardTypeAnalyzer,
+    TwitterPlayerValidator, TwitterSiteAnalyzer,
 };
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData,
@@ -267,7 +279,7 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-    /// in parallel using rayon. The default registry includes 104 analyzers
+    /// in parallel using rayon. The default registry includes 134 analyzers
 /// covering HTTP, SEO, content, links, images, security, accessibility,
 /// social media, AI-specific checks, and structured data validation.
 ///
@@ -446,6 +458,38 @@ impl AnalyzerRegistry {
             Box::new(TwitterCardTypeAnalyzer::new()),
             // HTTP: compression analysis
             Box::new(CompressionAnalyzer::new()),
+            // Content: new schema validators (WebPage, Service, ItemList, Offer, AggregateOffer, Brand, Occupation, Quest, Action, Playbook)
+            Box::new(WebPageSchemaValidator::new()),
+            Box::new(ServiceSchemaValidator::new()),
+            Box::new(ItemListSchemaValidator::new()),
+            Box::new(OfferSchemaValidator::new()),
+            Box::new(AggregateOfferSchemaValidator::new()),
+            Box::new(BrandSchemaValidator::new()),
+            Box::new(OccupationSchemaValidator::new()),
+            Box::new(QuestSchemaValidator::new()),
+            Box::new(ActionSchemaValidator::new()),
+            Box::new(PlaybookSchemaValidator::new()),
+            // Security: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies, CORP
+            Box::new(XContentTypeOptionsAnalyzer::new()),
+            Box::new(XPermittedCrossDomainPoliciesAnalyzer::new()),
+            Box::new(CrossOriginResourcePolicyAnalyzer::new()),
+            // SEO: meta robots, canonical self-reference, pagination rel, hreflang self-reference, OpenSearch description
+            // Social: OG audio, twitter:site
+            Box::new(OpenGraphAudioAnalyzer::new()),
+            Box::new(TwitterSiteAnalyzer::new()),
+            // HTTP: version and server header analysis
+            Box::new(HttpVersionAnalyzer::new()),
+            Box::new(ServerHeaderAnalyzer::new()),
+            // Performance: preload hints, async scripts, lazy loading, font display
+            Box::new(PreloadHintAnalyzer::new()),
+            Box::new(AsyncScriptAnalyzer::new()),
+            Box::new(ImageLazyLoadAnalyzer::new()),
+            Box::new(FontDisplayAnalyzer::new()),
+            Box::new(ResourceSizeAnalyzer::new()),
+            Box::new(ConnectionAnalyzer::new()),
+            // Security: mixed content and cookies
+            Box::new(MixedContentAnalyzer::new()),
+            Box::new(CookieAnalyzer::new()),
         ];
 
         if include_ai {
@@ -1349,7 +1393,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 104);
+        assert_eq!(registry.len(), 129);
         assert!(!registry.is_empty());
     }
 

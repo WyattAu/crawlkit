@@ -3912,6 +3912,763 @@ impl Analyzer for BreadcrumbListDepthAnalyzer {
     }
 }
 
+// =========================================================================
+// WebPageSchemaValidator
+// =========================================================================
+
+/// Validates WebPage structured data for completeness.
+pub struct WebPageSchemaValidator;
+
+impl Default for WebPageSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WebPageSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for WebPageSchemaValidator {
+    fn name(&self) -> &str {
+        "webpage-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("WebPage") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "WEBPG001".to_string(),
+                    title: "WebPage schema missing name".to_string(),
+                    description: "A WebPage structured data block is missing the \"name\" property. \
+                                  Search engines use the name to understand the page topic."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with a descriptive page title to the WebPage \
+                                     schema."
+                        .to_string(),
+                });
+            }
+
+            if data.get("datePublished").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "WEBPG002".to_string(),
+                    title: "WebPage schema missing datePublished".to_string(),
+                    description: "A WebPage structured data block is missing the \"datePublished\" \
+                                  property. This helps search engines assess content freshness."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"datePublished\" with an ISO 8601 date value."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ServiceSchemaValidator
+// =========================================================================
+
+/// Validates Service structured data for completeness.
+pub struct ServiceSchemaValidator;
+
+impl Default for ServiceSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServiceSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ServiceSchemaValidator {
+    fn name(&self) -> &str {
+        "service-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Service") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "SVC001".to_string(),
+                    title: "Service schema missing name".to_string(),
+                    description: "A Service structured data block is missing the \"name\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the service name to the Service schema."
+                        .to_string(),
+                });
+            }
+
+            if data.get("provider").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "SVC002".to_string(),
+                    title: "Service schema missing provider".to_string(),
+                    description: "A Service structured data block is missing the \"provider\" \
+                                  property. The provider identifies the organization offering the \
+                                  service."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"provider\" with an Organization or Person object."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ItemListSchemaValidator
+// =========================================================================
+
+/// Validates ItemList structured data for completeness.
+pub struct ItemListSchemaValidator;
+
+impl Default for ItemListSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ItemListSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ItemListSchemaValidator {
+    fn name(&self) -> &str {
+        "itemlist-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("ItemList") {
+                continue;
+            }
+            let data = &sd.data;
+
+            match data.get("itemListElement") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "ITEMLIST001".to_string(),
+                        title: "ItemList schema missing itemListElement".to_string(),
+                        description: "An ItemList structured data block is missing the required \
+                                      \"itemListElement\" property."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"itemListElement\" with an array of ListItem objects."
+                            .to_string(),
+                    });
+                }
+                Some(val) => {
+                    match val.as_array() {
+                        None => {
+                            // Not an array at all (e.g. string, number)
+                            findings.push(Finding {
+                                severity: Severity::Error,
+                                category: IssueCategory::Schema,
+                                code: "ITEMLIST001".to_string(),
+                                title: "ItemList schema missing itemListElement".to_string(),
+                                description: "An ItemList structured data block has an \
+                                              \"itemListElement\" that is not an array."
+                                    .to_string(),
+                                url: url.clone(),
+                                recommendation: "Change itemListElement to an array of ListItem objects."
+                                    .to_string(),
+                            });
+                        }
+                        Some(arr) if arr.is_empty() => {
+                            findings.push(Finding {
+                                severity: Severity::Error,
+                                category: IssueCategory::Schema,
+                                code: "ITEMLIST002".to_string(),
+                                title: "ItemList schema itemListElement is empty".to_string(),
+                                description: "An ItemList structured data block has an empty \
+                                              \"itemListElement\" array."
+                                    .to_string(),
+                                url: url.clone(),
+                                recommendation: "Populate the itemListElement array with ListItem objects."
+                                    .to_string(),
+                            });
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// OfferSchemaValidator
+// =========================================================================
+
+/// Validates Offer structured data for completeness.
+pub struct OfferSchemaValidator;
+
+impl Default for OfferSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OfferSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for OfferSchemaValidator {
+    fn name(&self) -> &str {
+        "offer-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Offer") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("price").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "OFFER001".to_string(),
+                    title: "Offer schema missing price".to_string(),
+                    description: "An Offer structured data block is missing the \"price\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"price\" with the item price."
+                        .to_string(),
+                });
+            }
+
+            if data.get("priceCurrency").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "OFFER002".to_string(),
+                    title: "Offer schema missing priceCurrency".to_string(),
+                    description: "An Offer structured data block is missing the \"priceCurrency\" \
+                                  property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"priceCurrency\" with an ISO 4217 currency code (e.g., \
+                                     \"USD\")."
+                        .to_string(),
+                });
+            }
+
+            if data.get("availability").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "OFFER003".to_string(),
+                    title: "Offer schema missing availability".to_string(),
+                    description: "An Offer structured data block is missing the \"availability\" \
+                                  property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"availability\" with a schema.org Availability value \
+                                     (e.g., \"https://schema.org/InStock\")."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// AggregateOfferSchemaValidator
+// =========================================================================
+
+/// Validates AggregateOffer structured data for completeness.
+pub struct AggregateOfferSchemaValidator;
+
+impl Default for AggregateOfferSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AggregateOfferSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for AggregateOfferSchemaValidator {
+    fn name(&self) -> &str {
+        "aggregate-offer-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("AggregateOffer") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("lowPrice").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "AGGOFFER001".to_string(),
+                    title: "AggregateOffer schema missing lowPrice".to_string(),
+                    description: "An AggregateOffer structured data block is missing the required \
+                                  \"lowPrice\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"lowPrice\" with the lowest price in the range."
+                        .to_string(),
+                });
+            }
+
+            if data.get("priceCurrency").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "AGGOFFER002".to_string(),
+                    title: "AggregateOffer schema missing priceCurrency".to_string(),
+                    description: "An AggregateOffer structured data block is missing the \
+                                  \"priceCurrency\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"priceCurrency\" with an ISO 4217 currency code."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// BrandSchemaValidator
+// =========================================================================
+
+/// Validates Brand structured data for completeness.
+pub struct BrandSchemaValidator;
+
+impl Default for BrandSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BrandSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for BrandSchemaValidator {
+    fn name(&self) -> &str {
+        "brand-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Brand") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "BRAND001".to_string(),
+                    title: "Brand schema missing name".to_string(),
+                    description: "A Brand structured data block is missing the \"name\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the brand name."
+                        .to_string(),
+                });
+            }
+
+            if data.get("url").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "BRAND002".to_string(),
+                    title: "Brand schema missing url".to_string(),
+                    description: "A Brand structured data block is missing the \"url\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"url\" with the brand website URL."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// OccupationSchemaValidator
+// =========================================================================
+
+/// Validates Occupation structured data for completeness.
+pub struct OccupationSchemaValidator;
+
+impl Default for OccupationSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OccupationSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for OccupationSchemaValidator {
+    fn name(&self) -> &str {
+        "occupation-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Occupation") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "OCCUP001".to_string(),
+                    title: "Occupation schema missing name".to_string(),
+                    description: "An Occupation structured data block is missing the \"name\" \
+                                  property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the occupation title."
+                        .to_string(),
+                });
+            }
+
+            let has_category = match data.get("occupationalCategory") {
+                None | Some(serde_json::Value::Null) => false,
+                Some(serde_json::Value::String(s)) => !s.is_empty(),
+                Some(serde_json::Value::Object(_)) => true,
+                Some(serde_json::Value::Array(a)) => !a.is_empty(),
+                Some(_) => true, // numbers, booleans
+            };
+            if !has_category {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "OCCUP002".to_string(),
+                    title: "Occupation schema missing occupationalCategory".to_string(),
+                    description: "An Occupation structured data block is missing the \
+                                  \"occupationalCategory\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"occupationalCategory\" with a category code or text."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// QuestSchemaValidator
+// =========================================================================
+
+/// Validates Quest structured data for games and education.
+pub struct QuestSchemaValidator;
+
+impl Default for QuestSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QuestSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for QuestSchemaValidator {
+    fn name(&self) -> &str {
+        "quest-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Quest") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "QUEST001".to_string(),
+                    title: "Quest schema missing name".to_string(),
+                    description: "A Quest structured data block is missing the \"name\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the quest title."
+                        .to_string(),
+                });
+            }
+
+            if data.get("questType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "QUEST002".to_string(),
+                    title: "Quest schema missing questType".to_string(),
+                    description: "A Quest structured data block is missing the \"questType\" \
+                                  property. This helps classify the quest (e.g., main quest, \
+                                  side quest, tutorial)."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"questType\" to classify the quest."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ActionSchemaValidator
+// =========================================================================
+
+/// Validates Action structured data for completeness.
+pub struct ActionSchemaValidator;
+
+impl Default for ActionSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ActionSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ActionSchemaValidator {
+    fn name(&self) -> &str {
+        "action-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Action") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("actionType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "ACTION001".to_string(),
+                    title: "Action schema missing actionType".to_string(),
+                    description: "An Action structured data block is missing the \"actionType\" \
+                                  property. Search engines use this to understand the action kind."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"actionType\" with a specific action type (e.g., \
+                                     \"BuyAction\", \"ViewAction\")."
+                        .to_string(),
+                });
+            }
+
+            let has_target = match data.get("target") {
+                None | Some(serde_json::Value::Null) => false,
+                Some(serde_json::Value::String(s)) => !s.is_empty(),
+                Some(serde_json::Value::Object(_)) => true,
+                Some(serde_json::Value::Array(a)) => !a.is_empty(),
+                Some(_) => true,
+            };
+            if !has_target {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "ACTION002".to_string(),
+                    title: "Action schema missing target".to_string(),
+                    description: "An Action structured data block is missing the \"target\" \
+                                  property. The target defines where the action leads."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"target\" with an EntryPoint or URL string."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// PlaybookSchemaValidator
+// =========================================================================
+
+/// Validates Playbook structured data for completeness.
+pub struct PlaybookSchemaValidator;
+
+impl Default for PlaybookSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PlaybookSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for PlaybookSchemaValidator {
+    fn name(&self) -> &str {
+        "playbook-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Playbook") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "PLAYBOOK001".to_string(),
+                    title: "Playbook schema missing name".to_string(),
+                    description: "A Playbook structured data block is missing the \"name\" \
+                                  property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the playbook title."
+                        .to_string(),
+                });
+            }
+
+            match data.get("step") {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "PLAYBOOK002".to_string(),
+                        title: "Playbook schema missing step".to_string(),
+                        description: "A Playbook structured data block is missing the required \
+                                      \"step\" property."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"step\" with an array of HowToStep objects."
+                            .to_string(),
+                    });
+                }
+                Some(val) if val.as_array().map_or(true, |a| a.is_empty()) => {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "PLAYBOOK002".to_string(),
+                        title: "Playbook schema step is empty".to_string(),
+                        description: "A Playbook structured data block has an empty \"step\" array."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Populate the step array with HowToStep objects."
+                            .to_string(),
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -8234,5 +8991,1827 @@ mod new_validator_tests {
         let findings = BreadcrumbListDepthAnalyzer::new().analyze(&ctx);
         // url_depth=3, breadcrumb_depth=2, diff=1 which is <= 1, so no issue
         assert!(!findings.iter().any(|f| f.code == "BDEPTH001"));
+    }
+
+    // =========================================================================
+    // WebPageSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_webpage_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEBPG001"));
+    }
+
+    #[test]
+    fn test_webpage_missing_date_published() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": "My Page"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    #[test]
+    fn test_webpage_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": "My Page",
+                "datePublished": "2024-01-01"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "WEBPG001"));
+        assert!(!findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    #[test]
+    fn test_webpage_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_webpage_non_webpage_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_webpage_multiple_webpages() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPage".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPage",
+                    "name": "Page 1",
+                    "datePublished": "2024-01-01"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPage".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPage"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEBPG001"));
+        assert!(findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    #[test]
+    fn test_webpage_name_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEBPG001"));
+    }
+
+    #[test]
+    fn test_webpage_name_only_no_date() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "name": "About Us"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "WEBPG001"));
+        assert!(findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    #[test]
+    fn test_webpage_date_only_no_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage",
+                "datePublished": "2024-06-15"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEBPG001"));
+        assert!(!findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    #[test]
+    fn test_webpage_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPage"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = WebPageSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "WEBPG001"));
+        assert!(findings.iter().any(|f| f.code == "WEBPG002"));
+    }
+
+    // =========================================================================
+    // ServiceSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_service_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+    }
+
+    #[test]
+    fn test_service_missing_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Web Hosting"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Web Hosting",
+                "provider": {"@type": "Organization", "name": "Acme Corp"}
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(!findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_service_non_service_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_service_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_name_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+    }
+
+    #[test]
+    fn test_service_provider_is_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Cloud Storage",
+                "provider": "Acme Corp"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(!findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_multiple_services() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Service".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Service",
+                    "name": "Valid Service",
+                    "provider": {"@type": "Organization", "name": "Corp"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Service".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Service"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_name_only_no_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "SEO Audit"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    // =========================================================================
+    // ItemListSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_itemlist_missing_item_list_element() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_item_list_element_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": []
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
+
+    #[test]
+    fn test_itemlist_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "Item 1"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST001"));
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
+
+    #[test]
+    fn test_itemlist_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_itemlist_non_itemlist_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "BreadcrumbList"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_itemlist_both_issues() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        // Missing itemListElement entirely fires only ITEMLIST001
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
+
+    #[test]
+    fn test_itemlist_multiple_itemlists() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("ItemList".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "ItemList",
+                    "itemListElement": [{"@type": "ListItem", "position": 1}]
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("ItemList".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "ItemList"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_null_item_list_element() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": null
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_item_list_element_string_instead_of_array() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": "not-an-array"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_single_item_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "Only Item"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // =========================================================================
+    // OfferSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_offer_missing_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "priceCurrency": "USD",
+                "availability": "https://schema.org/InStock"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OFFER001"));
+    }
+
+    #[test]
+    fn test_offer_missing_price_currency() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 29.99,
+                "availability": "https://schema.org/InStock"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OFFER002"));
+    }
+
+    #[test]
+    fn test_offer_missing_availability() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 29.99,
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OFFER003"));
+    }
+
+    #[test]
+    fn test_offer_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 29.99,
+                "priceCurrency": "USD",
+                "availability": "https://schema.org/InStock"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_offer_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_offer_non_offer_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_offer_all_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 3);
+        assert!(findings.iter().any(|f| f.code == "OFFER001"));
+        assert!(findings.iter().any(|f| f.code == "OFFER002"));
+        assert!(findings.iter().any(|f| f.code == "OFFER003"));
+    }
+
+    #[test]
+    fn test_offer_price_zero() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 0,
+                "priceCurrency": "USD",
+                "availability": "https://schema.org/InStock"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_offer_price_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": "29.99",
+                "priceCurrency": "USD",
+                "availability": "https://schema.org/InStock"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_offer_price_only_no_currency_no_availability() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 19.99
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OfferSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "OFFER001"));
+        assert!(findings.iter().any(|f| f.code == "OFFER002"));
+        assert!(findings.iter().any(|f| f.code == "OFFER003"));
+    }
+
+    // =========================================================================
+    // AggregateOfferSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_aggregate_offer_missing_low_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_missing_price_currency() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99,
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_non_aggregate_offer_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 10
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_low_price_zero() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 0,
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_with_high_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99,
+                "highPrice": 99.99,
+                "priceCurrency": "EUR"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_multiple_aggregate_offers() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("AggregateOffer".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "AggregateOffer",
+                    "lowPrice": 5,
+                    "priceCurrency": "USD"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("AggregateOffer".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "AggregateOffer"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_string_low_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": "9.99",
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // =========================================================================
+    // BrandSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_brand_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+    }
+
+    #[test]
+    fn test_brand_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme",
+                "url": "https://acme.com"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_brand_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_brand_non_brand_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_brand_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_name_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+    }
+
+    #[test]
+    fn test_brand_url_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme",
+                "url": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_multiple_brands() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Brand".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Brand",
+                    "name": "GoodBrand",
+                    "url": "https://good.com"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Brand".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Brand"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_name_only_no_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "SuperBrand"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    // =========================================================================
+    // OccupationSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_occupation_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+    }
+
+    #[test]
+    fn test_occupation_missing_occupational_category() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Software Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Software Engineer",
+                "occupationalCategory": "15-1252.00"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_occupation_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_occupation_non_occupation_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_occupation_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+    }
+
+    #[test]
+    fn test_occupation_category_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Doctor",
+                "occupationalCategory": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Occupation".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Occupation",
+                    "name": "Engineer",
+                    "occupationalCategory": "17-2000"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Occupation".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Occupation"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_category_as_object() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Nurse",
+                "occupationalCategory": {"@type": "CategoryCode", "codeValue": "29-1141"}
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // =========================================================================
+    // QuestSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_quest_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+    }
+
+    #[test]
+    fn test_quest_missing_quest_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Find the Dragon"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Find the Dragon",
+                "questType": "Main Quest"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_quest_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_quest_non_quest_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Game".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Game"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_quest_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+    }
+
+    #[test]
+    fn test_quest_quest_type_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Defeat Boss",
+                "questType": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Quest".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Quest",
+                    "name": "Tutorial",
+                    "questType": "Tutorial"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Quest".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Quest"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_name_only_no_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Collect Gems"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    // =========================================================================
+    // ActionSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_action_missing_action_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+    }
+
+    #[test]
+    fn test_action_missing_target() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "BuyAction"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
+
+    #[test]
+    fn test_action_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "BuyAction",
+                "target": "https://example.com/buy"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_non_action_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
+
+    #[test]
+    fn test_action_action_type_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+    }
+
+    #[test]
+    fn test_action_target_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "ViewAction",
+                "target": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
+
+    #[test]
+    fn test_action_target_as_entry_point() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "BuyAction",
+                "target": {
+                    "@type": "EntryPoint",
+                    "urlTemplate": "https://example.com/buy"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_multiple_actions() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Action".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Action",
+                    "actionType": "BuyAction",
+                    "target": "https://example.com/buy"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Action".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Action"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
+
+    // =========================================================================
+    // PlaybookSchemaValidator tests
+    // =========================================================================
+
+    #[test]
+    fn test_playbook_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK001"));
+    }
+
+    #[test]
+    fn test_playbook_missing_step() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": "Quick Start Guide"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
+    }
+
+    #[test]
+    fn test_playbook_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": "Quick Start Guide",
+                "step": [
+                    {"@type": "HowToStep", "text": "Step 1"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_playbook_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_playbook_non_playbook_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "HowTo"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_playbook_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK001"));
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
+    }
+
+    #[test]
+    fn test_playbook_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK001"));
+    }
+
+    #[test]
+    fn test_playbook_step_empty_array() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": "Guide",
+                "step": []
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
+    }
+
+    #[test]
+    fn test_playbook_step_null() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": "Guide",
+                "step": null
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
+    }
+
+    #[test]
+    fn test_playbook_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Playbook".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Playbook",
+                    "name": "Good Guide",
+                    "step": [{"@type": "HowToStep", "text": "Do this"}]
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Playbook".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Playbook"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK001"));
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
+    }
+
+    #[test]
+    fn test_playbook_name_only_no_step() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Playbook".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Playbook",
+                "name": "Deployment Playbook"
+            }),
+        }];
+        let ctx = make_ctx(&page);
+        let findings = PlaybookSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PLAYBOOK001"));
+        assert!(findings.iter().any(|f| f.code == "PLAYBOOK002"));
     }
 }

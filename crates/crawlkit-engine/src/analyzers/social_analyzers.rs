@@ -863,6 +863,150 @@ impl Analyzer for TwitterCardTypeAnalyzer {
     }
 }
 
+// =========================================================================
+// OpenGraphAudioAnalyzer
+// =========================================================================
+
+/// Validates Open Graph audio tags for completeness.
+pub struct OpenGraphAudioAnalyzer;
+
+impl Default for OpenGraphAudioAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OpenGraphAudioAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for OpenGraphAudioAnalyzer {
+    fn name(&self) -> &str {
+        "og-audio"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let og_audio = match ctx.page.meta.og.get("audio") {
+            Some(v) if !v.is_empty() => v,
+            _ => return findings,
+        };
+
+        let _ = og_audio;
+
+        // OGAUDIO001: og:audio present but missing og:audio:url
+        if ctx.page.meta.og.get("audio:url").is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Social,
+                code: "OGAUDIO001".to_string(),
+                title: "og:audio present but missing og:audio:url".to_string(),
+                description: "An og:audio tag is present but the corresponding og:audio:url tag \
+                              is missing. Without og:audio:url, social platforms may not be able \
+                              to play the audio correctly."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:audio:url\" content=\"https://...\"> \
+                                 with the direct audio URL."
+                    .to_string(),
+            });
+        }
+
+        // OGAUDIO002: og:audio present but missing og:audio:type
+        if ctx.page.meta.og.get("audio:type").is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Social,
+                code: "OGAUDIO002".to_string(),
+                title: "og:audio present but missing og:audio:type".to_string(),
+                description: "An og:audio tag is present but the corresponding og:audio:type tag \
+                              is missing. The MIME type helps social platforms determine how to \
+                              handle the audio."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:audio:type\" content=\"audio/mpeg\"> \
+                                 with the audio MIME type."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TwitterSiteAnalyzer
+// =========================================================================
+
+/// Validates twitter:site tag presence and format.
+pub struct TwitterSiteAnalyzer;
+
+impl Default for TwitterSiteAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TwitterSiteAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for TwitterSiteAnalyzer {
+    fn name(&self) -> &str {
+        "twitter-site"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match &ctx.page.meta.twitter.site {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Social,
+                    code: "TWSITE001".to_string(),
+                    title: "Missing twitter:site tag".to_string(),
+                    description: "No twitter:site meta tag was found. The twitter:site tag \
+                                  identifies the website associated with the Twitter/X account, \
+                                  which helps establish credibility."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add <meta name=\"twitter:site\" content=\"@username\"> with \
+                                     the site's Twitter handle."
+                        .to_string(),
+                });
+            }
+            Some(site) => {
+                if !site.starts_with('@') {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Social,
+                        code: "TWSITE002".to_string(),
+                        title: "twitter:site does not start with @".to_string(),
+                        description: format!(
+                            "twitter:site value \"{site}\" does not start with the @ character. \
+                             Twitter Card specs require the handle to be prefixed with @."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Update twitter:site to start with @, e.g., \
+                                         \"@username\"."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod tests_social_preview {
     use super::*;
@@ -1264,5 +1408,134 @@ mod tests_social_preview {
         let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
         // Both > 300: still triggers TW002
         assert!(findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    // ===== OpenGraphAudioAnalyzer tests =====
+
+    #[test]
+    fn test_og_audio_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGAUDIO001"));
+    }
+
+    #[test]
+    fn test_og_audio_missing_type() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGAUDIO002"));
+    }
+
+    #[test]
+    fn test_og_audio_valid() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert("audio:type".to_string(), "audio/mpeg".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_og_audio_no_audio() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_og_audio_empty_audio() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_og_audio_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "OGAUDIO001"));
+        assert!(findings.iter().any(|f| f.code == "OGAUDIO002"));
+    }
+
+    #[test]
+    fn test_og_audio_url_only() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "OGAUDIO001"));
+        assert!(findings.iter().any(|f| f.code == "OGAUDIO002"));
+    }
+
+    // ===== TwitterSiteAnalyzer tests =====
+
+    #[test]
+    fn test_twitter_site_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TWSITE001"));
+    }
+
+    #[test]
+    fn test_twitter_site_valid() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.site = Some("@example".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_twitter_site_no_at() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.site = Some("example".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TWSITE002"));
+    }
+
+    #[test]
+    fn test_twitter_site_with_at() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.site = Some("@mycompany".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TWSITE001"));
+        assert!(!findings.iter().any(|f| f.code == "TWSITE002"));
+    }
+
+    #[test]
+    fn test_twitter_site_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.site = Some("".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        // Empty string is not None, but doesn't start with @
+        assert!(!findings.iter().any(|f| f.code == "TWSITE001"));
+        assert!(findings.iter().any(|f| f.code == "TWSITE002"));
+    }
+
+    #[test]
+    fn test_twitter_site_with_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.site = Some("https://example.com".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterSiteAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TWSITE002"));
     }
 }

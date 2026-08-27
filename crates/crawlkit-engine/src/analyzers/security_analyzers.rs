@@ -1857,6 +1857,448 @@ impl Analyzer for XFrameOptionsAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Mixed Content Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct MixedContentAnalyzer;
+
+impl MixedContentAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for MixedContentAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for MixedContentAnalyzer {
+    fn name(&self) -> &str {
+        "mixed-content"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Only check HTTPS pages
+        if !url.starts_with("https://") {
+            return findings;
+        }
+
+        let body = ctx.body.unwrap_or("");
+
+        // MIXED001: HTTP resources on HTTPS page
+        let http_resources = Self::find_http_resources(body);
+        if !http_resources.is_empty() {
+            let examples = if http_resources.len() > 5 {
+                format!(
+                    "{}, ...",
+                    http_resources
+                        .iter()
+                        .take(5)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            } else {
+                http_resources.join(", ")
+            };
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "MIXED001".to_string(),
+                title: "HTTP resources on HTTPS page".to_string(),
+                description: format!(
+                    "Page loads {} resource(s) over HTTP: {}. Mixed content prevents full \
+                     HTTPS security and may be blocked by browsers.",
+                    http_resources.len(),
+                    examples
+                ),
+                url: url.clone(),
+                recommendation: "Update all resource URLs to use HTTPS. This includes images, \
+                                 scripts, stylesheets, and iframes."
+                    .to_string(),
+            });
+        }
+
+        // MIXED002: Mixed content forms
+        let http_forms = Self::find_http_forms(body);
+        if !http_forms.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Security,
+                code: "MIXED002".to_string(),
+                title: "Form submissions over HTTP".to_string(),
+                description: format!(
+                    "Found {} form(s) with action URLs using HTTP. User data submitted \
+                     through these forms will be transmitted in plaintext.",
+                    http_forms.len()
+                ),
+                url: url.clone(),
+                recommendation: "Change form action URLs to HTTPS to protect user data in \
+                                 transit."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+impl MixedContentAnalyzer {
+    /// Find HTTP resource references in HTML body.
+    fn find_http_resources(body: &str) -> Vec<String> {
+        let mut resources = Vec::new();
+        let patterns = [
+            "src=\"http://",
+            "src='http://",
+            "href=\"http://",
+            "href='http://",
+            "action=\"http://",
+            "action='http://",
+        ];
+        for pattern in &patterns {
+            let mut remaining = body;
+            while let Some(pos) = remaining.find(pattern) {
+                let start = pos + pattern.len();
+                let quote_char = pattern.chars().last().unwrap();
+                if let Some(end) = remaining[start..].find(quote_char) {
+                    let url = &remaining[start..start + end];
+                    // Skip data: and javascript: URIs
+                    if !url.starts_with("data:") && !url.starts_with("javascript:") {
+                        resources.push(format!("http://{url}"));
+                    }
+                    remaining = &remaining[start + end + 1..];
+                } else {
+                    break;
+                }
+            }
+        }
+        resources
+    }
+
+    /// Find HTTP form actions in HTML body.
+    fn find_http_forms(body: &str) -> Vec<String> {
+        let mut forms = Vec::new();
+        let patterns = ["action=\"http://", "action='http://"];
+        for pattern in &patterns {
+            let mut remaining = body;
+            while let Some(pos) = remaining.find(pattern) {
+                let start = pos + pattern.len();
+                let quote_char = pattern.chars().last().unwrap();
+                if let Some(end) = remaining[start..].find(quote_char) {
+                    let url = &remaining[start..start + end];
+                    forms.push(format!("http://{url}"));
+                    remaining = &remaining[start + end + 1..];
+                } else {
+                    break;
+                }
+            }
+        }
+        forms
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cookie Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct CookieAnalyzer;
+
+impl CookieAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for CookieAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CookieAnalyzer {
+    fn name(&self) -> &str {
+        "cookies"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Only check HTTPS pages
+        if !url.starts_with("https://") {
+            return findings;
+        }
+
+        let set_cookie_headers: Vec<&str> = ctx
+            .headers
+            .iter()
+            .filter(|(k, _)| k.eq_ignore_ascii_case("Set-Cookie"))
+            .map(|(_, v)| v.as_str())
+            .collect();
+
+        if set_cookie_headers.is_empty() {
+            return findings;
+        }
+
+        for cookie_header in &set_cookie_headers {
+            let lower = cookie_header.to_lowercase();
+            let cookie_name = cookie_header.split('=').next().unwrap_or("unknown").trim();
+
+            // COOKIE001: Missing Secure flag
+            if !lower.contains("secure") {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "COOKIE001".to_string(),
+                    title: "Cookie missing Secure flag".to_string(),
+                    description: format!(
+                        "Cookie \"{cookie_name}\" does not have the Secure flag. Without it, \
+                         the cookie will be sent over unencrypted HTTP connections."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add the Secure flag to the Set-Cookie header to ensure \
+                                     the cookie is only sent over HTTPS."
+                        .to_string(),
+                });
+            }
+
+            // COOKIE002: Missing HttpOnly flag
+            if !lower.contains("httponly") {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "COOKIE002".to_string(),
+                    title: "Cookie missing HttpOnly flag".to_string(),
+                    description: format!(
+                        "Cookie \"{cookie_name}\" does not have the HttpOnly flag. Without \
+                         it, the cookie is accessible to JavaScript, increasing the risk \
+                         of XSS attacks."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add the HttpOnly flag to the Set-Cookie header to \
+                                     prevent JavaScript access to the cookie."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// XContentTypeOptionsAnalyzer
+// =========================================================================
+
+/// Analyzes X-Content-Type-Options header for MIME sniffing protection.
+pub struct XContentTypeOptionsAnalyzer;
+
+impl Default for XContentTypeOptionsAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XContentTypeOptionsAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for XContentTypeOptionsAnalyzer {
+    fn name(&self) -> &str {
+        "x-content-type-options"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-Content-Type-Options") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "XCTO001".to_string(),
+                    title: "Missing X-Content-Type-Options header".to_string(),
+                    description: "No X-Content-Type-Options header was found. This header \
+                                  prevents browsers from MIME-sniffing a response away from the \
+                                  declared content type."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if !value.trim().eq_ignore_ascii_case("nosniff") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "XCTO002".to_string(),
+                        title: "X-Content-Type-Options not set to nosniff".to_string(),
+                        description: format!(
+                            "X-Content-Type-Options is \"{value}\" but should be \"nosniff\". \
+                             Other values are not recognized by browsers."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// XPermittedCrossDomainPoliciesAnalyzer
+// =========================================================================
+
+/// Analyzes X-Permitted-Cross-Domain-Policies header.
+pub struct XPermittedCrossDomainPoliciesAnalyzer;
+
+impl Default for XPermittedCrossDomainPoliciesAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XPermittedCrossDomainPoliciesAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for XPermittedCrossDomainPoliciesAnalyzer {
+    fn name(&self) -> &str {
+        "x-permitted-cross-domain-policies"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-Permitted-Cross-Domain-Policies") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "XPCDP001".to_string(),
+                    title: "Missing X-Permitted-Cross-Domain-Policies header".to_string(),
+                    description: "No X-Permitted-Cross-Domain-Policies header was found. This \
+                                  header controls cross-domain policy files for Flash, PDF, and \
+                                  other plugins."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-Permitted-Cross-Domain-Policies: none to prevent \
+                                     cross-domain policy loading."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim().eq_ignore_ascii_case("all") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "XPCDP002".to_string(),
+                        title: "X-Permitted-Cross-Domain-Policies set to all".to_string(),
+                        description: "The X-Permitted-Cross-Domain-Policies header is set to \
+                                      \"all\", which allows any cross-domain policy file. This \
+                                      weakens security by permitting cross-domain data access."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Set X-Permitted-Cross-Domain-Policies: none to block \
+                                         all cross-domain policy files."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CrossOriginResourcePolicyAnalyzer
+// =========================================================================
+
+/// Analyzes Cross-Origin-Resource-Policy header.
+pub struct CrossOriginResourcePolicyAnalyzer;
+
+impl Default for CrossOriginResourcePolicyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CrossOriginResourcePolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for CrossOriginResourcePolicyAnalyzer {
+    fn name(&self) -> &str {
+        "cross-origin-resource-policy"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if Self::get_header(ctx.headers, "Cross-Origin-Resource-Policy").is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "CORP001".to_string(),
+                title: "Missing Cross-Origin-Resource-Policy header".to_string(),
+                description: "No Cross-Origin-Resource-Policy header was found. CORP prevents \
+                              cross-origin reads of embedded resources, providing protection \
+                              against Spectre-like side-channel attacks."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Set Cross-Origin-Resource-Policy: same-origin if the resource \
+                                 should only be used by the same origin, or cross-origin for \
+                                 resources that need cross-origin access."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2230,6 +2672,576 @@ mod tests {
         let page = make_page("https://example.com/style.css");
         let ctx = make_ctx(&page, Some(200), &[], Some("text/css"));
         let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // ===== MixedContentAnalyzer tests =====
+
+    #[test]
+    fn test_mixed_no_resources() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_http_resources_on_https() {
+        let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MIXED001"));
+    }
+
+    #[test]
+    fn test_mixed_http_form_on_https() {
+        let body = r#"<form action="http://example.com/submit">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MIXED002"));
+    }
+
+    #[test]
+    fn test_mixed_all_https_no_finding() {
+        let body = r#"<img src="https://cdn.example.com/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_http_page_not_checked() {
+        let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
+        let page = make_page("http://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        // HTTP pages don't get mixed content warnings
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_multiple_http_resources() {
+        let body = r#"
+            <img src="http://cdn.example.com/photo1.jpg">
+            <img src="http://cdn.example.com/photo2.jpg">
+            <script src="http://cdn.example.com/app.js"></script>
+            <link href="http://cdn.example.com/style.css" rel="stylesheet">
+        "#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MIXED001"));
+        let f = findings.iter().find(|f| f.code == "MIXED001").unwrap();
+        assert!(f.description.contains("4"));
+    }
+
+    #[test]
+    fn test_mixed_relative_urls_not_flagged() {
+        let body = r#"<img src="/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_mixed_both_resource_and_form() {
+        let body = r#"
+            <img src="http://cdn.example.com/photo.jpg">
+            <form action="http://example.com/submit">
+        "#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MIXED001"));
+        assert!(findings.iter().any(|f| f.code == "MIXED002"));
+    }
+
+    #[test]
+    fn test_mixed_form_with_single_quotes() {
+        let body = r#"<form action='http://example.com/submit'>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MIXED002"));
+    }
+
+    #[test]
+    fn test_mixed_data_uris_not_flagged() {
+        let body = r#"<img src="data:image/png;base64,abc123">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = MixedContentAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // ===== CookieAnalyzer tests =====
+
+    #[test]
+    fn test_cookie_no_cookies() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_cookie_missing_secure() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; HttpOnly; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOKIE001"));
+    }
+
+    #[test]
+    fn test_cookie_missing_httponly() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; Secure; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOKIE002"));
+    }
+
+    #[test]
+    fn test_cookie_both_flags_missing() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOKIE001"));
+        assert!(findings.iter().any(|f| f.code == "COOKIE002"));
+    }
+
+    #[test]
+    fn test_cookie_all_flags_present() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; Secure; HttpOnly; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_cookie_http_page_not_checked() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; Path=/".to_string(),
+        )];
+        let page = make_page("http://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_cookie_multiple_cookies() {
+        let headers = vec![
+            (
+                "Set-Cookie".to_string(),
+                "session=abc123; Path=/".to_string(),
+            ),
+            (
+                "Set-Cookie".to_string(),
+                "token=xyz789; Path=/".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        // Both cookies missing both flags = 4 findings
+        assert_eq!(findings.len(), 4);
+    }
+
+    #[test]
+    fn test_cookie_case_insensitive_flags() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc123; secure; httponly; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_cookie_session_cookie_name_extracted() {
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session_id=abc123; Path=/".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = CookieAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "COOKIE001").unwrap();
+        assert!(f.description.contains("session_id"));
+    }
+
+    // ===== XContentTypeOptionsAnalyzer tests =====
+
+    #[test]
+    fn test_xcto_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XCTO001"));
+    }
+
+    #[test]
+    fn test_xcto_nosniff() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "nosniff".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xcto_wrong_value() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "sniff".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XCTO002"));
+    }
+
+    #[test]
+    fn test_xcto_case_insensitive() {
+        let headers = vec![("x-content-type-options".to_string(), "NOSNIFF".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xcto_whitespace_around_nosniff() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "  nosniff  ".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // ===== XPermittedCrossDomainPoliciesAnalyzer tests =====
+
+    #[test]
+    fn test_xpcdp_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XPCDP001"));
+    }
+
+    #[test]
+    fn test_xpcdp_none() {
+        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "none".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xpcdp_all() {
+        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "all".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XPCDP002"));
+    }
+
+    #[test]
+    fn test_xpcdp_case_insensitive() {
+        let headers = vec![("x-permitted-cross-domain-policies".to_string(), "ALL".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XPCDP002"));
+    }
+
+    #[test]
+    fn test_xpcdp_master_only() {
+        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "master-only".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
+        // master-only is not "all" and not missing
+        assert!(!findings.iter().any(|f| f.code == "XPCDP002"));
+        assert!(!findings.iter().any(|f| f.code == "XPCDP001"));
+    }
+
+    // ===== CrossOriginResourcePolicyAnalyzer tests =====
+
+    #[test]
+    fn test_corp_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CORP001"));
+    }
+
+    #[test]
+    fn test_corp_same_origin() {
+        let headers = vec![("Cross-Origin-Resource-Policy".to_string(), "same-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_corp_cross_origin() {
+        let headers = vec![("Cross-Origin-Resource-Policy".to_string(), "cross-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_corp_case_insensitive() {
+        let headers = vec![("cross-origin-resource-policy".to_string(), "same-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 }

@@ -2466,6 +2466,299 @@ impl Analyzer for InternalLinkAnchorAnalyzer {
 }
 
 // ---------------------------------------------------------------------------
+// WikipediaLinkAnalyzer
+// ---------------------------------------------------------------------------
+
+/// Detects outbound links to Wikipedia and Wikidata.
+///
+/// Wikipedia/Wikidata links indicate the page references authoritative
+/// sources, which can signal content depth and reliability. This is
+/// informational and considered positive for E-E-A-T.
+pub struct WikipediaLinkAnalyzer;
+
+impl Default for WikipediaLinkAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WikipediaLinkAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for WikipediaLinkAnalyzer {
+    fn name(&self) -> &str {
+        "wikipedia-link"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let external_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.is_external)
+            .collect();
+
+        if external_links.is_empty() {
+            return findings;
+        }
+
+        // WIKI001: Page has outbound Wikipedia links
+        let wikipedia_count = external_links
+            .iter()
+            .filter(|l| is_wikipedia_url(&l.href))
+            .count();
+
+        if wikipedia_count > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "WIKI001".to_string(),
+                title: "Wikipedia links detected".to_string(),
+                description: format!(
+                    "This page contains {wikipedia_count} outbound link(s) to Wikipedia. \
+                     Linking to authoritative reference sources signals content depth \
+                     and can strengthen E-E-A-T signals."
+                ),
+                url: url.clone(),
+                recommendation: "Keep outbound Wikipedia links as they demonstrate thorough \
+                                 research and provide additional context for readers."
+                    .to_string(),
+            });
+        }
+
+        // WIKI002: Page has outbound Wikidata links
+        let wikidata_count = external_links
+            .iter()
+            .filter(|l| is_wikidata_url(&l.href))
+            .count();
+
+        if wikidata_count > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "WIKI002".to_string(),
+                title: "Wikidata links detected".to_string(),
+                description: format!(
+                    "This page contains {wikidata_count} outbound link(s) to Wikidata. \
+                     Wikidata links reference structured knowledge-base entries, which \
+                     may support entity recognition by search engines."
+                ),
+                url: url.clone(),
+                recommendation: "Retain Wikidata links as they reference structured knowledge \
+                                 entries that can reinforce entity signals."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+fn is_wikipedia_url(href: &str) -> bool {
+    let lower = href.to_lowercase();
+    if !(lower.starts_with("https://en.wikipedia.org/")
+        || lower.starts_with("https://www.wikipedia.org/")
+        || lower.starts_with("http://en.wikipedia.org/")
+        || lower.starts_with("http://www.wikipedia.org/")
+        || lower.starts_with("https://en.m.wikipedia.org/"))
+    {
+        return false;
+    }
+    // Exclude Wikipedia namespace pages (case-insensitive)
+    let namespaces = [
+        "wikipedia:", "help:", "special:", "template:", "talk:", "user:",
+        "category:", "portal:", "file:",
+    ];
+    !namespaces.iter().any(|ns| {
+        let marker = format!("/wiki/{ns}");
+        lower.contains(&marker)
+    })
+}
+
+fn is_wikidata_url(href: &str) -> bool {
+    let lower = href.to_lowercase();
+    lower.starts_with("https://www.wikidata.org/wiki/")
+        || lower.starts_with("http://www.wikidata.org/wiki/")
+        || lower.starts_with("https://www.wikidata.org/entity/")
+        || lower.starts_with("http://www.wikidata.org/entity/")
+}
+
+// ---------------------------------------------------------------------------
+// AnchorTextDiversityAnalyzer
+// ---------------------------------------------------------------------------
+
+/// Analyzes anchor text diversity across internal links.
+///
+/// Monitors for two anti-patterns: all links sharing the same anchor text,
+/// and excessive use of generic phrases like "click here" or "read more".
+pub struct AnchorTextDiversityAnalyzer;
+
+impl Default for AnchorTextDiversityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AnchorTextDiversityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for AnchorTextDiversityAnalyzer {
+    fn name(&self) -> &str {
+        "anchor-text-diversity"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.is_external)
+            .collect();
+
+        // Need at least 3 internal links with anchor text to analyze
+        let links_with_text: Vec<&ExtractedLink> = internal_links
+            .iter()
+            .filter(|l| !l.text.trim().is_empty())
+            .copied()
+            .collect();
+
+        if links_with_text.len() < 3 {
+            return findings;
+        }
+
+        // Normalize anchor texts
+        let anchors: Vec<String> = links_with_text
+            .iter()
+            .map(|l| {
+                l.text
+                    .trim()
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                    .collect::<String>()
+                    .split_whitespace()
+                    .collect::<Vec<&str>>()
+                    .join(" ")
+            })
+            .filter(|a| !a.is_empty())
+            .collect();
+
+        if anchors.is_empty() {
+            return findings;
+        }
+
+        // ANCH-DIV001: All internal links use the same anchor text
+        {
+            let unique_anchors: HashSet<&str> = anchors.iter().map(|a| a.as_str()).collect();
+            if unique_anchors.len() == 1 && anchors.len() >= 3 {
+                let sample = anchors[0].clone();
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ANCH-DIV001".to_string(),
+                    title: "All internal links use identical anchor text".to_string(),
+                    description: format!(
+                        "All {count} internal links with anchor text use the identical phrase \
+                         \"{sample}\". Uniform anchor text provides no keyword diversity and \
+                         may appear manipulative to search engines.",
+                        count = anchors.len()
+                    ),
+                    url: url.clone(),
+                    recommendation: "Diversify anchor text across internal links. Use descriptive, \
+                                     varied phrases that naturally reflect the content of each \
+                                     linked page."
+                        .to_string(),
+                });
+            }
+        }
+
+        // ANCH-DIV002: >80% of anchor text is generic
+        {
+            let total = anchors.len();
+            let generic_count = anchors
+                .iter()
+                .filter(|a| is_generic_anchor(a))
+                .count();
+
+            let ratio = generic_count as f64 / total as f64;
+            if ratio > 0.8 && total >= 3 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ANCH-DIV002".to_string(),
+                    title: "Overuse of generic anchor text".to_string(),
+                    description: format!(
+                        "{:.0}% of internal link anchor text ({generic_count} of {total}) \
+                         consists of generic phrases (e.g., \"click here\", \"read more\", \
+                         \"learn more\"). Generic anchor text misses opportunities to signal \
+                         topical relevance.",
+                        ratio * 100.0
+                    ),
+                    url: url.clone(),
+                    recommendation: "Replace generic anchor text with descriptive phrases that \
+                                     convey the topic or purpose of the linked page."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+fn is_generic_anchor(text: &str) -> bool {
+    let lower = text.trim().to_lowercase();
+    matches!(
+        lower.as_str(),
+        "click here"
+            | "click this"
+            | "read more"
+            | "learn more"
+            | "more"
+            | "here"
+            | "this"
+            | "link"
+            | "go"
+            | "see more"
+            | "view more"
+            | "see details"
+            | "view details"
+            | "find out more"
+            | "find out"
+            | "discover more"
+            | "continue reading"
+            | "continue"
+            | "next"
+            | "previous"
+            | "read more here"
+            | "click to read more"
+            | "click to learn more"
+            | "learn more here"
+            | "see more here"
+            | "view here"
+            | "click here for more"
+            | "go here"
+            | "tap here"
+            | "press here"
+            | "see this"
+            | "check this out"
+            | "check it out"
+    )
+}
+
+// ---------------------------------------------------------------------------
 // Tests for new analyzers
 // ---------------------------------------------------------------------------
 
@@ -3734,5 +4027,812 @@ mod tests_new_analyzers {
         let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
         // Only 2 links, below the 3-link minimum for ANCHOR002
         assert!(!findings.iter().any(|f| f.code == "ANCHOR002"));
+    }
+
+    // ---- WikipediaLinkAnalyzer tests ----
+
+    #[test]
+    fn test_wiki_no_external_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_no_wikipedia_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://other.com/resource".to_string(),
+            text: "Other resource".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_wikipedia_link_detected() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Rust_(programming_language)".to_string(),
+            text: "Rust on Wikipedia".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI001"));
+    }
+
+    #[test]
+    fn test_wiki_wikidata_link_detected() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://www.wikidata.org/wiki/Q12345".to_string(),
+            text: "Wikidata entry".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI002"));
+    }
+
+    #[test]
+    fn test_wiki_both_wikipedia_and_wikidata() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+                text: "Rust".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://www.wikidata.org/wiki/Q12345".to_string(),
+                text: "Wikidata".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI001"));
+        assert!(findings.iter().any(|f| f.code == "WIKI002"));
+    }
+
+    #[test]
+    fn test_wiki_wikipedia_talk_page_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Talk:Rust".to_string(),
+            text: "Rust talk".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_wikipedia_category_page_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Category:Programming_languages".to_string(),
+            text: "Category".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_wikipedia_template_page_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Template:Cite_web".to_string(),
+            text: "Template".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_internal_wikipedia_link_not_counted() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wiki_multiple_wikipedia_links_count() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+                text: "Rust".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://en.wikipedia.org/wiki/Python".to_string(),
+                text: "Python".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        let wiki_finding = findings.iter().find(|f| f.code == "WIKI001").unwrap();
+        assert!(wiki_finding.description.contains("2"));
+    }
+
+    #[test]
+    fn test_wiki_wikidata_entity_url() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://www.wikidata.org/entity/Q12345".to_string(),
+            text: "Entity".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI002"));
+    }
+
+    #[test]
+    fn test_wiki_wikipedia_info_level() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_wiki_mobile_wikipedia() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://en.m.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI001"));
+    }
+
+    #[test]
+    fn test_wiki_non_main_wikipedia_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://fr.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust FR".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // ---- AnchorTextDiversityAnalyzer tests ----
+
+    #[test]
+    fn test_diversity_no_internal_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_diversity_too_few_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_diversity_all_same_anchor() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV001"));
+    }
+
+    #[test]
+    fn test_diversity_diverse_anchors_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "running shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "hiking boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "casual sandals".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_diversity_generic_over_80_percent() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // 4 of 4 are generic (100%), so >80%
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_generic_below_80_percent() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "running shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "hiking boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "casual sandals".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/e".to_string(),
+                text: "running shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // 1 of 5 = 20% generic, well below 80%
+        assert!(!findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_exactly_80_percent_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "running shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // 3 of 4 = 75%, not >80%
+        assert!(!findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_mixed_same_and_generic() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // All same but not generic, so DIV001 fires but DIV002 doesn't
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV001"));
+        assert!(!findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_empty_anchor_text_links_skipped() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // All anchor texts are empty, filtered out, so <3 valid anchors
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_diversity_external_links_excluded() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "https://other.com".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://other2.com".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://other3.com".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // Only external links, no internal links to analyze
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_diversity_all_generic_warnings() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // Both DIV001 and DIV002 should fire
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV001"));
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_various_generic_phrases() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "view more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // All 4 are different generic phrases, so DIV001 doesn't fire, DIV002 does
+        assert!(!findings.iter().any(|f| f.code == "ANCH-DIV001"));
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV002"));
+    }
+
+    #[test]
+    fn test_diversity_case_insensitive() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "Shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "SHOES".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // All same after case normalization
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV001"));
+    }
+
+    #[test]
+    fn test_diversity_warning_severity() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        let finding = findings.iter().find(|f| f.code == "ANCH-DIV001").unwrap();
+        assert_eq!(finding.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_diversity_with_whitespace_in_anchors() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "  shoes  ".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "  shoes  ".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "  shoes  ".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // Should match after trimming/normalization
+        assert!(findings.iter().any(|f| f.code == "ANCH-DIV001"));
+    }
+
+    #[test]
+    fn test_diversity_only_internal_links_considered() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://other.com".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
+        // Only 1 internal link, below minimum of 3
+        assert!(findings.is_empty());
     }
 }

@@ -45,16 +45,21 @@ pub use security_analyzers::{
     PermissionPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer,
 };
 pub use seo_analyzers::{
-    CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator, HeadingHierarchyAnalyzer,
-    HreflangConsistencyAnalyzer, HreflangValidator, InternalLinkAnchorAnalyzer,
-    InternationalSeoAnalyzer, KeywordAnalyzer, LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo,
-    MetaTagAnalyzer, MobileViewportAnalyzer, OpenSearchValidator, PaginationAnalyzer,
-    RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry, WordCountAnalyzer,
+    AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator,
+    HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer, HreflangValidator,
+    InternalLinkAnchorAnalyzer, InternationalSeoAnalyzer, KeywordAnalyzer,
+    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileViewportAnalyzer,
+    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry,
+    WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
     OpenGraphImageValidator, SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterPlayerValidator,
 };
-pub use post_crawl_analyzers::{CrawlData, PostCrawlAnalyzer, PostCrawlAnalyzerRegistry};
+pub use post_crawl_analyzers::{
+    build_post_crawl_registry, CannibalizationDetector, CrawlData,
+    CrossPageDuplicateContentDetector, InternalLinkGraphAnalyzer, LinkEquityDistributor,
+    OrphanPageDetector, PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
+};
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 
 /// Check if a URL path is a utility/page that should be excluded from analysis.
@@ -258,7 +263,7 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-/// in parallel using rayon. The default registry includes 93 analyzers
+    /// in parallel using rayon. The default registry includes 95 analyzers
 /// covering HTTP, SEO, content, links, images, security, accessibility,
 /// social media, AI-specific checks, and structured data validation.
 ///
@@ -418,6 +423,9 @@ impl AnalyzerRegistry {
             Box::new(BreadcrumbListDepthAnalyzer::new()),
             // SEO: internal link anchor analysis
             Box::new(InternalLinkAnchorAnalyzer::new()),
+            // SEO: Wikipedia/Wikidata link detection and anchor text diversity
+            Box::new(WikipediaLinkAnalyzer::new()),
+            Box::new(AnchorTextDiversityAnalyzer::new()),
             // Social: social preview optimizer
             Box::new(SocialPreviewOptimizer::new()),
         ];
@@ -1323,7 +1331,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 93);
+        assert_eq!(registry.len(), 95);
         assert!(!registry.is_empty());
     }
 

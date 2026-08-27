@@ -174,7 +174,7 @@ impl Default for CrawlEngineConfig {
             force: false,
             allow_http: false,
             plugin_dirs: Vec::new(),
-            post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
+            post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(),
         }
     }
 }
@@ -1004,7 +1004,7 @@ mod tests {
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
         // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 86);
+        assert_eq!(registry.len(), 88);
     }
 
     struct MockJsRenderer {

@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::needless_return)]
+#![allow(clippy::unwrap_used, clippy::needless_return, clippy::redundant_clone, clippy::unnecessary_to_owned)]
 #![allow(unused_imports, unused_variables, unused_mut)]
 
 use std::collections::{HashMap, HashSet};

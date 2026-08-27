@@ -20,20 +20,30 @@ pub mod social_analyzers;
 
 pub use content_analyzers::{
     ActionSchemaValidator, AggregateOfferSchemaValidator, ArticleSchemaValidator,
-    BreadcrumbListDepthAnalyzer, BreadcrumbsValidator, BrandSchemaValidator,
+    ApartmentSchemaValidator, BreadcrumbListDepthAnalyzer, BreadcrumbsValidator,
+    BrandSchemaValidator, CarSchemaValidator,
     ContentFreshnessScorer, ContentThinAnalyzer, ContentQualityAnalyzer, CourseSchemaValidator,
     CouponSchemaValidator, DatasetSchemaValidator, DuplicateContentDetector,
     EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator,
-    FaqSchemaValidator, HowToSchemaValidator, ItemListSchemaValidator,
+    FaqSchemaValidator, GovernmentServiceSchemaValidator, HealthPlanSchemaValidator,
+    HowToSchemaValidator, InvoiceSchemaValidator,
+    ItemListSchemaValidator,
     JobPostingSchemaValidator, JsonLdValidator,
     LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer, MetaDescriptionLengthAnalyzer,
-    MicrodataValidator, OfferAvailabilityAnalyzer, OfferSchemaValidator,
-    OrganizationSchemaValidator, OccupationSchemaValidator, PersonSchemaValidator,
-    PlaybookSchemaValidator, QuestSchemaValidator,
-    RecipeSchemaValidator, ReviewSchemaValidator, RdfaValidator, ServiceSchemaValidator,
+    MicrodataValidator, MovieSchemaValidator, MusicAlbumSchemaValidator,
+    OfferAvailabilityAnalyzer, OfferSchemaValidator,
+    OrganizationSchemaValidator, OccupationSchemaValidator, PermitSchemaValidator,
+    PersonSchemaValidator,
+    PlanSchemaValidator, PlaybookSchemaValidator, ProductModelSchemaValidator,
+    QuestSchemaValidator,
+    RecipeSchemaValidator, ResearchProjectSchemaValidator, ReviewSchemaValidator,
+    RdfaValidator, ScheduleSchemaValidator, ServiceSchemaValidator,
     ShippingSchemaValidator, SoftwareApplicationValidator, SpeakableSchemaValidator,
     SpecialAnnouncementSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
-    TitleLengthAnalyzer, VideoSchemaValidator, WebPageSchemaValidator,
+    TitleLengthAnalyzer, TripSchemaValidator, TVSeriesSchemaValidator,
+    VideoSchemaValidator, WebAPISchemaValidator, WebPageSchemaValidator,
+    WebPageElementSchemaValidator, WebSiteSchemaValidator, WearableSchemaValidator,
+    WorkerSchemaValidator, WorkersUnionSchemaValidator,
 };
 pub use http_analyzers::{
     CacheHeaderAnalyzer, CompressionAnalyzer, HttpVersionAnalyzer, HttpStatusAnalyzer,
@@ -47,11 +57,16 @@ pub use media_analyzers::{
     ProductVariantAnalyzer, ResourceCountAnalyzer, ResourceSizeAnalyzer,
 };
 pub use security_analyzers::{
-    AccessibilityAnalyzer, ColorContrastAnalyzer, ContentSecurityPolicyAnalyzer,
-    CookieAnalyzer, CrossOriginIsolationAnalyzer, CrossOriginResourcePolicyAnalyzer,
-    FocusOrderAnalyzer, FontSizeAnalyzer, HstsPreloadAnalyzer, MixedContentAnalyzer,
-    MobileFriendlinessChecker, PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer,
-    SecurityHeaderAnalyzer, SriAnalyzer, XContentTypeOptionsAnalyzer, XFrameOptionsAnalyzer,
+    AccessibilityAnalyzer, AriaRolesAnalyzer, ColorContrastAnalyzer,
+    ContentTypeSniffingAnalyzer,
+    ContentSecurityPolicyAnalyzer, CookieAnalyzer, CrossOriginIsolationAnalyzer,
+    CrossOriginResourcePolicyAnalyzer, FocusManagementAnalyzer, FocusOrderAnalyzer,
+    FontSizeAnalyzer, FormLabelAnalyzer, HeadingOrderAnalyzer, HstsPreloadAnalyzer,
+    ImageAccessibilityAnalyzer, LandmarkRegionsAnalyzer, LinkAccessibilityAnalyzer,
+    MixedContentAnalyzer, MobileFriendlinessChecker, PermissionPolicyAnalyzer,
+    ReferrerPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer, StrictTransportSecurityAnalyzer,
+    TableAccessibilityAnalyzer,
+    XContentTypeOptionsAnalyzer, XSSProtectionAnalyzer, XFrameOptionsAnalyzer,
     XPermittedCrossDomainPoliciesAnalyzer,
 };
 pub use seo_analyzers::{
@@ -73,8 +88,7 @@ pub use social_analyzers::{
 };
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData,
-    CrossPageDuplicateContentDetector, InternalLinkGraphAnalyzer, LinkEquityDistributor,
-    OrphanPageDetector, PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
+    PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
 };
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 
@@ -490,6 +504,45 @@ impl AnalyzerRegistry {
             // Security: mixed content and cookies
             Box::new(MixedContentAnalyzer::new()),
             Box::new(CookieAnalyzer::new()),
+            // Accessibility: landmark regions, heading order, form labels, table accessibility
+            Box::new(LandmarkRegionsAnalyzer::new()),
+            Box::new(HeadingOrderAnalyzer::new()),
+            Box::new(FormLabelAnalyzer::new()),
+            Box::new(TableAccessibilityAnalyzer::new()),
+            // Accessibility: link, image, ARIA roles, focus management, language attribute
+            Box::new(LinkAccessibilityAnalyzer::new()),
+            Box::new(ImageAccessibilityAnalyzer::new()),
+            Box::new(AriaRolesAnalyzer::new()),
+            Box::new(FocusManagementAnalyzer::new()),
+            Box::new(LanguageAttributeAnalyzer::new()),
+            // Schema validators: Apartment, Car, MusicAlbum, TVSeries, Movie
+            Box::new(ApartmentSchemaValidator::new()),
+            Box::new(CarSchemaValidator::new()),
+            Box::new(MusicAlbumSchemaValidator::new()),
+            Box::new(TVSeriesSchemaValidator::new()),
+            Box::new(MovieSchemaValidator::new()),
+            // Schema validators: GovernmentService, HealthPlan, Invoice, Permit, Plan
+            Box::new(GovernmentServiceSchemaValidator::new()),
+            Box::new(HealthPlanSchemaValidator::new()),
+            Box::new(InvoiceSchemaValidator::new()),
+            Box::new(PermitSchemaValidator::new()),
+            Box::new(PlanSchemaValidator::new()),
+            // Schema validators: ProductModel, ResearchProject, Schedule, Trip, WorkersUnion
+            Box::new(ProductModelSchemaValidator::new()),
+            Box::new(ResearchProjectSchemaValidator::new()),
+            Box::new(ScheduleSchemaValidator::new()),
+            Box::new(TripSchemaValidator::new()),
+            Box::new(WorkersUnionSchemaValidator::new()),
+            // Schema validators: WebAPI, Wearable, WebPageElement, WebSite, Worker
+            Box::new(WebAPISchemaValidator::new()),
+            Box::new(WearableSchemaValidator::new()),
+            Box::new(WebPageElementSchemaValidator::new()),
+            Box::new(WebSiteSchemaValidator::new()),
+            Box::new(WorkerSchemaValidator::new()),
+            // Security: HSTS, XSS protection, content-type sniffing
+            Box::new(StrictTransportSecurityAnalyzer::new()),
+            Box::new(XSSProtectionAnalyzer::new()),
+            Box::new(ContentTypeSniffingAnalyzer::new()),
         ];
 
         if include_ai {
@@ -1393,7 +1446,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 129);
+        assert_eq!(registry.len(), 161);
         assert!(!registry.is_empty());
     }
 

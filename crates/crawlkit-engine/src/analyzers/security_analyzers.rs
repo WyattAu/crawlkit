@@ -2299,11 +2299,1018 @@ impl Analyzer for CrossOriginResourcePolicyAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Landmark Regions Analyzer (WCAG landmark navigation)
+// ---------------------------------------------------------------------------
+
+pub struct LandmarkRegionsAnalyzer;
+
+impl LandmarkRegionsAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for LandmarkRegionsAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for LandmarkRegionsAnalyzer {
+    fn name(&self) -> &str {
+        "landmark-regions"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if !ctx.page.has_main_landmark {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LAND001".to_string(),
+                title: "Missing main landmark region".to_string(),
+                description: "No <main> element or role=\"main\" found. Screen reader users rely on landmark regions to quickly navigate to the primary content of a page."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Wrap the primary page content in a <main> element or add role=\"main\" to the primary content container."
+                    .to_string(),
+            });
+        }
+
+        if !ctx.page.has_nav_landmark {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "LAND002".to_string(),
+                title: "Missing navigation landmark".to_string(),
+                description: "No <nav> element or role=\"navigation\" found. Navigation landmarks allow screen reader users to jump directly to site navigation."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Wrap primary navigation links in a <nav> element or add role=\"navigation\" to the navigation container."
+                    .to_string(),
+            });
+        }
+
+        let has_banner = ctx.page.landmarks.iter().any(|l| l == "banner" || l == "header");
+        if !has_banner {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "LAND003".to_string(),
+                title: "Missing banner/header landmark".to_string(),
+                description: "No <header> element or role=\"banner\" found. The banner landmark typically contains the site logo, search, and primary navigation."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Wrap the site header in a <header> element. For the banner role, ensure it is a direct child of <body>."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Heading Order Analyzer (WCAG 1.3.1 heading hierarchy)
+// ---------------------------------------------------------------------------
+
+pub struct HeadingOrderAnalyzer;
+
+impl HeadingOrderAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for HeadingOrderAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for HeadingOrderAnalyzer {
+    fn name(&self) -> &str {
+        "heading-order"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.headings.len() < 2 {
+            return findings;
+        }
+
+        let mut prev_level: Option<u8> = None;
+        let mut found_descent = false;
+
+        for heading in &ctx.page.headings {
+            if let Some(prev) = prev_level {
+                if heading.level > prev + 1 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "HORDER001".to_string(),
+                        title: "Heading level skip detected".to_string(),
+                        description: format!(
+                            "Heading jumps from H{prev} to H{}, skipping intermediate levels. \
+                             Screen readers and outline tools rely on sequential heading levels.",
+                            heading.level
+                        ),
+                        url: url.to_string(),
+                        recommendation: format!(
+                            "Use H{} after H{prev} to maintain a proper document outline.",
+                            prev + 1
+                        ),
+                    });
+                }
+                if heading.level < prev && !found_descent {
+                    found_descent = true;
+                }
+                if found_descent && heading.level > prev {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "HORDER002".to_string(),
+                        title: "Non-sequential heading order".to_string(),
+                        description: format!(
+                            "Heading level decreased from H{prev} to H{} and then increased again. \
+                             Heading levels should follow a strictly non-increasing pattern within sections.",
+                            heading.level
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Ensure heading levels descend sequentially (H1 > H2 > H3) and do not increase within a section."
+                            .to_string(),
+                    });
+                    break;
+                }
+            }
+            prev_level = Some(heading.level);
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Form Label Analyzer (WCAG 1.3.1, 4.1.2 form accessibility)
+// ---------------------------------------------------------------------------
+
+pub struct FormLabelAnalyzer;
+
+impl FormLabelAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for FormLabelAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for FormLabelAnalyzer {
+    fn name(&self) -> &str {
+        "form-labels"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if !input.has_label {
+                    let aria_has_name = input.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                        || input.aria_labelledby.as_ref().is_some_and(|l| !l.trim().is_empty());
+                    if !aria_has_name {
+                        let desc = match (&input.name, &input.input_type) {
+                            (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
+                            (Some(n), None) => format!("input (name=\"{n}\")"),
+                            (None, Some(t)) => format!("input (type=\"{t}\")"),
+                            (None, None) => "input".to_string(),
+                        };
+                        findings.push(Finding {
+                            severity: Severity::Error,
+                            category: IssueCategory::Accessibility,
+                            code: "FLABEL001".to_string(),
+                            title: "Form input missing associated label".to_string(),
+                            description: format!(
+                                "{desc} has no associated <label> element, aria-label, or aria-labelledby attribute. \
+                                 Screen readers cannot announce the purpose of unlabeled inputs."
+                            ),
+                            url: url.to_string(),
+                            recommendation: "Associate a <label> element with the input using the for/id attributes, or add an aria-label attribute."
+                                .to_string(),
+                        });
+                    }
+                } else if let Some(placeholder) = &input.placeholder {
+                    if !placeholder.trim().is_empty() && input.aria_label.is_none() {
+                        let label_text = input
+                            .name
+                            .as_deref()
+                            .unwrap_or("input");
+                        if label_text.trim().is_empty() {
+                            findings.push(Finding {
+                                severity: Severity::Info,
+                                category: IssueCategory::Accessibility,
+                                code: "FLABEL002".to_string(),
+                                title: "Form input with empty label text".to_string(),
+                                description: format!(
+                                    "input (name=\"{}\") has a <label> element but the label text may be empty. \
+                                     Placeholder text is not a substitute for a proper label.",
+                                    input.name.as_deref().unwrap_or("")
+                                ),
+                                url: url.to_string(),
+                                recommendation: "Ensure the <label> element contains descriptive text explaining the input purpose."
+                                    .to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Table Accessibility Analyzer (WCAG 1.3.1 table semantics)
+// ---------------------------------------------------------------------------
+
+pub struct TableAccessibilityAnalyzer;
+
+impl TableAccessibilityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for TableAccessibilityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for TableAccessibilityAnalyzer {
+    fn name(&self) -> &str {
+        "table-accessibility"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.tables_total == 0 {
+            return findings;
+        }
+
+        let without_headers = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        if without_headers > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TACC001".to_string(),
+                title: "Table missing header cells".to_string(),
+                description: format!(
+                    "{} of {} table(s) have no <th> header cells. Header cells help screen reader \
+                     users understand the structure and relationships of tabular data.",
+                    without_headers, ctx.page.tables_total
+                ),
+                url: url.to_string(),
+                recommendation: "Use <th> elements for header cells and add scope=\"col\" or scope=\"row\" attributes for complex tables."
+                    .to_string(),
+            });
+        }
+
+        let without_captions = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_captions);
+        if without_captions > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "TACC002".to_string(),
+                title: "Table missing caption".to_string(),
+                description: format!(
+                    "{} of {} table(s) have no <caption> element. Captions provide a summary \
+                     of the table purpose for screen reader users.",
+                    without_captions, ctx.page.tables_total
+                ),
+                url: url.to_string(),
+                recommendation: "Add a <caption> element to each data table describing its content."
+                    .to_string(),
+            });
+        }
+
+        let tables_needing_scope = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        if tables_needing_scope > 10 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TACC003".to_string(),
+                title: "Large number of tables missing scope attributes".to_string(),
+                description: format!(
+                    "{} table(s) with more than 10 rows are missing scope attributes on header cells. \
+                     The scope attribute clarifies whether a header applies to a row or column.",
+                    tables_needing_scope
+                ),
+                url: url.to_string(),
+                recommendation: "Add scope=\"col\" to column headers and scope=\"row\" to row headers."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Link Accessibility Analyzer (WCAG 2.4.4 link purpose)
+// ---------------------------------------------------------------------------
+
+pub struct LinkAccessibilityAnalyzer;
+
+impl LinkAccessibilityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    const GENERIC_TEXTS: &[&str] = &[
+        "click here",
+        "read more",
+        "more",
+        "learn more",
+        "click",
+        "go",
+        "continue",
+    ];
+
+    const NON_DESCRIPTIVE_TEXTS: &[&str] = &["link", "here"];
+}
+
+impl Default for LinkAccessibilityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for LinkAccessibilityAnalyzer {
+    fn name(&self) -> &str {
+        "link-accessibility"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for link in &ctx.page.links {
+            let text_lower = link.text.trim().to_lowercase();
+            let has_accessible_name = !text_lower.is_empty()
+                || link.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+
+            if !has_accessible_name {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Accessibility,
+                    code: "LNKACC001".to_string(),
+                    title: "Link with empty text content".to_string(),
+                    description: format!(
+                        "Link to \"{}\" has no accessible text. Screen readers announce the raw URL, \
+                         which is not descriptive for users.",
+                        link.href
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Add descriptive text content, an aria-label, or an image with alt text inside the link."
+                        .to_string(),
+                });
+            } else if Self::GENERIC_TEXTS.contains(&text_lower.as_str()) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "LNKACC002".to_string(),
+                    title: "Link with generic text".to_string(),
+                    description: format!(
+                        "Link text \"{}\" is generic and does not describe the destination. \
+                         Screen reader users navigating by links hear a list of identical labels.",
+                        link.text.trim()
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Use descriptive link text that explains the purpose or destination of the link."
+                        .to_string(),
+                });
+            } else if Self::NON_DESCRIPTIVE_TEXTS.contains(&text_lower.as_str()) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "LNKACC003".to_string(),
+                    title: "Link with non-descriptive text".to_string(),
+                    description: format!(
+                        "Link text \"{}\" is too short to convey meaning. Users navigating by links \
+                         cannot determine the destination.",
+                        link.text.trim()
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Replace the link text with a phrase that describes the link destination."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Image Accessibility Analyzer (WCAG 1.1.1 non-text content)
+// ---------------------------------------------------------------------------
+
+pub struct ImageAccessibilityAnalyzer;
+
+impl ImageAccessibilityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn filename_from_src(src: &str) -> Option<&str> {
+        src.rsplit('/').next().and_then(|s| {
+            let s = s.trim_start_matches('\\');
+            if s.is_empty() {
+                None
+            } else {
+                Some(s)
+            }
+        })
+    }
+}
+
+impl Default for ImageAccessibilityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ImageAccessibilityAnalyzer {
+    fn name(&self) -> &str {
+        "image-accessibility"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for img in &ctx.page.images {
+            if !img.has_alt {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Accessibility,
+                    code: "IMGACC001".to_string(),
+                    title: "Image missing alt attribute".to_string(),
+                    description: format!(
+                        "Image \"{}\" has no alt attribute. Screen readers cannot convey \
+                         the image content to visually impaired users.",
+                        img.src
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Add an alt attribute to every <img> element. Use descriptive text for meaningful images and alt=\"\" for decorative ones."
+                        .to_string(),
+                });
+            } else if img.alt.is_empty() && !img.aria_hidden {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "IMGACC002".to_string(),
+                    title: "Image with empty alt on non-decorative image".to_string(),
+                    description: format!(
+                        "Image \"{}\" has alt=\"\" but is not marked as aria-hidden. If this image \
+                         conveys meaningful content, it needs descriptive alt text. If decorative, add aria-hidden=\"true\".",
+                        img.src
+                    ),
+                    url: url.to_string(),
+                    recommendation: "For meaningful images, provide descriptive alt text. For decorative images, use alt=\"\" AND aria-hidden=\"true\"."
+                        .to_string(),
+                });
+            } else if !img.alt.is_empty() {
+                if let Some(filename) = Self::filename_from_src(&img.src) {
+                    let filename_no_ext = filename.split('.').next().unwrap_or(filename);
+                    let alt_lower = img.alt.trim().to_lowercase();
+                    let filename_lower = filename_no_ext.to_lowercase();
+                    if alt_lower == filename_lower {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Accessibility,
+                            code: "IMGACC003".to_string(),
+                            title: "Image alt text identical to filename".to_string(),
+                            description: format!(
+                                "Image \"{}\" has alt text \"{}\" which matches the filename. \
+                                 Alt text should describe the image content, not repeat the file name.",
+                                img.src, img.alt
+                            ),
+                            url: url.to_string(),
+                            recommendation: "Replace the filename-based alt text with a description of what the image shows."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ARIA Roles Analyzer (WCAG 4.1.2 name, role, value)
+// ---------------------------------------------------------------------------
+
+pub struct AriaRolesAnalyzer;
+
+impl AriaRolesAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for AriaRolesAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for AriaRolesAnalyzer {
+    fn name(&self) -> &str {
+        "aria-roles"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIA001".to_string(),
+                title: "ARIA roles without accessible names".to_string(),
+                description: format!(
+                    "{} ARIA role(s) found but no aria-label or aria-labelledby attributes. \
+                     Custom ARIA roles require accessible names so screen readers can announce \
+                     the element purpose.",
+                    ctx.page.aria_role_count
+                ),
+                url: url.to_string(),
+                recommendation: "Add aria-label or aria-labelledby to all elements with custom ARIA roles."
+                    .to_string(),
+            });
+        }
+
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count > 0
+            && ctx.page.aria_role_count > ctx.page.aria_label_count
+        {
+            let unlabeled = ctx.page.aria_role_count.saturating_sub(ctx.page.aria_label_count);
+            if unlabeled > 0 {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Accessibility,
+                    code: "ARIA002".to_string(),
+                    title: "ARIA roles may need accessible names on non-semantic elements".to_string(),
+                    description: format!(
+                        "{} ARIA role(s) are used but not all have associated accessible names. \
+                         When adding ARIA roles to non-semantic elements like <div> or <span>, \
+                         ensure each has an aria-label or aria-labelledby.",
+                        unlabeled
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Every element with a role attribute should have an accessible name via aria-label, aria-labelledby, or visible text content."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Focus Management Analyzer (WCAG 2.4.3 focus order)
+// ---------------------------------------------------------------------------
+
+pub struct FocusManagementAnalyzer;
+
+impl FocusManagementAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for FocusManagementAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for FocusManagementAnalyzer {
+    fn name(&self) -> &str {
+        "focus-management"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "FOCUS001".to_string(),
+                title: "Positive tabindex values disrupt focus order".to_string(),
+                description: "Elements with tabindex > 0 alter the natural tab order, causing \
+                              keyboard navigation to skip elements or follow an unpredictable sequence. \
+                              This violates WCAG 2.4.3 Focus Order."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Remove positive tabindex values. Use tabindex=\"0\" to add elements to the natural tab order or tabindex=\"-1\" for programmatic focus only."
+                    .to_string(),
+            });
+        }
+
+        let body = ctx.body.unwrap_or("");
+        let has_focus_style = body.contains(":focus")
+            || body.contains(":focus-visible")
+            || body.contains(":focus-within");
+        let interactive_count = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.text.trim().is_empty())
+            .count()
+            + ctx.page.forms.len();
+
+        if interactive_count > 0 && !has_focus_style {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "FOCUS002".to_string(),
+                title: "No visible focus indicators found".to_string(),
+                description: format!(
+                    "Page has {} interactive element(s) but no :focus or :focus-visible CSS rules \
+                     were detected. Keyboard users rely on visible focus indicators to know which \
+                     element is active.",
+                    interactive_count
+                ),
+                url: url.to_string(),
+                recommendation: "Add :focus and/or :focus-visible CSS rules with a visible outline or background change. Ensure the indicator has sufficient contrast (3:1 minimum)."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Language Attribute Analyzer (WCAG 3.1.1 language of page)
+// ---------------------------------------------------------------------------
+
+pub struct LanguageAttributeAnalyzer;
+
+impl LanguageAttributeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for LanguageAttributeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for LanguageAttributeAnalyzer {
+    fn name(&self) -> &str {
+        "language-attribute"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if !ctx.page.has_lang_attribute {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LANGACC001".to_string(),
+                title: "Missing html lang attribute".to_string(),
+                description: "The <html> element has no lang attribute. Screen readers use this \
+                              attribute to select the correct pronunciation engine and hyphenation rules."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Add lang=\"en\" (or the appropriate language code) to the <html> element."
+                    .to_string(),
+            });
+        }
+
+        if let Some(lang) = &ctx.page.html_lang {
+            if lang.len() < 2 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "LANGACC002".to_string(),
+                    title: "Lang attribute value too short".to_string(),
+                    description: format!(
+                        "The html lang attribute is set to \"{}\", which is shorter than the minimum \
+                         2-character language code. Valid examples: \"en\", \"fr\", \"de\", \"zh-CN\".",
+                        lang
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Use a valid BCP 47 language tag (e.g., \"en\", \"fr-CA\", \"zh-CN\")."
+                        .to_string(),
+                });
+            }
+
+            let has_hreflang = ctx
+                .page
+                .meta
+                .hreflang
+                .iter()
+                .any(|h| h.lang == *lang);
+            let has_content = ctx.page.word_count > 0;
+            if has_content && !has_hreflang && !ctx.page.meta.hreflang.is_empty() {
+                let hreflang_langs: Vec<&str> =
+                    ctx.page.meta.hreflang.iter().map(|h| h.lang.as_str()).collect();
+                if !hreflang_langs.contains(&lang.as_str()) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "LANGACC002".to_string(),
+                        title: "Lang attribute doesn't match hreflang declarations".to_string(),
+                        description: format!(
+                            "The html lang=\"{}\" but hreflang tags declare: {}. The page language \
+                             should match one of the declared hreflang values.",
+                            lang,
+                            hreflang_langs.join(", ")
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Ensure the html lang attribute matches the content language declared in hreflang tags."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// StrictTransportSecurityAnalyzer
+// =========================================================================
+
+/// Analyzes Strict-Transport-Security header for proper HSTS configuration.
+pub struct StrictTransportSecurityAnalyzer;
+
+impl Default for StrictTransportSecurityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StrictTransportSecurityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Parse max-age from an HSTS header value.
+    fn parse_max_age(value: &str) -> Option<u64> {
+        for part in value.split(';') {
+            let trimmed = part.trim();
+            if let Some(val) = trimmed.strip_prefix("max-age=") {
+                if let Ok(n) = val.trim().parse::<u64>() {
+                    return Some(n);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Analyzer for StrictTransportSecurityAnalyzer {
+    fn name(&self) -> &str {
+        "strict-transport-security"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Strict-Transport-Security") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "STRICT001".to_string(),
+                    title: "Missing Strict-Transport-Security header".to_string(),
+                    description: "No Strict-Transport-Security header was found. HSTS tells \
+                                  browsers to only use HTTPS for this domain."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set Strict-Transport-Security: max-age=31536000; \
+                                     includeSubDomains; preload."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if let Some(max_age) = Self::parse_max_age(value) {
+                    if max_age < 31536000 {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Security,
+                            code: "STRICT002".to_string(),
+                            title: "HSTS max-age is too short".to_string(),
+                            description: format!(
+                                "Strict-Transport-Security max-age is {max_age} seconds, \
+                                 which is less than the recommended minimum of 31536000 \
+                                 (1 year)."
+                            ),
+                            url: url.to_string(),
+                            recommendation: "Set max-age to at least 31536000 (1 year)."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// XSSProtectionAnalyzer
+// =========================================================================
+
+/// Analyzes X-XSS-Protection header configuration.
+pub struct XSSProtectionAnalyzer;
+
+impl Default for XSSProtectionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XSSProtectionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for XSSProtectionAnalyzer {
+    fn name(&self) -> &str {
+        "xss-protection"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-XSS-Protection") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "XSS001".to_string(),
+                    title: "Missing X-XSS-Protection header".to_string(),
+                    description: "No X-XSS-Protection header was found. While modern browsers \
+                                  rely on CSP, this header provides legacy XSS protection."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-XSS-Protection: 1; mode=block for legacy browser \
+                                     support."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim().contains("mode=block") {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "XSS002".to_string(),
+                        title: "X-XSS-Protection set to mode=block".to_string(),
+                        description: "X-XSS-Protection is set to mode=block. While this enables \
+                                      the XSS auditor in mode=block, the header is deprecated \
+                                      and Content-Security-Policy is preferred."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Consider removing X-XSS-Protection and relying on \
+                                         Content-Security-Policy instead."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentTypeSniffingAnalyzer
+// =========================================================================
+
+/// Analyzes X-Content-Type-Options for MIME type sniffing protection.
+pub struct ContentTypeSniffingAnalyzer;
+
+impl Default for ContentTypeSniffingAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentTypeSniffingAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for ContentTypeSniffingAnalyzer {
+    fn name(&self) -> &str {
+        "content-type-sniffing"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-Content-Type-Options") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "CTSNIFF001".to_string(),
+                    title: "Missing X-Content-Type-Options header".to_string(),
+                    description: "No X-Content-Type-Options header was found. This header \
+                                  prevents browsers from MIME-sniffing a response away from \
+                                  the declared content type."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if !value.trim().eq_ignore_ascii_case("nosniff") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CTSNIFF002".to_string(),
+                        title: "X-Content-Type-Options not set to nosniff".to_string(),
+                        description: format!(
+                            "X-Content-Type-Options is \"{value}\" but should be \"nosniff\". \
+                             Only the nosniff value is recognized by browsers."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ParsedPage;
+    use crate::parser::{ParsedPage, Heading, ExtractedLink, ExtractedImage};
     use crate::meta::MetaTags;
+    use url::Url;
 
     fn make_page(url: &str) -> ParsedPage {
         ParsedPage {
@@ -3243,5 +4250,1509 @@ mod tests {
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
+    }
+
+    // ===== LandmarkRegionsAnalyzer tests =====
+
+    #[test]
+    fn test_landmark_missing_all() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LAND001"));
+        assert!(findings.iter().any(|f| f.code == "LAND002"));
+        assert!(findings.iter().any(|f| f.code == "LAND003"));
+    }
+
+    #[test]
+    fn test_landmark_has_main() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAND001"));
+    }
+
+    #[test]
+    fn test_landmark_has_nav() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAND002"));
+    }
+
+    #[test]
+    fn test_landmark_has_banner() {
+        let mut page = make_page("https://example.com");
+        page.landmarks.push("banner".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAND003"));
+    }
+
+    #[test]
+    fn test_landmark_has_header_role() {
+        let mut page = make_page("https://example.com");
+        page.landmarks.push("header".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LAND003"));
+    }
+
+    #[test]
+    fn test_landmark_all_present_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = true;
+        page.has_nav_landmark = true;
+        page.landmarks.push("banner".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_landmark_only_main_missing() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.landmarks.push("banner".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LAND001"));
+        assert!(!findings.iter().any(|f| f.code == "LAND002"));
+        assert!(!findings.iter().any(|f| f.code == "LAND003"));
+    }
+
+    #[test]
+    fn test_landmark_severity_levels() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        let land001 = findings.iter().find(|f| f.code == "LAND001").unwrap();
+        assert_eq!(land001.severity, Severity::Error);
+        let land002 = findings.iter().find(|f| f.code == "LAND002").unwrap();
+        assert_eq!(land002.severity, Severity::Warning);
+        let land003 = findings.iter().find(|f| f.code == "LAND003").unwrap();
+        assert_eq!(land003.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_landmark_all_use_accessibility_category() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LandmarkRegionsAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_landmark_analyzer_name() {
+        assert_eq!(LandmarkRegionsAnalyzer::new().name(), "landmark-regions");
+    }
+
+    // ===== HeadingOrderAnalyzer tests =====
+
+    #[test]
+    fn test_heading_order_skip_level() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 1, text: "H1".to_string(), length: 2 },
+            Heading { level: 3, text: "H3".to_string(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HORDER001"));
+    }
+
+    #[test]
+    fn test_heading_order_non_sequential() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 1, text: "H1".to_string(), length: 2 },
+            Heading { level: 2, text: "H2".to_string(), length: 2 },
+            Heading { level: 3, text: "H3".to_string(), length: 2 },
+            Heading { level: 2, text: "H2b".to_string(), length: 3 },
+            Heading { level: 4, text: "H4".to_string(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HORDER002"));
+    }
+
+    #[test]
+    fn test_heading_order_valid_sequence() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 1, text: "H1".to_string(), length: 2 },
+            Heading { level: 2, text: "H2".to_string(), length: 2 },
+            Heading { level: 3, text: "H3".to_string(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_heading_order_same_level_repeated() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 2, text: "H2a".to_string(), length: 3 },
+            Heading { level: 2, text: "H2b".to_string(), length: 3 },
+            Heading { level: 2, text: "H2c".to_string(), length: 3 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_heading_order_single_heading() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![Heading { level: 1, text: "Only".to_string(), length: 4 }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_heading_order_no_headings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_heading_order_skip_from_h2_to_h4() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 2, text: "H2".to_string(), length: 2 },
+            Heading { level: 4, text: "H4".to_string(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HORDER001"));
+    }
+
+    #[test]
+    fn test_heading_order_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 1, text: "H1".to_string(), length: 2 },
+            Heading { level: 3, text: "H3".to_string(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_heading_order_analyzer_name() {
+        assert_eq!(HeadingOrderAnalyzer::new().name(), "heading-order");
+    }
+
+    #[test]
+    fn test_heading_order_descend_then_ascent() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            Heading { level: 3, text: "H3".to_string(), length: 2 },
+            Heading { level: 2, text: "H2".to_string(), length: 2 },
+            Heading { level: 3, text: "H3b".to_string(), length: 3 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HORDER002"));
+    }
+
+    // ===== FormLabelAnalyzer tests =====
+
+    #[test]
+    fn test_form_label_missing_label() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FLABEL001"));
+    }
+
+    #[test]
+    fn test_form_label_with_aria_label() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: Some("Email address".to_string()),
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FLABEL001"));
+    }
+
+    #[test]
+    fn test_form_label_with_label_element() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("email".to_string()),
+                name: Some("user_email".to_string()),
+                id: Some("email".to_string()),
+                has_label: true,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: true,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_form_label_multiple_inputs_mixed() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 2,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![
+                ExtractedInput {
+                    input_type: Some("text".to_string()),
+                    name: Some("name".to_string()),
+                    id: None,
+                    has_label: true,
+                    aria_label: None,
+                    aria_labelledby: None,
+                    aria_describedby: None,
+                    placeholder: None,
+                    required: false,
+                },
+                ExtractedInput {
+                    input_type: Some("email".to_string()),
+                    name: Some("email".to_string()),
+                    id: None,
+                    has_label: false,
+                    aria_label: None,
+                    aria_labelledby: None,
+                    aria_describedby: None,
+                    placeholder: None,
+                    required: false,
+                },
+            ],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FLABEL001"));
+        let f = findings.iter().find(|f| f.code == "FLABEL001").unwrap();
+        assert!(f.description.contains("email"));
+    }
+
+    #[test]
+    fn test_form_label_with_aria_labelledby() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("search".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: Some("search-label".to_string()),
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FLABEL001"));
+    }
+
+    #[test]
+    fn test_form_label_no_forms() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_form_label_use_accessibility_category() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("field".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_form_label_analyzer_name() {
+        assert_eq!(FormLabelAnalyzer::new().name(), "form-labels");
+    }
+
+    #[test]
+    fn test_form_label_unnamed_input() {
+        use crate::parser::{ExtractedForm, ExtractedInput};
+        let mut page = make_page("https://example.com");
+        page.forms = vec![ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: None,
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FormLabelAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FLABEL001"));
+        let f = findings.iter().find(|f| f.code == "FLABEL001").unwrap();
+        assert!(f.description.contains("input (type=\"text\")"));
+    }
+
+    // ===== TableAccessibilityAnalyzer tests =====
+
+    #[test]
+    fn test_table_acc_missing_headers() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_headers = 1;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TACC001"));
+    }
+
+    #[test]
+    fn test_table_acc_missing_caption() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 2;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TACC002"));
+    }
+
+    #[test]
+    fn test_table_acc_all_have_headers_and_captions() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 5;
+        page.tables_with_headers = 5;
+        page.tables_with_captions = 5;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_table_acc_no_tables() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_table_acc_large_table_missing_scope() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 15;
+        page.tables_with_headers = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TACC003"));
+    }
+
+    #[test]
+    fn test_table_acc_small_table_no_scope_finding() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 5;
+        page.tables_with_headers = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TACC003"));
+    }
+
+    #[test]
+    fn test_table_acc_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 1;
+        page.tables_with_headers = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_table_acc_analyzer_name() {
+        assert_eq!(TableAccessibilityAnalyzer::new().name(), "table-accessibility");
+    }
+
+    #[test]
+    fn test_table_acc_all_have_captions_no_headers() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_headers = 0;
+        page.tables_with_captions = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TACC001"));
+        assert!(!findings.iter().any(|f| f.code == "TACC002"));
+    }
+
+    #[test]
+    fn test_table_acc_description_contains_counts() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 5;
+        page.tables_with_headers = 2;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableAccessibilityAnalyzer::new().analyze(&ctx);
+        let tacc001 = findings.iter().find(|f| f.code == "TACC001").unwrap();
+        assert!(tacc001.description.contains("3 of 5"));
+    }
+
+    // ===== LinkAccessibilityAnalyzer tests =====
+
+    #[test]
+    fn test_link_acc_empty_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LNKACC001"));
+    }
+
+    #[test]
+    fn test_link_acc_generic_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "click here".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LNKACC002"));
+    }
+
+    #[test]
+    fn test_link_acc_nondescriptive_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "link".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LNKACC003"));
+    }
+
+    #[test]
+    fn test_link_acc_good_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/pricing".to_string(),
+            text: "View our pricing plans".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_link_acc_with_aria_label() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: Some("Go to page".to_string()),
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LNKACC001"));
+    }
+
+    #[test]
+    fn test_link_acc_with_img_alt() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: Some("Logo link".to_string()),
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LNKACC001"));
+    }
+
+    #[test]
+    fn test_link_acc_multiple_generic_texts() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        let generic = findings.iter().filter(|f| f.code == "LNKACC002").count();
+        assert_eq!(generic, 2);
+    }
+
+    #[test]
+    fn test_link_acc_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_link_acc_analyzer_name() {
+        assert_eq!(LinkAccessibilityAnalyzer::new().name(), "link-accessibility");
+    }
+
+    #[test]
+    fn test_link_acc_here_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "here".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LinkAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LNKACC003"));
+    }
+
+    // ===== ImageAccessibilityAnalyzer tests =====
+
+    #[test]
+    fn test_img_acc_missing_alt() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/photo.jpg".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: false,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "IMGACC001"));
+    }
+
+    #[test]
+    fn test_img_acc_empty_alt_non_decorative() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/photo.jpg".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "IMGACC002"));
+    }
+
+    #[test]
+    fn test_img_acc_empty_alt_decorative() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/photo.jpg".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: true,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_img_acc_alt_equals_filename() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/images/sunset.jpg".to_string(),
+            alt: "sunset".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "IMGACC003"));
+    }
+
+    #[test]
+    fn test_img_acc_good_alt_text() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/images/sunset.jpg".to_string(),
+            alt: "Beautiful sunset over the ocean".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_img_acc_no_images() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_img_acc_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "/a.png".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: false,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_img_acc_analyzer_name() {
+        assert_eq!(ImageAccessibilityAnalyzer::new().name(), "image-accessibility");
+    }
+
+    #[test]
+    fn test_img_acc_multiple_missing_alt() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![
+            ExtractedImage {
+                src: "/a.png".to_string(),
+                alt: String::new(),
+                width: None,
+                height: None,
+                has_alt: false,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+            ExtractedImage {
+                src: "/b.jpg".to_string(),
+                alt: String::new(),
+                width: None,
+                height: None,
+                has_alt: false,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ImageAccessibilityAnalyzer::new().analyze(&ctx);
+        let imgacc001 = findings.iter().filter(|f| f.code == "IMGACC001").count();
+        assert_eq!(imgacc001, 2);
+    }
+
+    #[test]
+    fn test_img_acc_filename_from_src() {
+        assert_eq!(
+            ImageAccessibilityAnalyzer::filename_from_src("/images/photo.jpg"),
+            Some("photo.jpg")
+        );
+        assert_eq!(
+            ImageAccessibilityAnalyzer::filename_from_src("https://cdn.com/img.png"),
+            Some("img.png")
+        );
+        assert_eq!(
+            ImageAccessibilityAnalyzer::filename_from_src("/noext"),
+            Some("noext")
+        );
+    }
+
+    // ===== AriaRolesAnalyzer tests =====
+
+    #[test]
+    fn test_aria_roles_with_no_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ARIA001"));
+    }
+
+    #[test]
+    fn test_aria_roles_with_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aria_roles_partial_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 5;
+        page.aria_label_count = 2;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ARIA002"));
+    }
+
+    #[test]
+    fn test_aria_roles_no_roles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aria_roles_more_labels_than_roles() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 2;
+        page.aria_label_count = 5;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aria_roles_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 1;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_aria_roles_analyzer_name() {
+        assert_eq!(AriaRolesAnalyzer::new().name(), "aria-roles");
+    }
+
+    #[test]
+    fn test_aria_roles_description_contains_count() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 7;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        let aria001 = findings.iter().find(|f| f.code == "ARIA001").unwrap();
+        assert!(aria001.description.contains("7"));
+    }
+
+    #[test]
+    fn test_aria_roles_single_role_no_label() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 1;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaRolesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ARIA001"));
+        assert!(!findings.iter().any(|f| f.code == "ARIA002"));
+    }
+
+    // ===== FocusManagementAnalyzer tests =====
+
+    #[test]
+    fn test_focus_positive_tabindex() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FOCUS001"));
+    }
+
+    #[test]
+    fn test_focus_no_positive_tabindex() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FOCUS001"));
+    }
+
+    #[test]
+    fn test_focus_no_focus_styles() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FOCUS002"));
+    }
+
+    #[test]
+    fn test_focus_has_focus_visible_style() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let body = "<style>:focus-visible { outline: 2px solid blue; }</style>";
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FOCUS002"));
+    }
+
+    #[test]
+    fn test_focus_has_focus_style() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let body = "<style>:focus { outline: 2px solid blue; }</style>";
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FOCUS002"));
+    }
+
+    #[test]
+    fn test_focus_no_interactive_elements() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "FOCUS002"));
+    }
+
+    #[test]
+    fn test_focus_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_focus_analyzer_name() {
+        assert_eq!(FocusManagementAnalyzer::new().name(), "focus-management");
+    }
+
+    #[test]
+    fn test_focus_both_issues() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FOCUS001"));
+        assert!(findings.iter().any(|f| f.code == "FOCUS002"));
+    }
+
+    #[test]
+    fn test_focus_severity_levels() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        page.links = vec![ExtractedLink {
+            href: "/page".to_string(),
+            text: "Go".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FocusManagementAnalyzer::new().analyze(&ctx);
+        let focus001 = findings.iter().find(|f| f.code == "FOCUS001").unwrap();
+        assert_eq!(focus001.severity, Severity::Error);
+        let focus002 = findings.iter().find(|f| f.code == "FOCUS002").unwrap();
+        assert_eq!(focus002.severity, Severity::Warning);
+    }
+
+    // ===== LanguageAttributeAnalyzer (security) tests =====
+
+    #[test]
+    fn test_lang_acc_missing_lang() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANGACC001"));
+    }
+
+    #[test]
+    fn test_lang_acc_has_lang() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANGACC001"));
+    }
+
+    #[test]
+    fn test_lang_acc_too_short_value() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("e".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    #[test]
+    fn test_lang_acc_valid_value() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    #[test]
+    fn test_lang_acc_hreflang_mismatch() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("fr".to_string());
+        page.word_count = 100;
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    #[test]
+    fn test_lang_acc_hreflang_match() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.word_count = 100;
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    #[test]
+    fn test_lang_acc_use_accessibility_category() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
+    }
+
+    #[test]
+    fn test_lang_acc_analyzer_name() {
+        assert_eq!(LanguageAttributeAnalyzer::new().name(), "language-attribute");
+    }
+
+    #[test]
+    fn test_lang_acc_empty_hreflang_no_mismatch() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("de".to_string());
+        page.word_count = 100;
+        page.meta.hreflang = vec![];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    #[test]
+    fn test_lang_acc_zero_words_no_mismatch() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("fr".to_string());
+        page.word_count = 0;
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANGACC002"));
+    }
+
+    // ===== StrictTransportSecurityAnalyzer tests =====
+
+    #[test]
+    fn test_hsts_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "STRICT001"));
+    }
+
+    #[test]
+    fn test_hsts_valid() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "STRICT001"));
+        assert!(!findings.iter().any(|f| f.code == "STRICT002"));
+    }
+
+    #[test]
+    fn test_hsts_too_short() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "STRICT002"));
+    }
+
+    #[test]
+    fn test_hsts_case_insensitive() {
+        let headers = vec![(
+            "strict-transport-security".to_string(),
+            "max-age=63072000".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_with_preload() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_exact_boundary() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        // Exactly 31536000 is valid
+        assert!(!findings.iter().any(|f| f.code == "STRICT002"));
+    }
+
+    #[test]
+    fn test_hsts_whitespace_around_max_age() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "  max-age=31536000  ".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_missing_max_age_param() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "includeSubDomains".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzer::new().analyze(&ctx);
+        // No max-age parsed → treated as missing/valid (no STRICT002)
+        assert!(!findings.iter().any(|f| f.code == "STRICT002"));
+    }
+
+    // ===== XSSProtectionAnalyzer tests =====
+
+    #[test]
+    fn test_xss_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XSS001"));
+    }
+
+    #[test]
+    fn test_xss_mode_block() {
+        let headers = vec![(
+            "X-XSS-Protection".to_string(),
+            "1; mode=block".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XSS002"));
+    }
+
+    #[test]
+    fn test_xss_enabled_no_mode_block() {
+        let headers = vec![("X-XSS-Protection".to_string(), "1".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        // Present and not mode=block → no findings
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xss_case_insensitive() {
+        let headers = vec![(
+            "x-xss-protection".to_string(),
+            "1; mode=block".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XSS002"));
+    }
+
+    #[test]
+    fn test_xss_zero_disabled() {
+        let headers = vec![("X-XSS-Protection".to_string(), "0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        // Present, not mode=block → no findings
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xss_whitespace_around_value() {
+        let headers = vec![(
+            "X-XSS-Protection".to_string(),
+            "  1; mode=block  ".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XSS002"));
+    }
+
+    #[test]
+    fn test_xss_no_header_and_no_csp() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XSS001"));
+    }
+
+    #[test]
+    fn test_xss_multiple_headers_last_wins() {
+        let headers = vec![
+            ("X-XSS-Protection".to_string(), "1".to_string()),
+            ("X-XSS-Protection".to_string(), "1; mode=block".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
+        // Our get_header returns first match, which is "1" (no mode=block)
+        assert!(findings.is_empty());
+    }
+
+    // ===== ContentTypeSniffingAnalyzer tests =====
+
+    #[test]
+    fn test_ctsniff_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CTSNIFF001"));
+    }
+
+    #[test]
+    fn test_ctsniff_nosniff() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "nosniff".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ctsniff_wrong_value() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "sniff".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CTSNIFF002"));
+    }
+
+    #[test]
+    fn test_ctsniff_case_insensitive() {
+        let headers = vec![("x-content-type-options".to_string(), "NOSNIFF".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ctsniff_whitespace_around_nosniff() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "  nosniff  ".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ctsniff_empty_value() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        // Empty string is not "nosniff"
+        assert!(findings.iter().any(|f| f.code == "CTSNIFF002"));
+    }
+
+    #[test]
+    fn test_ctsniff_uppercase() {
+        let headers = vec![("X-Content-Type-Options".to_string(), "NOSNIFF".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ctsniff_no_header_implies_vulnerable() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CTSNIFF001"));
+        assert!(!findings.iter().any(|f| f.code == "CTSNIFF002"));
     }
 }

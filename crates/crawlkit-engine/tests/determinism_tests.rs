@@ -392,6 +392,10 @@ fn analyzer_registry_orders_findings_canonically_and_repeatably() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
     };
 
     let run_keys = || -> Vec<String> {
@@ -464,6 +468,10 @@ fn decorative_badges_with_empty_alt_and_aria_hidden_are_not_flagged() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
     };
     let findings = AccessibilityAnalyzer::new().analyze(&ctx);
     assert!(
@@ -491,6 +499,10 @@ fn empty_alt_alone_is_not_flagged() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
     };
     let findings = AccessibilityAnalyzer::new().analyze(&ctx);
     assert!(findings.iter().all(|f| f.code != "A11Y001"));
@@ -515,6 +527,10 @@ fn missing_alt_attribute_is_still_flagged() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
     };
     let findings = AccessibilityAnalyzer::new().analyze(&ctx);
     assert!(findings.iter().any(|f| f.code == "A11Y001"));

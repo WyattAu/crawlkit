@@ -59,6 +59,8 @@ impl HtmlParser {
             description: Self::get_meta_content(document, "twitter:description"),
             image: Self::get_meta_content(document, "twitter:image"),
             image_alt: Self::get_meta_content(document, "twitter:image:alt"),
+            player: Self::get_meta_content(document, "twitter:player"),
+            player_stream: Self::get_meta_content(document, "twitter:player:stream"),
         };
 
         let hreflang = Self::extract_hreflang(document, page_url);

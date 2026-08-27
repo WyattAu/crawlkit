@@ -4,6 +4,9 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(feature = "observability")]
+pub mod otel;
+
 /// Observability metrics for crawl operations.
 ///
 /// Thread-safe metrics collection using atomic operations.

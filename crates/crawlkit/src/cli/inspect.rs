@@ -61,6 +61,14 @@ pub async fn run(
     pb.set_message("Running 31 analyzers...");
     let headers_vec: Vec<(String, String)> = result.headers.clone();
     let empty_chain: Vec<crawlkit_engine::RedirectHop> = vec![];
+    let server = headers_vec
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("server"))
+        .map(|(_, v)| v.as_str());
+    let content_type = headers_vec
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+        .map(|(_, v)| v.as_str());
     let ctx = crawlkit_engine::analyzers::AnalysisContext {
         page: &parsed,
         body: Some(&result.body),
@@ -69,6 +77,10 @@ pub async fn run(
         response_time: Some(fetch_time),
         redirect_chain: &empty_chain,
         robots_txt: None,
+        body_size: Some(result.body.len()),
+        compressed_size: None,
+        server,
+        content_type,
     };
     let findings = registry.analyze(&ctx);
 

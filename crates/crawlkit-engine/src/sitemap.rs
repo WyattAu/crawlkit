@@ -4,7 +4,7 @@
 //! (sitemap index files). Sitemap URLs are discovered from robots.txt
 //! via `RobotsTxtCache::sitemaps()`.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use dashmap::DashMap;
 use quick_xml::events::Event;
@@ -265,24 +265,38 @@ fn parse_sitemapindex(
 /// Handles cases where quick_xml fails due to namespace-qualified tag names.
 #[allow(clippy::unwrap_used)]
 fn parse_sitemap_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
+    fn url_block_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<url>(.*?)</url>").unwrap())
+    }
+    fn loc_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap())
+    }
+    fn lastmod_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<lastmod>\s*(.*?)\s*</lastmod>").unwrap())
+    }
+    fn changefreq_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<changefreq>\s*(.*?)\s*</changefreq>").unwrap())
+    }
+    fn priority_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<priority>\s*(.*?)\s*</priority>").unwrap())
+    }
+
     let mut entries = Vec::new();
 
-    // Match <url> blocks and extract <loc>, <lastmod>, <changefreq>, <priority>
-    let url_block_re = regex::Regex::new(r"(?s)<url>(.*?)</url>").unwrap();
-    let loc_re = regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap();
-    let lastmod_re = regex::Regex::new(r"(?s)<lastmod>\s*(.*?)\s*</lastmod>").unwrap();
-    let changefreq_re = regex::Regex::new(r"(?s)<changefreq>\s*(.*?)\s*</changefreq>").unwrap();
-    let priority_re = regex::Regex::new(r"(?s)<priority>\s*(.*?)\s*</priority>").unwrap();
-
-    for cap in url_block_re.captures_iter(xml) {
+    for cap in url_block_re().captures_iter(xml) {
         let block = &cap[1];
-        if let Some(loc_match) = loc_re.captures(block) {
+        if let Some(loc_match) = loc_re().captures(block) {
             let url = loc_match[1].trim().to_string();
-            let lastmod = lastmod_re.captures(block).map(|m| m[1].trim().to_string());
-            let changefreq = changefreq_re
+            let lastmod = lastmod_re().captures(block).map(|m| m[1].trim().to_string());
+            let changefreq = changefreq_re()
                 .captures(block)
                 .map(|m| m[1].trim().to_string());
-            let priority = priority_re
+            let priority = priority_re()
                 .captures(block)
                 .and_then(|m| m[1].trim().parse().ok());
 
@@ -306,8 +320,11 @@ fn parse_sitemap_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
 /// Regex-based fallback parser for sitemap indexes.
 #[allow(clippy::unwrap_used)]
 fn parse_sitemapindex_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
-    let loc_re = regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap();
-    let urls: Vec<String> = loc_re
+    fn loc_re() -> &'static regex::Regex {
+        static RE: OnceLock<regex::Regex> = OnceLock::new();
+        RE.get_or_init(|| regex::Regex::new(r"(?s)<loc>\s*(.*?)\s*</loc>").unwrap())
+    }
+    let urls: Vec<String> = loc_re()
         .captures_iter(xml)
         .map(|cap| cap[1].trim().to_string())
         .collect();

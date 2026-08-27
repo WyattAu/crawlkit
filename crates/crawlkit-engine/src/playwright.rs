@@ -465,7 +465,7 @@ const targetUrl = process.argv[2];
     
     const context = await browser.newContext({{
         viewport: {{ width: 1920, height: 1080 }},
-        userAgent: 'crawlkit/0.4.0'
+        userAgent: 'crawlkit/4.4.1'
     }});
     
     const page = await context.newPage();

@@ -195,6 +195,67 @@ impl DistributedQueue {
     }
 }
 
+#[cfg(all(feature = "full", feature = "unstable"))]
+impl crate::queue_trait::Queue for DistributedQueue {
+    fn push(
+        &self,
+        entry: crate::queue::QueueEntry,
+    ) -> Result<bool, crate::queue_trait::QueueError> {
+        let url_str = entry.url.to_string();
+        self.push(&url_str, entry.depth, entry.priority.value() as i64)
+            .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))?;
+        Ok(true)
+    }
+
+    fn pop(&self) -> Result<Option<crate::queue::QueueEntry>, crate::queue_trait::QueueError> {
+        match self.pop() {
+            Ok(Some(entry)) => {
+                let url = url::Url::parse(&entry.url)
+                    .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))?;
+                Ok(Some(crate::queue::QueueEntry {
+                    url: url.clone(),
+                    canonical_url: url,
+                    depth: entry.depth,
+                    priority: crate::queue::Priority::NORMAL,
+                    discovered_at: chrono::Utc::now(),
+                    referrer: None,
+                }))
+            }
+            Ok(None) => Ok(None),
+            Err(e) => Err(crate::queue_trait::QueueError::Backend(e.to_string())),
+        }
+    }
+
+    fn len(&self) -> Result<usize, crate::queue_trait::QueueError> {
+        self.len()
+            .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))
+    }
+
+    fn is_empty(&self) -> Result<bool, crate::queue_trait::QueueError> {
+        self.is_empty()
+            .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))
+    }
+
+    fn contains(&self, url: &str) -> Result<bool, crate::queue_trait::QueueError> {
+        let mut conn = self
+            .client
+            .get_connection()
+            .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))?;
+
+        let members: Vec<String> = redis::Commands::zrange(&mut conn, &self.prefix, 0, -1)
+            .map_err(|e| crate::queue_trait::QueueError::Backend(e.to_string()))?;
+
+        for member in &members {
+            if let Ok(entry) = serde_json::from_str::<DistributedQueueEntry>(member) {
+                if entry.url == url {
+                    return Ok(true);
+                }
+            }
+        }
+        Ok(false)
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {

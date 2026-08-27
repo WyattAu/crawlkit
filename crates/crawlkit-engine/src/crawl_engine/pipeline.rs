@@ -204,6 +204,22 @@ impl CrawlRun<'_> {
             response_time: Some(fetched.fetch_time),
             redirect_chain: &empty_chain,
             robots_txt: robots_ref,
+            body_size: Some(result.body_size),
+            compressed_size: result
+                .headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
+                .and_then(|(_, v)| v.parse().ok()),
+            server: result
+                .headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("server"))
+                .map(|(_, v)| v.as_str()),
+            content_type: result
+                .headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
+                .map(|(_, v)| v.as_str()),
         };
         let analysis_start = std::time::Instant::now();
         let mut findings = self.analyzer_registry.analyze(&ctx);

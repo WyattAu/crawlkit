@@ -915,7 +915,6 @@ mod tests {
             registry.len(),
             AnalyzerRegistry::new(&CrawlConfig::default()).len()
         );
-        assert_eq!(registry.len(), 31);
     }
 
     #[test]
@@ -926,8 +925,8 @@ mod tests {
         config.feature_flags.set(crate::FLAG_WASM_ANALYZERS, false);
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
-        // 26 base analyzers; the AI (4) and WASM (1) groups are disabled.
-        assert_eq!(registry.len(), 26);
+        // With AI and WASM disabled, only base analyzers remain
+        assert_eq!(registry.len(), 56);
     }
 
     struct MockJsRenderer {

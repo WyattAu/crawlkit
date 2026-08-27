@@ -432,6 +432,10 @@ mod tests {
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
             robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
         };
 
         let findings = analyzer.analyze(&ctx);
@@ -452,6 +456,10 @@ mod tests {
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
             robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
         };
 
         let findings = analyzer.analyze(&ctx);
@@ -477,6 +485,10 @@ mod tests {
             response_time: Some(Duration::from_millis(100)),
             redirect_chain: &[],
             robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
         };
 
         let findings = analyzer.analyze(&ctx);

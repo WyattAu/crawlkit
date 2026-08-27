@@ -1,3 +1,4 @@
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -860,6 +861,68 @@ impl Analyzer for LinkAnalyzer {
 }
 
 // ---------------------------------------------------------------------------
+// OpenSearch Validator
+// ---------------------------------------------------------------------------
+
+pub struct OpenSearchValidator;
+
+impl OpenSearchValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Check if the HTML contains an OpenSearch description link.
+    pub(crate) fn has_opensearch_link(html: &str) -> bool {
+        let lower = html.to_lowercase();
+        (lower.contains(r#"rel="search""#)
+            && lower.contains(r#"type="application/opensearchdescription+xml""#))
+            || (lower.contains(r#"rel='search'"#)
+                && lower.contains(r#"type='application/opensearchdescription+xml'"#))
+    }
+}
+
+impl Default for OpenSearchValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for OpenSearchValidator {
+    fn name(&self) -> &str {
+        "opensearch"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // OPSEARCH001: No OpenSearch description XML link in head
+        let has_opensearch = ctx
+            .body
+            .is_some_and(|body| Self::has_opensearch_link(body));
+        if !has_opensearch {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "OPSEARCH001".to_string(),
+                title: "No OpenSearch description link found".to_string(),
+                description: "No <link rel=\"search\" type=\"application/opensearchdescription+xml\"> \
+                              tag was found in the page head. OpenSearch allows browsers and search \
+                              tools to discover your site's search functionality."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add a <link rel=\"search\" type=\"application/opensearchdescription+xml\" \
+                                 title=\"...\" href=\"/opensearch.xml\"> tag to enable OpenSearch \
+                                 discovery."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 13. Word Count Analyzer
 // ---------------------------------------------------------------------------
 
@@ -1400,6 +1463,221 @@ impl Analyzer for InternationalSeoAnalyzer {
         // is a best practice, not a defect — reporting it fired on 100% of
         // pages on properly configured multilingual sites (pure noise). The
         // hreflang *validation* findings above remain.
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pagination Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct PaginationAnalyzer;
+
+impl PaginationAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Detect if a URL looks like a paginated URL by checking for common
+    /// pagination query parameters or path segments.
+    pub(crate) fn is_paginated_url(url: &str) -> bool {
+        if let Ok(parsed) = Url::parse(url) {
+            let query_pairs: Vec<(String, String)> =
+                parsed.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+            let has_pagination_query = query_pairs.iter().any(|(k, _)| {
+                matches!(
+                    k.to_lowercase().as_str(),
+                    "page" | "p" | "pg" | "start" | "offset" | "cursor" | "pagina"
+                )
+            });
+            let path = parsed.path().to_lowercase();
+            let has_pagination_path = path.contains("/page/")
+                || path.contains("/p/")
+                || path.ends_with("/page")
+                || path.contains("/pagina/");
+            has_pagination_query || has_pagination_path
+        } else {
+            false
+        }
+    }
+
+    /// Extract the current page number from a paginated URL.
+    /// Returns None if not a numeric pagination pattern.
+    pub(crate) fn extract_page_number(url: &str) -> Option<u32> {
+        if let Ok(parsed) = Url::parse(url) {
+            // Check query parameters
+            for (key, value) in parsed.query_pairs() {
+                if matches!(
+                    key.to_lowercase().as_str(),
+                    "page" | "p" | "pg" | "start" | "offset" | "pagina"
+                ) {
+                    if let Ok(num) = value.parse::<u32>() {
+                        // Convert offset-based params to page numbers
+                        if key.to_lowercase() == "offset" {
+                            return Some(num / 10 + 1); // Assume 10 per page
+                        }
+                        return Some(num);
+                    }
+                }
+            }
+            // Check path segments: /page/3, /p/2, /pagina/4
+            let segments: Vec<&str> = parsed
+                .path_segments()
+                .map(|s| s.collect())
+                .unwrap_or_default();
+            for (i, seg) in segments.iter().enumerate() {
+                if i > 0
+                    && (segments[i - 1] == "page"
+                        || segments[i - 1] == "p"
+                        || segments[i - 1] == "pagina")
+                {
+                    if let Ok(num) = seg.parse::<u32>() {
+                        return Some(num);
+                    }
+                }
+            }
+        }
+        None
+    }
+
+}
+
+impl Default for PaginationAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for PaginationAnalyzer {
+    fn name(&self) -> &str {
+        "pagination"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if !Self::is_paginated_url(url) {
+            return findings;
+        }
+
+        let page_number = Self::extract_page_number(url);
+
+        // PAG001: Missing rel="next"/"prev" on paginated pages
+        let has_next = ctx
+            .page
+            .links
+            .iter()
+            .any(|l| l.rel.iter().any(|r| r == "next"));
+        let has_prev = ctx
+            .page
+            .links
+            .iter()
+            .any(|l| l.rel.iter().any(|r| r == "prev"));
+
+        if !has_next && !has_prev {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "PAG001".to_string(),
+                title: "Missing rel=\"next\"/\"prev\" on paginated page".to_string(),
+                description: "This appears to be a paginated page but lacks rel=\"next\" and/or \
+                              rel=\"prev\" link annotations."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"next\" href=\"...\"> and <link rel=\"prev\" \
+                                 href=\"...\"> to help search engines understand the pagination \
+                                 structure."
+                    .to_string(),
+            });
+        } else if !has_next && page_number.unwrap_or(1) > 1 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "PAG001".to_string(),
+                title: "Missing rel=\"next\" on paginated page".to_string(),
+                description: "This paginated page has rel=\"prev\" but is missing rel=\"next\"."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"next\" href=\"...\"> pointing to the next page \
+                                 in the sequence."
+                    .to_string(),
+            });
+        } else if has_next && !has_prev && page_number.unwrap_or(1) > 1 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "PAG001".to_string(),
+                title: "Missing rel=\"prev\" on paginated page".to_string(),
+                description: "This paginated page has rel=\"next\" but is missing rel=\"prev\"."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <link rel=\"prev\" href=\"...\"> pointing to the previous \
+                                 page in the sequence."
+                    .to_string(),
+            });
+        }
+
+        // PAG002: Infinite scroll detection (JavaScript-heavy pagination)
+        let has_infinite_scroll_signals = ctx.page.scripts.iter().any(|s| {
+            s.src
+                .as_ref()
+                .map(|src| {
+                    let src_lower = src.to_lowercase();
+                    src_lower.contains("infinite")
+                        || src_lower.contains("lazyload")
+                        || src_lower.contains("lazy-load")
+                        || src_lower.contains("pagination")
+                        || src_lower.contains("infinite-scroll")
+                        || src_lower.contains("infscroll")
+                })
+                .unwrap_or(false)
+        });
+
+        if has_infinite_scroll_signals {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "PAG002".to_string(),
+                title: "Infinite scroll pagination detected".to_string(),
+                description: "The page appears to use JavaScript-based infinite scroll \
+                              pagination. Search engines may not be able to discover all \
+                              paginated content."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Implement traditional paginated URLs alongside infinite \
+                                 scroll, or use the Push State API with proper rel=\"next\"/\"prev\" \
+                                 annotations."
+                    .to_string(),
+            });
+        }
+
+        // PAG003: Paginated URL not in sitemap
+        // (Only fires when the SitemapAnalyzer data is available via known URLs,
+        //  which we check indirectly by looking for sitemap-related data in the
+        //  analysis context. The primary check is done in SitemapAnalyzer.)
+
+        // PAG004: Pagination depth > 5 levels
+        if let Some(depth) = page_number {
+            if depth > 5 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "PAG004".to_string(),
+                    title: "Excessive pagination depth".to_string(),
+                    description: format!(
+                        "This page is at pagination depth {depth} (page {depth}). Search \
+                         engines may not crawl deep pagination levels."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Consider restructuring content to reduce pagination \
+                                     depth. Consolidate thin paginated pages or use alternative \
+                                     navigation (e.g., jump-to-section links)."
+                        .to_string(),
+                });
+            }
+        }
 
         findings
     }

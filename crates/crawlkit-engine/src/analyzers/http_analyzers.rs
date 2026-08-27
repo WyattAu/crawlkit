@@ -721,6 +721,300 @@ impl Analyzer for SslCertificateValidator {
 }
 
 // ---------------------------------------------------------------------------
+// 18. Response Size Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ResponseSizeAnalyzer;
+
+impl ResponseSizeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Look up a header value by name (case-insensitive).
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Default for ResponseSizeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ResponseSizeAnalyzer {
+    fn name(&self) -> &str {
+        "response-size"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let size = match ctx.body_size {
+            Some(s) => s,
+            None => return findings,
+        };
+
+        // SIZE002: Response body > 10MB (ERROR)
+        if size > 10 * 1024 * 1024 {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Performance,
+                code: "SIZE002".to_string(),
+                title: "Response body exceeds 10MB".to_string(),
+                description: format!(
+                    "Response body is {} bytes ({:.1} MB), exceeding the 10MB threshold.",
+                    size,
+                    size as f64 / (1024.0 * 1024.0)
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Reduce response size. Consider pagination, lazy loading, or content compression."
+                        .to_string(),
+            });
+        } else if size > 5 * 1024 * 1024 {
+            // SIZE001: Response body > 5MB (WARNING)
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "SIZE001".to_string(),
+                title: "Response body exceeds 5MB".to_string(),
+                description: format!(
+                    "Response body is {} bytes ({:.1} MB), exceeding the 5MB threshold.",
+                    size,
+                    size as f64 / (1024.0 * 1024.0)
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Consider reducing response size through compression, pagination, or lazy loading."
+                        .to_string(),
+            });
+        }
+
+        // SIZE003: No Content-Length header when body is present
+        if Self::get_header(ctx.headers, "Content-Length").is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Http,
+                code: "SIZE003".to_string(),
+                title: "Missing Content-Length header".to_string(),
+                description:
+                    "Response has a body but no Content-Length header was found.".to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Add a Content-Length header to enable caching and bandwidth optimization."
+                        .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 19. TTFB Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct TtfbAnalyzer;
+
+impl TtfbAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for TtfbAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for TtfbAnalyzer {
+    fn name(&self) -> &str {
+        "ttfb"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let response_time = match ctx.response_time {
+            Some(rt) => rt,
+            None => return findings,
+        };
+
+        let ttfb_ms = response_time.as_millis();
+
+        // TTFB002: TTFB > 1000ms (ERROR)
+        if ttfb_ms > 1000 {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Performance,
+                code: "TTFB002".to_string(),
+                title: "High Time to First Byte (TTFB)".to_string(),
+                description: format!(
+                    "TTFB is {ttfb_ms}ms, exceeding the 1000ms threshold for a poor user \
+                     experience."
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Optimize server response time. Use a CDN, enable server-side caching, or \
+                     optimize database queries."
+                        .to_string(),
+            });
+        } else if ttfb_ms > 600 {
+            // TTFB001: TTFB > 600ms (WARNING)
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "TTFB001".to_string(),
+                title: "Slow Time to First Byte (TTFB)".to_string(),
+                description: format!(
+                    "TTFB is {ttfb_ms}ms, exceeding the 600ms threshold."
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Improve server response time. Consider CDN, caching, or optimizing backend \
+                     processing."
+                        .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 20. Cache Header Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct CacheHeaderAnalyzer;
+
+impl CacheHeaderAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Look up a header value by name (case-insensitive).
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+
+    /// Check if a status code is eligible for caching.
+    fn is_cacheable_response(status: u16) -> bool {
+        matches!(
+            status,
+            200 | 203 | 204 | 206 | 300 | 301 | 302 | 304 | 404 | 410
+        )
+    }
+}
+
+impl Default for CacheHeaderAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CacheHeaderAnalyzer {
+    fn name(&self) -> &str {
+        "cache-headers"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let status = match ctx.status_code {
+            Some(s) => s,
+            None => return findings,
+        };
+
+        if !Self::is_cacheable_response(status) {
+            return findings;
+        }
+
+        let cache_control = Self::get_header(ctx.headers, "Cache-Control");
+        let etag = Self::get_header(ctx.headers, "ETag");
+        let last_modified = Self::get_header(ctx.headers, "Last-Modified");
+        let content_type = Self::get_header(ctx.headers, "Content-Type")
+            .or(ctx.content_type);
+
+        // CACHE001: No Cache-Control header on cacheable responses
+        if cache_control.is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "CACHE001".to_string(),
+                title: "Missing Cache-Control header".to_string(),
+                description: "No Cache-Control header was found on a cacheable response. \
+                              Without caching directives, browsers may not cache this resource \
+                              effectively."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add appropriate Cache-Control headers (e.g., max-age=86400) \
+                                 for cacheable responses."
+                    .to_string(),
+            });
+        }
+
+        // CACHE002: No ETag or Last-Modified header
+        if etag.is_none() && last_modified.is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "CACHE002".to_string(),
+                title: "No ETag or Last-Modified header".to_string(),
+                description: "Neither ETag nor Last-Modified headers were found. Without these \
+                              conditional request headers, browsers cannot perform efficient \
+                              cache validation."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add ETag or Last-Modified headers to enable conditional \
+                                 requests and reduce bandwidth usage."
+                    .to_string(),
+            });
+        }
+
+        // CACHE003: Cache-Control: no-cache on HTML content
+        if let Some(cc) = cache_control {
+            let cc_lower = cc.to_lowercase();
+            if cc_lower.contains("no-cache") || cc_lower.contains("no-store") {
+                if let Some(ct) = content_type {
+                    if ct.contains("text/html") {
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Performance,
+                            code: "CACHE003".to_string(),
+                            title: "HTML content marked as non-cacheable".to_string(),
+                            description: format!(
+                                "Cache-Control header contains '{cc}' for HTML content. This \
+                                 prevents browsers from caching the page, which may be \
+                                 unnecessary for static content."
+                            ),
+                            url: url.clone(),
+                            recommendation: "For static HTML pages, consider using a moderate \
+                                             max-age (e.g., 300-3600 seconds) with \
+                                             stale-while-revalidate."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 16. Mobile-Friendliness Checker
 // ---------------------------------------------------------------------------
 

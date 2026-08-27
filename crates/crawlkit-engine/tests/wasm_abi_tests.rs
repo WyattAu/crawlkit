@@ -16,7 +16,7 @@ use crawlkit_engine::plugin::{sign_plugin_wasm, PluginVerification, WasmConfig, 
 /// Seed (hex) of the first-party dev key embedded in
 /// `TRUSTED_PLUGIN_KEYS` — test fixture only; production signing secrets
 /// never live in the repo.
-const TRUSTED_SEED_HEX: &str = "92bb3bc94dc375ea2c3111e1636511a8c0b22995437ee0338f4d21cdb9bfdd4d";
+const TRUSTED_SEED_HEX: &str = "49ed0535cea538a1a3ca61e45137a8b33b5fb85b2a5de1c76d7d49ef2eca2341";
 
 /// An unrelated key NOT in the trust store (any 32 bytes form a valid
 /// clamped ed25519 seed). Used to forge signatures.

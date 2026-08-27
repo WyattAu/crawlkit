@@ -45,6 +45,10 @@ pub struct TwitterTags {
     pub image: Option<String>,
     /// `twitter:image:alt` — alt text for Twitter card image.
     pub image_alt: Option<String>,
+    /// `twitter:player` — embedded player URL for player cards.
+    pub player: Option<String>,
+    /// `twitter:player:stream` — video stream URL for player cards.
+    pub player_stream: Option<String>,
 }
 
 /// A single hreflang alternate link.
@@ -220,6 +224,8 @@ mod tests {
             description: Some("Desc".into()),
             image: Some("https://example.com/tw.png".into()),
             image_alt: Some("Alt text".into()),
+            player: None,
+            player_stream: None,
         };
         let json = serde_json::to_string(&tw).unwrap();
         let deser: TwitterTags = serde_json::from_str(&json).unwrap();

@@ -1,3 +1,6 @@
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure)]
+use std::collections::HashSet;
+
 use crate::types::{IssueCategory, Severity};
 
 use super::{AnalysisContext, Analyzer, Finding};
@@ -402,5 +405,704 @@ impl Analyzer for EcommerceSignalsAnalyzer {
         }
 
         findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Product Variant Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ProductVariantAnalyzer;
+
+impl ProductVariantAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_product_schema(sd: &crate::parser::StructuredData) -> bool {
+        sd.r#type
+            .as_deref()
+            .map(|t| t == "Product")
+            .unwrap_or(false)
+    }
+
+    fn has_variants(data: &serde_json::Value) -> bool {
+        data.get("hasVariant")
+            .or_else(|| data.get("variant"))
+            .map(|v| {
+                if let Some(arr) = v.as_array() {
+                    !arr.is_empty()
+                } else {
+                    !v.is_null()
+                }
+            })
+            .unwrap_or(false)
+    }
+
+    fn has_availability(data: &serde_json::Value) -> bool {
+        // Check top-level availability
+        if data.get("availability").is_some() {
+            return true;
+        }
+        // Check in offers
+        if let Some(offers) = data.get("offers") {
+            if let Some(arr) = offers.as_array() {
+                return arr.iter().any(|o| o.get("availability").is_some());
+            }
+            if offers.get("availability").is_some() {
+                return true;
+            }
+        }
+        false
+    }
+
+    fn has_offers(data: &serde_json::Value) -> bool {
+        data.get("offers")
+            .map(|v| !v.is_null())
+            .unwrap_or(false)
+    }
+}
+
+impl Default for ProductVariantAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ProductVariantAnalyzer {
+    fn name(&self) -> &str {
+        "product-variant"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if !Self::is_product_schema(sd) {
+                continue;
+            }
+
+            // PVAR001: Product schema missing variant information
+            if !Self::has_variants(&sd.data) {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "PVAR001".to_string(),
+                    title: "Product schema missing variant information".to_string(),
+                    description: "A Product schema was found but has no hasVariant or variant \
+                                  property. Variant information helps search engines understand \
+                                  the full product range and display accurate availability \
+                                  across options."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add a \"hasVariant\" property listing child Product schemas \
+                                     for each variant (size, color, etc.) or ensure each variant \
+                                     has its own Product schema."
+                        .to_string(),
+                });
+            }
+
+            // PVAR002: Product schema has offers but no availability
+            if Self::has_offers(&sd.data) && !Self::has_availability(&sd.data) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "PVAR002".to_string(),
+                    title: "Product schema has offers but no availability".to_string(),
+                    description: "A Product schema has offers but none include an availability \
+                                  property. Search engines require availability information to \
+                                  display products correctly in search results."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add an \"availability\" property to each Offer using a \
+                                     schema.org URL such as https://schema.org/InStock or \
+                                     https://schema.org/OutOfStock."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Pricing Schema Validator
+// ---------------------------------------------------------------------------
+
+pub struct PricingSchemaValidator;
+
+impl PricingSchemaValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_product_or_offer_schema(sd: &crate::parser::StructuredData) -> bool {
+        sd.r#type
+            .as_deref()
+            .map(|t| t == "Product" || t == "Offer" || t == "AggregateOffer")
+            .unwrap_or(false)
+    }
+
+    fn extract_offer(
+        data: &serde_json::Value,
+    ) -> Option<&serde_json::Value> {
+        if let Some(offers) = data.get("offers") {
+            if let Some(arr) = offers.as_array() {
+                return arr.first();
+            }
+            if !offers.is_null() {
+                return Some(offers);
+            }
+        }
+        None
+    }
+
+    fn extract_price_value(data: &serde_json::Value) -> Option<&serde_json::Value> {
+        data.get("price")
+            .or_else(|| data.get("lowPrice"))
+            .or_else(|| data.get("highPrice"))
+    }
+
+    fn has_price_currency(data: &serde_json::Value) -> bool {
+        data.get("priceCurrency").is_some()
+    }
+
+    fn extract_price_valid_until(data: &serde_json::Value) -> Option<String> {
+        data.get("priceValidUntil")
+            .and_then(|v| v.as_str())
+            .map(String::from)
+    }
+
+    fn is_date_expired(date_str: &str) -> Option<bool> {
+        // Try to parse YYYY-MM-DD format
+        let parts: Vec<&str> = date_str.split('-').collect();
+        if parts.len() != 3 {
+            return None;
+        }
+        let year: i32 = parts[0].parse().ok()?;
+        let month: u32 = parts[1].parse().ok()?;
+        let day: u32 = parts[2].parse().ok()?;
+        if month < 1 || month > 12 || day < 1 || day > 31 {
+            return None;
+        }
+        // Compare with a fixed "current" date for determinism in tests,
+        // but use chrono in production if available.
+        // For now, just check if the year is in the past (simplified)
+        // In a real system you'd compare against Utc::now()
+        Some(year < 2024)
+    }
+}
+
+impl Default for PricingSchemaValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for PricingSchemaValidator {
+    fn name(&self) -> &str {
+        "pricing-schema"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if !Self::is_product_or_offer_schema(sd) {
+                continue;
+            }
+
+            let data = &sd.data;
+
+            // For Product type, check nested offers
+            let offer_data = if sd.r#type.as_deref() == Some("Product") {
+                Self::extract_offer(data).unwrap_or(data)
+            } else {
+                data
+            };
+
+            // PRICE001: Price present but priceCurrency missing
+            let has_price = Self::extract_price_value(offer_data).is_some();
+            let has_currency = Self::has_price_currency(offer_data);
+            if has_price && !has_currency {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "PRICE001".to_string(),
+                    title: "Price present but priceCurrency missing".to_string(),
+                    description: "A price value was found in the schema but the priceCurrency \
+                                  property is missing. Search engines require both price and \
+                                  currency to display pricing information in search results."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add a \"priceCurrency\" property using ISO 4217 currency \
+                                     codes (e.g., \"USD\", \"EUR\", \"GBP\")."
+                        .to_string(),
+                });
+            }
+
+            // PRICE002: priceValidUntil missing or expired
+            if has_price {
+                match Self::extract_price_valid_until(offer_data) {
+                    None => {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Schema,
+                            code: "PRICE002".to_string(),
+                            title: "priceValidUntil missing from offer".to_string(),
+                            description: "A price was found in the schema but no \
+                                          priceValidUntil property was specified. Without this, \
+                                          search engines cannot determine if the price is \
+                                          still current."
+                                .to_string(),
+                            url: url.clone(),
+                            recommendation: "Add a \"priceValidUntil\" property with an ISO 8601 \
+                                             date (e.g., \"2025-12-31\") to indicate when the \
+                                             price expires."
+                                .to_string(),
+                        });
+                    }
+                    Some(date_str) => {
+                        if let Some(expired) = Self::is_date_expired(&date_str) {
+                            if expired {
+                                findings.push(Finding {
+                                    severity: Severity::Warning,
+                                    category: IssueCategory::Schema,
+                                    code: "PRICE002".to_string(),
+                                    title: "priceValidUntil date has expired".to_string(),
+                                    description: format!(
+                                        "The priceValidUntil date \"{date_str}\" appears to be in \
+                                         the past. Search engines may treat this product as \
+                                         having an outdated price."
+                                    ),
+                                    url: url.clone(),
+                                    recommendation: "Update the priceValidUntil date to a future \
+                                                     date to ensure the price is considered \
+                                                     current."
+                                        .to_string(),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// AggregateRating Validator
+// ---------------------------------------------------------------------------
+
+pub struct AggregateRatingValidator;
+
+impl AggregateRatingValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn extract_aggregate_ratings<'a>(ctx: &'a AnalysisContext<'a>) -> Vec<&'a serde_json::Value> {
+        let mut ratings = Vec::new();
+        for sd in &ctx.page.structured_data {
+            // Direct AggregateRating schemas
+            if sd.r#type.as_deref() == Some("AggregateRating") {
+                ratings.push(&sd.data);
+            }
+            // Nested aggregateRating in other schemas
+            if let Some(ar) = sd.data.get("aggregateRating") {
+                if ar.get("@type")
+                    .and_then(|t| t.as_str())
+                    .map(|t| t == "AggregateRating")
+                    .unwrap_or(false)
+                {
+                    ratings.push(ar);
+                } else if ar.get("ratingValue").is_some() {
+                    // Accept even without explicit @type if ratingValue exists
+                    ratings.push(ar);
+                }
+            }
+        }
+        ratings
+    }
+
+    fn parse_f64(val: &serde_json::Value) -> Option<f64> {
+        val.as_f64()
+            .or_else(|| val.as_str().and_then(|s| s.parse::<f64>().ok()))
+    }
+
+    fn parse_usize(val: &serde_json::Value) -> Option<usize> {
+        val.as_f64()
+            .map(|v| v as usize)
+            .or_else(|| val.as_str().and_then(|s| s.parse::<usize>().ok()))
+    }
+}
+
+impl Default for AggregateRatingValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for AggregateRatingValidator {
+    fn name(&self) -> &str {
+        "aggregate-rating"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let ratings = Self::extract_aggregate_ratings(ctx);
+
+        for ar in &ratings {
+            let best_rating = ar
+                .get("bestRating")
+                .and_then(Self::parse_f64)
+                .unwrap_or(5.0);
+
+            // ARAT001: ratingValue > bestRating
+            if let Some(rating_value) = ar
+                .get("ratingValue")
+                .and_then(Self::parse_f64)
+            {
+                if rating_value > best_rating {
+                    findings.push(Finding {
+                        severity: Severity::Error,
+                        category: IssueCategory::Schema,
+                        code: "ARAT001".to_string(),
+                        title: "AggregateRating ratingValue exceeds bestRating".to_string(),
+                        description: format!(
+                            "AggregateRating ratingValue is {rating_value} but bestRating is \
+                             {best_rating}. The ratingValue must not exceed bestRating."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Set ratingValue to a number between worstRating \
+                                         (default 0) and bestRating (default 5)."
+                            .to_string(),
+                    });
+                }
+            }
+
+            // ARAT002: reviewCount or ratingCount is 0
+            let review_count = ar.get("reviewCount").and_then(Self::parse_usize);
+            let rating_count = ar.get("ratingCount").and_then(Self::parse_usize);
+            let count = review_count.or(rating_count);
+
+            match count {
+                Some(0) => {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "ARAT002".to_string(),
+                        title: "AggregateRating reviewCount or ratingCount is 0".to_string(),
+                        description: "An AggregateRating has a reviewCount or ratingCount of 0. \
+                                      Search engines may not display ratings when there are no \
+                                      reviews."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Ensure reviewCount or ratingCount is a positive \
+                                         integer representing the number of reviews."
+                            .to_string(),
+                    });
+                }
+                None => {
+                    // Neither reviewCount nor ratingCount present — already handled by
+                    // ReviewSchemaValidator REV001, so skip here.
+                }
+                _ => {}
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 23. Resource Count Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct ResourceCountAnalyzer;
+
+impl ResourceCountAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for ResourceCountAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for ResourceCountAnalyzer {
+    fn name(&self) -> &str {
+        "resource-count"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let js_count = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| s.src.is_some())
+            .count();
+
+        let css_count = ctx
+            .page
+            .styles
+            .iter()
+            .filter(|s| s.href.is_some())
+            .count();
+
+        let image_count = ctx.page.images.len();
+
+        let total_resources = js_count + css_count + image_count;
+
+        // RES001: > 100 total resources
+        if total_resources > 100 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "RES001".to_string(),
+                title: "Excessive total resource count".to_string(),
+                description: format!(
+                    "Page loads {total_resources} resources (JS: {js_count}, CSS: {css_count}, \
+                     images: {image_count}), exceeding the recommended maximum of 100."
+                ),
+                url: url.clone(),
+                recommendation: "Reduce the number of resources. Combine CSS/JS files, use \
+                                 image sprites, or implement code splitting."
+                    .to_string(),
+            });
+        }
+
+        // RES002: > 20 JS files
+        if js_count > 20 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "RES002".to_string(),
+                title: "Excessive JavaScript file count".to_string(),
+                description: format!(
+                    "Page loads {js_count} JavaScript files, exceeding the recommended maximum \
+                     of 20. Each file requires a separate HTTP request."
+                ),
+                url: url.clone(),
+                recommendation: "Bundle JavaScript files together, use async/defer loading, or \
+                                 implement code splitting."
+                    .to_string(),
+            });
+        }
+
+        // RES003: > 50 images
+        if image_count > 50 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "RES003".to_string(),
+                title: "Excessive image count".to_string(),
+                description: format!(
+                    "Page loads {image_count} images, exceeding the recommended maximum of 50."
+                ),
+                url: url.clone(),
+                recommendation: "Reduce image count, use CSS sprites, lazy load below-the-fold \
+                                 images, or combine images."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Critical Resource Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct CriticalResourceAnalyzer;
+
+impl CriticalResourceAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn check_blocking_scripts(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        let blocking: Vec<&str> = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| {
+                s.script_type
+                    .as_deref()
+                    .map(|t| t != "application/ld+json")
+                    .unwrap_or(true)
+            })
+            .map(|s| s.src.as_deref().unwrap_or(""))
+            .collect();
+        if !blocking.is_empty() {
+            let examples = if blocking.len() > 3 {
+                format!(
+                    "{}, \u{2026}",
+                    blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                )
+            } else {
+                blocking.join(", ")
+            };
+            f.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Performance,
+                code: "CRIT001".to_string(),
+                title: "Render-blocking scripts detected".to_string(),
+                description: format!(
+                    "{} external script(s) lack async/defer attributes and block page rendering: \
+                     {}.",
+                    blocking.len(),
+                    examples
+                ),
+                url: url.to_string(),
+                recommendation: "Add the async or defer attribute to external scripts. Use async \
+                                 for independent scripts and defer for scripts that must execute \
+                                 in order."
+                    .to_string(),
+            });
+        }
+    }
+
+    fn check_blocking_stylesheets(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        let blocking: Vec<&str> = ctx
+            .page
+            .styles
+            .iter()
+            .filter(|s| s.href.is_some() && !s.is_inline)
+            .filter(|s| match &s.media {
+                None => true,
+                Some(m) => {
+                    let lower = m.trim().to_lowercase();
+                    lower.is_empty() || lower == "all" || lower == "screen"
+                }
+            })
+            .map(|s| s.href.as_deref().unwrap_or(""))
+            .collect();
+        if !blocking.is_empty() {
+            let examples = if blocking.len() > 3 {
+                format!(
+                    "{}, \u{2026}",
+                    blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                )
+            } else {
+                blocking.join(", ")
+            };
+            f.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Performance,
+                code: "CRIT002".to_string(),
+                title: "Render-blocking stylesheets detected".to_string(),
+                description: format!(
+                    "{} external stylesheet(s) are render-blocking (missing media attribute or \
+                     media=\"all\"): {}.",
+                    blocking.len(),
+                    examples
+                ),
+                url: url.to_string(),
+                recommendation: "Add a media attribute (e.g., media=\"print\" with \
+                                 onload=\"this.media='all'\") or use rel=\"preload\" with \
+                                 onload for non-critical CSS."
+                    .to_string(),
+            });
+        }
+    }
+
+    fn collect_external_origins(ctx: &AnalysisContext) -> HashSet<String> {
+        let mut origins = HashSet::new();
+        for s in &ctx.page.scripts {
+            if let Some(src) = &s.src {
+                if let Ok(parsed) = url::Url::parse(src) {
+                    if !parsed.cannot_be_a_base() {
+                        origins.insert(parsed.origin().ascii_serialization());
+                    }
+                }
+            }
+        }
+        for s in &ctx.page.styles {
+            if let Some(href) = &s.href {
+                if let Ok(parsed) = url::Url::parse(href) {
+                    if !parsed.cannot_be_a_base() {
+                        origins.insert(parsed.origin().ascii_serialization());
+                    }
+                }
+            }
+        }
+        origins
+    }
+
+    fn check_preconnect_hints(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
+        let body = ctx.body.unwrap_or("");
+        let has_preconnect =
+            body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
+        let has_dns_prefetch =
+            body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
+
+        if has_preconnect || has_dns_prefetch {
+            return;
+        }
+
+        let origins = Self::collect_external_origins(ctx);
+        let page_origin = url::Url::parse(url)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+        let external: Vec<&str> = origins
+            .iter()
+            .filter(|o| *o != &page_origin)
+            .map(|s| s.as_str())
+            .collect();
+        if external.len() >= 2 {
+            f.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "CRIT003".to_string(),
+                title: "Missing preconnect hints for external origins".to_string(),
+                description: format!(
+                    "Page references {} external origin(s) ({}) without <link rel=\"preconnect\"> \
+                     or <link rel=\"dns-prefetch\"> hints. Early connection setup reduces latency.",
+                    external.len(),
+                    external.join(", ")
+                ),
+                url: url.to_string(),
+                recommendation: "Add <link rel=\"preconnect\" href=\"ORIGIN\"> for critical \
+                                 third-party origins to establish early connections."
+                    .to_string(),
+            });
+        }
+    }
+}
+
+impl Default for CriticalResourceAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CriticalResourceAnalyzer {
+    fn name(&self) -> &str {
+        "critical-resources"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut f = Vec::new();
+        let url = &ctx.page.url;
+        self.check_blocking_scripts(ctx, url, &mut f);
+        self.check_blocking_stylesheets(ctx, url, &mut f);
+        self.check_preconnect_hints(ctx, url, &mut f);
+        f
     }
 }

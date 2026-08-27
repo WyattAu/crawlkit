@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 24 (v5.0.0 Ground Truth)
-**Version:** 5.0.0
+**Current Phase:** Phase 25 (v5.1.0 Depth)
+**Version:** 5.1.0
 **Status:** In Development
 **Last Updated:** 2026-08-27
 **MSRV:** 1.94.0
@@ -29,8 +29,8 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 782 passing (unit/lib: 634, integration: 104, doc: 44; 9 ignored)
-- **Analyzer Count:** 31
+- **Test Count:** 909 passing (unit/lib: 754, integration: 111, doc: 44; 12 ignored)
+- **Analyzer Count:** 62
 - **Clippy Warnings:** 0
 - **Unsafe Code:** Denied (workspace-level); FFI crates override to allow with SAFETY comments
 - **Workspace Crates:** 5 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-types)

@@ -365,6 +365,40 @@ impl UrlQueue {
     }
 }
 
+impl crate::queue_trait::Queue for UrlQueue {
+    fn push(&self, entry: QueueEntry) -> Result<bool, crate::queue_trait::QueueError> {
+        let added = self.push_with_referrer(
+            entry.url,
+            entry.depth,
+            entry.priority,
+            entry.referrer,
+        );
+        Ok(added)
+    }
+
+    fn pop(&self) -> Result<Option<QueueEntry>, crate::queue_trait::QueueError> {
+        Ok(self.heap.lock().pop())
+    }
+
+    fn len(&self) -> Result<usize, crate::queue_trait::QueueError> {
+        Ok(self.heap.lock().len())
+    }
+
+    fn is_empty(&self) -> Result<bool, crate::queue_trait::QueueError> {
+        Ok(self.heap.lock().is_empty())
+    }
+
+    fn contains(&self, url: &str) -> Result<bool, crate::queue_trait::QueueError> {
+        // Normalize the URL the same way UrlQueue::push_with_referrer does
+        // (via Url::to_string()) so the lookup matches the stored keys.
+        let normalized = match Url::parse(url) {
+            Ok(u) => u.to_string(),
+            Err(_) => return Ok(false),
+        };
+        Ok(self.seen.contains(&normalized))
+    }
+}
+
 /// Checks if a domain matches a pattern (supports leading `*` wildcard).
 fn domain_matches_pattern(domain: &str, pattern: &str) -> bool {
     if let Some(suffix) = pattern.strip_prefix("*.") {

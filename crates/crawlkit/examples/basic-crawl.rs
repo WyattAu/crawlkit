@@ -163,6 +163,10 @@ async fn main() -> Result<()> {
             response_time: Some(fetch_time),
             redirect_chain: &[],
             robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
         };
         let findings = analyzer_registry.analyze(&ctx);
         issues_found += findings.len();

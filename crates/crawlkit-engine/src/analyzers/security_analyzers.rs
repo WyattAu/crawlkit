@@ -3305,6 +3305,237 @@ impl Analyzer for ContentTypeSniffingAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Permissions Policy Analyzer (PPERM codes)
+// ---------------------------------------------------------------------------
+
+pub struct PermissionsPolicyAnalyzerNew;
+
+impl PermissionsPolicyAnalyzerNew {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Default for PermissionsPolicyAnalyzerNew {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for PermissionsPolicyAnalyzerNew {
+    fn name(&self) -> &str {
+        "permissions-policy-check"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Permissions-Policy") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "PPERM001".to_string(),
+                    title: "Permissions-Policy header missing".to_string(),
+                    description: "No Permissions-Policy header was found. This header controls \
+                                  which browser features and APIs can be used by the page. \
+                                  Without it, all features are available by default."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set a Permissions-Policy header to restrict access to \
+                                     sensitive features like camera, microphone, and geolocation."
+                        .into(),
+                });
+            }
+            Some(policy) => {
+                let lower = policy.to_lowercase();
+                if lower.contains("camera") && !lower.contains("camera=()")
+                    && !lower.contains("camera=(self)")
+                {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "PPERM002".to_string(),
+                        title: "Permissions-Policy allows camera by default".to_string(),
+                        description: "The Permissions-Policy header does not explicitly restrict \
+                                      camera access. Allowing camera access increases the attack \
+                                      surface for camera-based attacks."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Add camera=() to Permissions-Policy to disable camera \
+                                         access, or camera=(self) to restrict to same-origin."
+                            .into(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-Origin Embedder Policy Analyzer (COEP codes)
+// ---------------------------------------------------------------------------
+
+pub struct CrossOriginEmbedderPolicyAnalyzer;
+
+impl CrossOriginEmbedderPolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Default for CrossOriginEmbedderPolicyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CrossOriginEmbedderPolicyAnalyzer {
+    fn name(&self) -> &str {
+        "cross-origin-embedder-policy"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Cross-Origin-Embedder-Policy") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "COEP001".to_string(),
+                    title: "Cross-Origin-Embedder-Policy header missing".to_string(),
+                    description: "No Cross-Origin-Embedder-Policy (COEP) header was found. COEP \
+                                  prevents loading cross-origin resources without explicit opt-in, \
+                                  enabling cross-origin isolation for high-precision timing \
+                                  mitigation (Spectre)."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set Cross-Origin-Embedder-Policy: require-corp to enable \
+                                     cross-origin isolation."
+                        .into(),
+                });
+            }
+            Some(value) => {
+                if value.trim() != "require-corp" {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "COEP002".to_string(),
+                        title: "Cross-Origin-Embedder-Policy not set to require-corp".to_string(),
+                        description: format!(
+                            "Cross-Origin-Embedder-Policy is \"{value}\" instead of \
+                             \"require-corp\". The require-corp value is needed for full \
+                             cross-origin isolation."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Set Cross-Origin-Embedder-Policy: require-corp for \
+                                         strictest cross-origin isolation."
+                            .into(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cross-Origin Opener Policy Analyzer (COOP codes)
+// ---------------------------------------------------------------------------
+
+pub struct CrossOriginOpenerPolicyAnalyzer;
+
+impl CrossOriginOpenerPolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Default for CrossOriginOpenerPolicyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CrossOriginOpenerPolicyAnalyzer {
+    fn name(&self) -> &str {
+        "cross-origin-opener-policy"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Cross-Origin-Opener-Policy") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "COOP001".to_string(),
+                    title: "Cross-Origin-Opener-Policy header missing".to_string(),
+                    description: "No Cross-Origin-Opener-Policy (COOP) header was found. COOP \
+                                  isolates your browsing context from cross-origin popups, \
+                                  preventing cross-origin window references that could be \
+                                  exploited."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set Cross-Origin-Opener-Policy: same-origin to isolate your \
+                                     browsing context."
+                        .into(),
+                });
+            }
+            Some(value) => {
+                if value.trim() != "same-origin" {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "COOP002".to_string(),
+                        title: "Cross-Origin-Opener-Policy not set to same-origin".to_string(),
+                        description: format!(
+                            "Cross-Origin-Opener-Policy is \"{value}\" instead of \"same-origin\". \
+                             The same-origin value provides the strictest isolation."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Set Cross-Origin-Opener-Policy: same-origin for strictest \
+                                         cross-origin isolation."
+                            .into(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -5754,5 +5985,290 @@ mod tests {
         let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CTSNIFF001"));
         assert!(!findings.iter().any(|f| f.code == "CTSNIFF002"));
+    }
+
+    // =========================================================================
+    // PermissionsPolicyAnalyzerNew tests
+    // =========================================================================
+
+    #[test]
+    fn test_pperm_missing_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PPERM001"));
+    }
+
+    #[test]
+    fn test_pperm_camera_not_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=self".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PPERM002"));
+    }
+
+    #[test]
+    fn test_pperm_camera_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_pperm_valid_with_multiple_features() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=(), geolocation=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_pperm_camera_self_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(self)".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_pperm_no_camera_feature() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "microphone=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_pperm_empty_header_value() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PPERM001"));
+        assert!(!findings.iter().any(|f| f.code == "PPERM002"));
+    }
+
+    #[test]
+    fn test_pperm_case_insensitive_camera() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "Camera=self".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PPERM002"));
+    }
+
+    // =========================================================================
+    // CrossOriginEmbedderPolicyAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_coep_missing_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+    }
+
+    #[test]
+    fn test_coep_not_require_corp() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "credentialless".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP002"));
+    }
+
+    #[test]
+    fn test_coep_require_corp_valid() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "require-corp".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_coep_unsafe_none() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "unsafe-none".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP002"));
+    }
+
+    #[test]
+    fn test_coep_case_sensitive() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "Require-Corp".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP002"));
+    }
+
+    #[test]
+    fn test_coep_empty_value() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COEP002"));
+    }
+
+    #[test]
+    fn test_coep_with_whitespace() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            " require-corp ".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_coep_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+    }
+
+    // =========================================================================
+    // CrossOriginOpenerPolicyAnalyzer tests
+    // =========================================================================
+
+    #[test]
+    fn test_coop_missing_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOP001"));
+    }
+
+    #[test]
+    fn test_coop_not_same_origin() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "same-origin-allow-popups".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_coop_same_origin_valid() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "same-origin".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_coop_unsafe_none() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "unsafe-none".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_coop_case_sensitive() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "Same-Origin".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_coop_empty_value() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "COOP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_coop_with_whitespace() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            " same-origin ".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_coop_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().any(|f| f.code == "COOP001"));
     }
 }

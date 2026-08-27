@@ -2758,6 +2758,174 @@ fn is_generic_anchor(text: &str) -> bool {
     )
 }
 
+// =========================================================================
+// RobotsTxtDirectivesAnalyzer
+// =========================================================================
+
+/// Checks if pages are disallowed by robots.txt but still crawled.
+pub struct RobotsTxtDirectivesAnalyzer;
+
+impl Default for RobotsTxtDirectivesAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RobotsTxtDirectivesAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Check if a path is disallowed for the given user-agent in robots.txt.
+    fn is_disallowed(path: &str, disallowed_paths: &[String]) -> bool {
+        disallowed_paths.iter().any(|blocked| path.starts_with(blocked.as_str()))
+    }
+}
+
+impl Analyzer for RobotsTxtDirectivesAnalyzer {
+    fn name(&self) -> &str {
+        "robots-txt-directives"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let robots_txt = match ctx.robots_txt {
+            Some(txt) => txt,
+            None => return findings,
+        };
+
+        // Parse disallowed paths from robots.txt for * user-agent
+        let mut disallowed = Vec::new();
+        let mut in_wildcard = false;
+        for line in robots_txt.lines() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() || trimmed.starts_with('#') {
+                continue;
+            }
+            if let Some(val) = trimmed.strip_prefix("User-agent:") {
+                let val = val.trim();
+                in_wildcard = val == "*";
+            } else if in_wildcard {
+                if let Some(val) = trimmed.strip_prefix("Disallow:") {
+                    let val = val.trim();
+                    if !val.is_empty() {
+                        disallowed.push(val.to_string());
+                    }
+                }
+            }
+        }
+
+        if disallowed.is_empty() {
+            return findings;
+        }
+
+        // Extract path from page URL
+        if let Ok(parsed) = Url::parse(url) {
+            let path = parsed.path();
+            if Self::is_disallowed(path, &disallowed) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ROBOTS-D001".to_string(),
+                    title: "Page disallowed by robots.txt".to_string(),
+                    description: format!(
+                        "This page's path ({}) matches a Disallow directive in robots.txt for \
+                         the wildcard user-agent. Crawling disallowed pages may waste crawl budget \
+                         and could be blocked by search engines."
+                    ,
+                        path
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Either remove the Disallow directive if the page should be \
+                                     crawled, or add a noindex meta tag if the page should not \
+                                     appear in search results."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SitemapUrlAnalyzer
+// =========================================================================
+
+/// Checks page URLs for sitemap-unfriendly patterns.
+pub struct SitemapUrlAnalyzer;
+
+impl Default for SitemapUrlAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SitemapUrlAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for SitemapUrlAnalyzer {
+    fn name(&self) -> &str {
+        "sitemap-url"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let parsed = match Url::parse(url) {
+            Ok(u) => u,
+            Err(_) => return findings,
+        };
+
+        // SITEMAP-U001: URL contains query parameters
+        if !parsed.query().unwrap_or("").is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "SITEMAP-U001".to_string(),
+                title: "URL contains query parameters".to_string(),
+                description: "This page URL contains query parameters. URLs with query \
+                              parameters are generally unfriendly for sitemaps as they may \
+                              create duplicate content issues."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Use parameterless URLs for sitemap inclusion. If parameters \
+                                 are necessary, consider using canonical URLs to consolidate \
+                                 duplicate content."
+                    .to_string(),
+            });
+        }
+
+        // SITEMAP-U002: URL contains uppercase characters in path
+        let path = parsed.path();
+        if path.chars().any(|c| c.is_ascii_uppercase()) {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "SITEMAP-U002".to_string(),
+                title: "URL contains uppercase characters".to_string(),
+                description: "This page URL contains uppercase characters in the path. Search \
+                              engines generally treat URLs as case-sensitive, which can lead to \
+                              duplicate content issues."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Use lowercase characters in URLs for consistency. If the page \
+                                 is already indexed with uppercase, ensure proper canonical tags \
+                                 are in place."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests for new analyzers
 // ---------------------------------------------------------------------------
@@ -4833,6 +5001,361 @@ mod tests_new_analyzers {
         let ctx = make_ctx(&page, Some(200));
         let findings = AnchorTextDiversityAnalyzer::new().analyze(&ctx);
         // Only 1 internal link, below minimum of 3
+        assert!(findings.is_empty());
+    }
+
+    // ===== RobotsTxtDirectivesAnalyzer tests =====
+
+    #[test]
+    fn test_robots_directives_no_robots_txt() {
+        let page = make_page("https://example.com/admin");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(RobotsTxtDirectivesAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_disallowed() {
+        let robots = "User-agent: *\nDisallow: /admin\n";
+        let page = make_page("https://example.com/admin/secret");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    #[test]
+    fn test_robots_directives_allowed() {
+        let robots = "User-agent: *\nDisallow: /admin\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_empty_disallow() {
+        let robots = "User-agent: *\nDisallow:\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_multiple_rules() {
+        let robots = "User-agent: *\nDisallow: /admin\nDisallow: /private\nDisallow: /temp\n";
+        let page = make_page("https://example.com/private/data");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    #[test]
+    fn test_robots_directives_specific_user_agent_only() {
+        let robots = "User-agent: Googlebot\nDisallow: /admin\n";
+        let page = make_page("https://example.com/admin");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        // Only Googlebot is disallowed, wildcard is not
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_root_disallow() {
+        let robots = "User-agent: *\nDisallow: /\n";
+        let page = make_page("https://example.com/anything");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    #[test]
+    fn test_robots_directives_comments_ignored() {
+        let robots = "# This is a comment\nUser-agent: *\n# Another comment\nDisallow: /admin\n";
+        let page = make_page("https://example.com/admin");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    #[test]
+    fn test_robots_directives_partial_path_match() {
+        let robots = "User-agent: *\nDisallow: /admin\n";
+        let page = make_page("https://example.com/admin-page");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        // /admin-page does NOT start with /admin followed by / or end
+        // Actually /admin-page DOES start with /admin, so it IS disallowed
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    #[test]
+    fn test_robots_directives_no_disallow_allows_everything() {
+        let robots = "User-agent: *\nAllow: /\n";
+        let page = make_page("https://example.com/anywhere");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_only_comments() {
+        let robots = "# Just comments\n# Nothing else\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_directives_subpath_disallowed() {
+        let robots = "User-agent: *\nDisallow: /files\n";
+        let page = make_page("https://example.com/files/doc.pdf");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = RobotsTxtDirectivesAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS-D001"));
+    }
+
+    // ===== SitemapUrlAnalyzer tests =====
+
+    #[test]
+    fn test_sitemap_url_with_query_params() {
+        let page = make_page("https://example.com/page?foo=bar&baz=1");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U001"));
+    }
+
+    #[test]
+    fn test_sitemap_url_no_query_params() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SITEMAP-U001"));
+    }
+
+    #[test]
+    fn test_sitemap_url_uppercase() {
+        let page = make_page("https://example.com/MyPage");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U002"));
+    }
+
+    #[test]
+    fn test_sitemap_url_lowercase() {
+        let page = make_page("https://example.com/mypage");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SITEMAP-U002"));
+    }
+
+    #[test]
+    fn test_sitemap_url_both_issues() {
+        let page = make_page("https://example.com/MyPage?foo=bar");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U001"));
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U002"));
+    }
+
+    #[test]
+    fn test_sitemap_url_empty_query() {
+        let page = make_page("https://example.com/page?=");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        // Empty query string: url crate may not set query for `?` alone
+        // Use `?=` which has a key with empty value
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U001"));
+    }
+
+    #[test]
+    fn test_sitemap_url_fragment_not_query() {
+        let page = make_page("https://example.com/page#section");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SITEMAP-U001"));
+    }
+
+    #[test]
+    fn test_sitemap_url_root() {
+        let page = make_page("https://example.com/");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_url_mixed_case_path() {
+        let page = make_page("https://example.com/Path/To/Page");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U002"));
+    }
+
+    #[test]
+    fn test_sitemap_url_only_uppercase_in_segment() {
+        let page = make_page("https://example.com/API/v2/users");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U002"));
+    }
+
+    #[test]
+    fn test_sitemap_url_query_with_multiple_params() {
+        let page = make_page("https://example.com/search?q=rust&page=2&sort=asc");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SITEMAP-U001"));
+    }
+
+    #[test]
+    fn test_sitemap_url_invalid_url() {
+        let page = make_page("not-a-valid-url");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
     }
 }

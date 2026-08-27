@@ -49,6 +49,7 @@ impl HtmlParser {
             r#type: Self::get_meta_content(document, "og:type"),
             site_name: Self::get_meta_content(document, "og:site_name"),
             locale: Self::get_meta_content(document, "og:locale"),
+            extra: Self::extract_extra_og_tags(document),
         };
 
         let twitter = TwitterTags {
@@ -96,6 +97,30 @@ impl HtmlParser {
     // ---------------------------------------------------------------------------
     // Headings
     // ---------------------------------------------------------------------------
+    /// Extract additional OG tags not covered by named fields (e.g., og:video).
+    fn extract_extra_og_tags(document: &Html) -> std::collections::HashMap<String, String> {
+        let mut extra = std::collections::HashMap::new();
+        let known = [
+            "og:title", "og:description", "og:image", "og:url", "og:type",
+            "og:site_name", "og:locale",
+        ];
+        let selector = match Selector::parse("meta[property^=\"og:\"]") {
+            Ok(s) => s,
+            Err(_) => return extra,
+        };
+        for el in document.select(&selector) {
+            if let Some(prop) = el.value().attr("property") {
+                if !known.contains(&prop) {
+                    if let Some(content) = el.value().attr("content") {
+                        let key = prop.strip_prefix("og:").unwrap_or(prop).to_string();
+                        extra.insert(key, content.to_string());
+                    }
+                }
+            }
+        }
+        extra
+    }
+
     pub(super) fn extract_headings(document: &Html) -> Vec<Heading> {
         let mut headings = Vec::new();
         for level in 1..=6 {

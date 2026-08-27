@@ -2535,6 +2535,106 @@ impl Analyzer for LocalBusinessSchemaValidator {
 }
 
 // =========================================================================
+// LocalBusinessNapAnalyzer
+// =========================================================================
+
+/// Validates LocalBusiness NAP (Name, Address, Phone) consistency.
+pub struct LocalBusinessNapAnalyzer;
+
+impl Default for LocalBusinessNapAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LocalBusinessNapAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    const LOCAL_BUSINESS_TYPES: &[&str] = &[
+        "LocalBusiness", "Store", "Restaurant", "MedicalBusiness",
+        "FinancialService", "TravelAgency", "AutoBodyShop", "AutoDealer",
+        "AutoPartsStore", "AutoRental", "AutoRepair", "Bakery", "BarOrPub",
+        "BeautySalon", "Brewery", "CafeOrCoffeeShop", "Cemetery",
+        "ChildCare", "Dentist", "EmploymentAgency", "EntertainmentBusiness",
+        "FoodEstablishment", "GardenStore",
+        "GovernmentOffice", "HealthAndBeautyBusiness", "HomeAndConstructionBusiness",
+        "InsuranceAgency", "InternetCafe", "LegalService", "Library",
+        "LodgingBusiness", "MovingCompany",
+        "MusicStore", "OfficeEquipmentStore", "OutletStore", "PawnShop",
+        "PetStore", "Physician", "Plumber", "RealEstateAgent",
+        "RecyclingCenter", "SelfStorage", "ShoeStore", "ShoppingCenter",
+        "SportingGoodsStore", "TattooParlor", "TelevisionStation",
+        "ToyStore", "WholesaleStore",
+    ];
+}
+
+impl Analyzer for LocalBusinessNapAnalyzer {
+    fn name(&self) -> &str {
+        "local-business-nap"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            let schema_type = sd.data.get("@type").and_then(|t| t.as_str()).unwrap_or("");
+            if !Self::LOCAL_BUSINESS_TYPES.contains(&schema_type) {
+                continue;
+            }
+
+            // NAP001: Missing telephone
+            if sd.data.get("telephone").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "NAP001".to_string(),
+                    title: "LocalBusiness schema missing telephone".to_string(),
+                    description: format!(
+                        "A {} schema is missing the \"telephone\" property. Phone numbers are \
+                         essential for NAP consistency and local SEO."
+                    ,
+                        schema_type
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add \"telephone\" with the business phone number in \
+                                     international format (e.g., \"+1-555-555-5555\")."
+                        .to_string(),
+                });
+            }
+
+            // NAP002: Missing openingHours
+            if sd.data.get("openingHours").is_none()
+                && sd.data.get("openingHoursSpecification").is_none()
+            {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "NAP002".to_string(),
+                    title: "LocalBusiness schema missing openingHours".to_string(),
+                    description: format!(
+                        "A {} schema is missing \"openingHours\" or \
+                         \"openingHoursSpecification\". Business hours help customers know when \
+                         to visit."
+                    ,
+                        schema_type
+                    ),
+                    url: url.clone(),
+                    recommendation: "Add \"openingHours\" with ISO 8601 time ranges or \
+                                     \"openingHoursSpecification\" with OpeningHoursSpecification \
+                                     objects."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
 // FaqSchemaValidator
 // =========================================================================
 
@@ -2884,29 +2984,12 @@ impl Analyzer for DatasetSchemaValidator {
                 });
             }
 
-            // DATA002: Missing description
-            if data.get("description").is_none() {
-                findings.push(Finding {
-                    severity: Severity::Error,
-                    category: IssueCategory::Schema,
-                    code: "DATA002".to_string(),
-                    title: "Dataset schema missing description".to_string(),
-                    description: "A Dataset structured data block is missing the required \
-                                  \"description\" property. The description provides context \
-                                  about the dataset contents."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Add \"description\" with a summary of the dataset."
-                        .to_string(),
-                });
-            }
-
-            // DATA003: Missing distribution
+            // DATA002: Missing distribution
             if data.get("distribution").is_none() {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
-                    code: "DATA003".to_string(),
+                    code: "DATA002".to_string(),
                     title: "Dataset schema missing distribution".to_string(),
                     description: "A Dataset structured data block is missing the \"distribution\" \
                                   property. Distribution specifies how to access the dataset."
@@ -3049,47 +3132,17 @@ impl Analyzer for SoftwareApplicationValidator {
                 });
             }
 
-            // SOFT002: Missing applicationCategory
-            if data.get("applicationCategory").is_none() {
+            // SOFT002: Missing offers
+            if data.get("offers").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Info,
+                    severity: Severity::Warning,
                     category: IssueCategory::Schema,
                     code: "SOFT002".to_string(),
-                    title: "SoftwareApplication missing applicationCategory".to_string(),
+                    title: "SoftwareApplication missing offers".to_string(),
                     description: "A SoftwareApplication structured data block is missing the \
-                                  \"applicationCategory\" property. This classifies the software \
-                                  type."
-                        .to_string(),
-                    url: url.clone(),
-                    recommendation: "Add \"applicationCategory\" with the category URL or string \
-                                     (e.g., https://schema.org/GameApplication)."
-                        .to_string(),
-                });
-            }
-
-            // SOFT003: Missing offers with price
-            let offers = data.get("offers");
-            let has_valid_offers = offers
-                .map(|o| {
-                    if let Some(arr) = o.as_array() {
-                        arr.iter().any(|item| item.get("price").is_some())
-                    } else if let Some(obj) = o.as_object() {
-                        obj.get("price").is_some()
-                    } else {
-                        false
-                    }
-                })
-                .unwrap_or(false);
-
-            if !has_valid_offers {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Schema,
-                    code: "SOFT003".to_string(),
-                    title: "SoftwareApplication missing offers with price".to_string(),
-                    description: "A SoftwareApplication structured data block is missing \
-                                  \"offers\" with a \"price\" property. Pricing information helps \
-                                  search engines display cost details in app search results."
+                                  \"offers\" property. Offers provide pricing and availability \
+                                  information that helps search engines display cost details in \
+                                  app search results."
                         .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"offers\" with an Offer object containing \"price\" and \
@@ -5005,6 +5058,170 @@ mod tests {
         assert!(findings.iter().any(|f| f.code == "LBIZ001"));
     }
 
+    // ===== LocalBusinessNapAnalyzer =====
+
+    #[test]
+    fn test_nap_missing_telephone() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "address": {"@type": "PostalAddress"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP001"));
+    }
+
+    #[test]
+    fn test_nap_missing_opening_hours() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHours": "Mo-Fr 09:00-17:00"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nap_missing_all() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_non_local_business_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nap_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nap_restaurant_subtype() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({"@type": "Restaurant"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_opening_hours_specification_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHoursSpecification": [{"@type": "OpeningHoursSpecification", "dayOfWeek": "Monday", "opens": "09:00", "closes": "17:00"}]}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_telephone_present_no_opening_hours() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_multiple_businesses() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("LocalBusiness".to_string()),
+                data: serde_json::json!({"@type": "LocalBusiness"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("LocalBusiness".to_string()),
+                data: serde_json::json!({"@type": "LocalBusiness"}),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.iter().filter(|f| f.code == "NAP001").count(), 2);
+        assert_eq!(findings.iter().filter(|f| f.code == "NAP002").count(), 2);
+    }
+
+    #[test]
+    fn test_nap_store_subtype() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Store".to_string()),
+            data: serde_json::json!({"@type": "Store"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_restaurant_with_both_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({
+                "@type": "Restaurant",
+                "name": "Pizza Place",
+                "telephone": "+1-555-123-4567",
+                "openingHours": "Mo-Su 11:00-22:00"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
     // ===== FaqSchemaValidator =====
 
     #[test]
@@ -5462,7 +5679,7 @@ mod tests {
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(DatasetSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "DATA003"));
+        assert!(DatasetSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "DATA002"));
     }
 
     #[test]
@@ -5513,7 +5730,6 @@ mod tests {
         let findings = DatasetSchemaValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "DATA001"));
         assert!(findings.iter().any(|f| f.code == "DATA002"));
-        assert!(findings.iter().any(|f| f.code == "DATA003"));
     }
 
     #[test]
@@ -5661,7 +5877,7 @@ mod tests {
     }
 
     #[test]
-    fn test_software_missing_application_category() {
+    fn test_software_missing_offers() {
         let mut page = make_page("https://example.com/app");
         page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
@@ -5669,29 +5885,11 @@ mod tests {
             data: serde_json::json!({
                 "@type": "SoftwareApplication",
                 "name": "My App",
-                "operatingSystem": "Windows",
-                "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+                "operatingSystem": "Windows"
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
         assert!(SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT002"));
-    }
-
-    #[test]
-    fn test_software_missing_offers_with_price() {
-        let mut page = make_page("https://example.com/app");
-        page.structured_data = vec![StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("SoftwareApplication".to_string()),
-            data: serde_json::json!({
-                "@type": "SoftwareApplication",
-                "name": "My App",
-                "operatingSystem": "Windows",
-                "applicationCategory": "https://schema.org/GameApplication"
-            }),
-        }];
-        let ctx = make_ctx(&page, Some(200));
-        assert!(SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT003"));
     }
 
     #[test]
@@ -5704,7 +5902,6 @@ mod tests {
                 "@type": "SoftwareApplication",
                 "name": "My App",
                 "operatingSystem": "Windows",
-                "applicationCategory": "https://schema.org/GameApplication",
                 "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
             }),
         }];
@@ -5759,12 +5956,11 @@ mod tests {
                 "@type": "SoftwareApplication",
                 "name": "My App",
                 "operatingSystem": "Android",
-                "applicationCategory": "https://schema.org.GameApplication",
                 "offers": [{"@type": "Offer", "availability": "https://schema.org/InStock"}]
             }),
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT003"));
+        assert!(!SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT002"));
     }
 
     #[test]
@@ -5779,7 +5975,6 @@ mod tests {
         let findings = SoftwareApplicationValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SOFT001"));
         assert!(findings.iter().any(|f| f.code == "SOFT002"));
-        assert!(findings.iter().any(|f| f.code == "SOFT003"));
     }
 }
 

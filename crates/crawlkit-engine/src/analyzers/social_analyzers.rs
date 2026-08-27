@@ -704,6 +704,165 @@ impl Analyzer for SocialPreviewOptimizer {
     }
 }
 
+// =========================================================================
+// OpenGraphVideoAnalyzer
+// =========================================================================
+
+/// Validates Open Graph video tags for completeness.
+pub struct OpenGraphVideoAnalyzer;
+
+impl Default for OpenGraphVideoAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OpenGraphVideoAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for OpenGraphVideoAnalyzer {
+    fn name(&self) -> &str {
+        "og-video"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let og_video = match ctx.page.meta.og.get("video") {
+            Some(v) if !v.is_empty() => v,
+            _ => return findings,
+        };
+
+        let _ = og_video;
+
+        // OGVID001: og:video present but missing og:video:url
+        if ctx.page.meta.og.get("video:url").is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Social,
+                code: "OGVID001".to_string(),
+                title: "og:video present but missing og:video:url".to_string(),
+                description: "An og:video tag is present but the corresponding og:video:url tag \
+                              is missing. Without og:video:url, social platforms may not be able \
+                              to play the video correctly."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:video:url\" content=\"https://...\"> \
+                                 with the direct video URL."
+                    .to_string(),
+            });
+        }
+
+        // OGVID002: og:video present but missing og:video:type
+        if ctx.page.meta.og.get("video:type").is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Social,
+                code: "OGVID002".to_string(),
+                title: "og:video present but missing og:video:type".to_string(),
+                description: "An og:video tag is present but the corresponding og:video:type tag \
+                              is missing. The MIME type helps social platforms determine how to \
+                              handle the video."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:video:type\" content=\"video/mp4\"> \
+                                 with the video MIME type."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TwitterCardTypeAnalyzer
+// =========================================================================
+
+/// Validates Twitter Card type selection.
+pub struct TwitterCardTypeAnalyzer;
+
+impl Default for TwitterCardTypeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TwitterCardTypeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for TwitterCardTypeAnalyzer {
+    fn name(&self) -> &str {
+        "twitter-card-type"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match &ctx.page.meta.twitter.card {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Social,
+                    code: "TW001".to_string(),
+                    title: "Twitter card type missing".to_string(),
+                    description: "No twitter:card meta tag was found. Twitter/X will not render \
+                                  a rich preview without a valid card type."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add <meta name=\"twitter:card\" content=\"summary_large_image\">."
+                        .to_string(),
+                });
+            }
+            Some(card_type) => {
+                // TW002: summary when summary_large_image might be better
+                if card_type == "summary" {
+                    // Check if there's a large image that suggests summary_large_image
+                    let has_image = ctx.page.meta.twitter.image.is_some()
+                        || ctx.page.meta.og.image.is_some();
+                    let has_large_dimensions = ctx
+                        .page
+                        .og_image_width
+                        .map(|w| w > 300)
+                        .unwrap_or(false)
+                        || ctx
+                            .page
+                            .og_image_height
+                            .map(|h| h > 300)
+                            .unwrap_or(false);
+
+                    if has_image && has_large_dimensions {
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Social,
+                            code: "TW002".to_string(),
+                            title: "Twitter card type could be summary_large_image".to_string(),
+                            description: "The twitter:card is set to 'summary' but the page has \
+                                          a large image (>300px). Using 'summary_large_image' \
+                                          would provide a better visual presentation on Twitter/X."
+                                .to_string(),
+                            url: url.clone(),
+                            recommendation: "Consider changing twitter:card to \
+                                             'summary_large_image' for better image display."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod tests_social_preview {
     use super::*;
@@ -857,5 +1016,253 @@ mod tests_social_preview {
         assert!(!SocialPreviewOptimizer::is_valid_image_url(""));
         assert!(!SocialPreviewOptimizer::is_valid_image_url("not-a-url"));
         assert!(!SocialPreviewOptimizer::is_valid_image_url("ftp://example.com/img.png"));
+    }
+
+    // ===== OpenGraphVideoAnalyzer tests =====
+
+    #[test]
+    fn test_og_video_no_video_tag() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        assert!(OpenGraphVideoAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_og_video_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGVID001"));
+    }
+
+    #[test]
+    fn test_og_video_missing_type() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    #[test]
+    fn test_og_video_valid() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_og_video_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGVID001"));
+        assert!(findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    #[test]
+    fn test_og_video_empty_video_value() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), String::new());
+        let ctx = make_ctx(&page);
+        assert!(OpenGraphVideoAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_og_video_only_url_missing_type() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "OGVID001"));
+        assert!(findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    #[test]
+    fn test_og_video_only_type_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGVID001"));
+        assert!(!findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    #[test]
+    fn test_og_video_url_only_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "OGVID001"));
+    }
+
+    #[test]
+    fn test_og_video_type_only_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    #[test]
+    fn test_og_video_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        assert!(OpenGraphVideoAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_og_video_embed_url_not_checked() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/embed".to_string());
+        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        // No video:type, but that's still a finding
+        let ctx = make_ctx(&page);
+        let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OGVID002"));
+    }
+
+    // ===== TwitterCardTypeAnalyzer tests =====
+
+    #[test]
+    fn test_twitter_card_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TW001"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_large_image() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary_large_image".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TW001"));
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_without_large_image() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/small.png".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        // summary without large image: no TW002
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_with_large_image() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/large.png".to_string());
+        page.og_image_width = Some(1200);
+        page.og_image_height = Some(630);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_with_og_image_large() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.og.image = Some("https://example.com/large.png".to_string());
+        page.og_image_width = Some(800);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_no_image() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_app_type() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("app".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TW001"));
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_player_type() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("player".to_string());
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TW001"));
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_height_over_300() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/img.png".to_string());
+        page.og_image_height = Some(500);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_width_under_300() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/img.png".to_string());
+        page.og_image_width = Some(200);
+        page.og_image_height = Some(200);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        // Both dimensions under 300: no TW002
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_exact_300() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/img.png".to_string());
+        page.og_image_width = Some(300);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        // Exactly 300: not > 300, so no TW002
+        assert!(!findings.iter().any(|f| f.code == "TW002"));
+    }
+
+    #[test]
+    fn test_twitter_card_summary_both_width_and_height_large() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.card = Some("summary".to_string());
+        page.meta.twitter.image = Some("https://example.com/img.png".to_string());
+        page.og_image_width = Some(600);
+        page.og_image_height = Some(400);
+        let ctx = make_ctx(&page);
+        let findings = TwitterCardTypeAnalyzer::new().analyze(&ctx);
+        // Both > 300: still triggers TW002
+        assert!(findings.iter().any(|f| f.code == "TW002"));
     }
 }

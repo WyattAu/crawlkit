@@ -22,6 +22,41 @@ pub struct OpenGraphTags {
     pub site_name: Option<String>,
     /// `og:locale` — content locale (e.g., "en_US").
     pub locale: Option<String>,
+    /// Additional OG properties not covered by named fields (e.g., `og:video`, `og:video:url`).
+    #[serde(default, skip_serializing_if = "std::collections::HashMap::is_empty")]
+    pub extra: std::collections::HashMap<String, String>,
+}
+
+impl OpenGraphTags {
+    /// Get an OG property by key, checking named fields first then extras.
+    pub fn get(&self, key: &str) -> Option<&str> {
+        match key {
+            "title" => self.title.as_deref(),
+            "description" => self.description.as_deref(),
+            "image" => self.image.as_deref(),
+            "url" => self.url.as_deref(),
+            "type" => self.r#type.as_deref(),
+            "site_name" => self.site_name.as_deref(),
+            "locale" => self.locale.as_deref(),
+            _ => self.extra.get(key).map(|s| s.as_str()),
+        }
+    }
+
+    /// Insert an OG property, using named fields for known keys and extras for others.
+    pub fn insert(&mut self, key: String, value: String) {
+        match key.as_str() {
+            "title" => self.title = Some(value),
+            "description" => self.description = Some(value),
+            "image" => self.image = Some(value),
+            "url" => self.url = Some(value),
+            "type" => self.r#type = Some(value),
+            "site_name" => self.site_name = Some(value),
+            "locale" => self.locale = Some(value),
+            _ => {
+                self.extra.insert(key, value);
+            }
+        }
+    }
 }
 
 /// Twitter Card tags for Twitter/X previews.
@@ -207,6 +242,7 @@ mod tests {
             r#type: Some("website".into()),
             site_name: Some("Example".into()),
             locale: Some("en_US".into()),
+            extra: std::collections::HashMap::new(),
         };
         let json = serde_json::to_string(&og).unwrap();
         let deser: OpenGraphTags = serde_json::from_str(&json).unwrap();

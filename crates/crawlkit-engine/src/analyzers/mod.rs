@@ -24,7 +24,7 @@ pub use content_analyzers::{
     CouponSchemaValidator, DatasetSchemaValidator, DuplicateContentDetector,
     EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator,
     FaqSchemaValidator, HowToSchemaValidator, JobPostingSchemaValidator, JsonLdValidator,
-    LocalBusinessSchemaValidator, MetaDescriptionLengthAnalyzer, MicrodataValidator,
+    LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer, MetaDescriptionLengthAnalyzer, MicrodataValidator,
     OfferAvailabilityAnalyzer, OrganizationSchemaValidator, PersonSchemaValidator,
     RecipeSchemaValidator, ReviewSchemaValidator, RdfaValidator, ShippingSchemaValidator,
     SoftwareApplicationValidator, SpeakableSchemaValidator,
@@ -32,7 +32,7 @@ pub use content_analyzers::{
     TitleLengthAnalyzer, VideoSchemaValidator,
 };
 pub use http_analyzers::{
-    CacheHeaderAnalyzer, HttpStatusAnalyzer, RedirectChainAnalyzer, ResponseSizeAnalyzer,
+    CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, RedirectChainAnalyzer, ResponseSizeAnalyzer,
     RobotsRule, RobotsTxtAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
 pub use media_analyzers::{
@@ -40,20 +40,24 @@ pub use media_analyzers::{
     ImageInfo, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
 };
 pub use security_analyzers::{
-    AccessibilityAnalyzer, ColorContrastAnalyzer, CrossOriginIsolationAnalyzer,
+    AccessibilityAnalyzer, ColorContrastAnalyzer, ContentSecurityPolicyAnalyzer,
+    CrossOriginIsolationAnalyzer,
     FocusOrderAnalyzer, FontSizeAnalyzer, HstsPreloadAnalyzer, MobileFriendlinessChecker,
-    PermissionPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer,
+    PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer,
+    XFrameOptionsAnalyzer,
 };
 pub use seo_analyzers::{
     AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator,
     HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer, HreflangValidator,
     InternalLinkAnchorAnalyzer, InternationalSeoAnalyzer, KeywordAnalyzer,
     LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileViewportAnalyzer,
-    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry,
+    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
+    SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
-    OpenGraphImageValidator, SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterPlayerValidator,
+    OpenGraphImageValidator, OpenGraphVideoAnalyzer, SocialMediaAnalyzer,
+    SocialPreviewOptimizer, TwitterCardTypeAnalyzer, TwitterPlayerValidator,
 };
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData,
@@ -263,7 +267,7 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-    /// in parallel using rayon. The default registry includes 95 analyzers
+    /// in parallel using rayon. The default registry includes 104 analyzers
 /// covering HTTP, SEO, content, links, images, security, accessibility,
 /// social media, AI-specific checks, and structured data validation.
 ///
@@ -428,6 +432,20 @@ impl AnalyzerRegistry {
             Box::new(AnchorTextDiversityAnalyzer::new()),
             // Social: social preview optimizer
             Box::new(SocialPreviewOptimizer::new()),
+            // Local business NAP consistency
+            Box::new(LocalBusinessNapAnalyzer::new()),
+            // Security: CSP, Referrer-Policy, X-Frame-Options deep analysis
+            Box::new(ContentSecurityPolicyAnalyzer::new()),
+            Box::new(ReferrerPolicyAnalyzer::new()),
+            Box::new(XFrameOptionsAnalyzer::new()),
+            // SEO: robots.txt directives, sitemap URL analysis
+            Box::new(RobotsTxtDirectivesAnalyzer::new()),
+            Box::new(SitemapUrlAnalyzer::new()),
+            // Social: Open Graph video, Twitter card type
+            Box::new(OpenGraphVideoAnalyzer::new()),
+            Box::new(TwitterCardTypeAnalyzer::new()),
+            // HTTP: compression analysis
+            Box::new(CompressionAnalyzer::new()),
         ];
 
         if include_ai {
@@ -1331,7 +1349,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 95);
+        assert_eq!(registry.len(), 104);
         assert!(!registry.is_empty());
     }
 

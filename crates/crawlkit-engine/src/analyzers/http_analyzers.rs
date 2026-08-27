@@ -1019,3 +1019,261 @@ impl Analyzer for CacheHeaderAnalyzer {
 // ---------------------------------------------------------------------------
 
 pub struct MobileFriendlinessChecker;
+
+// =========================================================================
+// CompressionAnalyzer
+// =========================================================================
+
+/// Analyzes response compression for performance.
+pub struct CompressionAnalyzer;
+
+impl Default for CompressionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CompressionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for CompressionAnalyzer {
+    fn name(&self) -> &str {
+        "compression"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body_size = match ctx.body_size {
+            Some(s) => s,
+            None => return findings,
+        };
+
+        let has_compression = Self::get_header(ctx.headers, "Content-Encoding").is_some();
+
+        // COMP001: Response not compressed when >1KB
+        if body_size > 1024 && !has_compression {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "COMP001".to_string(),
+                title: "Large response not compressed".to_string(),
+                description: format!(
+                    "This response is {} bytes but has no Content-Encoding header. Compressing \
+                     responses with gzip, br, or deflate can significantly reduce transfer size \
+                     and improve load times."
+                ,
+                    body_size
+                ),
+                url: url.to_string(),
+                recommendation: "Enable server-side compression (gzip, brotli, or deflate) for \
+                                 responses larger than 1KB."
+                    .to_string(),
+            });
+        }
+
+        // COMP002: Unnecessary compression for <1KB responses
+        if body_size <= 1024 && has_compression {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Performance,
+                code: "COMP002".to_string(),
+                title: "Unnecessary compression for small response".to_string(),
+                description: format!(
+                    "This response is only {} bytes but has Content-Encoding applied. Compressing \
+                     very small responses may add overhead without meaningful benefit."
+                ,
+                    body_size
+                ),
+                url: url.to_string(),
+                recommendation: "Consider not compressing responses under 1KB as the overhead \
+                                 may outweigh the benefit."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ParsedPage;
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(
+        page: &'a ParsedPage,
+        status: Option<u16>,
+        headers: &'a [(String, String)],
+        body_size: Option<usize>,
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // ===== CompressionAnalyzer tests =====
+
+    #[test]
+    fn test_compression_no_body_size() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CompressionAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_compression_large_uncompressed() {
+        let headers = vec![];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(2048));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COMP001"));
+    }
+
+    #[test]
+    fn test_compression_large_compressed() {
+        let headers = vec![("Content-Encoding".to_string(), "gzip".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(2048));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_compression_small_compressed() {
+        let headers = vec![("Content-Encoding".to_string(), "gzip".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(512));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COMP002"));
+    }
+
+    #[test]
+    fn test_compression_small_uncompressed() {
+        let headers = vec![];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(512));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_compression_exact_1024_uncompressed() {
+        let headers = vec![];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(1024));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        // Exactly 1024: not > 1024, so no COMP001
+        assert!(!findings.iter().any(|f| f.code == "COMP001"));
+    }
+
+    #[test]
+    fn test_compression_exact_1025_uncompressed() {
+        let headers = vec![];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(1025));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COMP001"));
+    }
+
+    #[test]
+    fn test_compression_brotli_encoding() {
+        let headers = vec![("Content-Encoding".to_string(), "br".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(5000));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_compression_deflate_encoding() {
+        let headers = vec![("Content-Encoding".to_string(), "deflate".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(3000));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_compression_case_insensitive_header() {
+        let headers = vec![("content-encoding".to_string(), "gzip".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(2048));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_compression_exact_1024_compressed() {
+        let headers = vec![("Content-Encoding".to_string(), "gzip".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(1024));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        // Exactly 1024: not <= 1024 for small check? Actually 1024 <= 1024 is true
+        assert!(findings.iter().any(|f| f.code == "COMP002"));
+    }
+
+    #[test]
+    fn test_compression_zero_size() {
+        let headers = vec![];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some(0));
+        let findings = CompressionAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+}

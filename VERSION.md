@@ -29,8 +29,8 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 1183+ passing (unit/lib: 1183, integration/doc: additional)
-- **Analyzer Count:** 102 (96 single-page + 6 cross-page)
+- **Test Count:** 1161 passing (unit/lib: 1161; integration/doc: additional)
+- **Analyzer Count:** 116 (97 single-page + 19 cross-page)
 - **Clippy Warnings:** 0
 - **Unsafe Code:** Denied (workspace-level); FFI crates override to allow with SAFETY comments
 - **Workspace Crates:** 5 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-types)

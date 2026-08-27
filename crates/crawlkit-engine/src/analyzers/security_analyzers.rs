@@ -1614,3 +1614,622 @@ impl Analyzer for CrossOriginIsolationAnalyzer {
         findings
     }
 }
+
+// =========================================================================
+// ContentSecurityPolicyAnalyzer
+// =========================================================================
+
+/// Analyzes Content-Security-Policy for insecure directives.
+pub struct ContentSecurityPolicyAnalyzer;
+
+impl Default for ContentSecurityPolicyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentSecurityPolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for ContentSecurityPolicyAnalyzer {
+    fn name(&self) -> &str {
+        "content-security-policy"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let csp = match Self::get_header(ctx.headers, "Content-Security-Policy") {
+            Some(v) => v,
+            None => return findings,
+        };
+
+        // CSP001: script-src allows unsafe-inline
+        let lower = csp.to_lowercase();
+        if let Some(script_src_pos) = lower.find("script-src") {
+            let after = &csp[script_src_pos..];
+            if after.split(';').next().unwrap_or("").contains("'unsafe-inline'") {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "CSP001".to_string(),
+                    title: "CSP script-src allows unsafe-inline".to_string(),
+                    description: "The Content-Security-Policy script-src directive includes \
+                                  'unsafe-inline', which allows inline JavaScript execution. \
+                                  This weakens XSS protection."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Remove 'unsafe-inline' from script-src and use nonces or \
+                                     hashes for inline scripts."
+                        .to_string(),
+                });
+            }
+        }
+
+        // CSP002: Missing frame-ancestors
+        if !lower.contains("frame-ancestors") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "CSP002".to_string(),
+                title: "CSP missing frame-ancestors directive".to_string(),
+                description: "The Content-Security-Policy header does not include a \
+                              'frame-ancestors' directive. Without it, the page may be embedded \
+                              in iframes from any origin, enabling clickjacking."
+                    .to_string(),
+                url: url.to_string(),
+                recommendation: "Add frame-ancestors 'self' (or frame-ancestors 'none') to \
+                                 the Content-Security-Policy header."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ReferrerPolicyAnalyzer
+// =========================================================================
+
+/// Analyzes Referrer-Policy header configuration.
+pub struct ReferrerPolicyAnalyzer;
+
+impl Default for ReferrerPolicyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ReferrerPolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for ReferrerPolicyAnalyzer {
+    fn name(&self) -> &str {
+        "referrer-policy"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Referrer-Policy") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "REF001".to_string(),
+                    title: "Missing Referrer-Policy header".to_string(),
+                    description: "No Referrer-Policy header was found. Without this header, \
+                                  browsers may send full URLs as referrers, leaking sensitive \
+                                  information."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin to \
+                                     control referrer information leakage."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim().eq_ignore_ascii_case("unsafe-url") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "REF002".to_string(),
+                        title: "Referrer-Policy set to unsafe-url".to_string(),
+                        description: "The Referrer-Policy header is set to 'unsafe-url', which \
+                                      sends the full URL (including path and query string) as \
+                                      referrer for all requests, including cross-origin."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Use 'strict-origin-when-cross-origin' or \
+                                         'no-referrer-when-downgrade' instead of 'unsafe-url'."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// XFrameOptionsAnalyzer
+// =========================================================================
+
+/// Analyzes X-Frame-Options header for clickjacking protection.
+pub struct XFrameOptionsAnalyzer;
+
+impl Default for XFrameOptionsAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XFrameOptionsAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for XFrameOptionsAnalyzer {
+    fn name(&self) -> &str {
+        "x-frame-options"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Only check HTML pages
+        if let Some(ct) = ctx.content_type {
+            if !ct.contains("text/html") {
+                return findings;
+            }
+        }
+
+        match Self::get_header(ctx.headers, "X-Frame-Options") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "XFO001".to_string(),
+                    title: "Missing X-Frame-Options header on HTML page".to_string(),
+                    description: "No X-Frame-Options header was found on this HTML page. This \
+                                  header prevents the page from being embedded in iframes, which \
+                                  protects against clickjacking attacks."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-Frame-Options to DENY (preferred) or SAMEORIGIN."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim().eq_ignore_ascii_case("ALLOWALL") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "XFO002".to_string(),
+                        title: "X-Frame-Options set to ALLOWALL".to_string(),
+                        description: "The X-Frame-Options header is set to 'ALLOWALL', which \
+                                      permits the page to be embedded in iframes from any origin. \
+                                      This provides no clickjacking protection."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN instead of \
+                                         ALLOWALL."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ParsedPage;
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>, headers: &'a [(String, String)], content_type: Option<&'a str>) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type,
+            rendered: None,
+        }
+    }
+
+    // ===== ContentSecurityPolicyAnalyzer tests =====
+
+    #[test]
+    fn test_csp_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ContentSecurityPolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_csp_unsafe_inline() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'unsafe-inline'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CSP001"));
+    }
+
+    #[test]
+    fn test_csp_no_frame_ancestors() {
+        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CSP002"));
+    }
+
+    #[test]
+    fn test_csp_valid() {
+        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self'; frame-ancestors 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_csp_both_issues() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'unsafe-inline'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CSP001"));
+        assert!(findings.iter().any(|f| f.code == "CSP002"));
+    }
+
+    #[test]
+    fn test_csp_frame_ancestors_none() {
+        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; frame-ancestors 'none'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CSP002"));
+    }
+
+    #[test]
+    fn test_csp_case_insensitive_header_lookup() {
+        let headers = vec![("content-security-policy".to_string(), "default-src 'self'; frame-ancestors 'none'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_csp_script_src_in_other_directive_not_flagged() {
+        let headers = vec![("Content-Security-Policy".to_string(), "style-src 'self' 'unsafe-inline'; frame-ancestors 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CSP001"));
+    }
+
+    #[test]
+    fn test_csp_empty_script_src_value() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src; frame-ancestors 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CSP001"));
+    }
+
+    #[test]
+    fn test_csp_multiple_script_src_directives() {
+        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CSP001"));
+    }
+
+    #[test]
+    fn test_csp_nonce_instead_of_unsafe_inline() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'nonce-abc123'; frame-ancestors 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_csp_empty_csp_value() {
+        let headers = vec![("Content-Security-Policy".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CSP002"));
+    }
+
+    // ===== ReferrerPolicyAnalyzer tests =====
+
+    #[test]
+    fn test_referrer_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "REF001"));
+    }
+
+    #[test]
+    fn test_referrer_unsafe_url() {
+        let headers = vec![("Referrer-Policy".to_string(), "unsafe-url".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "REF002"));
+    }
+
+    #[test]
+    fn test_referrer_valid() {
+        let headers = vec![("Referrer-Policy".to_string(), "strict-origin-when-cross-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_no_referrer() {
+        let headers = vec![("Referrer-Policy".to_string(), "no-referrer".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_case_insensitive() {
+        let headers = vec![("referrer-policy".to_string(), "unsafe-url".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "REF002"));
+    }
+
+    #[test]
+    fn test_referrer_origin() {
+        let headers = vec![("Referrer-Policy".to_string(), "origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_same_origin() {
+        let headers = vec![("Referrer-Policy".to_string(), "same-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_strict_origin() {
+        let headers = vec![("Referrer-Policy".to_string(), "strict-origin".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_no_referrer_when_downgrade() {
+        let headers = vec![("Referrer-Policy".to_string(), "no-referrer-when-downgrade".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_unsafe_url_with_whitespace() {
+        let headers = vec![("Referrer-Policy".to_string(), "  unsafe-url  ".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "REF002"));
+    }
+
+    #[test]
+    fn test_referrer_empty_value() {
+        let headers = vec![("Referrer-Policy".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_referrer_both_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "REF001");
+    }
+
+    // ===== XFrameOptionsAnalyzer tests =====
+
+    #[test]
+    fn test_xfo_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XFO001"));
+    }
+
+    #[test]
+    fn test_xfo_allowall() {
+        let headers = vec![("X-Frame-Options".to_string(), "ALLOWALL".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XFO002"));
+    }
+
+    #[test]
+    fn test_xfo_deny() {
+        let headers = vec![("X-Frame-Options".to_string(), "DENY".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_sameorigin() {
+        let headers = vec![("X-Frame-Options".to_string(), "SAMEORIGIN".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_non_html_page_ignored() {
+        let page = make_page("https://example.com/image.png");
+        let ctx = make_ctx(&page, Some(200), &[], Some("image/png"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_case_insensitive_header() {
+        let headers = vec![("x-frame-options".to_string(), "DENY".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_allowall_case_insensitive() {
+        let headers = vec![("x-frame-options".to_string(), "allowall".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, Some("text/html"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XFO002"));
+    }
+
+    #[test]
+    fn test_xfo_no_content_type_treated_as_html() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "XFO001"));
+    }
+
+    #[test]
+    fn test_xfo_xml_content_type_ignored() {
+        let page = make_page("https://example.com/feed.xml");
+        let ctx = make_ctx(&page, Some(200), &[], Some("application/xml"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_json_content_type_ignored() {
+        let page = make_page("https://example.com/api/data");
+        let ctx = make_ctx(&page, Some(200), &[], Some("application/json"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_javascript_content_type_ignored() {
+        let page = make_page("https://example.com/app.js");
+        let ctx = make_ctx(&page, Some(200), &[], Some("application/javascript"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_xfo_css_content_type_ignored() {
+        let page = make_page("https://example.com/style.css");
+        let ctx = make_ctx(&page, Some(200), &[], Some("text/css"));
+        let findings = XFrameOptionsAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+}

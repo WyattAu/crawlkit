@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
 use std::collections::HashSet;
 
 use crate::types::{IssueCategory, Severity};

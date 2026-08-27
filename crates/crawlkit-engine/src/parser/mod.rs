@@ -151,6 +151,8 @@ pub struct ScriptInfo {
     pub defer: bool,
     /// Script type attribute (e.g., "application/ld+json").
     pub script_type: Option<String>,
+    /// Whether the script has an `integrity` attribute (Subresource Integrity).
+    pub has_integrity: bool,
 }
 
 /// Style/link stylesheet information.
@@ -164,6 +166,8 @@ pub struct StyleInfo {
     pub media: Option<String>,
     /// Whether this is an inline `<style>` block.
     pub is_inline: bool,
+    /// Whether the stylesheet has an `integrity` attribute (Subresource Integrity).
+    pub has_integrity: bool,
 }
 
 /// Structured data extracted from JSON-LD `<script>` blocks.

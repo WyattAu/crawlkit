@@ -360,6 +360,7 @@ mod tests {
                 r#async: false,
                 defer: false,
                 script_type: None,
+                has_integrity: false,
             }],
             styles: Vec::new(),
             structured_data: Vec::new(),

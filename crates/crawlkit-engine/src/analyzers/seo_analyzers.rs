@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -1680,5 +1680,1651 @@ impl Analyzer for PaginationAnalyzer {
         }
 
         findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 24. Language Attribute Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct LanguageAttributeAnalyzer;
+
+impl LanguageAttributeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for LanguageAttributeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for LanguageAttributeAnalyzer {
+    fn name(&self) -> &str {
+        "language-attribute"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // LANG001: Missing html lang attribute
+        if !ctx.page.has_lang_attribute || ctx.page.html_lang.is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "LANG001".to_string(),
+                title: "Missing html lang attribute".to_string(),
+                description: "The <html> element does not have a lang attribute.".to_string(),
+                url: url.clone(),
+                recommendation: "Add lang=\"en\" (or the appropriate language code) to the <html> \
+                                 element to help search engines and screen readers identify the \
+                                 page language."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        let lang = ctx.page.html_lang.as_deref().unwrap();
+
+        // LANG003: Empty lang attribute
+        if lang.trim().is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Seo,
+                code: "LANG003".to_string(),
+                title: "Empty lang attribute".to_string(),
+                description: "The <html> lang attribute is present but empty.".to_string(),
+                url: url.clone(),
+                recommendation: "Set the lang attribute to a valid BCP 47 language tag (e.g., \
+                                 \"en\", \"fr-CA\")."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        // LANG002: html lang doesn't match content language (meta.language)
+        if let Some(meta_lang) = &ctx.page.meta.language {
+            let lang_lower = lang.to_lowercase();
+            let meta_lower = meta_lang.to_lowercase();
+            if lang_lower != meta_lower
+                && !lang_lower.starts_with(&meta_lower)
+                && !meta_lower.starts_with(&lang_lower)
+            {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "LANG002".to_string(),
+                    title: "Language attribute mismatch".to_string(),
+                    description: format!(
+                        "The html lang attribute (\"{lang}\") does not match the content \
+                         language meta tag (\"{meta_lang}\")."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Ensure the html lang attribute and the Content-Language \
+                                     meta tag declare the same language."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 25. Hreflang Consistency Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct HreflangConsistencyAnalyzer;
+
+impl HreflangConsistencyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Validate that a locale code follows BCP 47 / ISO 639 format.
+    pub(crate) fn is_valid_locale(code: &str) -> bool {
+        if code == "x-default" {
+            return true;
+        }
+        let parts: Vec<&str> = code.split('-').collect();
+        match parts.len() {
+            1 => {
+                let lang = parts[0];
+                lang.len() >= 2 && lang.len() <= 3 && lang.chars().all(|c| c.is_ascii_alphabetic())
+            }
+            2 => {
+                let lang = parts[0];
+                let region = parts[1];
+                lang.len() >= 2
+                    && lang.len() <= 3
+                    && lang.chars().all(|c| c.is_ascii_alphabetic())
+                    && ((region.len() == 2 && region.chars().all(|c| c.is_ascii_alphabetic()))
+                        || (region.len() == 3 && region.chars().all(|c| c.is_ascii_digit())))
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Default for HreflangConsistencyAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for HreflangConsistencyAnalyzer {
+    fn name(&self) -> &str {
+        "hreflang-consistency"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hreflang_tags = &ctx.page.meta.hreflang;
+
+        if hreflang_tags.is_empty() {
+            return findings;
+        }
+
+        let current_canonical = ctx.page.meta.canonical.as_ref();
+
+        for tag in hreflang_tags {
+            let target_url = tag.url.as_str();
+
+            // HREFT001: Hreflang URL returns non-200 status
+            if target_url == url {
+                if let Some(status) = ctx.status_code {
+                    if status != 200 {
+                        findings.push(Finding {
+                            severity: Severity::Error,
+                            category: IssueCategory::Seo,
+                            code: "HREFT001".to_string(),
+                            title: "Hreflang target returns non-200 status".to_string(),
+                            description: format!(
+                                "Hreflang tag lang=\"{}\" points to this page which returned \
+                                 HTTP {status}.",
+                                tag.lang
+                            ),
+                            url: url.clone(),
+                            recommendation: "Ensure all hreflang target URLs return HTTP 200."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+
+            // HREFT002: Hreflang URL has different canonical than current page
+            if let Some(canonical) = current_canonical {
+                if target_url == url {
+                    let canonical_str = canonical.to_string();
+                    if canonical_str != *url {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Seo,
+                            code: "HREFT002".to_string(),
+                            title: "Hreflang target canonical mismatch".to_string(),
+                            description: format!(
+                                "Hreflang tag lang=\"{}\" points to this page, but the page \
+                                 canonical (\"{canonical_str}\") does not match the page URL.",
+                                tag.lang
+                            ),
+                            url: url.clone(),
+                            recommendation: "Ensure the canonical URL matches the hreflang \
+                                             target URL."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+
+            // HREFT003: Hreflang tag with invalid locale code format
+            if !Self::is_valid_locale(&tag.lang) {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Seo,
+                    code: "HREFT003".to_string(),
+                    title: "Invalid hreflang locale code".to_string(),
+                    description: format!(
+                        "The hreflang code \"{}\" does not follow BCP 47 format.",
+                        tag.lang
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use valid BCP 47 language tags (e.g., \"en\", \"en-US\", \
+                                     \"fr-CA\", \"x-default\")."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 26. Charset Validator
+// ---------------------------------------------------------------------------
+
+pub struct CharsetValidator;
+
+impl CharsetValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Extract charset from Content-Type header value.
+    pub(crate) fn extract_charset_from_content_type(content_type: &str) -> Option<String> {
+        for part in content_type.split(';') {
+            let trimmed = part.trim();
+            if let Some(val) = trimmed.strip_prefix("charset=") {
+                return Some(val.trim().to_lowercase());
+            }
+        }
+        None
+    }
+}
+
+impl Default for CharsetValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CharsetValidator {
+    fn name(&self) -> &str {
+        "charset-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let meta_charset = ctx
+            .page
+            .meta
+            .charset
+            .as_ref()
+            .map(|c| c.to_lowercase());
+
+        let header_charset = ctx
+            .content_type
+            .and_then(|ct| Self::extract_charset_from_content_type(ct));
+
+        // CHARSET001: Missing charset declaration
+        if meta_charset.is_none() && header_charset.is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "CHARSET001".to_string(),
+                title: "Missing charset declaration".to_string(),
+                description: "No charset was declared in either the meta tag or HTTP headers."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta charset=\"utf-8\"> or ensure the Content-Type header \
+                                 includes charset=utf-8."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        // CHARSET002: Charset declared in meta but not in HTTP header
+        if meta_charset.is_some() && header_charset.is_none() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "CHARSET002".to_string(),
+                title: "Charset missing from HTTP header".to_string(),
+                description: "Charset is declared in a meta tag but not in the Content-Type \
+                              HTTP header."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Consider adding charset to the Content-Type header for faster \
+                                 browser detection."
+                    .to_string(),
+            });
+        }
+
+        // CHARSET003: Non-UTF-8 charset
+        let effective_charset = meta_charset
+            .as_deref()
+            .or(header_charset.as_deref())
+            .unwrap_or_default();
+        if !effective_charset.is_empty()
+            && effective_charset != "utf-8"
+            && effective_charset != "utf8"
+        {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "CHARSET003".to_string(),
+                title: "Non-UTF-8 charset".to_string(),
+                description: format!(
+                    "The declared charset is \"{effective_charset}\". UTF-8 is recommended for \
+                     universal compatibility."
+                ),
+                url: url.clone(),
+                recommendation: "Use UTF-8 encoding for broadest character support and to avoid \
+                                 rendering issues."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 27. Robots Meta Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct RobotsMetaAnalyzer;
+
+impl RobotsMetaAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Parse robots meta directives into a set of individual tokens.
+    pub(crate) fn parse_robots_directives(robots: &str) -> HashSet<String> {
+        robots
+            .split(',')
+            .map(|d| d.trim().to_lowercase())
+            .filter(|d| !d.is_empty())
+            .collect()
+    }
+}
+
+impl Default for RobotsMetaAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for RobotsMetaAnalyzer {
+    fn name(&self) -> &str {
+        "robots-meta"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let robots = match &ctx.page.meta.robots {
+            Some(r) if !r.trim().is_empty() => r,
+            _ => return findings,
+        };
+
+        let directives = Self::parse_robots_directives(robots);
+
+        // ROBOTS001: noindex on potentially important pages
+        if directives.contains("noindex") {
+            if !is_utility_page(url) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ROBOTS001".to_string(),
+                    title: "noindex on content page".to_string(),
+                    description: "The page has a noindex robots directive. This page will be \
+                                  excluded from search engine indices."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Verify that noindex is intentional. Remove it if this page \
+                                     should appear in search results."
+                        .to_string(),
+                });
+            }
+        }
+
+        // ROBOTS002: nofollow on potentially important pages
+        if directives.contains("nofollow") {
+            if !is_utility_page(url) {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "ROBOTS002".to_string(),
+                    title: "nofollow on content page".to_string(),
+                    description: "The page has a nofollow robots directive. Search engines will \
+                                  not follow any links on this page."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Ensure nofollow is intentional. If the page contains \
+                                     important internal links, remove the nofollow directive."
+                        .to_string(),
+                });
+            }
+        }
+
+        // ROBOTS003: Conflicting robots directives (noindex + index, or nofollow + follow)
+        let has_index = directives.contains("index");
+        let has_noindex = directives.contains("noindex");
+        let has_follow = directives.contains("follow");
+        let has_nofollow = directives.contains("nofollow");
+
+        if has_index && has_noindex {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Seo,
+                code: "ROBOTS003".to_string(),
+                title: "Conflicting robots directives".to_string(),
+                description: "The robots meta tag contains both \"index\" and \"noindex\". This \
+                              is contradictory and the behavior is undefined."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Remove one of the conflicting directives. Use either \"index\" \
+                                 or \"noindex\", not both."
+                    .to_string(),
+            });
+        }
+
+        if has_follow && has_nofollow {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Seo,
+                code: "ROBOTS003".to_string(),
+                title: "Conflicting robots directives".to_string(),
+                description: "The robots meta tag contains both \"follow\" and \"nofollow\". This \
+                              is contradictory and the behavior is undefined."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Remove one of the conflicting directives. Use either \"follow\" \
+                                 or \"nofollow\", not both."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 28. Canonical Depth Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct CanonicalDepthAnalyzer;
+
+impl CanonicalDepthAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Count the number of path segments (depth) in a URL.
+    pub(crate) fn path_depth(url: &Url) -> usize {
+        url.path_segments()
+            .map(|s| s.filter(|seg| !seg.is_empty()).count())
+            .unwrap_or(0)
+    }
+}
+
+impl Default for CanonicalDepthAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for CanonicalDepthAnalyzer {
+    fn name(&self) -> &str {
+        "canonical-depth"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let canonical = match &ctx.page.meta.canonical {
+            Some(c) => c,
+            None => return findings,
+        };
+
+        // CDEP001: Canonical URL is more than 3 levels deep
+        let depth = Self::path_depth(canonical);
+        if depth > 3 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "CDEP001".to_string(),
+                title: "Canonical URL is deeply nested".to_string(),
+                description: format!(
+                    "The canonical URL \"{}\" has a path depth of {} segments (more than 3). \
+                     Deeply nested canonicals may indicate poor URL structure.",
+                    canonical, depth
+                ),
+                url: url.clone(),
+                recommendation: "Consider flattening the URL structure or pointing the canonical \
+                                 to a higher-level URL if the deep page is not the preferred \
+                                 version."
+                    .to_string(),
+            });
+        }
+
+        // CDEP002: Canonical URL has query parameters
+        if canonical.query().is_some() && !canonical.query().unwrap_or("").is_empty() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "CDEP002".to_string(),
+                title: "Canonical URL contains query parameters".to_string(),
+                description: format!(
+                    "The canonical URL \"{}\" contains query parameters. Canonical URLs with \
+                     parameters may not be crawlable or may cause indexing issues.",
+                    canonical
+                ),
+                url: url.clone(),
+                recommendation: "Point the canonical URL to the clean, parameterless version of \
+                                 the page."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 29. Mobile Viewport Analyzer
+// ---------------------------------------------------------------------------
+
+pub struct MobileViewportAnalyzer;
+
+impl MobileViewportAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Parse viewport content string into a map of directives.
+    pub(crate) fn parse_viewport(content: &str) -> HashMap<String, String> {
+        let mut map = HashMap::new();
+        for part in content.split(',') {
+            let trimmed = part.trim();
+            if let Some((key, value)) = trimmed.split_once('=') {
+                map.insert(
+                    key.trim().to_lowercase(),
+                    value.trim().to_lowercase(),
+                );
+            }
+        }
+        map
+    }
+}
+
+impl Default for MobileViewportAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for MobileViewportAnalyzer {
+    fn name(&self) -> &str {
+        "mobile-viewport"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let viewport = match &ctx.page.meta.viewport {
+            Some(v) if !v.trim().is_empty() => v,
+            _ => return findings,
+        };
+
+        let directives = Self::parse_viewport(viewport);
+
+        // MOBVIEW001: Viewport missing initial-scale
+        if !directives.contains_key("initial-scale") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Mobile,
+                code: "MOBVIEW001".to_string(),
+                title: "Viewport missing initial-scale".to_string(),
+                description: "The viewport meta tag does not include initial-scale. Without it, \
+                              some mobile browsers may not scale the page correctly."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add initial-scale=1 to the viewport meta tag: <meta \
+                                 name=\"viewport\" content=\"width=device-width, \
+                                 initial-scale=1\">."
+                    .to_string(),
+            });
+        }
+
+        // MOBVIEW002: Viewport width not set to device-width
+        let width = directives.get("width").map(|s| s.as_str());
+        if width != Some("device-width") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Mobile,
+                code: "MOBVIEW002".to_string(),
+                title: "Viewport width not set to device-width".to_string(),
+                description: format!(
+                    "The viewport width is set to \"{}\" instead of \"device-width\". This may \
+                     cause the page to render at a fixed width on mobile devices.",
+                    width.unwrap_or("not set")
+                ),
+                url: url.clone(),
+                recommendation: "Set width=device-width in the viewport meta tag for proper \
+                                 responsive layout."
+                    .to_string(),
+            });
+        }
+
+        // MOBVIEW003: Viewport user-scalable=no
+        let scalable = directives.get("user-scalable");
+        if scalable == Some(&"no".to_string()) || scalable == Some(&"0".to_string()) {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Mobile,
+                code: "MOBVIEW003".to_string(),
+                title: "Viewport disables user scaling".to_string(),
+                description: "The viewport meta tag sets user-scalable=no, which prevents users \
+                              from zooming in. This is an accessibility issue."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Remove user-scalable=no to allow pinch-to-zoom for users with \
+                                 low vision."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Tests for new analyzers
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests_new_analyzers {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::ParsedPage;
+    use crate::types::{IssueCategory, Severity};
+    use url::Url;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+        }
+    }
+
+    // ---- LanguageAttributeAnalyzer tests ----
+
+    #[test]
+    fn test_lang_missing_no_lang_attribute() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANG001"));
+    }
+
+    #[test]
+    fn test_lang_present_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANG001"));
+    }
+
+    #[test]
+    fn test_lang_empty_attribute() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANG003"));
+    }
+
+    #[test]
+    fn test_lang_whitespace_only() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("   ".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANG003"));
+    }
+
+    #[test]
+    fn test_lang_mismatch_with_meta_language() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.meta.language = Some("fr".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANG002"));
+    }
+
+    #[test]
+    fn test_lang_match_with_meta_language() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.meta.language = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANG002"));
+    }
+
+    #[test]
+    fn test_lang_prefix_match() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en-US".to_string());
+        page.meta.language = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "LANG002"));
+    }
+
+    #[test]
+    fn test_lang_no_meta_language_no_mismatch() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_lang_no_lang_attribute_has_meta() {
+        let mut page = make_page("https://example.com");
+        page.meta.language = Some("en".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LANG001"));
+    }
+
+    #[test]
+    fn test_lang_mismatch_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("de".to_string());
+        page.meta.language = Some("es".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "LANG002").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_lang_name() {
+        assert_eq!(LanguageAttributeAnalyzer::new().name(), "language-attribute");
+    }
+
+    #[test]
+    fn test_lang_default() {
+        let a = LanguageAttributeAnalyzer;
+        assert_eq!(a.name(), "language-attribute");
+    }
+
+    #[test]
+    fn test_lang_valid_bcp47_codes() {
+        for code in &["en", "fr", "zh", "en-US", "pt-BR", "zh-CN"] {
+            let mut page = make_page("https://example.com");
+            page.has_lang_attribute = true;
+            page.html_lang = Some(code.to_string());
+            let ctx = make_ctx(&page, Some(200));
+            let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+            assert!(
+                !findings.iter().any(|f| f.code == "LANG003"),
+                "code {code} should be valid"
+            );
+        }
+    }
+
+    #[test]
+    fn test_lang_mismatch_both_directions() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("en".to_string());
+        page.meta.language = Some("en-US".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        // en starts with en — prefix match, no mismatch
+        assert!(!findings.iter().any(|f| f.code == "LANG002"));
+    }
+
+    #[test]
+    fn test_lang_empty_returns_immediately() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        page.html_lang = Some("".to_string());
+        page.meta.language = Some("fr".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LanguageAttributeAnalyzer::new().analyze(&ctx);
+        // LANG003 fires, LANG002 does NOT (returns early)
+        assert!(findings.iter().any(|f| f.code == "LANG003"));
+        assert!(!findings.iter().any(|f| f.code == "LANG002"));
+    }
+
+    // ---- HreflangConsistencyAnalyzer tests ----
+
+    #[test]
+    fn test_hreflang_consistency_no_tags() {
+        let page = make_page("https://example.com/en");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hreflang_consistency_non200_self_referencing() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(404));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HREFT001"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_200_self_referencing() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HREFT001"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_invalid_locale() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "invalid-code-too-long".to_string(),
+                url: Url::parse("https://example.com/x").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HREFT003"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_valid_locales() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "fr-CA".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "x-default".to_string(),
+                url: Url::parse("https://example.com").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HREFT003"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_canonical_mismatch_self() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.canonical = Some(Url::parse("https://example.com/canonical").unwrap());
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HREFT002"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_canonical_match_self() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.canonical = Some(Url::parse("https://example.com/en").unwrap());
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HREFT002"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_external_target_no_canonical_check() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.canonical = Some(Url::parse("https://example.com/canonical").unwrap());
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "fr".to_string(),
+            url: Url::parse("https://example.com/fr").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HREFT002"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_is_valid_locale() {
+        assert!(HreflangConsistencyAnalyzer::is_valid_locale("en"));
+        assert!(HreflangConsistencyAnalyzer::is_valid_locale("fr"));
+        assert!(HreflangConsistencyAnalyzer::is_valid_locale("en-US"));
+        assert!(HreflangConsistencyAnalyzer::is_valid_locale("zh-CN"));
+        assert!(HreflangConsistencyAnalyzer::is_valid_locale("x-default"));
+        assert!(!HreflangConsistencyAnalyzer::is_valid_locale("e"));
+        assert!(!HreflangConsistencyAnalyzer::is_valid_locale("english"));
+        assert!(!HreflangConsistencyAnalyzer::is_valid_locale("123"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_name() {
+        assert_eq!(
+            HreflangConsistencyAnalyzer::new().name(),
+            "hreflang-consistency"
+        );
+    }
+
+    #[test]
+    fn test_hreflang_consistency_default() {
+        let a = HreflangConsistencyAnalyzer;
+        assert_eq!(a.name(), "hreflang-consistency");
+    }
+
+    #[test]
+    fn test_hreflang_consistency_multiple_findings() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "bad-code".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(500));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HREFT001"));
+        assert!(findings.iter().any(|f| f.code == "HREFT003"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_non200_301_redirect() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(301));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HREFT001"));
+    }
+
+    #[test]
+    fn test_hreflang_consistency_500_server_error() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, Some(500));
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "HREFT001").unwrap();
+        assert_eq!(f.severity, Severity::Error);
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_hreflang_consistency_no_status_code_no_hreft001() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = HreflangConsistencyAnalyzer::new().analyze(&ctx);
+        // No status code available, can't check
+        assert!(!findings.iter().any(|f| f.code == "HREFT001"));
+    }
+
+    // ---- CharsetValidator tests ----
+
+    #[test]
+    fn test_charset_missing_all() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CHARSET001"));
+    }
+
+    #[test]
+    fn test_charset_meta_only() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("utf-8".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CHARSET002"));
+    }
+
+    #[test]
+    fn test_charset_header_only() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: Some("text/html; charset=utf-8"),
+        };
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CHARSET001"));
+        assert!(!findings.iter().any(|f| f.code == "CHARSET002"));
+    }
+
+    #[test]
+    fn test_charset_both_present_utf8() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("utf-8".to_string());
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: Some("text/html; charset=utf-8"),
+        };
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_charset_non_utf8() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("iso-8859-1".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CHARSET003"));
+    }
+
+    #[test]
+    fn test_charset_utf8_uppercase() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("UTF-8".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CHARSET003"));
+    }
+
+    #[test]
+    fn test_charset_extract_from_content_type() {
+        assert_eq!(
+            CharsetValidator::extract_charset_from_content_type("text/html; charset=utf-8"),
+            Some("utf-8".to_string())
+        );
+        assert_eq!(
+            CharsetValidator::extract_charset_from_content_type("text/html"),
+            None
+        );
+        assert_eq!(
+            CharsetValidator::extract_charset_from_content_type(
+                "text/html; charset=iso-8859-1; boundary=something"
+            ),
+            Some("iso-8859-1".to_string())
+        );
+    }
+
+    #[test]
+    fn test_charset_non_utf8_header() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: Some("text/html; charset=windows-1252"),
+        };
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CHARSET003"));
+    }
+
+    #[test]
+    fn test_charset_name() {
+        assert_eq!(CharsetValidator::new().name(), "charset-validator");
+    }
+
+    #[test]
+    fn test_charset_default() {
+        let a = CharsetValidator;
+        assert_eq!(a.name(), "charset-validator");
+    }
+
+    #[test]
+    fn test_charset_missing_severity_warning() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CHARSET001").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_charset_non_utf8_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("ascii".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CHARSET003").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_charset_meta_only_severity_info() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("utf-8".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CHARSET002").unwrap();
+        assert_eq!(f.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_charset_utf8_alias() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("utf8".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CHARSET003"));
+    }
+
+    #[test]
+    fn test_charset_non_utf8_category() {
+        let mut page = make_page("https://example.com");
+        page.meta.charset = Some("shift_jis".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CharsetValidator::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CHARSET003").unwrap();
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    // ---- RobotsMetaAnalyzer tests ----
+
+    #[test]
+    fn test_robots_meta_no_directives() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_meta_index_follow() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("index, follow".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_meta_noindex_content_page() {
+        let mut page = make_page("https://example.com/blog/post");
+        page.meta.robots = Some("noindex".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS001"));
+    }
+
+    #[test]
+    fn test_robots_meta_noindex_utility_page() {
+        let mut page = make_page("https://example.com/login");
+        page.meta.robots = Some("noindex".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ROBOTS001"));
+    }
+
+    #[test]
+    fn test_robots_meta_nofollow_content_page() {
+        let mut page = make_page("https://example.com/blog/post");
+        page.meta.robots = Some("nofollow".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS002"));
+    }
+
+    #[test]
+    fn test_robots_meta_nofollow_utility_page() {
+        let mut page = make_page("https://example.com/admin");
+        page.meta.robots = Some("nofollow".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ROBOTS002"));
+    }
+
+    #[test]
+    fn test_robots_meta_conflicting_index_noindex() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.robots = Some("index, noindex".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS003"));
+    }
+
+    #[test]
+    fn test_robots_meta_conflicting_follow_nofollow() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.robots = Some("follow, nofollow".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ROBOTS003"));
+    }
+
+    #[test]
+    fn test_robots_meta_noconflict() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.robots = Some("noindex, nofollow".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ROBOTS003"));
+    }
+
+    #[test]
+    fn test_robots_meta_parse_directives() {
+        let dirs = RobotsMetaAnalyzer::parse_robots_directives("noindex, nofollow");
+        assert!(dirs.contains("noindex"));
+        assert!(dirs.contains("nofollow"));
+        assert!(!dirs.contains("index"));
+    }
+
+    #[test]
+    fn test_robots_meta_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_meta_whitespace() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("  ".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_robots_meta_name() {
+        assert_eq!(RobotsMetaAnalyzer::new().name(), "robots-meta");
+    }
+
+    #[test]
+    fn test_robots_meta_default() {
+        let a = RobotsMetaAnalyzer::default();
+        assert_eq!(a.name(), "robots-meta");
+    }
+
+    #[test]
+    fn test_robots_meta_severity_noindex_warning() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.robots = Some("noindex".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "ROBOTS001").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_robots_meta_severity_conflict_error() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.robots = Some("index, noindex".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = RobotsMetaAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "ROBOTS003").unwrap();
+        assert_eq!(f.severity, Severity::Error);
+    }
+
+    // ---- CanonicalDepthAnalyzer tests ----
+
+    #[test]
+    fn test_canonical_depth_no_canonical() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_canonical_depth_shallow() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CDEP001"));
+    }
+
+    #[test]
+    fn test_canonical_depth_exactly_3() {
+        let mut page = make_page("https://example.com/a/b/c");
+        page.meta.canonical = Some(Url::parse("https://example.com/a/b/c").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CDEP001"));
+    }
+
+    #[test]
+    fn test_canonical_depth_deep() {
+        let mut page = make_page("https://example.com/a/b/c/d");
+        page.meta.canonical = Some(Url::parse("https://example.com/a/b/c/d").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CDEP001"));
+    }
+
+    #[test]
+    fn test_canonical_depth_very_deep() {
+        let mut page = make_page("https://example.com/a/b/c/d/e/f");
+        page.meta.canonical = Some(Url::parse("https://example.com/a/b/c/d/e/f").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CDEP001"));
+    }
+
+    #[test]
+    fn test_canonical_depth_with_query_params() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page?ref=nav").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CDEP002"));
+    }
+
+    #[test]
+    fn test_canonical_depth_no_query_params() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CDEP002"));
+    }
+
+    #[test]
+    fn test_canonical_depth_empty_query() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page?").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "CDEP002"));
+    }
+
+    #[test]
+    fn test_canonical_depth_path_depth_calc() {
+        assert_eq!(
+            CanonicalDepthAnalyzer::path_depth(&Url::parse("https://example.com").unwrap()),
+            0
+        );
+        assert_eq!(
+            CanonicalDepthAnalyzer::path_depth(&Url::parse("https://example.com/a").unwrap()),
+            1
+        );
+        assert_eq!(
+            CanonicalDepthAnalyzer::path_depth(&Url::parse("https://example.com/a/b/c/d").unwrap()),
+            4
+        );
+    }
+
+    #[test]
+    fn test_canonical_depth_name() {
+        assert_eq!(CanonicalDepthAnalyzer::new().name(), "canonical-depth");
+    }
+
+    #[test]
+    fn test_canonical_depth_default() {
+        let a = CanonicalDepthAnalyzer::default();
+        assert_eq!(a.name(), "canonical-depth");
+    }
+
+    #[test]
+    fn test_canonical_depth_deep_severity_info() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/a/b/c/d").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CDEP001").unwrap();
+        assert_eq!(f.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_canonical_depth_query_severity_warning() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page?foo=bar").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "CDEP002").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_canonical_depth_both_issues() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical =
+            Some(Url::parse("https://example.com/a/b/c/d?ref=nav").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CDEP001"));
+        assert!(findings.iter().any(|f| f.code == "CDEP002"));
+    }
+
+    #[test]
+    fn test_canonical_depth_root_slash() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
+        // Root has depth 0
+        assert!(!findings.iter().any(|f| f.code == "CDEP001"));
+    }
+
+    // ---- MobileViewportAnalyzer tests ----
+
+    #[test]
+    fn test_viewport_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_viewport_complete() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_viewport_missing_initial_scale() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=device-width".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW001"));
+    }
+
+    #[test]
+    fn test_viewport_wrong_width() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=1024, initial-scale=1".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW002"));
+    }
+
+    #[test]
+    fn test_viewport_correct_width() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "MOBVIEW002"));
+    }
+
+    #[test]
+    fn test_viewport_user_scalable_no() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport =
+            Some("width=device-width, initial-scale=1, user-scalable=no".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW003"));
+    }
+
+    #[test]
+    fn test_viewport_user_scalable_zero() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport =
+            Some("width=device-width, initial-scale=1, user-scalable=0".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW003"));
+    }
+
+    #[test]
+    fn test_viewport_user_scalable_yes() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport =
+            Some("width=device-width, initial-scale=1, user-scalable=yes".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "MOBVIEW003"));
+    }
+
+    #[test]
+    fn test_viewport_parse() {
+        let map = MobileViewportAnalyzer::parse_viewport("width=device-width, initial-scale=1");
+        assert_eq!(map.get("width").unwrap(), "device-width");
+        assert_eq!(map.get("initial-scale").unwrap(), "1");
+    }
+
+    #[test]
+    fn test_viewport_parse_with_spaces() {
+        let map = MobileViewportAnalyzer::parse_viewport("width=device-width , initial-scale=1");
+        assert_eq!(map.get("width").unwrap(), "device-width");
+        assert_eq!(map.get("initial-scale").unwrap(), "1");
+    }
+
+    #[test]
+    fn test_viewport_name() {
+        assert_eq!(MobileViewportAnalyzer::new().name(), "mobile-viewport");
+    }
+
+    #[test]
+    fn test_viewport_default() {
+        let a = MobileViewportAnalyzer::default();
+        assert_eq!(a.name(), "mobile-viewport");
+    }
+
+    #[test]
+    fn test_viewport_all_three_issues() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=800, user-scalable=no".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW001"));
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW002"));
+        assert!(findings.iter().any(|f| f.code == "MOBVIEW003"));
+    }
+
+    #[test]
+    fn test_viewport_severity_warnings() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=800, initial-scale=1, user-scalable=no".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        for f in &findings {
+            assert_eq!(f.severity, Severity::Warning);
+            assert_eq!(f.category, IssueCategory::Mobile);
+        }
+    }
+
+    #[test]
+    fn test_viewport_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MobileViewportAnalyzer::new().analyze(&ctx);
+        // Empty viewport treated as missing (early return)
+        assert!(findings.is_empty());
     }
 }

@@ -926,7 +926,7 @@ mod tests {
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
         // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 56);
+        assert_eq!(registry.len(), 76);
     }
 
     struct MockJsRenderer {

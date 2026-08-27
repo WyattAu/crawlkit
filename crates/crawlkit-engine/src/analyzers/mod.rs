@@ -17,12 +17,14 @@ pub mod seo_analyzers;
 pub mod social_analyzers;
 
 pub use content_analyzers::{
-    BreadcrumbsValidator, ContentQualityAnalyzer, CouponSchemaValidator,
-    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer,
-    EntityLinkingAnalyzer, EventSchemaValidator, LocalBusinessSchemaValidator,
+    BreadcrumbsValidator, ContentThinAnalyzer, ContentQualityAnalyzer, CouponSchemaValidator,
+    DatasetSchemaValidator, DuplicateContentDetector, EnhancedReadabilityAnalyzer,
+    EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator, FaqSchemaValidator,
+    HowToSchemaValidator, JsonLdValidator, LocalBusinessSchemaValidator, MetaDescriptionLengthAnalyzer,
     MicrodataValidator, OfferAvailabilityAnalyzer, ReviewSchemaValidator, RdfaValidator,
-    ShippingSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
-    VideoSchemaValidator,
+    ShippingSchemaValidator, SoftwareApplicationValidator, SpeakableSchemaValidator,
+    SpecialAnnouncementSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
+    TitleLengthAnalyzer, VideoSchemaValidator,
 };
 pub use http_analyzers::{
     CacheHeaderAnalyzer, HttpStatusAnalyzer, RedirectChainAnalyzer, ResponseSizeAnalyzer,
@@ -33,13 +35,16 @@ pub use media_analyzers::{
     ImageInfo, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
 };
 pub use security_analyzers::{
-    AccessibilityAnalyzer, ColorContrastAnalyzer, FocusOrderAnalyzer, FontSizeAnalyzer,
-    MobileFriendlinessChecker, SecurityHeaderAnalyzer,
+    AccessibilityAnalyzer, ColorContrastAnalyzer, CrossOriginIsolationAnalyzer,
+    FocusOrderAnalyzer, FontSizeAnalyzer, HstsPreloadAnalyzer, MobileFriendlinessChecker,
+    PermissionPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer,
 };
 pub use seo_analyzers::{
-    CanonicalUrlValidator, HeadingHierarchyAnalyzer, HreflangValidator, InternationalSeoAnalyzer,
-    KeywordAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, OpenSearchValidator,
-    PaginationAnalyzer, SitemapAnalyzer, SitemapEntry, WordCountAnalyzer,
+    CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator, HeadingHierarchyAnalyzer,
+    HreflangConsistencyAnalyzer, HreflangValidator, InternationalSeoAnalyzer, KeywordAnalyzer,
+    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileViewportAnalyzer,
+    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry,
+    WordCountAnalyzer,
 };
 pub use social_analyzers::{OpenGraphImageValidator, SocialMediaAnalyzer, TwitterPlayerValidator};
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
@@ -367,6 +372,30 @@ impl AnalyzerRegistry {
             Box::new(VideoSchemaValidator::new()),
             Box::new(TableOfContentsAnalyzer::new()),
             Box::new(LocalBusinessSchemaValidator::new()),
+            // International SEO: language, hreflang consistency, charset, robots, canonical depth, mobile viewport
+            Box::new(LanguageAttributeAnalyzer::new()),
+            Box::new(HreflangConsistencyAnalyzer::new()),
+            Box::new(CharsetValidator::new()),
+            Box::new(RobotsMetaAnalyzer::new()),
+            Box::new(CanonicalDepthAnalyzer::new()),
+            Box::new(MobileViewportAnalyzer::new()),
+            // FAQ, HowTo, Speakable, Dataset, SpecialAnnouncement, SoftwareApplication validators
+            Box::new(FaqSchemaValidator::new()),
+            Box::new(HowToSchemaValidator::new()),
+            Box::new(SpeakableSchemaValidator::new()),
+            Box::new(DatasetSchemaValidator::new()),
+            Box::new(SpecialAnnouncementSchemaValidator::new()),
+            Box::new(SoftwareApplicationValidator::new()),
+            // Security: HSTS preload, SRI, Permission-Policy, Cross-Origin Isolation
+            Box::new(HstsPreloadAnalyzer::new()),
+            Box::new(SriAnalyzer::new()),
+            Box::new(PermissionPolicyAnalyzer::new()),
+            Box::new(CrossOriginIsolationAnalyzer::new()),
+            // Content: JSON-LD validator, meta description length, title length, thin content
+            Box::new(JsonLdValidator::new()),
+            Box::new(MetaDescriptionLengthAnalyzer::new()),
+            Box::new(TitleLengthAnalyzer::new()),
+            Box::new(ContentThinAnalyzer::new()),
         ];
 
         if include_ai {
@@ -1262,7 +1291,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 61);
+        assert_eq!(registry.len(), 81);
         assert!(!registry.is_empty());
     }
 
@@ -1524,6 +1553,7 @@ mod tests {
         page.has_main_landmark = true;
         page.has_nav_landmark = true;
         page.has_skip_link = true;
+        page.word_count = 500;
 
         let ctx = make_ctx(&page, Some(200));
         let findings = registry.analyze(&ctx);
@@ -4064,4 +4094,1088 @@ fn test_is_valid_lastmod_fixtures() {
 
     // Valid date appearing after a prefix (scan finds it anywhere).
     assert!(SitemapAnalyzer::is_valid_lastmod("modified:2024-06"));
+}
+
+// =========================================================================
+// HstsPreloadAnalyzer tests
+// =========================================================================
+
+#[cfg(test)]
+mod hsts_preload_tests {
+    use super::*;
+    use crate::parser::ParsedPage;
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx_with_headers<'a>(
+        page: &'a ParsedPage,
+        headers: &'a [(String, String)],
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+        }
+    }
+
+    #[test]
+    fn test_hsts_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &[]);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_missing_include_subdomains() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS001"));
+    }
+
+    #[test]
+    fn test_hsts_missing_preload() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS002"));
+        assert!(!findings.iter().any(|f| f.code == "HSTS001"));
+    }
+
+    #[test]
+    fn test_hsts_max_age_too_low() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS003"));
+    }
+
+    #[test]
+    fn test_hsts_perfect() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=63072000; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_max_age_exact_31536000() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HSTS003"));
+    }
+
+    #[test]
+    fn test_hsts_case_insensitive_directives() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; INCLUDESUBDOMAINS; PRELOAD".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_all_issues() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=100".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS001"));
+        assert!(findings.iter().any(|f| f.code == "HSTS002"));
+        assert!(findings.iter().any(|f| f.code == "HSTS003"));
+    }
+
+    #[test]
+    fn test_hsts_max_age_missing() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "includeSubDomains".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        // includeSubDomains is present, so HSTS001 should NOT fire
+        assert!(!findings.iter().any(|f| f.code == "HSTS001"));
+        assert!(findings.iter().any(|f| f.code == "HSTS002"));
+    }
+
+    #[test]
+    fn test_hsts_partial_include_subdomains() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS001"));
+        assert!(!findings.iter().any(|f| f.code == "HSTS002"));
+    }
+
+    #[test]
+    fn test_hsts_only_preload_missing() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=63072000; includeSubDomains".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "HSTS001"));
+        assert!(findings.iter().any(|f| f.code == "HSTS002"));
+        assert!(!findings.iter().any(|f| f.code == "HSTS003"));
+    }
+
+    #[test]
+    fn test_hsts_max_age_just_below() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31535999; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS003"));
+    }
+
+    #[test]
+    fn test_hsts_max_age_very_high() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=315360000; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_lowercase_header_name() {
+        let headers = vec![(
+            "strict-transport-security".to_string(),
+            "max-age=31536000; includeSubDomains; preload".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_hsts_directives_case_insensitive() {
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "Max-Age=31536000; includesubdomains; PRELOAD".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = HstsPreloadAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+}
+
+// =========================================================================
+// SriAnalyzer tests
+// =========================================================================
+
+#[cfg(test)]
+mod sri_tests {
+    use super::*;
+    use crate::parser::{ParsedPage, ScriptInfo, StyleInfo};
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+        }
+    }
+
+    #[test]
+    fn test_sri_no_scripts_or_styles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_sri_local_script_no_issue() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SRI001"));
+    }
+
+    #[test]
+    fn test_sri_external_script_without_integrity() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI001"));
+    }
+
+    #[test]
+    fn test_sri_external_script_with_integrity() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: true,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SRI001"));
+    }
+
+    #[test]
+    fn test_sri_external_stylesheet_without_integrity() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/style.css".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI002"));
+    }
+
+    #[test]
+    fn test_sri_external_stylesheet_with_integrity() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/style.css".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: true,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SRI002"));
+    }
+
+    #[test]
+    fn test_sri_inline_style_no_issue() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![StyleInfo {
+            href: None,
+            media: None,
+            is_inline: true,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_sri_multiple_external_scripts_mixed() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn.example.com/a.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn.example.com/b.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: true,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI001"));
+        let finding = findings.iter().find(|f| f.code == "SRI001").unwrap();
+        assert!(finding.description.contains("1 external script(s)"));
+    }
+
+    #[test]
+    fn test_sri_protocol_relative_url() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("//cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI001"));
+    }
+
+    #[test]
+    fn test_sri_both_scripts_and_styles() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/style.css".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI001"));
+        assert!(findings.iter().any(|f| f.code == "SRI002"));
+    }
+
+    #[test]
+    fn test_sri_no_cross_origin_scripts_all_local() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("/js/a.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("/js/b.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SRI001"));
+    }
+
+    #[test]
+    fn test_sri_no_cross_origin_stylesheets() {
+        let mut page = make_page("https://example.com");
+        page.styles = vec![
+            StyleInfo {
+                href: Some("/css/a.css".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            },
+            StyleInfo {
+                href: None,
+                media: None,
+                is_inline: true,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SRI002"));
+    }
+
+    #[test]
+    fn test_sri_only_external_without_integrity_counted() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://cdn.example.com/a.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("https://cdn.example.com/b.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            ScriptInfo {
+                src: Some("/local.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SRI001"));
+        let finding = findings.iter().find(|f| f.code == "SRI001").unwrap();
+        assert!(finding.description.contains("2 external script(s)"));
+    }
+
+    #[test]
+    fn test_sri_all_with_integrity_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://cdn.example.com/lib.js".to_string()),
+            r#async: true,
+            defer: false,
+            script_type: None,
+            has_integrity: true,
+        }];
+        page.styles = vec![StyleInfo {
+            href: Some("https://cdn.example.com/style.css".to_string()),
+            media: Some("screen".to_string()),
+            is_inline: false,
+            has_integrity: true,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_sri_only_local_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("/app.js".to_string()),
+            r#async: false,
+            defer: true,
+            script_type: None,
+            has_integrity: false,
+        }];
+        page.styles = vec![StyleInfo {
+            href: Some("/style.css".to_string()),
+            media: None,
+            is_inline: false,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SriAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+}
+
+// =========================================================================
+// PermissionPolicyAnalyzer tests
+// =========================================================================
+
+#[cfg(test)]
+mod permission_policy_tests {
+    use super::*;
+    use crate::parser::ParsedPage;
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx_with_headers<'a>(
+        page: &'a ParsedPage,
+        headers: &'a [(String, String)],
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+        }
+    }
+
+    #[test]
+    fn test_perm_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &[]);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERM001"));
+    }
+
+    #[test]
+    fn test_perm_camera_not_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=*".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERM002"));
+    }
+
+    #[test]
+    fn test_perm_microphone_not_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "microphone=*".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERM002"));
+    }
+
+    #[test]
+    fn test_perm_camera_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PERM002"));
+        assert!(!findings.iter().any(|f| f.code == "PERM001"));
+    }
+
+    #[test]
+    fn test_perm_all_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=(), geolocation=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_perm_camera_self_restricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(self)".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PERM002"));
+    }
+
+    #[test]
+    fn test_perm_multiple_features_mixed() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=*, geolocation=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        // camera restricted, geolocation restricted, but microphone not
+        let perm002: Vec<&Finding> = findings.iter().filter(|f| f.code == "PERM002").collect();
+        assert_eq!(perm002.len(), 1);
+    }
+
+    #[test]
+    fn test_perm_lowercase_header_name() {
+        let headers = vec![(
+            "permissions-policy".to_string(),
+            "camera=(), microphone=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_perm_no_issue_when_feature_not_mentioned() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "geolocation=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PERM002"));
+    }
+
+    #[test]
+    fn test_perm_empty_policy_value() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        // Empty value means no header effectively, but technically present
+        assert!(!findings.iter().any(|f| f.code == "PERM001"));
+        assert!(!findings.iter().any(|f| f.code == "PERM002"));
+    }
+
+    #[test]
+    fn test_perm_only_microphone_unrestricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=*, geolocation=(), gyroscope=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        let perm002: Vec<&Finding> = findings.iter().filter(|f| f.code == "PERM002").collect();
+        assert_eq!(perm002.len(), 1);
+        assert!(perm002[0].description.contains("microphone"));
+    }
+
+    #[test]
+    fn test_perm_both_unrestricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=*, microphone=*".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        let perm002: Vec<&Finding> = findings.iter().filter(|f| f.code == "PERM002").collect();
+        assert_eq!(perm002.len(), 2);
+    }
+
+    #[test]
+    fn test_perm_multiple_restricted_features() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=(), geolocation=(), gyroscope=()".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_perm_with_other_directives() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "accelerometer=(), camera=(), geolocation=(), gyroscope=(), \
+             magnetometer=(), microphone=(), payment=(), usb=()"
+                .to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_perm_camera_with_self_and_unrestricted() {
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(self), microphone=*".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
+        let perm002: Vec<&Finding> = findings.iter().filter(|f| f.code == "PERM002").collect();
+        assert_eq!(perm002.len(), 1);
+        assert!(perm002[0].description.contains("microphone"));
+    }
+}
+
+// =========================================================================
+// CrossOriginIsolationAnalyzer tests
+// =========================================================================
+
+#[cfg(test)]
+mod cross_origin_isolation_tests {
+    use super::*;
+    use crate::parser::ParsedPage;
+    use crate::meta::MetaTags;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx_with_headers<'a>(
+        page: &'a ParsedPage,
+        headers: &'a [(String, String)],
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+        }
+    }
+
+    #[test]
+    fn test_co_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &[]);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_coep_present() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "require-corp".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_coop_present() {
+        let headers = vec![(
+            "Cross-Origin-Opener-Policy".to_string(),
+            "same-origin".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+        assert!(!findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_both_present() {
+        let headers = vec![
+            (
+                "Cross-Origin-Embedder-Policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "Cross-Origin-Opener-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_co_case_insensitive_header_names() {
+        let headers = vec![
+            (
+                "cross-origin-embedder-policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "cross-origin-opener-policy".to_string(),
+                "same-origin".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_co_only_coep_present() {
+        let headers = vec![
+            (
+                "Cross-Origin-Embedder-Policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "Cross-Origin-Resource-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_only_coop_present() {
+        let headers = vec![
+            (
+                "Cross-Origin-Opener-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+            (
+                "Cross-Origin-Resource-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+        assert!(!findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_corp_only_no_coep_no_coop() {
+        let headers = vec![(
+            "Cross-Origin-Resource-Policy".to_string(),
+            "same-origin".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_coep_wrong_value_still_present() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "unsafe-none".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        // Only checks presence, not value
+        assert!(!findings.iter().any(|f| f.code == "COEP001"));
+    }
+
+    #[test]
+    fn test_co_all_cross_origin_headers_present() {
+        let headers = vec![
+            (
+                "Cross-Origin-Embedder-Policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "Cross-Origin-Opener-Policy".to_string(),
+                "same-origin".to_string(),
+            ),
+            (
+                "Cross-Origin-Resource-Policy".to_string(),
+                "same-site".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_co_only_coep_wrong_value() {
+        let headers = vec![(
+            "Cross-Origin-Embedder-Policy".to_string(),
+            "unsafe-none".to_string(),
+        )];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "COEP001"));
+        assert!(findings.iter().any(|f| f.code == "COOP002"));
+    }
+
+    #[test]
+    fn test_co_mixed_case_header_names() {
+        let headers = vec![
+            (
+                "cross-origin-embedder-Policy".to_string(),
+                "require-corp".to_string(),
+            ),
+            (
+                "Cross-Origin-OPENER-policy".to_string(),
+                "same-origin".to_string(),
+            ),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_headers(&page, &headers);
+        let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

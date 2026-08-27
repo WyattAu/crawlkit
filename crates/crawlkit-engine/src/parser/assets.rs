@@ -20,12 +20,14 @@ impl HtmlParser {
                 let r#async = el.value().attr("async").is_some();
                 let defer = el.value().attr("defer").is_some();
                 let script_type = el.value().attr("type").map(String::from);
+                let has_integrity = el.value().attr("integrity").is_some();
 
                 ScriptInfo {
                     src,
                     r#async,
                     defer,
                     script_type,
+                    has_integrity,
                 }
             })
             .collect()
@@ -43,11 +45,13 @@ impl HtmlParser {
         for el in document.select(link_sel) {
             let href = el.value().attr("href").map(String::from);
             let media = el.value().attr("media").map(String::from);
+            let has_integrity = el.value().attr("integrity").is_some();
 
             styles.push(StyleInfo {
                 href,
                 media,
                 is_inline: false,
+                has_integrity,
             });
         }
 
@@ -61,6 +65,7 @@ impl HtmlParser {
                     href: None,
                     media: None,
                     is_inline: true,
+                    has_integrity: false,
                 });
             }
         }

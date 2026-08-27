@@ -279,6 +279,7 @@ fn bench_analyzer_registry(c: &mut Criterion) {
                 compressed_size: None,
                 server: None,
                 content_type: None,
+            rendered: None,
             };
             registry.analyze(&ctx)
         })

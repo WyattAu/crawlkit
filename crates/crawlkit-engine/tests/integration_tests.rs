@@ -135,6 +135,7 @@ fn test_analyzer_registry_full_pipeline() {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
     };
 
     let findings = registry.analyze(&ctx);
@@ -378,6 +379,7 @@ fn test_wasm_pattern_analyzer_integration() {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
     };
 
     let findings = analyzer.analyze(&ctx);
@@ -402,6 +404,7 @@ fn test_ai_analyzer_integration() {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
     };
 
     let findings = analyzer.analyze(&ctx);
@@ -469,6 +472,7 @@ fn test_full_crawl_pipeline() {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
 
         let findings = registry.analyze(&ctx);

@@ -604,3 +604,258 @@ impl Analyzer for TwitterPlayerValidator {
         findings
     }
 }
+
+// =========================================================================
+// SocialPreviewOptimizer
+// =========================================================================
+
+/// Validates social preview metadata (OG tags) for completeness and correctness.
+pub struct SocialPreviewOptimizer;
+
+impl Default for SocialPreviewOptimizer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SocialPreviewOptimizer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Validate an image URL for basic structural correctness.
+    fn is_valid_image_url(url: &str) -> bool {
+        if url.is_empty() {
+            return false;
+        }
+        if let Ok(parsed) = url::Url::parse(url) {
+            matches!(parsed.scheme(), "http" | "https" | "data")
+        } else {
+            false
+        }
+    }
+}
+
+impl Analyzer for SocialPreviewOptimizer {
+    fn name(&self) -> &str {
+        "social-preview-optimizer"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // SPREV001: OG title missing
+        if ctx.page.meta.og.title.is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Social,
+                code: "SPREV001".to_string(),
+                title: "OG title missing".to_string(),
+                description: "No og:title meta tag was found. Social platforms use this to \
+                              display the page title when shared."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:title\" content=\"Your Page Title\"> \
+                                 for consistent social sharing titles."
+                    .to_string(),
+            });
+        }
+
+        // SPREV002: OG description missing
+        if ctx.page.meta.og.description.is_none() {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Social,
+                code: "SPREV002".to_string(),
+                title: "OG description missing".to_string(),
+                description: "No og:description meta tag was found. Social platforms use this \
+                              to display a preview snippet when shared."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add <meta property=\"og:description\" content=\"A brief \
+                                 description\"> for richer social previews."
+                    .to_string(),
+            });
+        }
+
+        // SPREV003: OG image URL invalid
+        if let Some(og_image) = &ctx.page.meta.og.image {
+            if !Self::is_valid_image_url(og_image) {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Social,
+                    code: "SPREV003".to_string(),
+                    title: "OG image URL invalid".to_string(),
+                    description: format!(
+                        "og:image contains an invalid URL: \"{}\". Social platforms will \
+                         not be able to display this image.",
+                        og_image
+                    ),
+                    url: url.clone(),
+                    recommendation: "Set og:image to a valid, publicly accessible HTTP or HTTPS \
+                                     image URL (minimum 1200x630 pixels recommended)."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+#[cfg(test)]
+mod tests_social_preview {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::ParsedPage;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    #[test]
+    fn test_sprev001_og_title_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPREV001"));
+    }
+
+    #[test]
+    fn test_sprev001_og_title_present() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.title = Some("My Page".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SPREV001"));
+    }
+
+    #[test]
+    fn test_sprev002_og_description_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPREV002"));
+    }
+
+    #[test]
+    fn test_sprev002_og_description_present() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.description = Some("A description".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SPREV002"));
+    }
+
+    #[test]
+    fn test_sprev003_og_image_invalid() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("not-a-valid-url".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPREV003"));
+    }
+
+    #[test]
+    fn test_sprev003_og_image_valid() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("https://example.com/image.png".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SPREV003"));
+    }
+
+    #[test]
+    fn test_sprev003_og_image_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        // No image = no SPREV003 (handled by SPREV001/SPREV002)
+        assert!(!findings.iter().any(|f| f.code == "SPREV003"));
+    }
+
+    #[test]
+    fn test_sprev_all_present() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.title = Some("Title".to_string());
+        page.meta.og.description = Some("Desc".to_string());
+        page.meta.og.image = Some("https://example.com/img.png".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_sprev003_empty_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some(String::new());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPREV003"));
+    }
+
+    #[test]
+    fn test_sprev003_data_uri() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.image = Some("data:image/png;base64,abc".to_string());
+        let ctx = make_ctx(&page);
+        let findings = SocialPreviewOptimizer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SPREV003"));
+    }
+
+    #[test]
+    fn test_is_valid_image_url_cases() {
+        assert!(SocialPreviewOptimizer::is_valid_image_url("https://example.com/img.png"));
+        assert!(SocialPreviewOptimizer::is_valid_image_url("http://example.com/img.jpg"));
+        assert!(SocialPreviewOptimizer::is_valid_image_url("data:image/png;base64,abc"));
+        assert!(!SocialPreviewOptimizer::is_valid_image_url(""));
+        assert!(!SocialPreviewOptimizer::is_valid_image_url("not-a-url"));
+        assert!(!SocialPreviewOptimizer::is_valid_image_url("ftp://example.com/img.png"));
+    }
+}

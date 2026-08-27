@@ -35,6 +35,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
     };
 
     let findings = registry.analyze(&ctx);

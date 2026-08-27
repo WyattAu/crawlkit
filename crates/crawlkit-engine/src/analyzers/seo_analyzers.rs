@@ -2,6 +2,7 @@
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
+use crate::parser::ExtractedLink;
 use crate::types::{IssueCategory, Severity};
 
 use super::{is_utility_page, AnalysisContext, Analyzer, Finding};
@@ -2331,6 +2332,139 @@ impl Analyzer for MobileViewportAnalyzer {
     }
 }
 
+// =========================================================================
+// InternalLinkAnchorAnalyzer
+// =========================================================================
+
+/// Analyzes internal link anchor text quality.
+pub struct InternalLinkAnchorAnalyzer;
+
+impl Default for InternalLinkAnchorAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalLinkAnchorAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for InternalLinkAnchorAnalyzer {
+    fn name(&self) -> &str {
+        "internal-link-anchor"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.is_external)
+            .collect();
+
+        if internal_links.is_empty() {
+            return findings;
+        }
+
+        // ANCHOR001: Anchor text identical to URL
+        for link in &internal_links {
+            let text = link.text.trim();
+            if text.is_empty() {
+                continue;
+            }
+            // Compare text to the href (strip protocol and domain for comparison)
+            let href_lower = link.href.to_lowercase();
+            let text_lower = text.to_lowercase();
+            // Strip protocol and domain for comparison
+            let href_path = href_lower
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_start_matches("www.");
+            if text_lower == href_path || text_lower == href_lower {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ANCHOR001".to_string(),
+                    title: "Anchor text identical to URL".to_string(),
+                    description: format!(
+                        "Internal link anchor text \"{}\" is identical to the link URL. \
+                         This provides no contextual signal to search engines.",
+                        text
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use descriptive anchor text that describes the linked \
+                                     page's content instead of using the URL itself."
+                        .to_string(),
+                });
+            }
+        }
+
+        // ANCHOR002: Over-optimized anchor text (>50% exact-match keywords)
+        if internal_links.len() >= 3 {
+            // Collect anchor texts, normalized
+            let anchors: Vec<String> = internal_links
+                .iter()
+                .filter(|l| !l.text.trim().is_empty())
+                .map(|l| {
+                    l.text
+                        .trim()
+                        .to_lowercase()
+                        .chars()
+                        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                        .collect()
+                })
+                .collect();
+
+            if anchors.len() >= 3 {
+                // Count exact-match duplicates
+                let mut freq: std::collections::HashMap<String, usize> =
+                    std::collections::HashMap::new();
+                for anchor in &anchors {
+                    *freq.entry(anchor.clone()).or_default() += 1;
+                }
+
+                let total = anchors.len();
+                let max_freq = freq.values().copied().max().unwrap_or(0);
+                let ratio = max_freq as f64 / total as f64;
+
+                if ratio > 0.5 {
+                    let most_common = freq
+                        .iter()
+                        .max_by_key(|(_, &c)| c)
+                        .map(|(k, _)| k.clone())
+                        .unwrap_or_default();
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Seo,
+                        code: "ANCHOR002".to_string(),
+                        title: "Over-optimized anchor text".to_string(),
+                        description: format!(
+                            "The anchor text \"{}\" appears in {:.0}% of internal links \
+                             ({} of {}), exceeding the 50% threshold. Over-optimized anchors \
+                             may be flagged as manipulative.",
+                            most_common,
+                            ratio * 100.0,
+                            max_freq,
+                            total
+                        ),
+                        url: url.clone(),
+                        recommendation: "Vary anchor text naturally. Use descriptive, diverse \
+                                         phrases instead of repeating the same exact-match text."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests for new analyzers
 // ---------------------------------------------------------------------------
@@ -2388,6 +2522,7 @@ mod tests_new_analyzers {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -2772,6 +2907,7 @@ mod tests_new_analyzers {
             compressed_size: None,
             server: None,
             content_type: Some("text/html; charset=utf-8"),
+            rendered: None,
         };
         let findings = CharsetValidator::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "CHARSET001"));
@@ -2794,6 +2930,7 @@ mod tests_new_analyzers {
             compressed_size: None,
             server: None,
             content_type: Some("text/html; charset=utf-8"),
+            rendered: None,
         };
         let findings = CharsetValidator::new().analyze(&ctx);
         assert!(findings.is_empty());
@@ -2850,6 +2987,7 @@ mod tests_new_analyzers {
             compressed_size: None,
             server: None,
             content_type: Some("text/html; charset=windows-1252"),
+            rendered: None,
         };
         let findings = CharsetValidator::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CHARSET003"));
@@ -3326,5 +3464,275 @@ mod tests_new_analyzers {
         let findings = MobileViewportAnalyzer::new().analyze(&ctx);
         // Empty viewport treated as missing (early return)
         assert!(findings.is_empty());
+    }
+
+    // ---- InternalLinkAnchorAnalyzer tests ----
+
+    #[test]
+    fn test_anchor001_identical_to_url() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/about".to_string(),
+            text: "/about".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ANCHOR001"));
+    }
+
+    #[test]
+    fn test_anchor001_not_identical() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/about".to_string(),
+            text: "About Us".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ANCHOR001"));
+    }
+
+    #[test]
+    fn test_anchor001_case_insensitive() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/About".to_string(),
+            text: "/about".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ANCHOR001"));
+    }
+
+    #[test]
+    fn test_anchor001_full_url_match() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://example.com/about".to_string(),
+            text: "https://example.com/about".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ANCHOR001"));
+    }
+
+    #[test]
+    fn test_anchor001_empty_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/about".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ANCHOR001"));
+    }
+
+    #[test]
+    fn test_anchor002_over_optimized() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "best shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "best shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "best shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ANCHOR002"));
+    }
+
+    #[test]
+    fn test_anchor002_not_over_optimized() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "best shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "running shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "hiking boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ANCHOR002"));
+    }
+
+    #[test]
+    fn test_anchor002_exactly_at_threshold() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        // 2/3 = 66.7% > 50%, should fire
+        assert!(findings.iter().any(|f| f.code == "ANCHOR002"));
+    }
+
+    #[test]
+    fn test_anchor002_below_threshold() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "boots".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "sandals".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ANCHOR002"));
+    }
+
+    #[test]
+    fn test_anchor_no_internal_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_anchor_external_links_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://other.com".to_string(),
+            text: "https://other.com".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_anchor002_only_two_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "shoes".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkAnchorAnalyzer::new().analyze(&ctx);
+        // Only 2 links, below the 3-link minimum for ANCHOR002
+        assert!(!findings.iter().any(|f| f.code == "ANCHOR002"));
     }
 }

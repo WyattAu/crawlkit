@@ -167,6 +167,7 @@ async fn main() -> Result<()> {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = analyzer_registry.analyze(&ctx);
         issues_found += findings.len();

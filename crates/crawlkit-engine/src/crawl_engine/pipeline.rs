@@ -112,8 +112,14 @@ impl CrawlRun<'_> {
             crate::HtmlParser::parse(&body_text, &fetched.entry.url)
         };
 
-        self.render_js_if_needed(&fetched.entry.url, &mut body_text, &mut parsed)
-            .await;
+        let mut rendered_page: Option<crate::playwright::RenderedPage> = None;
+        self.render_js_if_needed(
+            &fetched.entry.url,
+            &mut body_text,
+            &mut parsed,
+            &mut rendered_page,
+        )
+        .await;
 
         let (findings, analysis_time) = {
             let _analyze_span = tracing::info_span!(
@@ -122,7 +128,7 @@ impl CrawlRun<'_> {
                 analyzer_count = self.analyzer_registry.len(),
             );
             let _analyze_enter = _analyze_span.enter();
-            self.analyze(&parsed, &body_text, result, fetched)
+            self.analyze(&parsed, &body_text, result, fetched, rendered_page.as_ref())
         };
         bump_by(&self.counters.issues_found, findings.len());
 
@@ -152,6 +158,7 @@ impl CrawlRun<'_> {
         url: &Url,
         body_text: &mut String,
         parsed: &mut crate::ParsedPage,
+        rendered_page: &mut Option<crate::playwright::RenderedPage>,
     ) {
         if !self.cfg.enable_js_rendering {
             return;
@@ -170,10 +177,13 @@ impl CrawlRun<'_> {
             tracing::warn!("JS renderer not available, using static HTML: {}", url);
             return;
         }
-        match tokio::time::timeout(Duration::from_secs(30), renderer.render(url.as_str())).await {
-            Ok(Ok(rendered_html)) => {
-                *body_text = rendered_html;
+        match tokio::time::timeout(Duration::from_secs(30), renderer.render_rich(url.as_str()))
+            .await
+        {
+            Ok(Ok(page)) => {
+                *body_text = page.html.clone();
                 *parsed = crate::HtmlParser::parse(body_text, url);
+                *rendered_page = Some(page);
             }
             Ok(Err(e)) => tracing::warn!("JS render failed for {}: {}", url, e),
             Err(_) => tracing::warn!("JS render timed out for {}", url),
@@ -188,6 +198,7 @@ impl CrawlRun<'_> {
         body_text: &str,
         result: &crate::FetchResult,
         fetched: &FetchedPage,
+        rendered: Option<&crate::playwright::RenderedPage>,
     ) -> (Vec<crate::Finding>, Duration) {
         let headers_vec: Vec<(String, String)> = result.headers.clone();
         let empty_chain: Vec<RedirectHop> = Vec::new();
@@ -220,6 +231,7 @@ impl CrawlRun<'_> {
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
                 .map(|(_, v)| v.as_str()),
+            rendered,
         };
         let analysis_start = std::time::Instant::now();
         let mut findings = self.analyzer_registry.analyze(&ctx);

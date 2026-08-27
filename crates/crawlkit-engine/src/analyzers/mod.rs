@@ -9,6 +9,8 @@ pub mod content_analyzers;
 pub mod http_analyzers;
 /// Media and e-commerce analyzers for images, products, and shopping signals.
 pub mod media_analyzers;
+/// Post-crawl analyzers that inspect full crawl data for cross-page issues.
+pub mod post_crawl_analyzers;
 /// Security and accessibility analyzers for headers, mobile-friendliness, and WCAG compliance.
 pub mod security_analyzers;
 /// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
@@ -17,12 +19,15 @@ pub mod seo_analyzers;
 pub mod social_analyzers;
 
 pub use content_analyzers::{
-    BreadcrumbsValidator, ContentThinAnalyzer, ContentQualityAnalyzer, CouponSchemaValidator,
-    DatasetSchemaValidator, DuplicateContentDetector, EnhancedReadabilityAnalyzer,
-    EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator, FaqSchemaValidator,
-    HowToSchemaValidator, JsonLdValidator, LocalBusinessSchemaValidator, MetaDescriptionLengthAnalyzer,
-    MicrodataValidator, OfferAvailabilityAnalyzer, ReviewSchemaValidator, RdfaValidator,
-    ShippingSchemaValidator, SoftwareApplicationValidator, SpeakableSchemaValidator,
+    ArticleSchemaValidator, BreadcrumbListDepthAnalyzer, BreadcrumbsValidator,
+    ContentFreshnessScorer, ContentThinAnalyzer, ContentQualityAnalyzer, CourseSchemaValidator,
+    CouponSchemaValidator, DatasetSchemaValidator, DuplicateContentDetector,
+    EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator,
+    FaqSchemaValidator, HowToSchemaValidator, JobPostingSchemaValidator, JsonLdValidator,
+    LocalBusinessSchemaValidator, MetaDescriptionLengthAnalyzer, MicrodataValidator,
+    OfferAvailabilityAnalyzer, OrganizationSchemaValidator, PersonSchemaValidator,
+    RecipeSchemaValidator, ReviewSchemaValidator, RdfaValidator, ShippingSchemaValidator,
+    SoftwareApplicationValidator, SpeakableSchemaValidator,
     SpecialAnnouncementSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
     TitleLengthAnalyzer, VideoSchemaValidator,
 };
@@ -41,12 +46,15 @@ pub use security_analyzers::{
 };
 pub use seo_analyzers::{
     CanonicalDepthAnalyzer, CanonicalUrlValidator, CharsetValidator, HeadingHierarchyAnalyzer,
-    HreflangConsistencyAnalyzer, HreflangValidator, InternationalSeoAnalyzer, KeywordAnalyzer,
-    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileViewportAnalyzer,
-    OpenSearchValidator, PaginationAnalyzer, RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry,
-    WordCountAnalyzer,
+    HreflangConsistencyAnalyzer, HreflangValidator, InternalLinkAnchorAnalyzer,
+    InternationalSeoAnalyzer, KeywordAnalyzer, LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo,
+    MetaTagAnalyzer, MobileViewportAnalyzer, OpenSearchValidator, PaginationAnalyzer,
+    RobotsMetaAnalyzer, SitemapAnalyzer, SitemapEntry, WordCountAnalyzer,
 };
-pub use social_analyzers::{OpenGraphImageValidator, SocialMediaAnalyzer, TwitterPlayerValidator};
+pub use social_analyzers::{
+    OpenGraphImageValidator, SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterPlayerValidator,
+};
+pub use post_crawl_analyzers::{CrawlData, PostCrawlAnalyzer, PostCrawlAnalyzerRegistry};
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 
 /// Check if a URL path is a utility/page that should be excluded from analysis.
@@ -191,6 +199,8 @@ pub struct AnalysisContext<'a> {
     pub server: Option<&'a str>,
     /// Content-Type header value (e.g., "text/html; charset=utf-8").
     pub content_type: Option<&'a str>,
+    /// Rendered page data from JS rendering (if available).
+    pub rendered: Option<&'a crate::playwright::RenderedPage>,
 }
 
 /// A finding/issue detected by an analyzer.
@@ -248,9 +258,9 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-/// in parallel using rayon. The default registry includes 39 analyzers
+/// in parallel using rayon. The default registry includes 93 analyzers
 /// covering HTTP, SEO, content, links, images, security, accessibility,
-/// and AI-specific checks.
+/// social media, AI-specific checks, and structured data validation.
 ///
 /// # Examples
 ///
@@ -396,6 +406,20 @@ impl AnalyzerRegistry {
             Box::new(MetaDescriptionLengthAnalyzer::new()),
             Box::new(TitleLengthAnalyzer::new()),
             Box::new(ContentThinAnalyzer::new()),
+            // Schema validators: Article, Organization, Person, JobPosting, Course, Recipe
+            Box::new(ArticleSchemaValidator::new()),
+            Box::new(OrganizationSchemaValidator::new()),
+            Box::new(PersonSchemaValidator::new()),
+            Box::new(JobPostingSchemaValidator::new()),
+            Box::new(CourseSchemaValidator::new()),
+            Box::new(RecipeSchemaValidator::new()),
+            // Content freshness and breadcrumb depth
+            Box::new(ContentFreshnessScorer::new()),
+            Box::new(BreadcrumbListDepthAnalyzer::new()),
+            // SEO: internal link anchor analysis
+            Box::new(InternalLinkAnchorAnalyzer::new()),
+            // Social: social preview optimizer
+            Box::new(SocialPreviewOptimizer::new()),
         ];
 
         if include_ai {
@@ -416,6 +440,8 @@ impl AnalyzerRegistry {
         #[cfg(feature = "full")]
         if include_wasm {
             analyzers.push(Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()));
+            analyzers.push(Box::new(crate::wasm_analyzers::WasmRuntimeAnalyzer::new()));
+            analyzers.push(Box::new(crate::wasm_analyzers::WasmPerformanceAnalyzer::new()));
         }
         #[cfg(not(feature = "full"))]
         let _ = include_wasm;
@@ -534,6 +560,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -597,6 +624,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = HttpStatusAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HTTP002"));
@@ -634,6 +662,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR001"));
@@ -666,6 +695,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR002"));
@@ -691,6 +721,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR003"));
@@ -716,6 +747,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = RedirectChainAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "REDIR004"));
@@ -1291,7 +1323,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 81);
+        assert_eq!(registry.len(), 93);
         assert!(!registry.is_empty());
     }
 
@@ -2325,6 +2357,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // Should not flag any missing headers
@@ -2356,6 +2389,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC004"));
@@ -2377,6 +2411,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC006"));
@@ -2398,6 +2433,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // SAMEORIGIN is valid, should not flag SEC003 or SEC004
@@ -2424,6 +2460,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC014"));
@@ -2448,6 +2485,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC014"));
@@ -2472,6 +2510,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SEC013"));
@@ -2496,6 +2535,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "SEC013"));
@@ -2528,6 +2568,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         };
         let findings = SecurityHeaderAnalyzer::new().analyze(&ctx);
         // Lowercase header names should still be found
@@ -4154,6 +4195,7 @@ mod hsts_preload_tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -4397,6 +4439,7 @@ mod sri_tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -4738,6 +4781,7 @@ mod permission_policy_tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -4988,6 +5032,7 @@ mod cross_origin_isolation_tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 

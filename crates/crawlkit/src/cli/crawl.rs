@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crawlkit_engine::analyzers::post_crawl_analyzers::PostCrawlAnalyzerRegistry;
 use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
 use crawlkit_engine::storage::{Severity, Storage};
@@ -151,6 +152,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         force: params.force,
         allow_http: false,
         plugin_dirs,
+        post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

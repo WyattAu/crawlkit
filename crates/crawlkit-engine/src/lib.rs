@@ -302,14 +302,14 @@ pub use ai_analyzers::{
 pub use ai_bots::{AiBot, AiBotRegistry};
 pub use analyzers::{
     AccessibilityAnalyzer, AnalysisContext, Analyzer, AnalyzerRegistry, CacheHeaderAnalyzer,
-    CanonicalUrlValidator, ContentQualityAnalyzer, EcommerceSignalsAnalyzer,
+    CanonicalUrlValidator, ContentQualityAnalyzer, CrawlData, EcommerceSignalsAnalyzer,
     EnhancedReadabilityAnalyzer, EntityAnalyzer, Finding, HeadingHierarchyAnalyzer,
     HreflangValidator, HttpStatusAnalyzer, ImageAnalyzer, ImageInfo, InternationalSeoAnalyzer,
     KeywordAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileFriendlinessChecker,
-    RedirectChainAnalyzer, ResourceCountAnalyzer, ResponseSizeAnalyzer, RobotsRule,
-    RobotsTxtAnalyzer, SecurityHeaderAnalyzer, SitemapAnalyzer, SitemapEntry,
-    SocialMediaAnalyzer, SslCertificateInfo, SslCertificateValidator, StructuredDataValidator,
-    TtfbAnalyzer, WordCountAnalyzer,
+    PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, RedirectChainAnalyzer, ResourceCountAnalyzer,
+    ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer, SecurityHeaderAnalyzer, SitemapAnalyzer,
+    SitemapEntry, SocialMediaAnalyzer, SslCertificateInfo, SslCertificateValidator,
+    StructuredDataValidator, TtfbAnalyzer, WordCountAnalyzer,
 };
 #[cfg(feature = "full")]
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};

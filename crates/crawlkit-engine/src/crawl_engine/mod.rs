@@ -3,6 +3,7 @@ mod dedup;
 mod fetch;
 mod pipeline;
 
+use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzerRegistry};
 use crate::analyzers::AnalyzerRegistry;
 use crate::http::{HttpClient, HttpClientConfig};
 use crate::queue::{Priority, UrlQueue};
@@ -40,6 +41,24 @@ pub trait JsRenderer: Send + Sync {
 
     /// Render a page at the given URL and return the final HTML.
     async fn render(&self, url: &str) -> Result<String, String>;
+
+    /// Render a page and return the full `RenderedPage` with console
+    /// messages, network requests, WASM errors, and render metrics.
+    ///
+    /// The default implementation calls `render()` and wraps the HTML
+    /// in a minimal `RenderedPage`. Override to provide rich data.
+    async fn render_rich(&self, url: &str) -> Result<crate::playwright::RenderedPage, String> {
+        let html = self.render(url).await?;
+        Ok(crate::playwright::RenderedPage {
+            final_url: url.to_string(),
+            html,
+            console_messages: Vec::new(),
+            network_requests: Vec::new(),
+            wasm_errors: Vec::new(),
+            render_time: std::time::Duration::ZERO,
+            memory_used: 0,
+        })
+    }
 }
 
 /// Configuration for the crawl engine.
@@ -103,6 +122,9 @@ pub struct CrawlEngineConfig {
     /// `install_plugin` layout). Empty disables plugin execution during
     /// crawls.
     pub plugin_dirs: Vec<std::path::PathBuf>,
+
+    /// Post-crawl analyzers that run after the main crawl loop completes.
+    pub post_crawl_analyzers: PostCrawlAnalyzerRegistry,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -121,6 +143,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("encryption", &self.encryption.is_some())
             .field("timeout_secs", &self.timeout_secs)
             .field("plugin_dirs", &self.plugin_dirs)
+            .field("post_crawl_analyzers", &self.post_crawl_analyzers.len())
             .field("delay_ms", &self.delay_ms)
             .field("concurrency", &self.concurrency)
             .field("incremental", &self.incremental)
@@ -151,6 +174,7 @@ impl Default for CrawlEngineConfig {
             force: false,
             allow_http: false,
             plugin_dirs: Vec::new(),
+            post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
         }
     }
 }
@@ -676,6 +700,9 @@ impl CrawlEngine {
     ///
     /// Runs the final storage write on the blocking pool (SQLite write with
     /// fsync), emits the completion summary, and snapshots metrics.
+    /// If post-crawl analyzers are configured, builds [`CrawlData`] from
+    /// storage and runs them, merging any additional findings into the
+    /// output.
     async fn finish_and_report<'a>(
         &self,
         run: &CrawlRun<'a>,
@@ -701,14 +728,56 @@ impl CrawlEngine {
             tracing::warn!(error = %e, crawl_id = %crawl_id, "Failed to finish crawl in storage");
         }
 
+        // Run post-crawl analyzers if any are registered.
+        let post_crawl_issues = if self.config.post_crawl_analyzers.is_empty() {
+            0
+        } else {
+            let crawl_id_clone = crawl_id.clone();
+            let seed_url = run.cfg.crawl_config.start_url.to_string();
+            let storage_for_analysis = Arc::clone(&self.storage);
+            let crawl_data = tokio::task::spawn_blocking(move || {
+                let pages = storage_for_analysis
+                    .get_pages(&crawl_id_clone, 100_000)
+                    .unwrap_or_default();
+                let links = storage_for_analysis
+                    .get_links_for_crawl(&crawl_id_clone)
+                    .unwrap_or_default();
+                let issues = {
+                    use crate::storage::IssueFilter;
+                    storage_for_analysis
+                        .get_issues(&crawl_id_clone, &IssueFilter::default())
+                        .unwrap_or_default()
+                };
+                CrawlData {
+                    pages,
+                    links,
+                    issues,
+                    seed_url,
+                }
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Post-crawl data collection failed");
+                CrawlData {
+                    pages: vec![],
+                    links: vec![],
+                    issues: vec![],
+                    seed_url: String::new(),
+                }
+            });
+            let findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
+            findings.len()
+        };
+
         let elapsed = crawl_start.elapsed();
         let snapshot = run.metrics.snapshot();
 
         tracing::info!(
-            "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
+            "Crawl complete: {} pages crawled, {} stored, {} issues ({} post-crawl), {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
             stats.pages_crawled,
             stats.pages_stored,
-            stats.issues_found,
+            stats.issues_found + post_crawl_issues,
+            post_crawl_issues,
             stats.skipped_external,
             stats.skipped_robots,
             stats.skipped_duplicate,
@@ -721,7 +790,7 @@ impl CrawlEngine {
             crawl_id,
             pages_crawled: stats.pages_crawled,
             pages_stored: stats.pages_stored,
-            issues_found: stats.issues_found,
+            issues_found: stats.issues_found + post_crawl_issues,
             skipped_external: stats.skipped_external,
             skipped_robots: stats.skipped_robots,
             skipped_duplicate: stats.skipped_duplicate,
@@ -747,6 +816,15 @@ impl CrawlEngine {
     /// Get a reference to the underlying storage.
     pub fn storage(&self) -> &dyn StorageBackend {
         self.storage.as_ref()
+    }
+
+    /// Set post-crawl analyzers to run after the crawl loop completes.
+    pub fn with_post_crawl_analyzers(
+        mut self,
+        registry: PostCrawlAnalyzerRegistry,
+    ) -> Self {
+        self.config.post_crawl_analyzers = registry;
+        self
     }
 }
 
@@ -926,7 +1004,7 @@ mod tests {
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
         // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 76);
+        assert_eq!(registry.len(), 86);
     }
 
     struct MockJsRenderer {

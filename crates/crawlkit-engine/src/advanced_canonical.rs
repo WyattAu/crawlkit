@@ -456,6 +456,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -476,6 +477,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 
@@ -496,6 +498,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 

@@ -220,6 +220,7 @@ fn main() -> Result<()> {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
     };
 
     let analyzers: Vec<Box<dyn Analyzer>> = vec![

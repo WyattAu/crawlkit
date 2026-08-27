@@ -225,6 +225,19 @@ impl WasmRuntimeAnalyzer {
     }
 }
 
+impl crate::analyzers::Analyzer for WasmRuntimeAnalyzer {
+    fn name(&self) -> &str {
+        "wasm-runtime"
+    }
+
+    fn analyze(&self, ctx: &crate::analyzers::AnalysisContext) -> Vec<Finding> {
+        let Some(rendered) = ctx.rendered else {
+            return Vec::new();
+        };
+        self.analyze_rendered(&ctx.page.url, rendered)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // WASM Performance Analyzer
 // ---------------------------------------------------------------------------
@@ -335,6 +348,19 @@ impl WasmPerformanceAnalyzer {
     }
 }
 
+impl crate::analyzers::Analyzer for WasmPerformanceAnalyzer {
+    fn name(&self) -> &str {
+        "wasm-performance"
+    }
+
+    fn analyze(&self, ctx: &crate::analyzers::AnalysisContext) -> Vec<Finding> {
+        let Some(rendered) = ctx.rendered else {
+            return Vec::new();
+        };
+        self.analyze_rendered(&ctx.page.url, rendered)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -398,6 +424,7 @@ mod tests {
             compressed_size: None,
             server: None,
             content_type: None,
+            rendered: None,
         }
     }
 

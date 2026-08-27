@@ -81,6 +81,7 @@ pub async fn run(
         compressed_size: None,
         server,
         content_type,
+        rendered: None,
     };
     let findings = registry.analyze(&ctx);
 

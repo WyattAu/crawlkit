@@ -19,24 +19,30 @@ pub mod seo_analyzers;
 pub mod social_analyzers;
 
 pub use content_analyzers::{
-    ActionSchemaValidator, AggregateOfferSchemaValidator, ArticleSchemaValidator,
-    ApartmentSchemaValidator, BreadcrumbListDepthAnalyzer, BreadcrumbsValidator,
+    ActionSchemaValidator, AggregateOfferSchemaValidator, ApartmentSchemaValidator,
+    ArticleSchemaValidator,
+    BreadcrumbListDepthAnalyzer, BreadcrumbsValidator,
     BrandSchemaValidator, CarSchemaValidator,
-    ContentFreshnessScorer, ContentThinAnalyzer, ContentQualityAnalyzer, CourseSchemaValidator,
+    ContentFreshnessScorer, ContentThinAnalyzer, ContentQualityAnalyzer, CourseProviderValidator,
+    CourseSchemaValidator,
     CouponSchemaValidator, DatasetSchemaValidator, DuplicateContentDetector,
-    EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventSchemaValidator,
+    EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer, EventLocationValidator,
+    EventSchemaValidator,
     FaqSchemaValidator, GovernmentServiceSchemaValidator, HealthPlanSchemaValidator,
     HowToSchemaValidator, InvoiceSchemaValidator,
     ItemListSchemaValidator,
-    JobPostingSchemaValidator, JsonLdValidator,
-    LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer, MetaDescriptionLengthAnalyzer,
+    JobPostingSalaryValidator, JobPostingSchemaValidator, JsonLdValidator,
+    LocalBusinessHoursValidator, LocalBusinessSchemaValidator, LocalBusinessNapAnalyzer,
+    MetaDescriptionLengthAnalyzer,
     MicrodataValidator, MovieSchemaValidator, MusicAlbumSchemaValidator,
     OfferAvailabilityAnalyzer, OfferSchemaValidator,
-    OrganizationSchemaValidator, OccupationSchemaValidator, PermitSchemaValidator,
-    PersonSchemaValidator,
-    PlanSchemaValidator, PlaybookSchemaValidator, ProductModelSchemaValidator,
+    OrganizationLogoValidator, OrganizationSchemaValidator, OccupationSchemaValidator,
+    PermitSchemaValidator,
+    PersonJobTitleValidator, PersonSchemaValidator,
+    PlanSchemaValidator, PlaybookSchemaValidator, ProductModelSchemaValidator, ProductReviewValidator,
     QuestSchemaValidator,
-    RecipeSchemaValidator, ResearchProjectSchemaValidator, ReviewSchemaValidator,
+    RecipeNutritionValidator, RecipeSchemaValidator, ResearchProjectSchemaValidator,
+    ReviewSchemaValidator,
     RdfaValidator, ScheduleSchemaValidator, ServiceSchemaValidator,
     ShippingSchemaValidator, SoftwareApplicationValidator, SpeakableSchemaValidator,
     SpecialAnnouncementSchemaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
@@ -539,6 +545,15 @@ impl AnalyzerRegistry {
             Box::new(WebPageElementSchemaValidator::new()),
             Box::new(WebSiteSchemaValidator::new()),
             Box::new(WorkerSchemaValidator::new()),
+            // Additional schema validators
+            Box::new(LocalBusinessHoursValidator::new()),
+            Box::new(ProductReviewValidator::new()),
+            Box::new(EventLocationValidator::new()),
+            Box::new(OrganizationLogoValidator::new()),
+            Box::new(PersonJobTitleValidator::new()),
+            Box::new(RecipeNutritionValidator::new()),
+            Box::new(CourseProviderValidator::new()),
+            Box::new(JobPostingSalaryValidator::new()),
             // Security: HSTS, XSS protection, content-type sniffing
             Box::new(StrictTransportSecurityAnalyzer::new()),
             Box::new(XSSProtectionAnalyzer::new()),
@@ -1446,7 +1461,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 161);
+        assert_eq!(registry.len(), 169);
         assert!(!registry.is_empty());
     }
 

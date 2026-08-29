@@ -31,8 +31,7 @@ impl Analyzer for FaqSchemaValidator {
             let data = &sd.data;
 
             // FAQ001: Missing mainEntity
-            let main_entity = data.get("mainEntity");
-            if main_entity.is_none() {
+            let Some(main_entity) = data.get("mainEntity") else {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Schema,
@@ -47,9 +46,7 @@ impl Analyzer for FaqSchemaValidator {
                         .to_string(),
                 });
                 continue;
-            }
-
-            let main_entity = main_entity.unwrap();
+            };
 
             // FAQ002: mainEntity has fewer than 2 questions
             let questions = main_entity.as_array();
@@ -159,26 +156,6 @@ mod tests {
         }
     }
 
-    fn make_ctx_with_body<'a>(
-        page: &'a crate::parser::ParsedPage,
-        status: Option<u16>,
-        body: &'a str,
-    ) -> AnalysisContext<'a> {
-        AnalysisContext {
-            page,
-            body: Some(body),
-            status_code: status,
-            headers: &[],
-            response_time: None,
-            redirect_chain: &[],
-            robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
-        }
-    }
     #[test]
 fn test_faq_missing_main_entity() {
     let mut page = make_page("https://example.com/faq");

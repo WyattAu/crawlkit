@@ -2718,6 +2718,290 @@ impl Analyzer for AnchorTextDiversityAnalyzer {
     }
 }
 
+// =========================================================================
+// TitlePixelWidthAnalyzer
+// =========================================================================
+
+/// Checks if the page title would be truncated in Google SERP (~580px / ~60 chars display).
+///
+/// Estimates pixel width using a simple heuristic: 7px per ASCII char, 14px per CJK char.
+pub struct TitlePixelWidthAnalyzer;
+
+impl Default for TitlePixelWidthAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TitlePixelWidthAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Estimate pixel width of text. ASCII chars ~7px, CJK/fullwidth ~14px.
+    pub(crate) fn estimate_pixel_width(text: &str) -> f64 {
+        text.chars()
+            .map(|c| {
+                if c.is_ascii() {
+                    7.0
+                } else if is_cjk(c) {
+                    14.0
+                } else {
+                    7.0
+                }
+            })
+            .sum()
+    }
+}
+
+fn is_cjk(c: char) -> bool {
+    let cp = c as u32;
+    (0x4E00..=0x9FFF).contains(&cp)
+        || (0x3400..=0x4DBF).contains(&cp)
+        || (0xF900..=0xFAFF).contains(&cp)
+        || (0x3000..=0x303F).contains(&cp)
+        || (0xFF00..=0xFFEF).contains(&cp)
+}
+
+impl Analyzer for TitlePixelWidthAnalyzer {
+    fn name(&self) -> &str {
+        "title-pixel-width"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let title = match &ctx.page.meta.title {
+            Some(t) if !t.trim().is_empty() => t,
+            _ => return findings,
+        };
+
+        let px = Self::estimate_pixel_width(title);
+
+        if px > 580.0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "TITLE-PX001".to_string(),
+                title: "Title exceeds SERP pixel width".to_string(),
+                description: format!(
+                    "Title estimated width is {:.0}px, exceeding the ~580px display limit.                      Google SERP will likely truncate this title.",
+                    px
+                ),
+                url: url.clone(),
+                recommendation: "Shorten the title to fit within ~60 characters / 580px to                                  prevent truncation in search results."
+                    .to_string(),
+            });
+        }
+
+        if title.len() < 20 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "TITLE-PX002".to_string(),
+                title: "Title too short for SERP display".to_string(),
+                description: format!(
+                    "Title is {} characters ({:.0}px estimated), which is shorter than the                      typical SERP display width. This wastes valuable search result real estate.",
+                    title.len(),
+                    px
+                ),
+                url: url.clone(),
+                recommendation: "Expand the title to 30-60 characters to maximize SERP                                  click-through rate."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MetaDescriptionPixelWidthAnalyzer
+// =========================================================================
+
+/// Checks if meta description would be truncated in Google SERP (~920px / ~155 chars display).
+pub struct MetaDescriptionPixelWidthAnalyzer;
+
+impl Default for MetaDescriptionPixelWidthAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetaDescriptionPixelWidthAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Estimate pixel width of text. ASCII chars ~7px, CJK/fullwidth ~14px.
+    pub(crate) fn estimate_pixel_width(text: &str) -> f64 {
+        text.chars()
+            .map(|c| {
+                if c.is_ascii() {
+                    7.0
+                } else if is_cjk(c) {
+                    14.0
+                } else {
+                    7.0
+                }
+            })
+            .sum()
+    }
+}
+
+impl Analyzer for MetaDescriptionPixelWidthAnalyzer {
+    fn name(&self) -> &str {
+        "meta-description-pixel-width"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let desc = match &ctx.page.meta.description {
+            Some(d) if !d.trim().is_empty() => d,
+            _ => return findings,
+        };
+
+        let px = Self::estimate_pixel_width(desc);
+
+        if px > 920.0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "MDESC-PX001".to_string(),
+                title: "Meta description exceeds SERP pixel width".to_string(),
+                description: format!(
+                    "Meta description estimated width is {:.0}px, exceeding the ~920px display                      limit. Google SERP will likely truncate this description.",
+                    px
+                ),
+                url: url.clone(),
+                recommendation: "Shorten the meta description to fit within ~155 characters /                                  920px to prevent truncation in search results."
+                    .to_string(),
+            });
+        }
+
+        if desc.len() < 70 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "MDESC-PX002".to_string(),
+                title: "Meta description too short for SERP display".to_string(),
+                description: format!(
+                    "Meta description is {} characters ({:.0}px estimated), shorter than the                      typical SERP display width. This wastes valuable search result space.",
+                    desc.len(),
+                    px
+                ),
+                url: url.clone(),
+                recommendation: "Expand the meta description to 120-160 characters to maximize                                  SERP click-through rate."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// InternalLinkTopicalAnalyzer
+// =========================================================================
+
+/// Checks if internal link anchor text relates to page headings (topical relevance).
+pub struct InternalLinkTopicalAnalyzer;
+
+impl Default for InternalLinkTopicalAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalLinkTopicalAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Tokenize text into lowercase words > 2 chars, excluding stop words.
+    fn tokenize(text: &str) -> HashSet<String> {
+        text.to_lowercase()
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>()
+            })
+            .filter(|w| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect()
+    }
+}
+
+impl Analyzer for InternalLinkTopicalAnalyzer {
+    fn name(&self) -> &str {
+        "internal-link-topical"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.is_external && !l.text.trim().is_empty())
+            .collect();
+
+        if internal_links.is_empty() || ctx.page.headings.is_empty() {
+            return findings;
+        }
+
+        let heading_text: String = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let heading_keywords = Self::tokenize(&heading_text);
+
+        if heading_keywords.is_empty() {
+            return findings;
+        }
+
+        let relevant_count = internal_links
+            .iter()
+            .filter(|link| {
+                let anchor_words = Self::tokenize(&link.text);
+                anchor_words.iter().any(|w| heading_keywords.contains(w))
+            })
+            .count();
+
+        let total = internal_links.len();
+        let ratio = relevant_count as f64 / total as f64;
+
+        if ratio < 0.20 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "INTOPIC001".to_string(),
+                title: "Internal link anchor text lacks topical relevance".to_string(),
+                description: format!(
+                    "Only {:.0}% of internal link anchor text ({}/{}) contains keywords from                      the page headings. Anchor text that relates to the page topic provides                      stronger topical signals to search engines.",
+                    ratio * 100.0,
+                    relevant_count,
+                    total
+                ),
+                url: url.clone(),
+                recommendation: "Use anchor text that reflects the page's topic and headings.                                  Descriptive, topic-relevant anchor text strengthens topical                                  relevance signals."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
 fn is_generic_anchor(text: &str) -> bool {
     let lower = text.trim().to_lowercase();
     matches!(
@@ -5357,5 +5641,457 @@ mod tests_new_analyzers {
         let ctx = make_ctx(&page, Some(200));
         let findings = SitemapUrlAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
+    }
+
+    // ---- TitlePixelWidthAnalyzer tests ----
+
+    #[test]
+    fn test_title_px_no_title() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitlePixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_px_empty_title() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitlePixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_px_within_limit() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Short Title".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TITLE-PX001"));
+        assert!(findings.iter().any(|f| f.code == "TITLE-PX002"));
+    }
+
+    #[test]
+    fn test_title_px_exceeds_limit() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("This is a very long page title that definitely exceeds the pixel width limit for SERP".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TITLE-PX001"));
+    }
+
+    #[test]
+    fn test_title_px_below_char_threshold() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Short".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TITLE-PX002"));
+        assert!(!findings.iter().any(|f| f.code == "TITLE-PX001"));
+    }
+
+    #[test]
+    fn test_title_px_exact_20_chars() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Exactly twenty chars!!!".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TITLE-PX002"));
+    }
+
+    #[test]
+    fn test_title_px_cjk_characters() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("日本語テストページタイトル".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TITLE-PX001"));
+    }
+
+    #[test]
+    fn test_title_px_cjk_exceeds_limit() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("这是一个非常长的中文页面标题用于测试像素宽度限制是否正确工作超过了五百八十像素的限制哦".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TITLE-PX001"));
+    }
+
+    #[test]
+    fn test_title_px_mixed_ascii_cjk() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Hello World 日本語".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TITLE-PX001"));
+    }
+
+    #[test]
+    fn test_title_px_estimate_function() {
+        assert_eq!(TitlePixelWidthAnalyzer::estimate_pixel_width(""), 0.0);
+        assert_eq!(TitlePixelWidthAnalyzer::estimate_pixel_width("abc"), 21.0);
+        assert_eq!(TitlePixelWidthAnalyzer::estimate_pixel_width("中"), 14.0);
+    }
+
+    #[test]
+    fn test_title_px_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("This is a very long page title that definitely exceeds the pixel width limit for SERP".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "TITLE-PX001").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_title_px_severity_info() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Short".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "TITLE-PX002").unwrap();
+        assert_eq!(f.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_title_px_name() {
+        assert_eq!(TitlePixelWidthAnalyzer::new().name(), "title-pixel-width");
+    }
+
+    // ---- MetaDescriptionPixelWidthAnalyzer tests ----
+
+    #[test]
+    fn test_mdesc_px_no_description() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mdesc_px_empty_description() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mdesc_px_within_limit() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A reasonable meta description that fits within SERP limits perfectly.".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "MDESC-PX001"));
+    }
+
+    #[test]
+    fn test_mdesc_px_exceeds_limit() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("This is a very long meta description that will definitely exceed the pixel width limit for Google SERP display area and get truncated.".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MDESC-PX001"));
+    }
+
+    #[test]
+    fn test_mdesc_px_too_short() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Short desc".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MDESC-PX002"));
+    }
+
+    #[test]
+    fn test_mdesc_px_exact_70_chars() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefgh".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "MDESC-PX002"));
+    }
+
+    #[test]
+    fn test_mdesc_px_69_chars() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abc".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MDESC-PX002"));
+    }
+
+    #[test]
+    fn test_mdesc_px_cjk_description() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("这是一个非常长的中文元描述用于测试搜索引擎结果页面中像素宽度限制是否会截断描述内容显示效果因为描述太长了所以会被搜索引擎截断显示不完整".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MDESC-PX001"));
+    }
+
+    #[test]
+    fn test_mdesc_px_mixed_content() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Buy shoes online - best prices for running shoes and hiking boots".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "MDESC-PX001"));
+    }
+
+    #[test]
+    fn test_mdesc_px_estimate_function() {
+        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width(""), 0.0);
+        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("abc"), 21.0);
+        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("中"), 14.0);
+    }
+
+    #[test]
+    fn test_mdesc_px_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("This is a very long meta description that will definitely exceed the pixel width limit for Google SERP display area and get truncated.".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "MDESC-PX001").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_mdesc_px_severity_info() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Short".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "MDESC-PX002").unwrap();
+        assert_eq!(f.severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_mdesc_px_name() {
+        assert_eq!(
+            MetaDescriptionPixelWidthAnalyzer::new().name(),
+            "meta-description-pixel-width"
+        );
+    }
+
+    #[test]
+    fn test_mdesc_px_whitespace_only() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("   ".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    // ---- InternalLinkTopicalAnalyzer tests ----
+
+    #[test]
+    fn test_intopic_no_internal_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkTopicalAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_intopic_no_headings() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "/about".to_string(),
+            text: "About us".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkTopicalAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_intopic_relevant_anchor_text() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![ExtractedLink {
+            href: "/rust-guide".to_string(),
+            text: "Rust programming guide".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+
+    #[test]
+    fn test_intopic_irrelevant_anchor_text() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming Languages".to_string(), length: 26 },
+        ];
+        page.links = vec![
+            ExtractedLink { href: "/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/d".to_string(), text: "see details".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/e".to_string(), text: "view more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+
+    #[test]
+    fn test_intopic_mixed_relevance() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![
+            ExtractedLink { href: "/a".to_string(), text: "rust guide".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/b".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/c".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/d".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/e".to_string(), text: "view details".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+
+    #[test]
+    fn test_intopic_empty_anchor_text_skipped() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![ExtractedLink {
+            href: "/a".to_string(),
+            text: String::new(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_intopic_external_links_not_counted() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![ExtractedLink {
+            href: "https://other.com/rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_intopic_stop_words_excluded() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "The Best Rust Guide".to_string(), length: 19 },
+        ];
+        page.links = vec![
+            ExtractedLink { href: "/a".to_string(), text: "the".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/b".to_string(), text: "best".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/c".to_string(), text: "rust guide tutorial".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/d".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/e".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+
+    #[test]
+    fn test_intopic_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![
+            ExtractedLink { href: "/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        let f = findings.iter().find(|f| f.code == "INTOPIC001").unwrap();
+        assert_eq!(f.severity, Severity::Warning);
+        assert_eq!(f.category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_intopic_name() {
+        assert_eq!(InternalLinkTopicalAnalyzer::new().name(), "internal-link-topical");
+    }
+
+    #[test]
+    fn test_intopic_case_insensitive_matching() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "RUST Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![
+            ExtractedLink { href: "/a".to_string(), text: "rust guide".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+
+    #[test]
+    fn test_intopic_heading_empty_text() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "".to_string(), length: 0 },
+        ];
+        page.links = vec![ExtractedLink {
+            href: "/a".to_string(),
+            text: "click here".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_intopic_single_link_relevant() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+        ];
+        page.links = vec![ExtractedLink {
+            href: "/rust".to_string(),
+            text: "rust tutorial".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
     }
 }

@@ -301,7 +301,7 @@ impl CrawlRun<'_> {
                     .meta
                     .viewport
                     .as_deref()
-                    .map_or(false, |v| v.contains("device-width")),
+                    .is_some_and(|v| v.contains("device-width")),
             ),
             has_csp: Some(
                 result

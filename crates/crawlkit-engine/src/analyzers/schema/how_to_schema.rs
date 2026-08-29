@@ -47,8 +47,7 @@ impl Analyzer for HowToSchemaValidator {
             }
 
             // HOWTO002: Missing step
-            let steps = data.get("step");
-            if steps.is_none() {
+            let Some(steps) = data.get("step") else {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Schema,
@@ -63,9 +62,7 @@ impl Analyzer for HowToSchemaValidator {
                         .to_string(),
                 });
                 continue;
-            }
-
-            let steps = steps.unwrap();
+            };
             let steps_arr = steps.as_array();
 
             // HOWTO003: Steps missing name or text
@@ -164,26 +161,6 @@ mod tests {
         }
     }
 
-    fn make_ctx_with_body<'a>(
-        page: &'a crate::parser::ParsedPage,
-        status: Option<u16>,
-        body: &'a str,
-    ) -> AnalysisContext<'a> {
-        AnalysisContext {
-            page,
-            body: Some(body),
-            status_code: status,
-            headers: &[],
-            response_time: None,
-            redirect_chain: &[],
-            robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
-        }
-    }
     #[test]
 fn test_howto_missing_name() {
     let mut page = make_page("https://example.com/howto");

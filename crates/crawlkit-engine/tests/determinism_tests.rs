@@ -166,6 +166,15 @@ fn seed_unsorted_crawl(storage: &Storage, crawl_id: &str) {
         cwv_lcp: None,
         cwv_cls: None,
         cwv_inp: None,
+        has_structured_data: None,
+        schema_types: None,
+        viewport_ok: None,
+        has_csp: None,
+        has_hsts: None,
+        images_total: None,
+        images_missing_alt: None,
+        h1_count: None,
+        heading_count: None,
     };
 
     // Deliberately unsorted insertion order.

@@ -1305,7 +1305,7 @@ impl PostCrawlAnalyzer for HeadingStructureAnalyzer {
         let total = data.pages.len();
         if total == 0 { return findings; }
         let no_h1 = data.pages.iter().filter(|p| p.h1_count == Some(0)).count();
-        let multi_h1 = data.pages.iter().filter(|p| p.h1_count.map_or(false, |c| c > 1)).count();
+        let multi_h1 = data.pages.iter().filter(|p| p.h1_count.is_some_and(|c| c > 1)).count();
         if no_h1 as f64 / total as f64 > 0.3 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -1355,7 +1355,7 @@ impl PostCrawlAnalyzer for CanonicalConsistencyAnalyzer {
         if total == 0 { return findings; }
         let with_canonical = data.pages.iter().filter(|p| p.canonical_url.is_some()).count();
         let self_canonical = data.pages.iter().filter(|p| {
-            p.canonical_url.as_ref().map_or(false, |c| c.as_str() == p.url.as_str())
+            p.canonical_url.as_ref().is_some_and(|c| c.as_str() == p.url.as_str())
         }).count();
         let pct_self = if with_canonical > 0 { self_canonical as f64 / with_canonical as f64 * 100.0 } else { 0.0 };
         if pct_self > 90.0 && with_canonical > 5 {

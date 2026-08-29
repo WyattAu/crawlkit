@@ -3,8 +3,8 @@
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-1733--passing-green.svg)](https://github.com/WyattAu/crawlkit)
-[![Analyzers](https://img.shields.io/badge/analyzers-200-blue.svg)](https://github.com/WyattAu/crawlkit)
+[![Tests](https://img.shields.io/badge/tests-1807--passing-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Analyzers](https://img.shields.io/badge/analyzers-204-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
 
 High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings.
@@ -135,7 +135,7 @@ output_dir = "./crawl-results"
 
 ## Performance
 
-> All numbers measured on local hardware. See [benchmarks/measured-v4.4.1.md](docs/benchmarks/measured-v4.4.1.md) for methodology.
+> All numbers measured on local hardware. See [benchmarks/measured-v5.3.0.md](docs/benchmarks/measured-v5.3.0.md) for methodology.
 
 | Metric | Value |
 |--------|-------|

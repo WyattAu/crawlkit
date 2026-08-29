@@ -86,7 +86,14 @@ chore: update dependencies
 
 ## Pull Request Workflow
 
-1. Create feature branch from `main`
+## Hard Rules (enforced by CI and reviewers)
+
+**Central pre-push gate:** Before any `git push`, ALL of the following must pass:
+1. `cargo clippy --workspace --all-targets -- -D warnings` — zero clippy errors
+2. `cargo test --workspace --lib --bins` — all tests pass
+3. README badge numbers must match actual test count and analyzer count (verify: `grep "badge/tests" README.md` and `grep "badge/analyzers" README.md` vs actual counts)
+
+This gate exists because past releases pushed with broken clippy / stale badges. `just gate` runs steps 1-2 automatically.
 2. Implement changes with tests
 3. Ensure all CI checks pass (fmt, clippy, test, audit)
 4. Request review (minimum 1 approval)

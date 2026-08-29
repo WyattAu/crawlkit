@@ -11,7 +11,6 @@ impl Default for SpeakableSchemaValidator {
 
 impl SpeakableSchemaValidator {
     pub fn new() -> Self {
-    #[allow(clippy::unwrap_used)]
         Self
     }
 }
@@ -26,11 +25,9 @@ impl Analyzer for SpeakableSchemaValidator {
         let url = &ctx.page.url;
 
         for sd in &ctx.page.structured_data {
-            let speakable = sd.data.get("speakable");
-            if speakable.is_none() {
+            let Some(speakable) = sd.data.get("speakable") else {
                 continue;
-            }
-            let speakable = speakable.unwrap();
+            };
 
             // Handle both object and array forms
             let speakables: Vec<&serde_json::Value> = if let Some(arr) = speakable.as_array() {
@@ -145,26 +142,6 @@ mod tests {
         }
     }
 
-    fn make_ctx_with_body<'a>(
-        page: &'a crate::parser::ParsedPage,
-        status: Option<u16>,
-        body: &'a str,
-    ) -> AnalysisContext<'a> {
-        AnalysisContext {
-            page,
-            body: Some(body),
-            status_code: status,
-            headers: &[],
-            response_time: None,
-            redirect_chain: &[],
-            robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
-        }
-    }
     #[test]
 fn test_speakable_missing_xpath() {
     let mut page = make_page("https://example.com");

@@ -60,7 +60,7 @@ impl Analyzer for PlaybookSchemaValidator {
                             .to_string(),
                     });
                 }
-                Some(val) if val.as_array().map_or(true, |a| a.is_empty()) => {
+                Some(val) if val.as_array().is_none_or(|a| a.is_empty()) => {
                     findings.push(Finding {
                         severity: Severity::Error,
                         category: IssueCategory::Schema,
@@ -141,26 +141,6 @@ mod tests {
         }
     }
 
-    fn make_ctx_with_body<'a>(
-        page: &'a crate::parser::ParsedPage,
-        status: Option<u16>,
-        body: &'a str,
-    ) -> AnalysisContext<'a> {
-        AnalysisContext {
-            page,
-            body: Some(body),
-            status_code: status,
-            headers: &[],
-            response_time: None,
-            redirect_chain: &[],
-            robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
-        }
-    }
     #[test]
 fn test_playbook_missing_name() {
     let mut page = make_page("https://example.com");

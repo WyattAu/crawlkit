@@ -102,6 +102,7 @@ pub struct PageData {
     pub heading_count: Option<usize>,
 }
 
+#[allow(clippy::unwrap_used)]
 impl Default for PageData {
     fn default() -> Self {
         Self {

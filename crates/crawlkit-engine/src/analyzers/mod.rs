@@ -22,7 +22,8 @@ pub mod social_analyzers;
 
 pub use content_analyzers::{
     BreadcrumbListDepthAnalyzer, ContentFreshnessScorer, ContentThinAnalyzer,
-    ContentQualityAnalyzer, DuplicateContentDetector, EnhancedReadabilityAnalyzer,
+    ContentQualityAnalyzer, ContentTopicCoverageAnalyzer, DuplicateContentDetector,
+    EnhancedReadabilityAnalyzer,
     EntityAnalyzer, EntityLinkingAnalyzer, JsonLdValidator, MetaDescriptionLengthAnalyzer,
     MicrodataValidator, RdfaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
     TitleLengthAnalyzer,
@@ -59,12 +60,14 @@ pub use seo_analyzers::{
     CanonicalUrlValidator, CharsetValidator,
     HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
     HreflangValidator,
-    InternalLinkAnchorAnalyzer, InternationalSeoAnalyzer, KeywordAnalyzer,
+    InternalLinkAnchorAnalyzer, InternalLinkTopicalAnalyzer,
+    InternationalSeoAnalyzer, KeywordAnalyzer,
     LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo,
-    MetaTagAnalyzer,
+    MetaDescriptionPixelWidthAnalyzer, MetaTagAnalyzer,
     MobileViewportAnalyzer, OpenSearchValidator,
     PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
     SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
+    TitlePixelWidthAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
@@ -442,11 +445,13 @@ impl AnalyzerRegistry {
             // Content freshness and breadcrumb depth
             Box::new(ContentFreshnessScorer::new()),
             Box::new(BreadcrumbListDepthAnalyzer::new()),
-            // SEO: internal link anchor analysis
-            Box::new(InternalLinkAnchorAnalyzer::new()),
-            // SEO: Wikipedia/Wikidata link detection and anchor text diversity
-            Box::new(WikipediaLinkAnalyzer::new()),
-            Box::new(AnchorTextDiversityAnalyzer::new()),
+            // SEO: SERP pixel width analysis
+            Box::new(TitlePixelWidthAnalyzer::new()),
+            Box::new(MetaDescriptionPixelWidthAnalyzer::new()),
+            // SEO: internal link topical relevance
+            Box::new(InternalLinkTopicalAnalyzer::new()),
+            // Content: topic coverage analysis
+            Box::new(ContentTopicCoverageAnalyzer::new()),
             // Social: social preview optimizer
             Box::new(SocialPreviewOptimizer::new()),
             // Local business NAP consistency
@@ -505,7 +510,6 @@ impl AnalyzerRegistry {
             Box::new(ImageAccessibilityAnalyzer::new()),
             Box::new(AriaRolesAnalyzer::new()),
             Box::new(FocusManagementAnalyzer::new()),
-            Box::new(LanguageAttributeAnalyzer::new()),
             // Schema validators: Apartment, Car, MusicAlbum, TVSeries, Movie
             Box::new(ApartmentSchemaValidator::new()),
             Box::new(CarSchemaValidator::new()),

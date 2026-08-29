@@ -1,5 +1,5 @@
 #![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use regex::Regex;
 
@@ -1544,14 +1544,13 @@ impl Analyzer for EntityLinkingAnalyzer {
 // BreadcrumbsValidator
 // =========================================================================
 
-/// Validates BreadcrumbList structured data completeness and consistency.
+// Validates BreadcrumbList structured data completeness and consistency.
 ///
 /// Checks for incomplete BreadcrumbList schema, breadcrumb URLs that
 /// don't match the page hierarchy, and missing breadcrumbs on deep pages.
 // =========================================================================
 // DuplicateContentDetector
 // =========================================================================
-
 /// Detects potential duplicate content patterns within a single page.
 ///
 /// Checks for title/description similarity, boilerplate patterns,
@@ -1684,17 +1683,17 @@ impl Analyzer for DuplicateContentDetector {
 // EventSchemaValidator
 // =========================================================================
 
-/// Validates Event structured data for completeness.
+// Validates Event structured data for completeness.
 // =========================================================================
 // ReviewSchemaValidator
 // =========================================================================
 
-/// Validates Review and AggregateRating structured data.
+// Validates Review and AggregateRating structured data.
 // =========================================================================
 // VideoSchemaValidator
 // =========================================================================
 
-/// Validates VideoObject structured data.
+// Validates VideoObject structured data.
 // =========================================================================
 // TableOfContentsAnalyzer
 // =========================================================================
@@ -1765,72 +1764,72 @@ impl Analyzer for TableOfContentsAnalyzer {
 // LocalBusinessSchemaValidator
 // =========================================================================
 
-/// Validates LocalBusiness and subtype schemas for NAP consistency.
+// Validates LocalBusiness and subtype schemas for NAP consistency.
 // =========================================================================
 // LocalBusinessNapAnalyzer
 // =========================================================================
 
-/// Validates LocalBusiness NAP (Name, Address, Phone) consistency.
+// Validates LocalBusiness NAP (Name, Address, Phone) consistency.
 // =========================================================================
 // FaqSchemaValidator
 // =========================================================================
 
-/// Validates FAQPage structured data for completeness.
+// Validates FAQPage structured data for completeness.
 // =========================================================================
 // HowToSchemaValidator
 // =========================================================================
 
-/// Validates HowTo structured data for completeness.
+// Validates HowTo structured data for completeness.
 // =========================================================================
 // SpeakableSchemaValidator
 // =========================================================================
 
-/// Validates Speakable structured data for completeness.
+// Validates Speakable structured data for completeness.
 // =========================================================================
 // DatasetSchemaValidator
 // =========================================================================
 
-/// Validates Dataset structured data for completeness.
+// Validates Dataset structured data for completeness.
 // =========================================================================
 // SpecialAnnouncementSchemaValidator
 // =========================================================================
 
-/// Validates SpecialAnnouncement structured data for completeness.
+// Validates SpecialAnnouncement structured data for completeness.
 // =========================================================================
 // SoftwareApplicationValidator
 // =========================================================================
 
-/// Validates SoftwareApplication structured data for completeness.
+// Validates SoftwareApplication structured data for completeness.
 // =========================================================================
 // ArticleSchemaValidator
 // =========================================================================
 
-/// Validates Article (and subtype) structured data for completeness.
+// Validates Article (and subtype) structured data for completeness.
 // =========================================================================
 // OrganizationSchemaValidator
 // =========================================================================
 
-/// Validates Organization structured data for completeness.
+// Validates Organization structured data for completeness.
 // =========================================================================
 // PersonSchemaValidator
 // =========================================================================
 
-/// Validates Person structured data for completeness.
+// Validates Person structured data for completeness.
 // =========================================================================
 // JobPostingSchemaValidator
 // =========================================================================
 
-/// Validates JobPosting structured data for completeness.
+// Validates JobPosting structured data for completeness.
 // =========================================================================
 // CourseSchemaValidator
 // =========================================================================
 
-/// Validates Course structured data for completeness.
+// Validates Course structured data for completeness.
 // =========================================================================
 // RecipeSchemaValidator
 // =========================================================================
 
-/// Validates Recipe structured data for completeness.
+// Validates Recipe structured data for completeness.
 // =========================================================================
 // ContentFreshnessScorer
 // =========================================================================
@@ -2007,7 +2006,7 @@ impl Analyzer for ContentFreshnessScorer {
 // BreadcrumbListDepthAnalyzer
 // =========================================================================
 
-/// Validates BreadcrumbList depth consistency with URL depth.
+// Validates BreadcrumbList depth consistency with URL depth.
 pub struct BreadcrumbListDepthAnalyzer;
 
 impl Default for BreadcrumbListDepthAnalyzer {
@@ -2082,52 +2081,52 @@ impl Analyzer for BreadcrumbListDepthAnalyzer {
 // WebPageSchemaValidator
 // =========================================================================
 
-/// Validates WebPage structured data for completeness.
+// Validates WebPage structured data for completeness.
 // =========================================================================
 // ServiceSchemaValidator
 // =========================================================================
 
-/// Validates Service structured data for completeness.
+// Validates Service structured data for completeness.
 // =========================================================================
 // ItemListSchemaValidator
 // =========================================================================
 
-/// Validates ItemList structured data for completeness.
+// Validates ItemList structured data for completeness.
 // =========================================================================
 // OfferSchemaValidator
 // =========================================================================
 
-/// Validates Offer structured data for completeness.
+// Validates Offer structured data for completeness.
 // =========================================================================
 // AggregateOfferSchemaValidator
 // =========================================================================
 
-/// Validates AggregateOffer structured data for completeness.
+// Validates AggregateOffer structured data for completeness.
 // =========================================================================
 // BrandSchemaValidator
 // =========================================================================
 
-/// Validates Brand structured data for completeness.
+// Validates Brand structured data for completeness.
 // =========================================================================
 // OccupationSchemaValidator
 // =========================================================================
 
-/// Validates Occupation structured data for completeness.
+// Validates Occupation structured data for completeness.
 // =========================================================================
 // QuestSchemaValidator
 // =========================================================================
 
-/// Validates Quest structured data for games and education.
+// Validates Quest structured data for games and education.
 // =========================================================================
 // ActionSchemaValidator
 // =========================================================================
 
-/// Validates Action structured data for completeness.
+// Validates Action structured data for completeness.
 // =========================================================================
 // PlaybookSchemaValidator
 // =========================================================================
 
-/// Validates Playbook structured data for completeness.
+// Validates Playbook structured data for completeness.
 // =========================================================================
 // LocalBusinessHoursValidator
 // =========================================================================
@@ -2696,6 +2695,266 @@ mod tests {
     }
 
 
+
+
+    // ---- ContentTopicCoverageAnalyzer tests ----
+
+    #[test]
+    fn test_topcov_no_headings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_body(&page, Some(200), "Some body text here.");
+        assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_topcov_no_body() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.word_count = 100;
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_topcov_empty_body() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.word_count = 0;
+        let ctx = make_ctx_with_body(&page, Some(200), "");
+        assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_topcov_zero_word_count() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.word_count = 0;
+        let ctx = make_ctx_with_body(&page, Some(200), "Some content");
+        assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_topcov_good_coverage() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming Guide".to_string(), length: 22 }];
+        page.word_count = 100;
+        let body = "Rust is a systems programming language. Programming in Rust is safe and fast. This guide covers all the basics of Rust programming.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_poor_coverage() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming Guide".to_string(), length: 22 }];
+        page.word_count = 100;
+        let body = "The quick brown fox jumps over the lazy dog. A journey of a thousand miles begins with a single step. Knowledge is power.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_strictly_below_threshold() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Advanced Rust Programming Guide".to_string(), length: 30 },
+        ];
+        page.word_count = 100;
+        let body = "This guide covers everything you need to know about getting started with technology. The guide is comprehensive and detailed with many examples.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_stop_words_excluded() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "The Best Rust Guide".to_string(), length: 19 }];
+        page.word_count = 100;
+        let body = "Rust is great. This guide will help you learn. The guide is comprehensive.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_case_insensitive() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "RUST Programming".to_string(), length: 16 }];
+        page.word_count = 100;
+        let body = "rust is a language. Programming in rust is fun.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_empty_heading_text() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "".to_string(), length: 0 }];
+        page.word_count = 100;
+        let ctx = make_ctx_with_body(&page, Some(200), "Some content here.");
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_topcov_multiple_headings() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
+            crate::parser::Heading { level: 2, text: "Getting Started".to_string(), length: 15 },
+        ];
+        page.word_count = 100;
+        let body = "Rust is a systems programming language. Programming in Rust is safe and fast.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "TOPCOV001"));
+    }
+
+    #[test]
+    fn test_topcov_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Advanced Rust Programming Guide".to_string(), length: 30 }];
+        page.word_count = 100;
+        let body = "This guide covers everything you need to know about getting started with technology.";
+        let ctx = make_ctx_with_body(&page, Some(200), body);
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        if let Some(f) = findings.iter().find(|f| f.code == "TOPCOV001") {
+            assert_eq!(f.severity, Severity::Warning);
+            assert_eq!(f.category, IssueCategory::Content);
+        }
+    }
+
+    #[test]
+    fn test_topcov_name() {
+        assert_eq!(ContentTopicCoverageAnalyzer::new().name(), "content-topic-coverage");
+    }
+
+    #[test]
+    fn test_topcov_no_body_text_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust".to_string(), length: 4 }];
+        page.word_count = 100;
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_topcov_short_heading_keywords() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "Is It OK".to_string(), length: 8 }];
+        page.word_count = 100;
+        let ctx = make_ctx_with_body(&page, Some(200), "Some content here.");
+        let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+}
+
+// =========================================================================
+// ContentTopicCoverageAnalyzer
+// =========================================================================
+
+/// Checks if body content covers the same topics as headings (Lumar NLP-lite angle).
+pub struct ContentTopicCoverageAnalyzer;
+
+impl Default for ContentTopicCoverageAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentTopicCoverageAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Tokenize text into lowercase words > 2 chars, excluding stop words.
+    fn tokenize(text: &str) -> HashSet<String> {
+        text.to_lowercase()
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>()
+            })
+            .filter(|w| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect()
+    }
+}
+
+impl Analyzer for ContentTopicCoverageAnalyzer {
+    fn name(&self) -> &str {
+        "content-topic-coverage"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.headings.is_empty() || ctx.page.word_count == 0 {
+            return findings;
+        }
+
+        let heading_text: String = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let heading_keywords = Self::tokenize(&heading_text);
+
+        if heading_keywords.is_empty() {
+            return findings;
+        }
+
+        let body_text = ctx.body.unwrap_or("");
+        if body_text.is_empty() {
+            return findings;
+        }
+
+        let body_words = Self::tokenize(body_text);
+        if body_words.is_empty() {
+            return findings;
+        }
+
+        let covered = heading_keywords
+            .iter()
+            .filter(|kw| body_words.contains(*kw))
+            .count();
+        let total = heading_keywords.len();
+        let ratio = covered as f64 / total as f64;
+
+        if ratio < 0.30 {
+            let missing: Vec<&String> = heading_keywords
+                .iter()
+                .filter(|kw| !body_words.contains(*kw))
+                .collect();
+            let missing_display: Vec<&str> = missing.iter().take(5).map(|s| s.as_str()).collect();
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "TOPCOV001".to_string(),
+                title: "Body content lacks heading topic coverage".to_string(),
+                description: format!(
+                    "Only {:.0}% of heading keywords ({}/{}) appear in the body text.                      Headings introduce topics that the body content should elaborate on.                      Missing keywords: {}",
+                    ratio * 100.0,
+                    covered,
+                    total,
+                    missing_display.join(", ")
+                ),
+                url: url.clone(),
+                recommendation: "Ensure body content elaborates on the topics introduced by                                  headings. Each heading keyword should be discussed in the                                  corresponding section."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
 }
 
 // =========================================================================
@@ -3986,102 +4245,102 @@ mod thin_extra_tests {
 // ApartmentSchemaValidator
 // =========================================================================
 
-/// Validates Apartment/Residence structured data for completeness.
+// Validates Apartment/Residence structured data for completeness.
 // =========================================================================
 // CarSchemaValidator
 // =========================================================================
 
-/// Validates Car structured data for completeness.
+// Validates Car structured data for completeness.
 // =========================================================================
 // MusicAlbumSchemaValidator
 // =========================================================================
 
-/// Validates MusicAlbum structured data for completeness.
+// Validates MusicAlbum structured data for completeness.
 // =========================================================================
 // TVSeriesSchemaValidator
 // =========================================================================
 
-/// Validates TVSeries structured data for completeness.
+// Validates TVSeries structured data for completeness.
 // =========================================================================
 // MovieSchemaValidator
 // =========================================================================
 
-/// Validates Movie structured data for completeness.
+// Validates Movie structured data for completeness.
 // =========================================================================
 // GovernmentServiceSchemaValidator
 // =========================================================================
 
-/// Validates GovernmentService structured data for completeness.
+// Validates GovernmentService structured data for completeness.
 // =========================================================================
 // HealthPlanSchemaValidator
 // =========================================================================
 
-/// Validates HealthPlan structured data for completeness.
+// Validates HealthPlan structured data for completeness.
 // =========================================================================
 // InvoiceSchemaValidator
 // =========================================================================
 
-/// Validates Invoice structured data for completeness.
+// Validates Invoice structured data for completeness.
 // =========================================================================
 // PermitSchemaValidator
 // =========================================================================
 
-/// Validates Permit structured data for completeness.
+// Validates Permit structured data for completeness.
 // =========================================================================
 // PlanSchemaValidator
 // =========================================================================
 
-/// Validates Plan structured data for completeness.
+// Validates Plan structured data for completeness.
 // =========================================================================
 // ProductModelSchemaValidator
 // =========================================================================
 
-/// Validates ProductModel structured data for completeness.
+// Validates ProductModel structured data for completeness.
 // =========================================================================
 // ResearchProjectSchemaValidator
 // =========================================================================
 
-/// Validates ResearchProject structured data for completeness.
+// Validates ResearchProject structured data for completeness.
 // =========================================================================
 // ScheduleSchemaValidator
 // =========================================================================
 
-/// Validates Schedule structured data for completeness.
+// Validates Schedule structured data for completeness.
 // =========================================================================
 // TripSchemaValidator
 // =========================================================================
 
-/// Validates Trip structured data for completeness.
+// Validates Trip structured data for completeness.
 // =========================================================================
 // WorkersUnionSchemaValidator
 // =========================================================================
 
-/// Validates WorkersUnion structured data for completeness.
+// Validates WorkersUnion structured data for completeness.
 // =========================================================================
 // WebAPISchemaValidator
 // =========================================================================
 
-/// Validates WebAPI structured data for completeness.
+// Validates WebAPI structured data for completeness.
 // =========================================================================
 // WearableSchemaValidator
 // =========================================================================
 
-/// Validates Wearable structured data for completeness.
+// Validates Wearable structured data for completeness.
 // =========================================================================
 // WebPageElementSchemaValidator
 // =========================================================================
 
-/// Validates WebPageElement structured data for completeness.
+// Validates WebPageElement structured data for completeness.
 // =========================================================================
 // WebSiteSchemaValidator
 // =========================================================================
 
-/// Validates WebSite structured data for completeness.
+// Validates WebSite structured data for completeness.
 // =========================================================================
 // WorkerSchemaValidator
 // =========================================================================
 
-/// Validates Worker structured data for completeness.
+// Validates Worker structured data for completeness.
 // =========================================================================
 // Tests for new schema validators
 // =========================================================================

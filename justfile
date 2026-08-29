@@ -21,6 +21,15 @@ clippy:
 test:
     cargo test --workspace
 
+# Pre-push gate: clippy + badge accuracy check (MUST pass before any push)
+gate:
+    @echo "=== Central pre-push gate ==="
+    cargo clippy --workspace --all-targets -- -D warnings
+    @echo "clippy: PASS"
+    cargo test --workspace --lib --bins
+    @echo "tests: PASS"
+    @echo "=== Gate passed ==="
+
 # Run unit tests only (fast feedback)
 test-unit:
     cargo test --lib --workspace

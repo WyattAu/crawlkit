@@ -379,6 +379,16 @@ fn bench_storage_operations(c: &mut Criterion) {
                         cwv_lcp: None,
                         cwv_cls: None,
                         cwv_inp: None,
+                        has_structured_data: None,
+                        schema_types: None,
+                        viewport_ok: None,
+                        has_csp: None,
+                        has_hsts: None,
+                        images_total: None,
+                        images_missing_alt: None,
+                        h1_count: None,
+                        heading_count: None,
+                        extractions: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -412,6 +422,16 @@ fn bench_storage_operations(c: &mut Criterion) {
                         cwv_lcp: None,
                         cwv_cls: None,
                         cwv_inp: None,
+                        has_structured_data: None,
+                        schema_types: None,
+                        viewport_ok: None,
+                        has_csp: None,
+                        has_hsts: None,
+                        images_total: None,
+                        images_missing_alt: None,
+                        h1_count: None,
+                        heading_count: None,
+                        extractions: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -449,6 +469,16 @@ fn bench_storage_operations(c: &mut Criterion) {
                     cwv_lcp: None,
                     cwv_cls: None,
                     cwv_inp: None,
+            has_structured_data: None,
+            schema_types: None,
+            viewport_ok: None,
+            has_csp: None,
+            has_hsts: None,
+            images_total: None,
+            images_missing_alt: None,
+            h1_count: None,
+            heading_count: None,
+            extractions: None,
                 };
                 storage.insert_page(&crawl_id, &page).unwrap();
                 (storage, crawl_id)

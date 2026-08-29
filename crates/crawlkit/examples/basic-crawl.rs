@@ -48,6 +48,7 @@ async fn main() -> Result<()> {
         respect_robots_txt: true,
         allowed_patterns: Vec::new(),
         disallowed_patterns: vec!["/admin/*".to_string(), "/api/*".to_string()],
+        extraction: Default::default(),
     };
 
     println!(
@@ -196,6 +197,16 @@ async fn main() -> Result<()> {
             cwv_lcp: None,
             cwv_cls: None,
             cwv_inp: None,
+            has_structured_data: None,
+            schema_types: None,
+            viewport_ok: None,
+            has_csp: None,
+            has_hsts: None,
+            images_total: None,
+            images_missing_alt: None,
+            h1_count: None,
+            heading_count: None,
+            extractions: None,
         };
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
             eprintln!("  Storage error: {e}");

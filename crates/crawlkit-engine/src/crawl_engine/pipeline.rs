@@ -133,7 +133,8 @@ impl CrawlRun<'_> {
         bump_by(&self.counters.issues_found, findings.len());
 
         let page_id = uuid::Uuid::new_v4().to_string();
-        let page_data = self.build_page_data(&page_id, &fetched.entry.url, result, &parsed);
+        let page_data =
+            self.build_page_data(&page_id, &fetched.entry.url, result, &parsed, &body_text);
         self.store(&page_data, &findings).await;
 
         self.metrics.record_page_success(
@@ -263,7 +264,23 @@ impl CrawlRun<'_> {
         url: &Url,
         result: &crate::FetchResult,
         parsed: &crate::ParsedPage,
+        body_text: &str,
     ) -> PageData {
+        // Run custom extraction rules if enabled.
+        let extractions_json = if self.cfg.crawl_config.extraction.enabled
+            && !self.cfg.crawl_config.extraction.rules.is_empty()
+        {
+            let extraction_results =
+                crate::extraction::extract_page(body_text, &self.cfg.crawl_config.extraction.rules);
+            let pairs: Vec<(String, Vec<String>)> = extraction_results
+                .into_iter()
+                .map(|r| (r.rule_name, r.values))
+                .collect();
+            serde_json::to_string(&pairs).ok()
+        } else {
+            None
+        };
+
         let mut page_data = PageData {
             id: page_id.to_string(),
             url: url.clone(),
@@ -319,6 +336,7 @@ impl CrawlRun<'_> {
             images_missing_alt: Some(parsed.images.iter().filter(|i| !i.has_alt).count()),
             h1_count: Some(parsed.headings.iter().filter(|h| h.level == 1).count()),
             heading_count: Some(parsed.headings.len()),
+            extractions: extractions_json,
         };
         if let Some(encryption) = self.cfg.encryption.as_ref() {
             if encryption.is_enabled() {

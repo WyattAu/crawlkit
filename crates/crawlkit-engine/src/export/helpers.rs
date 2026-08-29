@@ -106,6 +106,7 @@ pub(super) struct PageRow {
     pub images_missing_alt: Option<usize>,
     pub h1_count: Option<usize>,
     pub heading_count: Option<usize>,
+    pub extractions: Option<String>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -188,6 +189,7 @@ pub(super) fn read_pages(
             images_missing_alt: p.images_missing_alt,
             h1_count: p.h1_count,
             heading_count: p.heading_count,
+            extractions: p.extractions,
         })
         .collect();
     rows.sort_by(|a, b| a.url.cmp(&b.url));

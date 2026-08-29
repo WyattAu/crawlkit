@@ -47,6 +47,7 @@ mod tests {
                 images_missing_alt: None,
                 h1_count: None,
                 heading_count: None,
+                extractions: None,
             },
             PageData {
                 id: "p2".into(),
@@ -76,6 +77,7 @@ mod tests {
                 images_missing_alt: None,
                 h1_count: None,
                 heading_count: None,
+                extractions: None,
             },
             PageData {
                 id: "p3".into(),
@@ -108,6 +110,7 @@ mod tests {
                 images_missing_alt: None,
                 h1_count: None,
                 heading_count: None,
+                extractions: None,
             },
         ];
         storage.insert_pages(crawl_id, &pages).unwrap();
@@ -413,7 +416,7 @@ mod tests {
     #[test]
     fn test_column_selector_headers() {
         let sel = CsvColumnSelector::all();
-        assert_eq!(sel.headers().len(), 21);
+        assert_eq!(sel.headers().len(), 22);
 
         let sel = CsvColumnSelector {
             url: true,
@@ -484,6 +487,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         };
         storage.insert_pages(&crawl_id, &[page]).unwrap();
 
@@ -543,6 +547,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         };
         storage.insert_pages(&crawl_id, &[page]).unwrap();
 

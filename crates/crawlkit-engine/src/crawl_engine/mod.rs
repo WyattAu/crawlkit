@@ -131,6 +131,11 @@ pub struct CrawlEngineConfig {
     /// Optional queue backend override. When `None`, the default
     /// [`UrlQueue`](crate::queue::UrlQueue) is used.
     pub queue: Option<Arc<dyn Queue>>,
+
+    /// Optional CrUX API key for fetching Core Web Vitals field data.
+    /// When set, the engine fetches CrUX data after crawl completion
+    /// and populates `cwv_lcp`, `cwv_cls`, `cwv_inp` on stored pages.
+    pub crux_api_key: Option<String>,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -155,6 +160,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("concurrency", &self.concurrency)
             .field("incremental", &self.incremental)
             .field("force", &self.force)
+            .field("crux_api_key", &self.crux_api_key.is_some())
             .finish()
     }
 }
@@ -183,6 +189,7 @@ impl Default for CrawlEngineConfig {
             plugin_dirs: Vec::new(),
             post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(),
             queue: None,
+            crux_api_key: None,
         }
     }
 }
@@ -823,6 +830,12 @@ impl CrawlEngine {
             stats.pages_new,
         );
 
+        // Fetch CrUX field data if configured (post-crawl, batched per origin).
+        if let Some(ref crux_api_key) = self.config.crux_api_key {
+            let client = crate::CruxClient::new(crux_api_key.clone());
+            self.populate_crux_field_data(&client, &crawl_id).await;
+        }
+
         CrawlOutput {
             crawl_id,
             pages_crawled: stats.pages_crawled,
@@ -848,6 +861,90 @@ impl CrawlEngine {
     /// feature flags control the optional analyzer groups.
     fn build_analyzer_registry(&self) -> AnalyzerRegistry {
         AnalyzerRegistry::with_feature_flags(&self.config.feature_flags)
+    }
+
+    /// Fetch CrUX field data for all crawled pages and update their CWV
+    /// columns. Batches by unique origin to minimize API calls.
+    async fn populate_crux_field_data(
+        &self,
+        client: &crate::CruxClient,
+        crawl_id: &str,
+    ) {
+        use std::collections::HashMap;
+
+        let storage = Arc::clone(&self.storage);
+        let crawl_id_owned = crawl_id.to_string();
+        let pages = tokio::task::spawn_blocking(move || {
+            storage.get_pages(&crawl_id_owned, 100_000)
+        })
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "Failed to fetch pages for CrUX");
+            Ok(Vec::new())
+        })
+        .unwrap_or_default();
+
+        if pages.is_empty() {
+            return;
+        }
+
+        // Deduplicate origins (scheme + host).
+        let mut origin_map: HashMap<String, Vec<(String, String)>> = HashMap::new();
+        for page in &pages {
+            let origin = format!(
+                "{}://{}",
+                page.url.scheme(),
+                page.url.host_str().unwrap_or_default()
+            );
+            origin_map
+                .entry(origin)
+                .or_default()
+                .push((page.id.clone(), page.url.to_string()));
+        }
+
+        tracing::info!(
+            origins = origin_map.len(),
+            "Fetching CrUX field data for crawled origins"
+        );
+
+        // Fetch CrUX data per origin (sequential to respect rate limits).
+        let mut cwv_hits = 0usize;
+        for (origin, page_ids) in &origin_map {
+            match client.get_field_data(origin).await {
+                Ok(Some(field_data)) => {
+                    for (page_id, _page_url) in page_ids {
+                        let storage = Arc::clone(&self.storage);
+                        let pid = page_id.clone();
+                        let lcp = field_data.lcp_p75;
+                        let cls = field_data.cls_p75;
+                        let inp = field_data.inp_p75;
+                        let result = tokio::task::spawn_blocking(move || {
+                            storage.update_page_cwv(&pid, lcp, cls, inp)
+                        })
+                        .await;
+                        match result {
+                            Ok(Ok(())) => cwv_hits += 1,
+                            Ok(Err(e)) => {
+                                tracing::warn!(error = %e, page_id = %page_id, "Failed to update CWV")
+                            }
+                            Err(e) => {
+                                tracing::warn!(error = %e, "Blocking CWV update task failed")
+                            }
+                        }
+                    }
+                }
+                Ok(None) => {
+                    tracing::debug!(origin = %origin, "No CrUX data available");
+                }
+                Err(e) => {
+                    tracing::warn!(origin = %origin, error = %e, "CrUX fetch failed");
+                }
+            }
+        }
+
+        if cwv_hits > 0 {
+            tracing::info!(updated = cwv_hits, "CrUX field data populated");
+        }
     }
 
     /// Get a reference to the underlying storage.

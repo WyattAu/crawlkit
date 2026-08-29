@@ -108,6 +108,15 @@ pub trait StorageBackend: Send + Sync {
         fetched_at: chrono::DateTime<chrono::Utc>,
     ) -> Result<(), StorageError>;
 
+    /// Update the Core Web Vitals fields of an existing page.
+    fn update_page_cwv(
+        &self,
+        page_id: &str,
+        cwv_lcp: Option<f64>,
+        cwv_cls: Option<f64>,
+        cwv_inp: Option<f64>,
+    ) -> Result<(), StorageError>;
+
     /// Get the most recent crawl ID.
     fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError>;
 
@@ -191,6 +200,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         }
     }
 

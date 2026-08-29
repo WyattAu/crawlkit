@@ -115,6 +115,7 @@ fn make_page_data(url: &str) -> PageData {
         images_missing_alt: None,
         h1_count: None,
         heading_count: None,
+            extractions: None,
     }
 }
 

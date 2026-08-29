@@ -122,6 +122,12 @@ pub mod compare;
 /// opportunities for new content creation.
 #[cfg(feature = "full")]
 pub mod content_gap;
+/// CrUX (Chrome User Experience Report) field data client.
+///
+/// Fetches real-world Core Web Vitals (LCP, CLS, INP, FCP, TTFB) from the
+/// CrUX API for origin-level performance data.
+#[cfg(feature = "full")]
+pub mod crux;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
 #[cfg(feature = "full")]
 pub mod crawl_engine;
@@ -358,6 +364,8 @@ pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
 #[cfg(feature = "full")]
 pub use robots::RobotsTxtCache;
 #[cfg(feature = "full")]
+pub use crux::{CruxClient, CruxError, CruxFieldData};
+#[cfg(feature = "full")]
 pub use rum::{
     CruxAdapter, CruxData, FieldMetrics, GoogleAnalyticsAdapter, LabMetrics, MergedMetrics,
     MetricDeltas, RumDataPoint, RumError,
@@ -375,6 +383,12 @@ pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRunti
 #[cfg(feature = "full")]
 pub use web_vitals::{WebVitals, WebVitalsError, WebVitalsMeasurer};
 
+/// Declarative custom extraction engine.
+///
+/// Applies user-defined CSS selector + regex rules to each crawled page,
+/// extracting structured fields for storage and export. Configuration
+/// is driven by `[[extraction.rules]]` entries in `crawlkit.toml`.
+pub mod extraction;
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 ///
 /// Provides MetaTags with helper methods for checking
@@ -549,6 +563,10 @@ pub struct CrawlConfig {
 
     /// Disallowed URL patterns (glob-style).
     pub disallowed_patterns: Vec<String>,
+
+    /// Custom extraction rules applied to each crawled page.
+    #[serde(default)]
+    pub extraction: extraction::ExtractionConfig,
 }
 
 impl Default for CrawlConfig {
@@ -567,6 +585,7 @@ impl Default for CrawlConfig {
             respect_robots_txt: true,
             allowed_patterns: Vec::new(),
             disallowed_patterns: Vec::new(),
+            extraction: extraction::ExtractionConfig::default(),
         }
     }
 }

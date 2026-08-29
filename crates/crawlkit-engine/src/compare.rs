@@ -556,6 +556,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         }
     }
 

@@ -49,6 +49,8 @@ pub struct CsvColumnSelector {
     pub issues_json: bool,
     /// If true, include all links as JSON array.
     pub links_json: bool,
+    /// If true, include custom extractions as JSON object (one column per rule name).
+    pub extractions_json: bool,
 }
 
 impl CsvColumnSelector {
@@ -76,6 +78,7 @@ impl CsvColumnSelector {
             issue_count: true,
             issues_json: true,
             links_json: true,
+            extractions_json: true,
         }
     }
 
@@ -144,6 +147,9 @@ impl CsvColumnSelector {
         }
         if self.links_json {
             h.push("links");
+        }
+        if self.extractions_json {
+            h.push("extractions");
         }
         h
     }
@@ -255,6 +261,9 @@ pub fn export_csv(
         }
         if selector.links_json {
             record.push(serde_json::to_string(&links).unwrap_or_default());
+        }
+        if selector.extractions_json {
+            record.push(page.extractions.clone().unwrap_or_default());
         }
         wtr.write_record(&record)?;
     }

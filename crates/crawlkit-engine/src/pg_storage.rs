@@ -794,6 +794,29 @@ impl StorageBackend for PgStorage {
         })
     }
 
+    fn update_page_cwv(
+        &self,
+        page_id: &str,
+        cwv_lcp: Option<f64>,
+        cwv_cls: Option<f64>,
+        cwv_inp: Option<f64>,
+    ) -> Result<(), StorageError> {
+        let pool = self.pool.clone();
+        let page_id = page_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            sqlx::query("UPDATE pages SET cwv_lcp = $1, cwv_cls = $2, cwv_inp = $3 WHERE id = $4")
+                .bind(cwv_lcp)
+                .bind(cwv_cls)
+                .bind(cwv_inp)
+                .bind(&page_id)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
     fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
         let pool = self.pool.clone();
 
@@ -1115,6 +1138,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         }
     }
 

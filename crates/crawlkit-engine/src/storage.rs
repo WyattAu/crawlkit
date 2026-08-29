@@ -100,6 +100,11 @@ pub struct PageData {
     pub h1_count: Option<usize>,
     /// Total number of headings (H1-H6) on the page.
     pub heading_count: Option<usize>,
+    /// JSON-serialized custom extraction results: `Vec<(String, Vec<String>)>`.
+    /// Each tuple is `(rule_name, extracted_values)`. `None` when no extraction
+    /// rules are configured for the crawl.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extractions: Option<String>,
 }
 
 #[allow(clippy::unwrap_used)]
@@ -133,6 +138,7 @@ impl Default for PageData {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         }
     }
 }
@@ -491,6 +497,7 @@ impl Storage {
             "images_missing_alt",
             "h1_count",
             "heading_count",
+            "extractions",
         ];
         for col in new_columns {
             if !columns.contains(&col.to_string()) {
@@ -581,6 +588,7 @@ impl Storage {
     ///     images_missing_alt: None,
     ///     h1_count: None,
     ///     heading_count: None,
+    ///     extractions: None,
     /// };
     ///
     /// storage.insert_page(&crawl_id, &page).unwrap();
@@ -592,8 +600,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
             params![
                 page.id,
                 crawl_id,
@@ -622,6 +630,7 @@ impl Storage {
                 page.images_missing_alt.map(|v| v as i64),
                 page.h1_count.map(|v| v as i64),
                 page.heading_count.map(|v| v as i64),
+                page.extractions,
             ],
         )?;
 
@@ -664,8 +673,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -700,6 +709,7 @@ impl Storage {
                 page.images_missing_alt.map(|v| v as i64),
                 page.h1_count.map(|v| v as i64),
                 page.heading_count.map(|v| v as i64),
+                page.extractions,
             ])?;
 
             for link in &page.links {
@@ -812,7 +822,7 @@ impl Storage {
 
         let conn = self.conn.lock();
         let result = conn.query_row(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
              FROM pages WHERE crawl_id = ?1 AND url = ?2",
             params![crawl_id, url],
             Self::row_to_page_data,
@@ -862,6 +872,7 @@ impl Storage {
             images_missing_alt: row.get::<_, Option<i64>>(23)?.map(|v| v as usize),
             h1_count: row.get::<_, Option<i64>>(24)?.map(|v| v as usize),
             heading_count: row.get::<_, Option<i64>>(25)?.map(|v| v as usize),
+            extractions: row.get(26)?,
         })
     }
 
@@ -908,6 +919,7 @@ impl Storage {
     ///     images_missing_alt: None,
     ///     h1_count: None,
     ///     heading_count: None,
+    ///     extractions: None,
     /// };
     /// storage.insert_page(&crawl_id, &page).unwrap();
     ///
@@ -918,7 +930,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -1039,7 +1051,7 @@ impl Storage {
     ) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
              FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
              ORDER BY fetched_at ASC LIMIT ?3",
         )?;
@@ -1333,6 +1345,22 @@ impl Storage {
         Ok(())
     }
 
+    /// Update the Core Web Vitals fields of an existing page.
+    pub fn update_page_cwv(
+        &self,
+        page_id: &str,
+        cwv_lcp: Option<f64>,
+        cwv_cls: Option<f64>,
+        cwv_inp: Option<f64>,
+    ) -> Result<(), StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "UPDATE pages SET cwv_lcp = ?1, cwv_cls = ?2, cwv_inp = ?3 WHERE id = ?4",
+            params![cwv_lcp, cwv_cls, cwv_inp, page_id],
+        )?;
+        Ok(())
+    }
+
     /// Get CrUX metrics for a page.
     pub fn get_crux_metrics(&self, page_id: &str) -> Result<Option<CruxMetrics>, StorageError> {
         let conn = self.conn.lock();
@@ -1497,6 +1525,16 @@ impl crate::storage_trait::StorageBackend for Storage {
         Storage::update_page_fetched_at(self, page_id, fetched_at)
     }
 
+    fn update_page_cwv(
+        &self,
+        page_id: &str,
+        cwv_lcp: Option<f64>,
+        cwv_cls: Option<f64>,
+        cwv_inp: Option<f64>,
+    ) -> Result<(), StorageError> {
+        Storage::update_page_cwv(self, page_id, cwv_lcp, cwv_cls, cwv_inp)
+    }
+
     fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
         Storage::get_latest_crawl_id(self)
     }
@@ -1636,6 +1674,7 @@ mod tests {
             images_missing_alt: None,
             h1_count: None,
             heading_count: None,
+            extractions: None,
         }
     }
 

@@ -153,6 +153,8 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         allow_http: false,
         plugin_dirs,
         post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
+        queue: None,
+        crux_api_key: std::env::var("CRUX_API_KEY").ok().filter(|k| !k.is_empty()),
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

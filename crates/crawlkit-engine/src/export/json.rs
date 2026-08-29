@@ -90,6 +90,8 @@ pub struct JsonPage {
     pub images_missing_alt: Option<usize>,
     pub h1_count: Option<usize>,
     pub heading_count: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub extractions: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub issues: Vec<JsonIssue>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -157,6 +159,10 @@ pub fn export_json(
                 })
                 .collect();
             let links = links_by_page.get(&p.id).cloned().unwrap_or_default();
+            let extractions: Option<serde_json::Value> = p
+                .extractions
+                .as_deref()
+                .and_then(|s| serde_json::from_str(s).ok());
             JsonPage {
                 id: p.id.clone(),
                 url: p.url.clone(),
@@ -178,6 +184,7 @@ pub fn export_json(
                 images_missing_alt: p.images_missing_alt,
                 h1_count: p.h1_count,
                 heading_count: p.heading_count,
+                extractions,
                 issues,
                 links,
             }

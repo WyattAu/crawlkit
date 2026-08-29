@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 29 (v5.5.0 Competitive Parity)
-**Version:** 5.5.0
+**Current Phase:** Phase 30 (v6.0.0 Enterprise)
+**Version:** 6.0.0
 **Status:** Released
 **Last Updated:** 2026-08-28
 **MSRV:** 1.94.0

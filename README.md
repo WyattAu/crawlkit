@@ -135,15 +135,16 @@ output_dir = "./crawl-results"
 
 ## Performance
 
+> All numbers measured on local hardware. See [benchmarks/measured-v4.4.1.md](docs/benchmarks/measured-v4.4.1.md) for methodology.
+
 | Metric | Value |
 |--------|-------|
-| Throughput | >= 50 pages/sec |
-| Memory (10k pages) | ~200 MB |
-| Startup time | ~10 ms |
-| Binary size | ~8 MB |
-| Full analyzer suite | ~25 us/page |
-| HTML parse (5 KB) | ~45 us |
-| PageRank (1K nodes) | ~4 ms |
+| Throughput (TestServer, 10 pages) | 301.5 pages/sec |
+| Binary size (release, LTO+strip) | 23 MB |
+| Startup time (median, N=20) | 3.9 ms |
+| HTML parse (5 KB) | 610 µs |
+| Full analyzer suite (200 analyzers) | 1.48 ms/page |
+| PageRank (100 nodes, 20 iterations) | 981 µs |
 
 Run benchmarks:
 
@@ -152,6 +153,12 @@ cargo bench
 ```
 
 Covers: HTML parser, analyzer execution, registry lookup, queue operations, storage insert/query.
+
+Run end-to-end throughput benchmark:
+
+```bash
+just bench-e2e
+```
 
 ## Security Model
 

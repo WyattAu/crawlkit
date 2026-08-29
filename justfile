@@ -33,6 +33,10 @@ test-integration:
 bench:
     cargo bench --workspace
 
+# Run end-to-end throughput benchmark (local TestServer)
+bench-e2e:
+    cargo run --release -p crawlkit-engine --example throughput_bench
+
 # Build release binary
 build:
     cargo build --release --workspace

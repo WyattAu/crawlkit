@@ -1,3 +1,4 @@
+#![allow(clippy::default_constructed_unit_structs)]
 // Re-export all schema validators
 
 mod action_schema;
@@ -51,6 +52,13 @@ mod speakable_schema;
 mod special_announcement_schema;
 mod trip_schema;
 mod tv_series_schema;
+mod event_start_date;
+mod faq_page_entity;
+mod howto_step_count;
+mod local_business_npi;
+mod organization_sameas;
+mod product_availability;
+mod video_object_duration;
 mod video_schema;
 mod wearable_schema;
 mod web_api_schema;
@@ -111,6 +119,13 @@ pub use speakable_schema::*;
 pub use special_announcement_schema::*;
 pub use trip_schema::*;
 pub use tv_series_schema::*;
+pub use event_start_date::*;
+pub use faq_page_entity::*;
+pub use howto_step_count::*;
+pub use local_business_npi::*;
+pub use organization_sameas::*;
+pub use product_availability::*;
+pub use video_object_duration::*;
 pub use video_schema::*;
 pub use wearable_schema::*;
 pub use web_api_schema::*;

@@ -1,3 +1,4 @@
+#![allow(clippy::default_constructed_unit_structs)]
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 

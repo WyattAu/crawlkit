@@ -1,3 +1,4 @@
+#![allow(clippy::useless_format)]
 #![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
 use std::collections::HashMap;
 
@@ -6335,5 +6336,825 @@ mod tests {
         let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
         assert_eq!(findings.len(), 1);
         assert!(findings.iter().any(|f| f.code == "COOP001"));
+    }
+}
+
+// =========================================================================
+// DnsRebindingAnalyzer
+// =========================================================================
+
+pub struct DnsRebindingAnalyzer;
+
+impl Default for DnsRebindingAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl DnsRebindingAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for DnsRebindingAnalyzer {
+    fn name(&self) -> &str {
+        "dns-rebinding"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Check for CORS headers that could enable DNS rebinding
+        let has_cors_wildcard = ctx.headers.iter().any(|(k, v)| {
+            k.eq_ignore_ascii_case("Access-Control-Allow-Origin") && v.trim() == "*"
+        });
+
+        if has_cors_wildcard {
+            // Check if the page also sets credentials
+            let has_credentials = ctx.headers.iter().any(|(k, v)| {
+                k.eq_ignore_ascii_case("Access-Control-Allow-Credentials")
+                    && v.trim().eq_ignore_ascii_case("true")
+            });
+
+            if has_credentials {
+                findings.push(Finding {
+                    severity: Severity::Critical,
+                    category: IssueCategory::Security,
+                    code: "DNSREBIND001".to_string(),
+                    title: "CORS wildcard with credentials enabled".to_string(),
+                    description: "The page sets Access-Control-Allow-Origin: * and \
+                                  Access-Control-Allow-Credentials: true, which is an \
+                                  invalid and dangerous configuration that could enable \
+                                  DNS rebinding attacks."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Remove the wildcard Access-Control-Allow-Origin or \
+                                     disable credentials. Never combine * origin with \
+                                     credentials."
+                        .to_string(),
+                });
+            }
+
+            // Check if the page has local/internal IP patterns in body
+            if let Some(body) = ctx.body {
+                let local_patterns = [
+                    "127.0.0.1",
+                    "localhost",
+                    "0.0.0.0",
+                    "192.168.",
+                    "10.0.",
+                    "172.16.",
+                ];
+                let has_local_ref = local_patterns
+                    .iter()
+                    .any(|p| body.contains(p));
+                if has_local_ref {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "DNSREBIND002".to_string(),
+                        title: "CORS wildcard with local network references".to_string(),
+                        description: "The page uses Access-Control-Allow-Origin: * and \
+                                      references local network addresses, which could \
+                                      indicate a DNS rebinding vulnerability."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Restrict CORS to specific trusted origins \
+                                         instead of using wildcard."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SubresourceIntegrityAnalyzer
+// =========================================================================
+
+pub struct SubresourceIntegrityAnalyzer;
+
+impl Default for SubresourceIntegrityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SubresourceIntegrityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for SubresourceIntegrityAnalyzer {
+    fn name(&self) -> &str {
+        "subresource-integrity"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body = match ctx.body {
+            Some(b) => b,
+            None => return findings,
+        };
+
+        // Count external script tags with src but without integrity
+        let scripts_without_sri = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| {
+                s.src.as_ref().is_some_and(|src| {
+                    let is_external = src.starts_with("http://")
+                        || src.starts_with("https://")
+                        || src.starts_with("//");
+                    let has_integrity = body.contains(&format!(
+                        "integrity=\""
+                    )) && body.contains(src);
+                    is_external && !has_integrity
+                })
+            })
+            .count();
+
+        if scripts_without_sri > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "SRISCRIPT001".to_string(),
+                title: "External scripts missing Subresource Integrity".to_string(),
+                description: format!(
+                    "{scripts_without_sri} external script(s) are loaded without \
+                     Subresource Integrity (SRI). Without SRI, compromised CDNs \
+                     could inject malicious code."
+                ),
+                url: url.clone(),
+                recommendation: "Add integrity and crossorigin attributes to external \
+                                 script tags. Generate SRI hashes with: openssl dgst \
+                                 -sha384 -binary file.js | openssl base64 -A"
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CorsMisconfigurationAnalyzer
+// =========================================================================
+
+pub struct CorsMisconfigurationAnalyzer;
+
+impl Default for CorsMisconfigurationAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CorsMisconfigurationAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for CorsMisconfigurationAnalyzer {
+    fn name(&self) -> &str {
+        "cors-misconfiguration"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let cors_origin = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin"))
+            .map(|(_, v)| v.as_str());
+
+        let cors_creds = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials"))
+            .map(|(_, v)| v.as_str());
+
+        if let Some(origin) = cors_origin {
+            if origin.trim() == "*" && cors_creds == Some("true") {
+                findings.push(Finding {
+                    severity: Severity::Critical,
+                    category: IssueCategory::Security,
+                    code: "CORS001".to_string(),
+                    title: "CORS allows all origins with credentials".to_string(),
+                    description: "Access-Control-Allow-Origin is set to \"*\" with \
+                                  Access-Control-Allow-Credentials: true. This is an \
+                                  invalid and insecure configuration."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Replace wildcard origin with the specific allowed \
+                                     origin or remove credentials support."
+                        .to_string(),
+                });
+            } else if origin.trim() == "*" {
+                // Wildcard without credentials is less severe but still notable
+                // for sensitive endpoints
+                let is_sensitive = url.contains("/api/")
+                    || url.contains("/admin")
+                    || url.contains("/auth")
+                    || url.contains("/login");
+                if is_sensitive {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CORS002".to_string(),
+                        title: "CORS wildcard on sensitive endpoint".to_string(),
+                        description: "Access-Control-Allow-Origin is set to \"*\" on a \
+                                      sensitive endpoint. While technically valid without \
+                                      credentials, this allows any site to read responses."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Restrict CORS to specific trusted origins for \
+                                         sensitive endpoints."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// AriaLabelAnalyzer
+// =========================================================================
+
+pub struct AriaLabelAnalyzer;
+
+impl Default for AriaLabelAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AriaLabelAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for AriaLabelAnalyzer {
+    fn name(&self) -> &str {
+        "aria-label"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        // Check if there are ARIA roles but no labels
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALABEL001".to_string(),
+                title: "ARIA roles without labels".to_string(),
+                description: format!(
+                    "{} ARIA role(s) found but no aria-label or aria-labelledby \
+                     attributes. Interactive elements need accessible names.",
+                    ctx.page.aria_role_count
+                ),
+                url: url.clone(),
+                recommendation: "Add aria-label or aria-labelledby to elements with \
+                                 ARIA roles."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TableCaptionAnalyzer
+// =========================================================================
+
+pub struct TableCaptionAnalyzer;
+
+impl Default for TableCaptionAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TableCaptionAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for TableCaptionAnalyzer {
+    fn name(&self) -> &str {
+        "table-caption"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.tables_total == 0 {
+            return findings;
+        }
+
+        let without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
+        if without_captions > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "TABLECAP001".to_string(),
+                title: "Table missing caption element".to_string(),
+                description: format!(
+                    "{without_captions} of {} table(s) have no <caption> element. \
+                     Captions help screen reader users understand table purpose.",
+                    ctx.page.tables_total
+                ),
+                url: url.clone(),
+                recommendation: "Add a <caption> element to each table to describe its \
+                                 purpose."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SkipLinkAnalyzer
+// =========================================================================
+
+pub struct SkipLinkAnalyzer;
+
+impl Default for SkipLinkAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SkipLinkAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for SkipLinkAnalyzer {
+    fn name(&self) -> &str {
+        "skip-link"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.has_nav_landmark && !ctx.page.has_skip_link {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "SKIPLINK001".to_string(),
+                title: "No skip navigation link".to_string(),
+                description: "The page has a navigation landmark but no skip-to-content \
+                              link. Keyboard users must tab through all navigation links \
+                              to reach main content."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add a skip link as the first focusable element pointing \
+                                 to the main content area."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TabindexAnalyzer
+// =========================================================================
+
+pub struct TabindexAnalyzer;
+
+impl Default for TabindexAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TabindexAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for TabindexAnalyzer {
+    fn name(&self) -> &str {
+        "tabindex"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "TABINDEX001".to_string(),
+                title: "Positive tabindex values detected".to_string(),
+                description: "Elements with tabindex > 0 alter the natural tab order, \
+                              making keyboard navigation unpredictable. Users expect a \
+                              sequential tab flow matching the visual layout."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Use tabindex=\"0\" to add elements to the natural tab \
+                                 order or tabindex=\"-1\" for programmatic focus only."
+                    .to_string(),
+            });
+        }
+
+            if ctx.page.tabindex_negative_count > 0 {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Accessibility,
+                    code: "TABINDEX002".to_string(),
+                    title: "Elements removed from tab order with tabindex=-1".to_string(),
+                    description: format!(
+                        "{} element(s) use tabindex=-1, removing them from the tab \
+                         order. This is acceptable for programmatically focused elements \
+                         but should not be used to hide interactive content.",
+                        ctx.page.tabindex_negative_count
+                    ),
+                    url: url.clone(),
+                    recommendation: "Ensure elements with tabindex=-1 are not interactive \
+                                     elements that users need to reach."
+                        .to_string(),
+                });
+            }
+
+        findings
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod new_analyzer_tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::ParsedPage;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(
+        page: &'a ParsedPage,
+        status: Option<u16>,
+        headers: &'a [(String, String)],
+        body: Option<&'a str>,
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body,
+            status_code: status,
+            headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // DnsRebindingAnalyzer tests
+
+    #[test]
+    fn test_dns_rebinding_no_cors() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_dns_rebinding_wildcard_with_creds() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+            ("Access-Control-Allow-Credentials".to_string(), "true".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND001"));
+    }
+
+    #[test]
+    fn test_dns_rebinding_wildcard_without_creds() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_dns_rebinding_wildcard_with_local_refs() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let body = "Connect to 127.0.0.1 for local access";
+        let ctx = make_ctx(&page, Some(200), &headers, Some(body));
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+    }
+
+    #[test]
+    fn test_dns_rebinding_name() {
+        assert_eq!(DnsRebindingAnalyzer::new().name(), "dns-rebinding");
+    }
+
+    #[test]
+    fn test_dns_rebinding_default() {
+        let _ = DnsRebindingAnalyzer::default();
+    }
+
+    // SubresourceIntegrityAnalyzer tests
+
+    #[test]
+    fn test_sri_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sri_name() {
+        assert_eq!(SubresourceIntegrityAnalyzer::new().name(), "subresource-integrity");
+    }
+
+    #[test]
+    fn test_sri_default() {
+        let _ = SubresourceIntegrityAnalyzer::default();
+    }
+
+    // CorsMisconfigurationAnalyzer tests
+
+    #[test]
+    fn test_cors_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cors_wildcard_with_creds() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+            ("Access-Control-Allow-Credentials".to_string(), "true".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CORS001"));
+    }
+
+    #[test]
+    fn test_cors_wildcard_on_sensitive() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com/api/data");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CORS002"));
+    }
+
+    #[test]
+    fn test_cors_wildcard_on_non_sensitive() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cors_specific_origin() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "https://other.com".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cors_name() {
+        assert_eq!(CorsMisconfigurationAnalyzer::new().name(), "cors-misconfiguration");
+    }
+
+    #[test]
+    fn test_cors_default() {
+        let _ = CorsMisconfigurationAnalyzer::default();
+    }
+
+    // AriaLabelAnalyzer tests
+
+    #[test]
+    fn test_aria_label_no_roles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_label_roles_with_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_label_roles_without_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIALABEL001"));
+    }
+
+    #[test]
+    fn test_aria_label_name() {
+        assert_eq!(AriaLabelAnalyzer::new().name(), "aria-label");
+    }
+
+    #[test]
+    fn test_aria_label_default() {
+        let _ = AriaLabelAnalyzer::default();
+    }
+
+    // TableCaptionAnalyzer tests
+
+    #[test]
+    fn test_table_caption_no_tables() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_table_caption_all_have_captions() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_captions = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_table_caption_missing() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_captions = 1;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+    }
+
+    #[test]
+    fn test_table_caption_name() {
+        assert_eq!(TableCaptionAnalyzer::new().name(), "table-caption");
+    }
+
+    #[test]
+    fn test_table_caption_default() {
+        let _ = TableCaptionAnalyzer::default();
+    }
+
+    // SkipLinkAnalyzer tests
+
+    #[test]
+    fn test_skip_link_no_nav() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_skip_link_has_nav_with_skip() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.has_skip_link = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_skip_link_has_nav_without_skip() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.has_skip_link = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
+    }
+
+    #[test]
+    fn test_skip_link_name() {
+        assert_eq!(SkipLinkAnalyzer::new().name(), "skip-link");
+    }
+
+    #[test]
+    fn test_skip_link_default() {
+        let _ = SkipLinkAnalyzer::default();
+    }
+
+    // TabindexAnalyzer tests
+
+    #[test]
+    fn test_tabindex_no_positive() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TabindexAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tabindex_positive() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABINDEX001"));
+    }
+
+    #[test]
+    fn test_tabindex_negative() {
+        let mut page = make_page("https://example.com");
+        page.tabindex_negative_count = 5;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABINDEX002"));
+    }
+
+    #[test]
+    fn test_tabindex_both() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        page.tabindex_negative_count = 2;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TabindexAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TABINDEX001"));
+        assert!(findings.iter().any(|f| f.code == "TABINDEX002"));
+    }
+
+    #[test]
+    fn test_tabindex_name() {
+        assert_eq!(TabindexAnalyzer::new().name(), "tabindex");
+    }
+
+    #[test]
+    fn test_tabindex_default() {
+        let _ = TabindexAnalyzer::default();
     }
 }

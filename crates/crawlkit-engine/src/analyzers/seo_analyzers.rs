@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -6093,5 +6093,1191 @@ mod tests_new_analyzers {
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "INTOPIC001"));
+    }
+}
+// =========================================================================
+// PaginationDepthValidator
+// =========================================================================
+
+pub struct PaginationDepthValidator;
+
+impl Default for PaginationDepthValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PaginationDepthValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for PaginationDepthValidator {
+    fn name(&self) -> &str {
+        "pagination-depth"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let parsed = match url::Url::parse(url) {
+            Ok(u) => u,
+            Err(_) => return findings,
+        };
+
+        // Check for page parameter pagination depth
+        if let Some(page_param) = parsed.query_pairs().find_map(|(k, v)| {
+            if k == "page" {
+                Some(v.to_string())
+            } else {
+                None
+            }
+        }) {
+            if let Ok(page_num) = page_param.parse::<u32>() {
+                if page_num > 5 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Seo,
+                        code: "PAGDEP001".to_string(),
+                        title: "Deep pagination detected".to_string(),
+                        description: format!(
+                            "Page parameter indicates pagination depth of {page_num} levels. \
+                             Deeply paginated pages receive less crawl budget and link equity."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Flatten pagination to 5 levels or fewer. Consider \
+                                         adding a sitemap index or using rel=canonical to \
+                                         consolidate paginated content."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        // Check for /page/N/ URL pattern
+        let path = parsed.path();
+        if let Some(pos) = path.rfind("/page/") {
+            let after = &path[pos + 6..];
+            if let Ok(page_num) = after.trim_end_matches('/').parse::<u32>() {
+                if page_num > 5 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Seo,
+                        code: "PAGDEP001".to_string(),
+                        title: "Deep pagination detected".to_string(),
+                        description: format!(
+                            "URL path indicates pagination depth of {page_num} levels (/page/{page_num}/). \
+                             Deeply paginated pages receive less crawl budget."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Limit pagination to 5 levels or fewer. Consider \
+                                         alternative navigation for deep content."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// RedirectLoopDetector
+// =========================================================================
+
+pub struct RedirectLoopDetector;
+
+impl Default for RedirectLoopDetector {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RedirectLoopDetector {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for RedirectLoopDetector {
+    fn name(&self) -> &str {
+        "redirect-loop"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.redirect_chain.is_empty() {
+            return findings;
+        }
+
+        // Check for URL appearing twice in the chain (loop indicator)
+        let mut seen = HashSet::new();
+        for hop in ctx.redirect_chain {
+            let from_str = hop.from.as_str();
+            if !seen.insert(from_str) {
+                findings.push(Finding {
+                    severity: Severity::Critical,
+                    category: IssueCategory::Http,
+                    code: "REDIRLOOP001".to_string(),
+                    title: "Redirect loop detected".to_string(),
+                    description: format!(
+                        "URL \"{}\" appears multiple times in the redirect chain, \
+                         indicating an infinite redirect loop.",
+                        hop.from
+                    ),
+                    url: url.clone(),
+                    recommendation: "Fix the redirect chain to eliminate the loop. Ensure \
+                                     the final destination does not redirect back to an \
+                                     earlier hop."
+                        .to_string(),
+                });
+                return findings;
+            }
+
+            // Self-redirect: from == to
+            if hop.from.as_str() == hop.to.as_str() {
+                findings.push(Finding {
+                    severity: Severity::Critical,
+                    category: IssueCategory::Http,
+                    code: "REDIRLOOP001".to_string(),
+                    title: "Redirect loop detected".to_string(),
+                    description: format!(
+                        "URL \"{}\" redirects to itself, creating an infinite loop.",
+                        hop.from
+                    ),
+                    url: url.clone(),
+                    recommendation: "Fix the redirect to point to a different destination."
+                        .to_string(),
+                });
+                return findings;
+            }
+        }
+
+        // Also check if the last hop's target is any earlier hop's source
+        if let Some(last_hop) = ctx.redirect_chain.last() {
+            for hop in &ctx.redirect_chain[..ctx.redirect_chain.len().saturating_sub(1)] {
+                if last_hop.to.as_str() == hop.from.as_str() {
+                    findings.push(Finding {
+                        severity: Severity::Critical,
+                        category: IssueCategory::Http,
+                        code: "REDIRLOOP001".to_string(),
+                        title: "Redirect loop detected".to_string(),
+                        description: format!(
+                            "The redirect chain ends by redirecting back to \"{}\", \
+                             which appeared earlier in the chain.",
+                            hop.from
+                        ),
+                        url: url.clone(),
+                        recommendation: "Fix the redirect chain to eliminate the loop."
+                            .to_string(),
+                    });
+                    return findings;
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MixedProtocolRedirectValidator
+// =========================================================================
+
+pub struct MixedProtocolRedirectValidator;
+
+impl Default for MixedProtocolRedirectValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MixedProtocolRedirectValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for MixedProtocolRedirectValidator {
+    fn name(&self) -> &str {
+        "mixed-protocol-redirect"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for hop in ctx.redirect_chain {
+            let from_scheme = hop.from.scheme();
+            let to_scheme = hop.to.scheme();
+
+            if from_scheme == "http" && to_scheme == "https" && hop.status_code != 301 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Http,
+                    code: "MIXPROT001".to_string(),
+                    title: "HTTP to HTTPS redirect not using 301".to_string(),
+                    description: format!(
+                        "HTTP→HTTPS redirect uses status {} instead of 301 (permanent). \
+                         Non-301 redirects may cause search engines to treat the HTTP \
+                         version as the canonical URL.",
+                        hop.status_code
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use HTTP 301 for HTTP→HTTPS redirects to signal that \
+                                     HTTPS is the permanent canonical URL."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// InternalNofollowOveruseValidator
+// =========================================================================
+
+pub struct InternalNofollowOveruseValidator;
+
+impl Default for InternalNofollowOveruseValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalNofollowOveruseValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for InternalNofollowOveruseValidator {
+    fn name(&self) -> &str {
+        "internal-nofollow-overuse"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<_> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.is_external)
+            .collect();
+
+        if internal_links.len() < 5 {
+            return findings;
+        }
+
+        let nofollow_count = internal_links
+            .iter()
+            .filter(|l| l.rel.contains(&"nofollow".to_string()))
+            .count();
+
+        let ratio = nofollow_count as f64 / internal_links.len() as f64;
+
+        if ratio > 0.30 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "NOFOLLOW001".to_string(),
+                title: "Excessive internal nofollow links".to_string(),
+                description: format!(
+                    "{:.0}% of internal links ({}/{}) have rel=\"nofollow\". Excessive use \
+                     of nofollow on internal links wastes crawl budget and dilutes link \
+                     equity flow.",
+                    ratio * 100.0,
+                    nofollow_count,
+                    internal_links.len()
+                ),
+                url: url.clone(),
+                recommendation: "Audit internal nofollow usage. Most internal links should \
+                                     not have rel=\"nofollow\" unless linking to untrusted \
+                                     user-generated content."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ExternalNofollowUnderuseValidator
+// =========================================================================
+
+pub struct ExternalNofollowUnderuseValidator;
+
+impl Default for ExternalNofollowUnderuseValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExternalNofollowUnderuseValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ExternalNofollowUnderuseValidator {
+    fn name(&self) -> &str {
+        "external-nofollow-underuse"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let external_links: Vec<_> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.is_external)
+            .collect();
+
+        if external_links.len() < 5 {
+            return findings;
+        }
+
+        let nofollow_count = external_links
+            .iter()
+            .filter(|l| l.rel.contains(&"nofollow".to_string()))
+            .count();
+
+        let ratio = nofollow_count as f64 / external_links.len() as f64;
+
+        if ratio < 0.10 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "NOFOLLOW002".to_string(),
+                title: "Few external links use nofollow".to_string(),
+                description: format!(
+                    "Only {:.0}% of external links ({}/{}) have rel=\"nofollow\". \
+                     Paid links, sponsored content, and untrusted external links \
+                     should use rel=\"nofollow\" to avoid passing link equity.",
+                    ratio * 100.0,
+                    nofollow_count,
+                    external_links.len()
+                ),
+                url: url.clone(),
+                recommendation: "Add rel=\"nofollow\" to paid links, sponsored content, \
+                                     and links to untrusted external sites."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SitemapXmlSizeValidator
+// =========================================================================
+
+pub struct SitemapXmlSizeValidator;
+
+impl Default for SitemapXmlSizeValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SitemapXmlSizeValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for SitemapXmlSizeValidator {
+    fn name(&self) -> &str {
+        "sitemap-xml-size"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if let Some(size) = ctx.body_size {
+            if size > 50 * 1024 * 1024 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "SITEMAPSIZE001".to_string(),
+                    title: "Sitemap XML exceeds 50MB".to_string(),
+                    description: format!(
+                        "Sitemap is {:.1}MB (uncompressed), exceeding the 50MB limit. \
+                         Search engines may reject or truncate oversized sitemaps.",
+                        size as f64 / (1024.0 * 1024.0)
+                    ),
+                    url: url.clone(),
+                    recommendation: "Split the sitemap into multiple smaller sitemaps, each \
+                                     under 50MB and containing no more than 50,000 URLs. \
+                                     Use a sitemap index to reference them."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// RobotsTxtSizeValidator
+// =========================================================================
+
+pub struct RobotsTxtSizeValidator;
+
+impl Default for RobotsTxtSizeValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RobotsTxtSizeValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for RobotsTxtSizeValidator {
+    fn name(&self) -> &str {
+        "robots-txt-size"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if let Some(robots) = ctx.robots_txt {
+            let size = robots.len();
+            if size > 500 * 1024 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ROBOTSSIZE001".to_string(),
+                    title: "robots.txt exceeds 500KB".to_string(),
+                    description: format!(
+                        "robots.txt is {:.1}KB, exceeding the recommended 500KB limit. \
+                         Oversized robots.txt files waste crawl budget as crawlers \
+                         must download and parse the entire file.",
+                        size as f64 / 1024.0
+                    ),
+                    url: url.clone(),
+                    recommendation: "Consolidate redundant rules and remove unnecessary \
+                                     comments to keep robots.txt under 500KB."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// New SEO analyzer tests
+// =========================================================================
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod new_seo_tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::ParsedPage;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    fn make_ctx_with_chain<'a>(
+        page: &'a ParsedPage,
+        chain: &'a [crate::RedirectHop],
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: None,
+            headers: &[],
+            response_time: None,
+            redirect_chain: chain,
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // PaginationDepthValidator tests
+
+    #[test]
+    fn test_pagination_depth_no_page_param() {
+        let page = make_page("https://example.com/products");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pagination_depth_page_3() {
+        let page = make_page("https://example.com/products?page=3");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pagination_depth_page_6() {
+        let page = make_page("https://example.com/products?page=6");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+    }
+
+    #[test]
+    fn test_pagination_depth_page_path() {
+        let page = make_page("https://example.com/blog/page/10/");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+    }
+
+    #[test]
+    fn test_pagination_depth_page_path_4() {
+        let page = make_page("https://example.com/blog/page/4/");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pagination_depth_invalid_page() {
+        let page = make_page("https://example.com/products?page=abc");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pagination_depth_name() {
+        assert_eq!(PaginationDepthValidator::new().name(), "pagination-depth");
+    }
+
+    #[test]
+    fn test_pagination_depth_page_exact_5() {
+        let page = make_page("https://example.com/products?page=5");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pagination_depth_page_100() {
+        let page = make_page("https://example.com/products?page=100");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+    }
+
+    #[test]
+    fn test_pagination_depth_category_param() {
+        let page = make_page("https://example.com/products?category=books&page=7");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+    }
+
+    // RedirectLoopDetector tests
+
+    #[test]
+    fn test_redirect_loop_no_chain() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(RedirectLoopDetector::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_redirect_loop_no_loop() {
+        let page = make_page("https://example.com/c");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("http://example.com/b").unwrap(),
+                status_code: 301,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/b").unwrap(),
+                to: Url::parse("http://example.com/c").unwrap(),
+                status_code: 302,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(RedirectLoopDetector::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_redirect_loop_detected() {
+        let page = make_page("https://example.com/a");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("http://example.com/b").unwrap(),
+                status_code: 301,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/b").unwrap(),
+                to: Url::parse("http://example.com/a").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+    }
+
+    #[test]
+    fn test_redirect_loop_self_redirect() {
+        let page = make_page("https://example.com/a");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("http://example.com/a").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+    }
+
+    #[test]
+    fn test_redirect_loop_three_hop_loop() {
+        let page = make_page("https://example.com/a");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("http://example.com/b").unwrap(),
+                status_code: 301,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/b").unwrap(),
+                to: Url::parse("http://example.com/c").unwrap(),
+                status_code: 302,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/c").unwrap(),
+                to: Url::parse("http://example.com/a").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+    }
+
+    #[test]
+    fn test_redirect_loop_name() {
+        assert_eq!(RedirectLoopDetector::new().name(), "redirect-loop");
+    }
+
+    #[test]
+    fn test_redirect_loop_no_loop_linear() {
+        let page = make_page("https://example.com/d");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("http://example.com/b").unwrap(),
+                status_code: 301,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/b").unwrap(),
+                to: Url::parse("http://example.com/c").unwrap(),
+                status_code: 301,
+            },
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/c").unwrap(),
+                to: Url::parse("http://example.com/d").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(RedirectLoopDetector::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_redirect_loop_same_url_different_schemes() {
+        let page = make_page("https://example.com/a");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("https://example.com/a").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        // Same path different scheme is NOT a loop
+        assert!(RedirectLoopDetector::new().analyze(&ctx).is_empty());
+    }
+
+    // MixedProtocolRedirectValidator tests
+
+    #[test]
+    fn test_mixed_protocol_no_redirects() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_protocol_301() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com").unwrap(),
+            to: Url::parse("https://example.com").unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_protocol_302() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com").unwrap(),
+            to: Url::parse("https://example.com").unwrap(),
+            status_code: 302,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+    }
+
+    #[test]
+    fn test_mixed_protocol_307() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com").unwrap(),
+            to: Url::parse("https://example.com").unwrap(),
+            status_code: 307,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+    }
+
+    #[test]
+    fn test_mixed_protocol_308() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com").unwrap(),
+            to: Url::parse("https://example.com").unwrap(),
+            status_code: 308,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+    }
+
+    #[test]
+    fn test_mixed_protocol_same_scheme() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("https://example.com/a").unwrap(),
+            to: Url::parse("https://example.com/b").unwrap(),
+            status_code: 302,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_protocol_name() {
+        assert_eq!(MixedProtocolRedirectValidator::new().name(), "mixed-protocol-redirect");
+    }
+
+    #[test]
+    fn test_mixed_protocol_multiple_hops() {
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![
+            crate::RedirectHop {
+                from: Url::parse("http://example.com/a").unwrap(),
+                to: Url::parse("https://example.com/a").unwrap(),
+                status_code: 302,
+            },
+            crate::RedirectHop {
+                from: Url::parse("https://example.com/a").unwrap(),
+                to: Url::parse("https://example.com/b").unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+    }
+
+    // InternalNofollowOveruseValidator tests
+
+    #[test]
+    fn test_nofollow_overuse_no_internal_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_overuse_low_ratio() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // Only 1 nofollow = 10% < 30%
+        page.links[0].rel = vec!["nofollow".to_string()];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_overuse_high_ratio() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // 4 nofollow = 40% > 30%
+        for i in 0..4 {
+            page.links[i].rel = vec!["nofollow".to_string()];
+        }
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+    }
+
+    #[test]
+    fn test_nofollow_overuse_fewer_than_5_links() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..4)
+            .map(|i| ExtractedLink {
+                href: format!("/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec!["nofollow".to_string()],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_overuse_all_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec!["nofollow".to_string()],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+    }
+
+    #[test]
+    fn test_nofollow_overuse_name() {
+        assert_eq!(InternalNofollowOveruseValidator::new().name(), "internal-nofollow-overuse");
+    }
+
+    #[test]
+    fn test_nofollow_overuse_mixed_internal_external() {
+        let mut page = make_page("https://example.com");
+        let mut links: Vec<ExtractedLink> = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // Add 5 external links
+        for i in 0..5 {
+            links.push(ExtractedLink {
+                href: format!("https://other.com/page{i}"),
+                text: format!("Ext {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            });
+        }
+        // 4 internal nofollow = 40% of 10 internal
+        for i in 0..4 {
+            links[i].rel = vec!["nofollow".to_string()];
+        }
+        page.links = links;
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+    }
+
+    // ExternalNofollowUnderuseValidator tests
+
+    #[test]
+    fn test_nofollow_underuse_no_external() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_underuse_enough_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("https://other.com/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // 2 nofollow = 20% >= 10%
+        page.links[0].rel = vec!["nofollow".to_string()];
+        page.links[1].rel = vec!["nofollow".to_string()];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_underuse_insufficient() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("https://other.com/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // 0 nofollow = 0% < 10%
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW002"));
+    }
+
+    #[test]
+    fn test_nofollow_underuse_fewer_than_5() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nofollow_underuse_name() {
+        assert_eq!(ExternalNofollowUnderuseValidator::new().name(), "external-nofollow-underuse");
+    }
+
+    #[test]
+    fn test_nofollow_underuse_one_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10)
+            .map(|i| ExtractedLink {
+                href: format!("https://other.com/page{i}"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        // 1 nofollow = 10% = 10% (not < 10%)
+        page.links[0].rel = vec!["nofollow".to_string()];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+    }
+
+    // SitemapXmlSizeValidator tests
+
+    #[test]
+    fn test_sitemap_size_no_body_size() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_size_under_limit() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body_size = Some(10 * 1024 * 1024); // 10MB
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_size_over_limit() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body_size = Some(60 * 1024 * 1024); // 60MB
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "SITEMAPSIZE001"));
+    }
+
+    #[test]
+    fn test_sitemap_size_exact_limit() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body_size = Some(50 * 1024 * 1024); // 50MB exactly
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_size_name() {
+        assert_eq!(SitemapXmlSizeValidator::new().name(), "sitemap-xml-size");
+    }
+
+    #[test]
+    fn test_sitemap_size_1mb() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body_size = Some(1024 * 1024); // 1MB
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_size_100mb() {
+        let page = make_page("https://example.com/sitemap.xml");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body_size = Some(100 * 1024 * 1024); // 100MB
+        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "SITEMAPSIZE001"));
+    }
+
+    // RobotsTxtSizeValidator tests
+
+    #[test]
+    fn test_robots_size_no_robots_txt() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_size_under_limit() {
+        let page = make_page("https://example.com");
+        let robots = "User-agent: *\nDisallow: /admin\n";
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.robots_txt = Some(robots);
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_size_over_limit() {
+        let page = make_page("https://example.com");
+        let robots = "User-agent: *\n".repeat(40000);
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.robots_txt = Some(&robots);
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTSSIZE001"));
+    }
+
+    #[test]
+    fn test_robots_size_exact_limit() {
+        let page = make_page("https://example.com");
+        let robots = "x".repeat(500 * 1024);
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.robots_txt = Some(&robots);
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_size_name() {
+        assert_eq!(RobotsTxtSizeValidator::new().name(), "robots-txt-size");
+    }
+
+    #[test]
+    fn test_robots_size_empty() {
+        let page = make_page("https://example.com");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.robots_txt = Some("");
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_size_600kb() {
+        let page = make_page("https://example.com");
+        let robots = "x".repeat(600 * 1024);
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.robots_txt = Some(&robots);
+        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTSSIZE001"));
     }
 }

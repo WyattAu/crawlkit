@@ -817,7 +817,7 @@ fn test_heading_deep_hierarchy() {
 fn test_registry_default() {
     let config = default_config();
     let registry = AnalyzerRegistry::new(&config);
-    assert_eq!(registry.len(), 180);
+    assert_eq!(registry.len(), 210);
     assert!(!registry.is_empty());
 }
 

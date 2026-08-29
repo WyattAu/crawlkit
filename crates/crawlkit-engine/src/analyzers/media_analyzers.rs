@@ -2896,3 +2896,544 @@ mod tests {
         assert!(findings.iter().any(|f| f.code == "CONN002"));
     }
 }
+
+// =========================================================================
+// ThirdPartyResourceAnalyzer
+// =========================================================================
+
+pub struct ThirdPartyResourceAnalyzer;
+
+impl Default for ThirdPartyResourceAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ThirdPartyResourceAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ThirdPartyResourceAnalyzer {
+    fn name(&self) -> &str {
+        "third-party-resources"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let page_origin = url::Url::parse(url)
+            .ok()
+            .map(|u| u.origin().ascii_serialization())
+            .unwrap_or_default();
+
+        let total_scripts = ctx.page.scripts.len();
+        let external_scripts = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| {
+                s.src.as_ref().is_some_and(|src| {
+                    url::Url::parse(src)
+                        .ok()
+                        .map(|u| u.origin().ascii_serialization() != page_origin)
+                        .unwrap_or(false)
+                })
+            })
+            .count();
+
+        let total_styles = ctx.page.styles.len();
+        let external_styles = ctx
+            .page
+            .styles
+            .iter()
+            .filter(|s| {
+                s.href.as_ref().is_some_and(|href| {
+                    url::Url::parse(href)
+                        .ok()
+                        .map(|u| u.origin().ascii_serialization() != page_origin)
+                        .unwrap_or(false)
+                })
+            })
+            .count();
+
+        let total_images = ctx.page.images.len();
+        let external_images = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| {
+                url::Url::parse(&img.src)
+                    .ok()
+                    .map(|u| u.origin().ascii_serialization() != page_origin)
+                    .unwrap_or(false)
+            })
+            .count();
+
+        let total = total_scripts + total_styles + total_images;
+        let external = external_scripts + external_styles + external_images;
+
+        if total > 0 {
+            let ratio = external as f64 / total as f64;
+            if ratio > 0.30 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Performance,
+                    code: "THIRDPARTY001".to_string(),
+                    title: "Excessive third-party resources".to_string(),
+                    description: format!(
+                        "{:.0}% of resources ({}/{}) are from third-party origins. \
+                         Third-party resources add DNS lookups, connections, and \
+                         compete for bandwidth.",
+                        ratio * 100.0,
+                        external,
+                        total
+                    ),
+                    url: url.clone(),
+                    recommendation: "Reduce third-party resource usage. Self-host critical \
+                                     resources or use a CDN on your own domain."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// BlockingStyleAnalyzer
+// =========================================================================
+
+pub struct BlockingStyleAnalyzer;
+
+impl Default for BlockingStyleAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BlockingStyleAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for BlockingStyleAnalyzer {
+    fn name(&self) -> &str {
+        "blocking-style"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let body = match ctx.body {
+            Some(b) => b,
+            None => return findings,
+        };
+
+        // Count link rel=stylesheet tags without media or async attributes
+        let blocking_count = ctx
+            .page
+            .styles
+            .iter()
+            .filter(|s| {
+                s.href.is_some()
+                    && s.media.as_deref() != Some("print")
+                    && !s.media.as_deref().is_some_and(|m| m != "all")
+            })
+            .count();
+
+        // Also check HTML directly for blocking patterns
+        let html_blocking = body.matches(r#"<link rel="stylesheet""#).count()
+            + body.matches(r#"<link rel='stylesheet'"#).count();
+
+        let count = blocking_count.max(html_blocking);
+
+        if count > 3 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "BLOCKSTYLE001".to_string(),
+                title: "Multiple blocking stylesheets in head".to_string(),
+                description: format!(
+                    "{count} blocking stylesheet(s) found. Synchronous stylesheets \
+                     block rendering until downloaded and parsed."
+                ),
+                url: url.clone(),
+                recommendation: "Use media queries or async loading for non-critical \
+                                 stylesheets. Inline critical CSS and defer the rest."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ImageDimensionMissingAnalyzer
+// =========================================================================
+
+pub struct ImageDimensionMissingAnalyzer;
+
+impl Default for ImageDimensionMissingAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageDimensionMissingAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ImageDimensionMissingAnalyzer {
+    fn name(&self) -> &str {
+        "image-dimension-missing"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let missing_dim = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| img.width.is_none() || img.height.is_none())
+            .count();
+
+        if missing_dim > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "IMGDIM001".to_string(),
+                title: "Images missing width/height attributes".to_string(),
+                description: format!(
+                    "{missing_dim} of {} image(s) are missing width or height attributes. \
+                     Without dimensions, browsers cannot reserve space, causing \
+                     Cumulative Layout Shift (CLS).",
+                    ctx.page.images.len()
+                ),
+                url: url.clone(),
+                recommendation: "Add explicit width and height attributes to all img \
+                                 elements to prevent layout shifts."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// New media analyzer tests
+// =========================================================================
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod new_media_tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::{ParsedPage, ScriptInfo, StyleInfo, ExtractedImage};
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(
+        page: &'a ParsedPage,
+        status: Option<u16>,
+        body: Option<&'a str>,
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // ThirdPartyResourceAnalyzer tests
+
+    #[test]
+    fn test_third_party_all_first_party() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![ScriptInfo {
+            src: Some("https://example.com/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_third_party_over_threshold() {
+        let mut page = make_page("https://example.com");
+        page.scripts = (0..10)
+            .map(|i| ScriptInfo {
+                src: Some(format!("https://cdn{i}.com/lib.js")),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            })
+            .collect();
+        page.scripts.push(ScriptInfo {
+            src: Some("https://example.com/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        });
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "THIRDPARTY001"));
+    }
+
+    #[test]
+    fn test_third_party_no_resources() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_third_party_name() {
+        assert_eq!(ThirdPartyResourceAnalyzer::new().name(), "third-party-resources");
+    }
+
+    #[test]
+    fn test_third_party_under_threshold() {
+        let mut page = make_page("https://example.com");
+        page.scripts = (0..10)
+            .map(|i| ScriptInfo {
+                src: Some(format!("https://example.com/lib{i}.js")),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_third_party_mixed_scripts_and_styles() {
+        let mut page = make_page("https://example.com");
+        page.scripts = (0..5)
+            .map(|i| ScriptInfo {
+                src: Some(format!("https://cdn{i}.com/lib.js")),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            })
+            .collect();
+        page.styles = (0..5)
+            .map(|i| StyleInfo {
+                href: Some(format!("https://cdn{i}.com/style.css")),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        // 10 external / 10 total = 100%
+        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "THIRDPARTY001"));
+    }
+
+    #[test]
+    fn test_third_party_default() {
+        let _ = ThirdPartyResourceAnalyzer::default();
+    }
+
+    // BlockingStyleAnalyzer tests
+
+    #[test]
+    fn test_blocking_style_no_styles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_blocking_style_few_styles() {
+        let mut page = make_page("https://example.com");
+        page.styles = (0..3)
+            .map(|_| StyleInfo {
+                href: Some("https://example.com/style.css".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_blocking_style_many_styles() {
+        let mut page = make_page("https://example.com");
+        page.styles = (0..5)
+            .map(|_| StyleInfo {
+                href: Some("https://example.com/style.css".to_string()),
+                media: None,
+                is_inline: false,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), Some("<html></html>"));
+        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "BLOCKSTYLE001"));
+    }
+
+    #[test]
+    fn test_blocking_style_non_blocking_media() {
+        let mut page = make_page("https://example.com");
+        page.styles = (0..5)
+            .map(|_| StyleInfo {
+                href: Some("https://example.com/style.css".to_string()),
+                media: Some("print".to_string()),
+                is_inline: false,
+                has_integrity: false,
+            })
+            .collect();
+        let ctx = make_ctx(&page, Some(200), None);
+        // print media is not blocking
+        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_blocking_style_name() {
+        assert_eq!(BlockingStyleAnalyzer::new().name(), "blocking-style");
+    }
+
+    #[test]
+    fn test_blocking_style_default() {
+        let _ = BlockingStyleAnalyzer::default();
+    }
+
+    #[test]
+    fn test_blocking_style_html_pattern() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head>
+            <link rel="stylesheet" href="/a.css">
+            <link rel="stylesheet" href="/b.css">
+            <link rel="stylesheet" href="/c.css">
+            <link rel="stylesheet" href="/d.css">
+        </head></html>"#;
+        let ctx = make_ctx(&page, Some(200), Some(body));
+        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "BLOCKSTYLE001"));
+    }
+
+    // ImageDimensionMissingAnalyzer tests
+
+    #[test]
+    fn test_image_dim_all_have_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "https://example.com/img.jpg".to_string(),
+            alt: "Test".to_string(),
+            width: Some(100),
+            height: Some(100),
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_image_dim_missing_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "https://example.com/img.jpg".to_string(),
+            alt: "Test".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGDIM001"));
+    }
+
+    #[test]
+    fn test_image_dim_partial_dimensions() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![ExtractedImage {
+            src: "https://example.com/img.jpg".to_string(),
+            alt: "Test".to_string(),
+            width: Some(100),
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGDIM001"));
+    }
+
+    #[test]
+    fn test_image_dim_no_images() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), None);
+        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_image_dim_name() {
+        assert_eq!(ImageDimensionMissingAnalyzer::new().name(), "image-dimension-missing");
+    }
+
+    #[test]
+    fn test_image_dim_default() {
+        let _ = ImageDimensionMissingAnalyzer::default();
+    }
+}

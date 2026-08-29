@@ -2854,6 +2854,486 @@ mod tests {
 }
 
 // =========================================================================
+// OpenGraphVideoUrlValidator
+// =========================================================================
+
+pub struct OpenGraphVideoUrlValidator;
+
+impl Default for OpenGraphVideoUrlValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OpenGraphVideoUrlValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_valid_video_url(url: &str) -> bool {
+        if url.is_empty() {
+            return false;
+        }
+        url::Url::parse(url).is_ok()
+            && (url.starts_with("http://") || url.starts_with("https://"))
+    }
+}
+
+impl Analyzer for OpenGraphVideoUrlValidator {
+    fn name(&self) -> &str {
+        "og-video-url-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let video_url = match ctx.page.meta.og.get("video") {
+            Some(v) => v,
+            None => return findings,
+        };
+
+        if video_url.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Social,
+                code: "OGVIDURL001".to_string(),
+                title: "Empty og:video URL".to_string(),
+                description: "The og:video meta tag has an empty value.".to_string(),
+                url: url.clone(),
+                recommendation: "Provide a valid video URL in the og:video meta tag."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        if !Self::is_valid_video_url(video_url) {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Social,
+                code: "OGVIDURL001".to_string(),
+                title: "Invalid og:video URL format".to_string(),
+                description: format!(
+                    "The og:video URL \"{video_url}\" is not a valid HTTP/HTTPS URL."
+                ),
+                url: url.clone(),
+                recommendation: "Ensure og:video points to a valid HTTP or HTTPS URL."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TwitterPlayerStreamValidator
+// =========================================================================
+
+pub struct TwitterPlayerStreamValidator;
+
+impl Default for TwitterPlayerStreamValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TwitterPlayerStreamValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_valid_stream_url(url: &str) -> bool {
+        if url.is_empty() {
+            return false;
+        }
+        url::Url::parse(url).is_ok()
+            && (url.starts_with("http://") || url.starts_with("https://"))
+    }
+}
+
+impl Analyzer for TwitterPlayerStreamValidator {
+    fn name(&self) -> &str {
+        "twitter-player-stream-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let stream_url = match &ctx.page.meta.twitter.player_stream {
+            Some(s) => s.as_str(),
+            None => return findings,
+        };
+
+        if stream_url.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Social,
+                code: "TWSTREAM001".to_string(),
+                title: "Empty twitter:player:stream URL".to_string(),
+                description: "The twitter:player:stream meta tag has an empty value.".to_string(),
+                url: url.clone(),
+                recommendation: "Provide a valid video stream URL in twitter:player:stream."
+                    .to_string(),
+            });
+            return findings;
+        }
+
+        if !Self::is_valid_stream_url(stream_url) {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Social,
+                code: "TWSTREAM001".to_string(),
+                title: "Invalid twitter:player:stream URL format".to_string(),
+                description: format!(
+                    "The twitter:player:stream URL \"{stream_url}\" is not a valid HTTP/HTTPS URL."
+                ),
+                url: url.clone(),
+                recommendation: "Ensure twitter:player:stream points to a valid HTTP or HTTPS URL."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SchemaNestingDepthValidator
+// =========================================================================
+
+pub struct SchemaNestingDepthValidator;
+
+impl Default for SchemaNestingDepthValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SchemaNestingDepthValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn max_nesting_depth(value: &serde_json::Value, depth: usize) -> usize {
+        match value {
+            serde_json::Value::Object(map) => {
+                let child_max = map
+                    .values()
+                    .map(|v| Self::max_nesting_depth(v, depth + 1))
+                    .max()
+                    .unwrap_or(depth);
+                child_max.max(depth)
+            }
+            serde_json::Value::Array(arr) => {
+                arr.iter()
+                    .map(|v| Self::max_nesting_depth(v, depth))
+                    .max()
+                    .unwrap_or(depth)
+            }
+            _ => depth,
+        }
+    }
+}
+
+impl Analyzer for SchemaNestingDepthValidator {
+    fn name(&self) -> &str {
+        "schema-nesting-depth"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            let depth = Self::max_nesting_depth(&sd.data, 0);
+            if depth > 3 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "SCNEST001".to_string(),
+                    title: "Schema nesting depth exceeds 3 levels".to_string(),
+                    description: format!(
+                        "JSON-LD block for type \"{}\" has a nesting depth of {} levels. \
+                         Deeply nested schemas may not be fully parsed by search engines.",
+                        sd.r#type.as_deref().unwrap_or("unknown"),
+                        depth
+                    ),
+                    url: url.clone(),
+                    recommendation: "Flatten nested schema structures to 3 levels or fewer for \
+                                     better search engine parsing."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SchemaIdReferenceValidator
+// =========================================================================
+
+pub struct SchemaIdReferenceValidator;
+
+impl Default for SchemaIdReferenceValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl SchemaIdReferenceValidator {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn collect_ids(schemas: &[crate::parser::StructuredData]) -> HashSet<String> {
+        let mut ids = HashSet::new();
+        for sd in schemas {
+            if let Some(id) = sd.data.get("@id").and_then(|v| v.as_str()) {
+                if !id.is_empty() {
+                    ids.insert(id.to_string());
+                }
+            }
+        }
+        ids
+    }
+
+    fn collect_refs(value: &serde_json::Value, refs: &mut Vec<String>) {
+        match value {
+            serde_json::Value::Object(map) => {
+                for (key, val) in map {
+                    // Collect @id references from any property (including nested objects)
+                    if (key == "@id" || key.ends_with("/@id") || key == "id")
+                        && val.is_string()
+                    {
+                        if let Some(s) = val.as_str() {
+                            if s.starts_with('#') {
+                                refs.push(s.to_string());
+                            }
+                        }
+                    } else if let serde_json::Value::String(s) = val {
+                        if s.contains('#') && !s.starts_with("http") {
+                            refs.push(s.clone());
+                        }
+                    }
+                    Self::collect_refs(val, refs);
+                }
+            }
+            serde_json::Value::Array(arr) => {
+                for item in arr {
+                    Self::collect_refs(item, refs);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
+impl Analyzer for SchemaIdReferenceValidator {
+    fn name(&self) -> &str {
+        "schema-id-reference"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let ids = Self::collect_ids(&ctx.page.structured_data);
+
+        for sd in &ctx.page.structured_data {
+            // Collect all @id fragment references from this schema's properties
+            let mut refs = Vec::new();
+            Self::collect_refs(&sd.data, &mut refs);
+            for ref_id in &refs {
+                if ref_id.starts_with('#') && !ids.contains(ref_id) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "SCREF001".to_string(),
+                        title: "Schema @id reference has no matching target".to_string(),
+                        description: format!(
+                            "Schema block references @id=\"{ref_id}\" but no other schema \
+                             block defines this @id."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Ensure all @id references have a corresponding \
+                                         @id target defined in another schema block."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// BreadcrumbActivePageValidator
+// =========================================================================
+
+pub struct BreadcrumbActivePageValidator;
+
+impl Default for BreadcrumbActivePageValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl BreadcrumbActivePageValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for BreadcrumbActivePageValidator {
+    fn name(&self) -> &str {
+        "breadcrumb-active-page"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            let schema_type = sd.data.get("@type").and_then(|t| t.as_str()).unwrap_or("");
+            if schema_type != "BreadcrumbList" {
+                continue;
+            }
+
+            let items = match sd.data.get("itemListElement").and_then(|i| i.as_array()) {
+                Some(arr) if !arr.is_empty() => arr,
+                _ => continue,
+            };
+
+            if let Some(last_item) = items.last() {
+                let item_url = last_item
+                    .get("item")
+                    .and_then(|i| i.get("@id").or(i.get("url")))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                if !item_url.is_empty() && item_url != url {
+                    // Normalize for comparison
+                    let normalize = |u: &str| -> String {
+                        u.trim_end_matches('/')
+                            .to_lowercase()
+                            .replace("https://", "http://")
+                    };
+                    if normalize(item_url) != normalize(url) {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Content,
+                            code: "BREADACT001".to_string(),
+                            title: "Last breadcrumb does not match current URL".to_string(),
+                            description: format!(
+                                "The last breadcrumb item points to \"{item_url}\" but the \
+                                 current page URL is \"{url}\"."
+                            ),
+                            url: url.clone(),
+                            recommendation: "The last breadcrumb item should represent the \
+                                             current page. Update the breadcrumb list to match \
+                                             the actual page URL."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentLanguageValidator
+// =========================================================================
+
+pub struct ContentLanguageValidator;
+
+impl Default for ContentLanguageValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentLanguageValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ContentLanguageValidator {
+    fn name(&self) -> &str {
+        "content-language"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let html_lang = match &ctx.page.html_lang {
+            Some(l) if !l.is_empty() => l,
+            _ => return findings,
+        };
+
+        // Check meta language vs html lang
+        if let Some(meta_lang) = &ctx.page.meta.language {
+            if !meta_lang.is_empty() && meta_lang != html_lang {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "CLANG001".to_string(),
+                    title: "Content language mismatch with html lang".to_string(),
+                    description: format!(
+                        "The meta language \"{meta_lang}\" differs from the html lang \
+                         attribute \"{html_lang}\". Language declarations should be consistent."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Ensure the meta language and html lang attribute declare \
+                                     the same language."
+                        .to_string(),
+                });
+            }
+        }
+
+        // Check hreflang consistency
+        for tag in &ctx.page.meta.hreflang {
+            if tag.lang.to_lowercase() != "x-default" {
+                let tag_lang_base = tag.lang.split('-').next().unwrap_or(&tag.lang);
+                let html_lang_base = html_lang.split('-').next().unwrap_or(html_lang);
+                if tag_lang_base == html_lang_base {
+                    // Found a matching hreflang — language is consistent
+                    return findings;
+                }
+            }
+        }
+
+        if !ctx.page.meta.hreflang.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "CLANG001".to_string(),
+                title: "No hreflang matches html lang".to_string(),
+                description: format!(
+                    "The html lang is \"{html_lang}\" but no hreflang tag matches this language \
+                     code."
+                ),
+                url: url.clone(),
+                recommendation: "Add an hreflang tag for the primary language or verify the \
+                                 html lang attribute is correct."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
 // ContentTopicCoverageAnalyzer
 // =========================================================================
 
@@ -4793,4 +5273,382 @@ mod new_validator_tests {
     // =========================================================================
     // JobPostingSalaryValidator tests
 
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod new_content_analyzer_tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::{ParsedPage, StructuredData};
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // OpenGraphVideoUrlValidator tests
+
+    #[test]
+    fn test_og_video_no_video() {
+        let page = make_page("https://example.com");
+        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_og_video_valid_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_og_video_invalid_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "not-a-url".to_string());
+        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+    }
+
+    #[test]
+    fn test_og_video_empty() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "".to_string());
+        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+    }
+
+    #[test]
+    fn test_og_video_ftp_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.og.insert("video".to_string(), "ftp://example.com/video.mp4".to_string());
+        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+    }
+
+    #[test]
+    fn test_og_video_name() {
+        assert_eq!(OpenGraphVideoUrlValidator::new().name(), "og-video-url-validator");
+    }
+
+    #[test]
+    fn test_og_video_default() {
+        let _ = OpenGraphVideoUrlValidator::default();
+    }
+
+    // TwitterPlayerStreamValidator tests
+
+    #[test]
+    fn test_twitter_stream_no_stream() {
+        let page = make_page("https://example.com");
+        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_twitter_stream_valid_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.player_stream = Some("https://example.com/stream.mp4".to_string());
+        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_twitter_stream_invalid_url() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.player_stream = Some("not-a-url".to_string());
+        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+    }
+
+    #[test]
+    fn test_twitter_stream_empty() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.player_stream = Some("".to_string());
+        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+    }
+
+    #[test]
+    fn test_twitter_stream_ftp() {
+        let mut page = make_page("https://example.com");
+        page.meta.twitter.player_stream = Some("ftp://example.com/stream.mp4".to_string());
+        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+    }
+
+    #[test]
+    fn test_twitter_stream_name() {
+        assert_eq!(TwitterPlayerStreamValidator::new().name(), "twitter-player-stream-validator");
+    }
+
+    #[test]
+    fn test_twitter_stream_default() {
+        let _ = TwitterPlayerStreamValidator::default();
+    }
+
+    // SchemaNestingDepthValidator tests
+
+    #[test]
+    fn test_nesting_no_schemas() {
+        let page = make_page("https://example.com");
+        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_nesting_shallow() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "name": "Test"}),
+        }];
+        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_nesting_deep() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "a": {"b": {"c": {"d": "deep"}}}}),
+        }];
+        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SCNEST001"));
+    }
+
+    #[test]
+    fn test_nesting_exactly_3() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "a": {"b": {"c": "ok"}}}),
+        }];
+        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_nesting_name() {
+        assert_eq!(SchemaNestingDepthValidator::new().name(), "schema-nesting-depth");
+    }
+
+    #[test]
+    fn test_nesting_default() {
+        let _ = SchemaNestingDepthValidator::default();
+    }
+
+    // SchemaIdReferenceValidator tests
+
+    #[test]
+    fn test_id_ref_no_schemas() {
+        let page = make_page("https://example.com");
+        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_id_ref_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "@id": "#article1"}),
+        }];
+        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_id_ref_invalid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "author": {"@id": "#missing"}}),
+        }];
+        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SCREF001"));
+    }
+
+    #[test]
+    fn test_id_ref_with_target() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Organization".to_string()),
+                data: serde_json::json!({"@type": "Organization", "@id": "#org"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article", "author": {"@id": "#org"}}),
+            },
+        ];
+        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_id_ref_name() {
+        assert_eq!(SchemaIdReferenceValidator::new().name(), "schema-id-reference");
+    }
+
+    #[test]
+    fn test_id_ref_default() {
+        let _ = SchemaIdReferenceValidator::default();
+    }
+
+    // BreadcrumbActivePageValidator tests
+
+    #[test]
+    fn test_breadcrumb_active_no_breadcrumb() {
+        let page = make_page("https://example.com/page");
+        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_breadcrumb_active_match() {
+        let mut page = make_page("https://example.com/page");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [
+                {"@type": "ListItem", "position": 1, "item": {"@id": "https://example.com"}},
+                {"@type": "ListItem", "position": 2, "item": {"@id": "https://example.com/page"}}
+            ]}),
+        }];
+        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_breadcrumb_active_mismatch() {
+        let mut page = make_page("https://example.com/page");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [
+                {"@type": "ListItem", "position": 1, "item": {"@id": "https://example.com"}},
+                {"@type": "ListItem", "position": 2, "item": {"@id": "https://example.com/other"}}
+            ]}),
+        }];
+        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "BREADACT001"));
+    }
+
+    #[test]
+    fn test_breadcrumb_active_empty_list() {
+        let mut page = make_page("https://example.com/page");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": []}),
+        }];
+        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_breadcrumb_active_name() {
+        assert_eq!(BreadcrumbActivePageValidator::new().name(), "breadcrumb-active-page");
+    }
+
+    #[test]
+    fn test_breadcrumb_active_default() {
+        let _ = BreadcrumbActivePageValidator::default();
+    }
+
+    // ContentLanguageValidator tests
+
+    #[test]
+    fn test_content_lang_no_html_lang() {
+        let page = make_page("https://example.com");
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_content_lang_match() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        page.meta.language = Some("en".to_string());
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_content_lang_mismatch() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        page.meta.language = Some("fr".to_string());
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CLANG001"));
+    }
+
+    #[test]
+    fn test_content_lang_no_meta_lang() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_content_lang_hreflang_match() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: url::Url::parse("https://example.com/en").unwrap(),
+        }];
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_content_lang_hreflang_no_match() {
+        let mut page = make_page("https://example.com");
+        page.html_lang = Some("en".to_string());
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "fr".to_string(),
+            url: url::Url::parse("https://example.com/fr").unwrap(),
+        }];
+        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CLANG001"));
+    }
+
+    #[test]
+    fn test_content_lang_name() {
+        assert_eq!(ContentLanguageValidator::new().name(), "content-language");
+    }
+
+    #[test]
+    fn test_content_lang_default() {
+        let _ = ContentLanguageValidator::default();
+    }
 }

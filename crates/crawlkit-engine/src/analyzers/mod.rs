@@ -21,12 +21,14 @@ pub mod schema;
 pub mod social_analyzers;
 
 pub use content_analyzers::{
-    BreadcrumbListDepthAnalyzer, ContentFreshnessScorer, ContentThinAnalyzer,
+    BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer, ContentFreshnessScorer,
+    ContentLanguageValidator, ContentThinAnalyzer,
     ContentQualityAnalyzer, ContentTopicCoverageAnalyzer, DuplicateContentDetector,
     EnhancedReadabilityAnalyzer,
     EntityAnalyzer, EntityLinkingAnalyzer, JsonLdValidator, MetaDescriptionLengthAnalyzer,
-    MicrodataValidator, RdfaValidator, StructuredDataValidator, TableOfContentsAnalyzer,
-    TitleLengthAnalyzer,
+    MicrodataValidator, OpenGraphVideoUrlValidator, RdfaValidator, SchemaIdReferenceValidator,
+    SchemaNestingDepthValidator, StructuredDataValidator, TableOfContentsAnalyzer,
+    TitleLengthAnalyzer, TwitterPlayerStreamValidator,
 };
 pub use schema::*;
 pub use http_analyzers::{
@@ -35,39 +37,49 @@ pub use http_analyzers::{
     ServerHeaderAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
 pub use media_analyzers::{
-    AggregateRatingValidator, AsyncScriptAnalyzer, ConnectionAnalyzer, CriticalResourceAnalyzer,
-    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, FormAnalyzer, ImageAnalyzer, ImageAspectRatioValidator,
+    AggregateRatingValidator, AsyncScriptAnalyzer, BlockingStyleAnalyzer,
+    ConnectionAnalyzer, CriticalResourceAnalyzer,
+    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, FormAnalyzer, ImageAnalyzer,
+    ImageAspectRatioValidator, ImageDimensionMissingAnalyzer,
     ImageFileSizeValidator, ImageInfo, ImageLazyLoadAnalyzer,
-    PreloadHintAnalyzer, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
-    ResourceSizeAnalyzer, ScriptAnalyzer, StylesheetAnalyzer,
+    PreloadHintAnalyzer, PricingSchemaValidator, ProductVariantAnalyzer,
+    ResourceCountAnalyzer, ResourceSizeAnalyzer, ScriptAnalyzer,
+    StylesheetAnalyzer, ThirdPartyResourceAnalyzer,
 };
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AriaRolesAnalyzer, CertificateTransparencyAnalyzer,
+    AccessibilityAnalyzer, AriaLabelAnalyzer, AriaRolesAnalyzer,
+    CertificateTransparencyAnalyzer,
     ColorContrastAnalyzer, ContentTypeSniffingAnalyzer,
-    ContentSecurityPolicyAnalyzer, CookieAnalyzer, CrossOriginIsolationAnalyzer,
-    CrossOriginResourcePolicyAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer,
+    ContentSecurityPolicyAnalyzer, CorsMisconfigurationAnalyzer, CookieAnalyzer,
+    CrossOriginIsolationAnalyzer,
+    CrossOriginResourcePolicyAnalyzer, DnsRebindingAnalyzer, ExpectCTAnalyzer,
+    FeaturePolicyAnalyzer,
     FocusManagementAnalyzer, FocusOrderAnalyzer,
     FontSizeAnalyzer, FormLabelAnalyzer, HeadingOrderAnalyzer, HstsPreloadAnalyzer,
     ImageAccessibilityAnalyzer, LandmarkRegionsAnalyzer, LinkAccessibilityAnalyzer,
     MixedContentAnalyzer, MobileFriendlinessChecker, PermissionPolicyAnalyzer,
-    ReferrerPolicyAnalyzer, SecurityHeaderAnalyzer, SriAnalyzer, StrictTransportSecurityAnalyzer,
-    TableAccessibilityAnalyzer,
+    ReferrerPolicyAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer, SriAnalyzer,
+    StrictTransportSecurityAnalyzer, SubresourceIntegrityAnalyzer,
+    TableAccessibilityAnalyzer, TableCaptionAnalyzer, TabindexAnalyzer,
     XContentTypeOptionsAnalyzer, XSSProtectionAnalyzer, XFrameOptionsAnalyzer,
     XPermittedCrossDomainPoliciesAnalyzer,
 };
 pub use seo_analyzers::{
     AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer,
     CanonicalUrlValidator, CharsetValidator,
+    ExternalNofollowUnderuseValidator,
     HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
     HreflangValidator,
     InternalLinkAnchorAnalyzer, InternalLinkTopicalAnalyzer,
+    InternalNofollowOveruseValidator,
     InternationalSeoAnalyzer, KeywordAnalyzer,
     LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo,
     MetaDescriptionPixelWidthAnalyzer, MetaTagAnalyzer,
-    MobileViewportAnalyzer, OpenSearchValidator,
-    PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
-    SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
-    TitlePixelWidthAnalyzer,
+    MixedProtocolRedirectValidator, MobileViewportAnalyzer, OpenSearchValidator,
+    PaginationAnalyzer, PaginationDepthValidator,
+    RedirectLoopDetector, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
+    RobotsTxtSizeValidator, SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
+    SitemapXmlSizeValidator, TitlePixelWidthAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
@@ -556,6 +568,42 @@ impl AnalyzerRegistry {
             Box::new(FeaturePolicyAnalyzer::new()),
             Box::new(ExpectCTAnalyzer::new()),
             Box::new(CertificateTransparencyAnalyzer::new()),
+            // Content analyzers: OG video URL, Twitter player stream, schema nesting, schema @id ref, breadcrumb active page, content language
+            Box::new(OpenGraphVideoUrlValidator::new()),
+            Box::new(TwitterPlayerStreamValidator::new()),
+            Box::new(SchemaNestingDepthValidator::new()),
+            Box::new(SchemaIdReferenceValidator::new()),
+            Box::new(BreadcrumbActivePageValidator::new()),
+            Box::new(ContentLanguageValidator::new()),
+            // SEO analyzers: pagination depth, redirect loop, mixed protocol, nofollow overuse/underuse, sitemap size, robots.txt size
+            Box::new(PaginationDepthValidator::new()),
+            Box::new(RedirectLoopDetector::new()),
+            Box::new(MixedProtocolRedirectValidator::new()),
+            Box::new(InternalNofollowOveruseValidator::new()),
+            Box::new(ExternalNofollowUnderuseValidator::new()),
+            Box::new(SitemapXmlSizeValidator::new()),
+            Box::new(RobotsTxtSizeValidator::new()),
+            // Schema validators: video duration, product availability, FAQ page entity, HowTo step count, event start date, local business NPI, org sameAs
+            Box::new(VideoObjectDurationValidator::new()),
+            Box::new(ProductAvailabilityValidator::new()),
+            Box::new(FaqPageEntityValidator::new()),
+            Box::new(HowToStepCountValidator::new()),
+            Box::new(EventStartDateValidator::new()),
+            Box::new(LocalBusinessNpiValidator::new()),
+            Box::new(OrganizationSameAsValidator::new()),
+            // Security: DNS rebinding, SRI scripts, CORS misconfiguration
+            Box::new(DnsRebindingAnalyzer::new()),
+            Box::new(SubresourceIntegrityAnalyzer::new()),
+            Box::new(CorsMisconfigurationAnalyzer::new()),
+            // Performance: third-party resources, blocking styles, image dimensions
+            Box::new(ThirdPartyResourceAnalyzer::new()),
+            Box::new(BlockingStyleAnalyzer::new()),
+            Box::new(ImageDimensionMissingAnalyzer::new()),
+            // Accessibility: ARIA labels, table caption, skip link, tabindex
+            Box::new(AriaLabelAnalyzer::new()),
+            Box::new(TableCaptionAnalyzer::new()),
+            Box::new(SkipLinkAnalyzer::new()),
+            Box::new(TabindexAnalyzer::new()),
         ];
 
         if include_ai {

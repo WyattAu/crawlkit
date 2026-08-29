@@ -266,6 +266,8 @@ pub struct CrawlOutput {
     pub elapsed: Duration,
     /// Monitoring delta result, populated when `previous_crawl_id` is set.
     pub monitoring: Option<crate::monitoring::MonitoringResult>,
+    /// Prioritized insights ranked by impact and effort.
+    pub insights: Vec<crate::insights::Insight>,
 }
 
 /// Callback invoked for each page successfully crawled and stored.
@@ -833,44 +835,53 @@ impl CrawlEngine {
         }
 
         // Run post-crawl analyzers if any are registered.
-        let post_crawl_issues = if self.config.post_crawl_analyzers.is_empty() {
-            0
+        let (post_crawl_issues, crawl_data_for_insights) =
+            if self.config.post_crawl_analyzers.is_empty() {
+                (0, None)
+            } else {
+                let crawl_id_clone = crawl_id.clone();
+                let seed_url = run.cfg.crawl_config.start_url.to_string();
+                let storage_for_analysis = Arc::clone(&self.storage);
+                let crawl_data = tokio::task::spawn_blocking(move || {
+                    let pages = storage_for_analysis
+                        .get_pages(&crawl_id_clone, 100_000)
+                        .unwrap_or_default();
+                    let links = storage_for_analysis
+                        .get_links_for_crawl(&crawl_id_clone)
+                        .unwrap_or_default();
+                    let issues = {
+                        use crate::storage::IssueFilter;
+                        storage_for_analysis
+                            .get_issues(&crawl_id_clone, &IssueFilter::default())
+                            .unwrap_or_default()
+                    };
+                    CrawlData {
+                        pages,
+                        links,
+                        issues,
+                        seed_url,
+                    }
+                })
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "Post-crawl data collection failed");
+                    CrawlData {
+                        pages: vec![],
+                        links: vec![],
+                        issues: vec![],
+                        seed_url: String::new(),
+                    }
+                });
+                let findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
+                let count = findings.len();
+                (count, Some(crawl_data))
+            };
+
+        // Generate prioritized insights from findings.
+        let insights = if let Some(ref data) = crawl_data_for_insights {
+            crate::insights::generate_insights_from_crawl_data(data)
         } else {
-            let crawl_id_clone = crawl_id.clone();
-            let seed_url = run.cfg.crawl_config.start_url.to_string();
-            let storage_for_analysis = Arc::clone(&self.storage);
-            let crawl_data = tokio::task::spawn_blocking(move || {
-                let pages = storage_for_analysis
-                    .get_pages(&crawl_id_clone, 100_000)
-                    .unwrap_or_default();
-                let links = storage_for_analysis
-                    .get_links_for_crawl(&crawl_id_clone)
-                    .unwrap_or_default();
-                let issues = {
-                    use crate::storage::IssueFilter;
-                    storage_for_analysis
-                        .get_issues(&crawl_id_clone, &IssueFilter::default())
-                        .unwrap_or_default()
-                };
-                CrawlData {
-                    pages,
-                    links,
-                    issues,
-                    seed_url,
-                }
-            })
-            .await
-            .unwrap_or_else(|e| {
-                tracing::warn!(error = %e, "Post-crawl data collection failed");
-                CrawlData {
-                    pages: vec![],
-                    links: vec![],
-                    issues: vec![],
-                    seed_url: String::new(),
-                }
-            });
-            let findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
-            findings.len()
+            Vec::new()
         };
 
         let elapsed = crawl_start.elapsed();
@@ -955,6 +966,7 @@ impl CrawlEngine {
             metrics: snapshot,
             elapsed,
             monitoring,
+            insights,
         }
     }
 
@@ -1198,6 +1210,7 @@ mod tests {
             metrics: crate::Metrics::new().snapshot(),
             elapsed: Duration::from_secs(1),
             monitoring: None,
+            insights: Vec::new(),
         };
         let cloned = output;
         assert_eq!(cloned.crawl_id, "test");
@@ -1244,7 +1257,7 @@ mod tests {
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
         // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 173);
+        assert_eq!(registry.len(), 203);
     }
 
     struct MockJsRenderer {

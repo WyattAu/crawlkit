@@ -341,6 +341,13 @@ pub mod gsc;
 /// and health scores, with linear regression for trend direction.
 #[cfg(feature = "full")]
 pub mod trends;
+/// Prioritized insights engine that ranks post-crawl findings by impact and effort.
+///
+/// Aggregates findings across all crawled pages, computes impact scores
+/// based on severity and prevalence, estimates fix effort, and produces
+/// a ranked list of actionable insights — the key differentiator that
+/// tools like Sitebulb and Lumar offer.
+pub mod insights;
 
 pub use ai_analyzers::{
     AiAnswerBoxAnalyzer, AiCitationEligibilityAnalyzer, AiContentStructureAnalyzer,

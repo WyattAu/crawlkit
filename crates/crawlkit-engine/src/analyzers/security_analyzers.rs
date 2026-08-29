@@ -6810,6 +6810,550 @@ impl Analyzer for TabindexAnalyzer {
     }
 }
 
+// =========================================================================
+// PermissionsPolicyAnalyzerV2
+// =========================================================================
+
+pub struct PermissionsPolicyAnalyzerV2;
+
+impl Default for PermissionsPolicyAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PermissionsPolicyAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for PermissionsPolicyAnalyzerV2 {
+    fn name(&self) -> &str {
+        "permissions-policy-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Permissions-Policy") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "PERM-V2001".to_string(),
+                    title: "Permissions-Policy header missing".to_string(),
+                    description: "No Permissions-Policy header was found."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set a Permissions-Policy header."
+                        .into(),
+                });
+            }
+            Some(policy) => {
+                let lower = policy.to_lowercase();
+                for feature in &["camera", "microphone", "geolocation", "payment"] {
+                    if !lower.contains(&format!("{feature}=()"))
+                        && !lower.contains(&format!("{feature}=(self)"))
+                    {
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Security,
+                            code: "PERM-V2002".to_string(),
+                            title: format!("Permissions-Policy does not restrict {feature}"),
+                            description: format!(
+                                "The Permissions-Policy header does not explicitly restrict \
+                                 {feature} access."
+                            ),
+                            url: url.to_string(),
+                            recommendation: format!(
+                                "Add {feature}=() to Permissions-Policy."
+                            ),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// FormInputLabelAnalyzer
+// =========================================================================
+
+pub struct FormInputLabelAnalyzer;
+
+impl Default for FormInputLabelAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl FormInputLabelAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for FormInputLabelAnalyzer {
+    fn name(&self) -> &str {
+        "form-input-label"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if !input.has_label {
+                    let aria_has_name = input.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                        || input.aria_labelledby.as_ref().is_some_and(|l| !l.trim().is_empty());
+                    if !aria_has_name {
+                        let desc = match (&input.name, &input.input_type) {
+                            (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
+                            (Some(n), None) => format!("input (name=\"{n}\")"),
+                            (None, Some(t)) => format!("input (type=\"{t}\")"),
+                            (None, None) => "input".to_string(),
+                        };
+                        findings.push(Finding {
+                            severity: Severity::Error,
+                            category: IssueCategory::Accessibility,
+                            code: "FILABEL001".to_string(),
+                            title: "Form input missing associated label".to_string(),
+                            description: format!(
+                                "{desc} has no associated <label> element, aria-label, or \
+                                 aria-labelledby attribute."
+                            ),
+                            url: url.to_string(),
+                            recommendation: "Associate a <label> element with the input."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// LinkTextAnalyzer
+// =========================================================================
+
+pub struct LinkTextAnalyzer;
+
+impl Default for LinkTextAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LinkTextAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for LinkTextAnalyzer {
+    fn name(&self) -> &str {
+        "link-text"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for link in &ctx.page.links {
+            let text = link.text.trim();
+            if text.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "LINKTEXT001".to_string(),
+                    title: "Link with empty text".to_string(),
+                    description: format!(
+                        "A link to \"{}\" has no visible text content.",
+                        link.href
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Add descriptive text content inside the <a> tag."
+                        .to_string(),
+                });
+                continue;
+            }
+
+            let lower = text.to_lowercase();
+            let generic_texts = [
+                "click here", "read more", "learn more", "here", "link", "more", "this", "continue",
+            ];
+            for generic in &generic_texts {
+                if lower == *generic {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "LINKTEXT002".to_string(),
+                        title: "Link with generic text".to_string(),
+                        description: format!(
+                            "Link text \"{text}\" is generic and does not describe the destination."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Replace generic text with descriptive text."
+                            .to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ImageAltTextAnalyzer
+// =========================================================================
+
+pub struct ImageAltTextAnalyzer;
+
+impl Default for ImageAltTextAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ImageAltTextAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ImageAltTextAnalyzer {
+    fn name(&self) -> &str {
+        "image-alt-text"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for image in &ctx.page.images {
+            if !image.has_alt || image.alt.trim().is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "IMGALT001".to_string(),
+                    title: "Image missing alt text".to_string(),
+                    description: format!(
+                        "Image \"{}\" is missing an alt attribute or has empty alt text.",
+                        image.src
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Add a descriptive alt attribute to the image."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// AriaRoleAnalyzer
+// =========================================================================
+
+pub struct AriaRoleAnalyzer;
+
+impl Default for AriaRoleAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl AriaRoleAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for AriaRoleAnalyzer {
+    fn name(&self) -> &str {
+        "aria-role"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIAROLE001".to_string(),
+                title: "ARIA roles without accessible names".to_string(),
+                description: format!(
+                    "{} ARIA role(s) found but no aria-label or aria-labelledby attributes.",
+                    ctx.page.aria_role_count
+                ),
+                url: url.to_string(),
+                recommendation: "Add aria-label or aria-labelledby to all elements with ARIA roles."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// StrictTransportSecurityAnalyzerV2
+// =========================================================================
+
+pub struct StrictTransportSecurityAnalyzerV2;
+
+impl Default for StrictTransportSecurityAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StrictTransportSecurityAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+
+    fn parse_max_age(value: &str) -> Option<u64> {
+        for part in value.split(';') {
+            let trimmed = part.trim();
+            if let Some(val) = trimmed.strip_prefix("max-age=") {
+                if let Ok(n) = val.trim().parse::<u64>() {
+                    return Some(n);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Analyzer for StrictTransportSecurityAnalyzerV2 {
+    fn name(&self) -> &str {
+        "strict-transport-security-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "Strict-Transport-Security") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "HSTS-V2001".to_string(),
+                    title: "Missing Strict-Transport-Security header".to_string(),
+                    description: "No Strict-Transport-Security header was found."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set Strict-Transport-Security: max-age=31536000; includeSubDomains; preload."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if let Some(max_age) = Self::parse_max_age(value) {
+                    if max_age < 31536000 {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Security,
+                            code: "HSTS-V2002".to_string(),
+                            title: "HSTS max-age is too short".to_string(),
+                            description: format!(
+                                "Strict-Transport-Security max-age is {max_age} seconds, which is below the recommended minimum of 31536000."
+                            ),
+                            url: url.to_string(),
+                            recommendation: "Set max-age to at least 31536000 (1 year)."
+                                .to_string(),
+                        });
+                    }
+                }
+
+                if !value.to_lowercase().contains("includesubdomains") {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "HSTS-V2003".to_string(),
+                        title: "HSTS missing includeSubDomains".to_string(),
+                        description: "The Strict-Transport-Security header does not include the includeSubDomains directive."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Add includeSubDomains to the HSTS header."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// XssProtectionAnalyzerV2
+// =========================================================================
+
+pub struct XssProtectionAnalyzerV2;
+
+impl Default for XssProtectionAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl XssProtectionAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for XssProtectionAnalyzerV2 {
+    fn name(&self) -> &str {
+        "xss-protection-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-XSS-Protection") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "XSS-V2001".to_string(),
+                    title: "Missing X-XSS-Protection header".to_string(),
+                    description: "No X-XSS-Protection header was found."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-XSS-Protection: 1; mode=block."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim() == "0" {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "XSS-V2002".to_string(),
+                        title: "X-XSS-Protection explicitly disabled".to_string(),
+                        description: "X-XSS-Protection is set to 0, explicitly disabling the XSS auditor."
+                            .to_string(),
+                        url: url.to_string(),
+                        recommendation: "Ensure Content-Security-Policy is properly configured."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentTypeSniffingAnalyzerV2
+// =========================================================================
+
+pub struct ContentTypeSniffingAnalyzerV2;
+
+impl Default for ContentTypeSniffingAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentTypeSniffingAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
+        headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.as_str())
+    }
+}
+
+impl Analyzer for ContentTypeSniffingAnalyzerV2 {
+    fn name(&self) -> &str {
+        "content-type-sniffing-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        match Self::get_header(ctx.headers, "X-Content-Type-Options") {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "CT-V2001".to_string(),
+                    title: "Missing X-Content-Type-Options header".to_string(),
+                    description: "No X-Content-Type-Options header was found."
+                        .to_string(),
+                    url: url.to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff."
+                        .to_string(),
+                });
+            }
+            Some(value) => {
+                if value.trim().to_lowercase() != "nosniff" {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CT-V2002".to_string(),
+                        title: "Invalid X-Content-Type-Options value".to_string(),
+                        description: format!(
+                            "X-Content-Type-Options is \"{value}\" instead of \"nosniff\"."
+                        ),
+                        url: url.to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod new_analyzer_tests {
@@ -7689,5 +8233,299 @@ mod new_analyzer_tests {
     #[test]
     fn test_tabindex_default() {
         let _ = TabindexAnalyzer::default();
+    }
+
+    // PermissionsPolicyAnalyzerV2 tests
+
+    #[test]
+    fn test_perm_v2_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(PermissionsPolicyAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "PERM-V2001"));
+    }
+
+    #[test]
+    fn test_perm_v2_present() {
+        let page = make_page("https://example.com");
+        let headers = vec![("Permissions-Policy".to_string(), "camera=(), microphone=(), geolocation=(), payment=()".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(PermissionsPolicyAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    // FormInputLabelAnalyzer tests
+
+    #[test]
+    fn test_form_input_label_no_forms() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormInputLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_form_input_label_with_label() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: None,
+                has_label: true,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormInputLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_form_input_label_missing_label() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None,
+            method: "post".to_string(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".to_string()),
+                name: Some("email".to_string()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
+            }],
+            has_fieldset: false,
+            has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormInputLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FILABEL001"));
+    }
+
+    // LinkTextAnalyzer tests
+
+    #[test]
+    fn test_link_text_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LinkTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_link_text_empty() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/target".to_string(),
+            text: "".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LinkTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LINKTEXT001"));
+    }
+
+    #[test]
+    fn test_link_text_generic() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/target".to_string(),
+            text: "click here".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LinkTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LINKTEXT002"));
+    }
+
+    #[test]
+    fn test_link_text_good() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/target".to_string(),
+            text: "About our company".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LinkTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // ImageAltTextAnalyzer tests
+
+    #[test]
+    fn test_image_alt_no_images() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_image_alt_missing() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![crate::parser::ExtractedImage {
+            src: "https://example.com/photo.jpg".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: false,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGALT001"));
+    }
+
+    #[test]
+    fn test_image_alt_empty() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![crate::parser::ExtractedImage {
+            src: "https://example.com/photo.jpg".to_string(),
+            alt: String::new(),
+            width: None,
+            height: None,
+            has_alt: false,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGALT001"));
+    }
+
+    #[test]
+    fn test_image_alt_present() {
+        let mut page = make_page("https://example.com");
+        page.images = vec![crate::parser::ExtractedImage {
+            src: "https://example.com/photo.jpg".to_string(),
+            alt: "A scenic mountain view".to_string(),
+            width: None,
+            height: None,
+            has_alt: true,
+            is_lazy_loaded: false,
+            aria_hidden: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // AriaRoleAnalyzer tests
+
+    #[test]
+    fn test_aria_role_no_roles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRoleAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_role_without_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRoleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIAROLE001"));
+    }
+
+    #[test]
+    fn test_aria_role_with_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRoleAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // StrictTransportSecurityAnalyzerV2 tests
+
+    #[test]
+    fn test_hsts_v2_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "HSTS-V2001"));
+    }
+
+    #[test]
+    fn test_hsts_v2_low_max_age() {
+        let page = make_page("https://example.com");
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=3600".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "HSTS-V2002"));
+    }
+
+    #[test]
+    fn test_hsts_v2_no_include_subdomains() {
+        let page = make_page("https://example.com");
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = StrictTransportSecurityAnalyzerV2::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HSTS-V2003"));
+    }
+
+    #[test]
+    fn test_hsts_v2_valid() {
+        let page = make_page("https://example.com");
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains; preload".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    // XssProtectionAnalyzerV2 tests
+
+    #[test]
+    fn test_xss_v2_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(XssProtectionAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "XSS-V2001"));
+    }
+
+    #[test]
+    fn test_xss_v2_disabled() {
+        let page = make_page("https://example.com");
+        let headers = vec![("X-XSS-Protection".to_string(), "0".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(XssProtectionAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "XSS-V2002"));
+    }
+
+    // ContentTypeSniffingAnalyzerV2 tests
+
+    #[test]
+    fn test_ct_v2_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CT-V2001"));
+    }
+
+    #[test]
+    fn test_ct_v2_invalid_value() {
+        let page = make_page("https://example.com");
+        let headers = vec![("X-Content-Type-Options".to_string(), "sniff".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CT-V2002"));
+    }
+
+    #[test]
+    fn test_ct_v2_valid() {
+        let page = make_page("https://example.com");
+        let headers = vec![("X-Content-Type-Options".to_string(), "nosniff".to_string())];
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).is_empty());
     }
 }

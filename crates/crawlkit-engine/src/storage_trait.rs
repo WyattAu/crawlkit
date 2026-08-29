@@ -163,6 +163,16 @@ pub trait StorageBackend: Send + Sync {
     /// Returns the number of crawls deleted.
     fn purge_old_crawls(&self, max_age_days: u32) -> Result<usize, StorageError>;
 
+    /// Purge crawls older than `max_age_days` days for a specific tenant.
+    ///
+    /// Only deletes crawls whose pages contain the given `tenant_id`.
+    /// Returns the number of crawls deleted.
+    fn purge_old_crawls_for_tenant(
+        &self,
+        max_age_days: u32,
+        tenant_id: &str,
+    ) -> Result<usize, StorageError>;
+
     /// Compare two crawls within the same storage backend.
     ///
     /// Returns a [`CrawlDiff`](crate::compare::CrawlDiff) describing
@@ -310,6 +320,73 @@ mod tests {
         assert_eq!(pages_b.len(), 2); // page_b + shared
         assert!(pages_b.iter().any(|p| p.id == "p2"));
         assert!(pages_b.iter().any(|p| p.id == "p3"));
+    }
+
+    #[test]
+    fn test_trait_tenant_isolated_issues() {
+        let storage: Box<dyn StorageBackend> = new_in_memory_backend().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let mut page_a = test_page("p1", "https://example.com/a", 200);
+        page_a.tenant_id = Some("tenant_a".to_string());
+        let mut page_b = test_page("p2", "https://example.com/b", 200);
+        page_b.tenant_id = Some("tenant_b".to_string());
+
+        storage.insert_page(&crawl_id, &page_a).unwrap();
+        storage.insert_page(&crawl_id, &page_b).unwrap();
+
+        let mut issue_a = test_issue("i1", "p1", IssueCategory::Seo, Severity::Error);
+        issue_a.tenant_id = Some("tenant_a".to_string());
+        let mut issue_b = test_issue("i2", "p2", IssueCategory::Seo, Severity::Error);
+        issue_b.tenant_id = Some("tenant_b".to_string());
+
+        storage.insert_issue(&issue_a).unwrap();
+        storage.insert_issue(&issue_b).unwrap();
+
+        let issues_a = storage
+            .get_issues_for_tenant(&crawl_id, "tenant_a", &IssueFilter::default())
+            .unwrap();
+        assert_eq!(issues_a.len(), 1);
+        assert_eq!(issues_a[0].id, "i1");
+
+        let issues_b = storage
+            .get_issues_for_tenant(&crawl_id, "tenant_b", &IssueFilter::default())
+            .unwrap();
+        assert_eq!(issues_b.len(), 1);
+        assert_eq!(issues_b[0].id, "i2");
+    }
+
+    #[test]
+    fn test_trait_tenant_scoped_purge() {
+        let storage: Box<dyn StorageBackend> = new_in_memory_backend().unwrap();
+
+        // Create crawls with different tenants
+        let crawl_id1 = storage.start_crawl("https://example.com", None).unwrap();
+        let crawl_id2 = storage.start_crawl("https://example.com", None).unwrap();
+
+        let mut page_a = test_page("p1", "https://example.com/a", 200);
+        page_a.tenant_id = Some("tenant_a".to_string());
+        let mut page_b = test_page("p2", "https://example.com/b", 200);
+        page_b.tenant_id = Some("tenant_b".to_string());
+
+        storage.insert_page(&crawl_id1, &page_a).unwrap();
+        storage.insert_page(&crawl_id2, &page_b).unwrap();
+
+        // Purge with max_age_days=0 should delete all crawls for tenant_a
+        let purged = storage.purge_old_crawls_for_tenant(0, "tenant_a").unwrap();
+        assert_eq!(purged, 1);
+
+        // Verify tenant_a's crawl is gone
+        let pages_a = storage
+            .get_pages_for_tenant(&crawl_id1, "tenant_a", 10)
+            .unwrap();
+        assert!(pages_a.is_empty());
+
+        // Verify tenant_b's crawl still exists
+        let pages_b = storage
+            .get_pages_for_tenant(&crawl_id2, "tenant_b", 10)
+            .unwrap();
+        assert_eq!(pages_b.len(), 1);
     }
 
     #[test]

@@ -6706,6 +6706,362 @@ impl Analyzer for RobotsTxtSizeValidator {
 }
 
 // =========================================================================
+// TitleLengthQualityAnalyzer
+// =========================================================================
+
+pub struct TitleLengthQualityAnalyzer;
+
+impl Default for TitleLengthQualityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl TitleLengthQualityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for TitleLengthQualityAnalyzer {
+    fn name(&self) -> &str {
+        "title-length-quality"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let title = match &ctx.page.meta.title {
+            Some(t) if !t.trim().is_empty() => t.trim(),
+            _ => return findings,
+        };
+
+        let len = title.chars().count();
+
+        if len < 20 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "TITLE-QLT001".to_string(),
+                title: "Title too short for quality".to_string(),
+                description: format!(
+                    "Title is {len} characters, which is below the quality minimum of 20 characters."
+                ),
+                url: url.clone(),
+                recommendation: "Write a title of at least 30 characters."
+                    .into(),
+            });
+        } else if len > 60 && len <= 70 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "TITLE-QLT002".to_string(),
+                title: "Title may be truncated in search results".to_string(),
+                description: format!(
+                    "Title is {len} characters. Titles over 60 characters may be truncated."
+                ),
+                url: url.clone(),
+                recommendation: "Keep the title under 60 characters."
+                    .into(),
+            });
+        } else if len > 70 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "TITLE-QLT003".to_string(),
+                title: "Title too long for search results".to_string(),
+                description: format!(
+                    "Title is {len} characters, which exceeds the recommended maximum."
+                ),
+                url: url.clone(),
+                recommendation: "Keep the title under 60 characters."
+                    .into(),
+            });
+        }
+
+        let words: Vec<&str> = title.split_whitespace().collect();
+        if words.len() < 2 && len > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "TITLE-QLT004".to_string(),
+                title: "Title appears to be a single word".to_string(),
+                description: "The title consists of only one word."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Expand the title to include multiple descriptive words."
+                    .into(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MetaDescriptionQualityAnalyzer
+// =========================================================================
+
+pub struct MetaDescriptionQualityAnalyzer;
+
+impl Default for MetaDescriptionQualityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetaDescriptionQualityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for MetaDescriptionQualityAnalyzer {
+    fn name(&self) -> &str {
+        "meta-description-quality"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let description = match &ctx.page.meta.description {
+            Some(d) if !d.trim().is_empty() => d.trim(),
+            _ => return findings,
+        };
+
+        let len = description.chars().count();
+
+        if len < 70 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "META-QLT001".to_string(),
+                title: "Meta description too short for quality".to_string(),
+                description: format!(
+                    "Meta description is {len} characters. Descriptions under 70 characters may not provide enough context."
+                ),
+                url: url.clone(),
+                recommendation: "Write a meta description of 120-160 characters."
+                    .into(),
+            });
+        }
+
+        if len > 160 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "META-QLT002".to_string(),
+                title: "Meta description may be truncated".to_string(),
+                description: format!(
+                    "Meta description is {len} characters. Descriptions over 160 characters are typically truncated."
+                ),
+                url: url.clone(),
+                recommendation: "Keep the meta description under 160 characters."
+                    .into(),
+            });
+        }
+
+        let sentences: Vec<&str> = description.split(['.', '!', '?'])
+            .filter(|s| !s.trim().is_empty())
+            .collect();
+        if sentences.len() > 1 {
+            let lower_sentences: Vec<String> = sentences.iter().map(|s| s.trim().to_lowercase()).collect();
+            let mut seen = std::collections::HashSet::new();
+            for s in &lower_sentences {
+                if !seen.insert(s.clone()) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Seo,
+                        code: "META-QLT003".to_string(),
+                        title: "Meta description contains duplicate sentences".to_string(),
+                        description: "The meta description contains repeated text."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Write unique, varied content."
+                            .into(),
+                    });
+                    break;
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// InternalLinkAnchorAnalyzerV2
+// =========================================================================
+
+pub struct InternalLinkAnchorAnalyzerV2;
+
+impl Default for InternalLinkAnchorAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalLinkAnchorAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for InternalLinkAnchorAnalyzerV2 {
+    fn name(&self) -> &str {
+        "internal-link-anchor-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| !l.is_external)
+            .collect();
+
+        if internal_links.is_empty() {
+            return findings;
+        }
+
+        let anchors: Vec<String> = internal_links
+            .iter()
+            .filter(|l| !l.text.trim().is_empty())
+            .map(|l| {
+                l.text
+                    .trim()
+                    .to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+                    .collect()
+            })
+            .collect();
+
+        if anchors.len() >= 3 {
+            let mut freq: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
+            for anchor in &anchors {
+                *freq.entry(anchor.clone()).or_default() += 1;
+            }
+
+            let total = anchors.len();
+            let unique_count = freq.len();
+            let diversity_ratio = unique_count as f64 / total as f64;
+
+            if diversity_ratio < 0.3 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ANCH-V2001".to_string(),
+                    title: "Low anchor text diversity".to_string(),
+                    description: format!(
+                        "Only {unique_count} unique anchor text(s) across {total} internal links ({:.0}% diversity).",
+                        diversity_ratio * 100.0
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use more varied, descriptive anchor text."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// WikipediaLinkAnalyzerV2
+// =========================================================================
+
+pub struct WikipediaLinkAnalyzerV2;
+
+impl Default for WikipediaLinkAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl WikipediaLinkAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_wikipedia_or_wikimedia(url: &str) -> bool {
+        let lower = url.to_lowercase();
+        lower.contains("wikipedia.org") || lower.contains("wikimedia.org") || lower.contains("wikidata.org")
+    }
+}
+
+impl Analyzer for WikipediaLinkAnalyzerV2 {
+    fn name(&self) -> &str {
+        "wikipedia-link-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let external_links: Vec<&ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.is_external)
+            .collect();
+
+        if external_links.is_empty() {
+            return findings;
+        }
+
+        let wiki_count = external_links
+            .iter()
+            .filter(|l| Self::is_wikipedia_or_wikimedia(&l.href))
+            .count();
+
+        if wiki_count > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "WIKI-V2001".to_string(),
+                title: "Wikipedia/Wikimedia links detected".to_string(),
+                description: format!(
+                    "This page contains {wiki_count} outbound link(s) to Wikipedia, Wikimedia, or Wikidata."
+                ),
+                url: url.clone(),
+                recommendation: "Keep Wikipedia/Wikimedia links as they demonstrate thorough research."
+                    .to_string(),
+            });
+        }
+
+        let nofollow_wiki = external_links
+            .iter()
+            .filter(|l| Self::is_wikipedia_or_wikimedia(&l.href) && l.rel.iter().any(|r| r == "nofollow"))
+            .count();
+
+        if nofollow_wiki > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "WIKI-V2002".to_string(),
+                title: "Wikipedia links marked nofollow".to_string(),
+                description: format!(
+                    "{nofollow_wiki} Wikipedia/Wikimedia link(s) are marked with rel=\"nofollow\"."
+                ),
+                url: url.clone(),
+                recommendation: "Consider removing nofollow from Wikipedia links."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
 // New SEO analyzer tests
 // =========================================================================
 
@@ -6714,7 +7070,7 @@ impl Analyzer for RobotsTxtSizeValidator {
 mod new_seo_tests {
     use super::*;
     use crate::meta::MetaTags;
-    use crate::parser::ParsedPage;
+    use crate::parser::{ExtractedLink, ParsedPage};
 
     fn make_page(url: &str) -> ParsedPage {
         ParsedPage {
@@ -7612,5 +7968,166 @@ mod new_seo_tests {
     #[test]
     fn test_opdesc_default() {
         let _ = OpenSearchDescriptionValidator::default();
+    }
+
+    // TitleLengthQualityAnalyzer tests
+
+    #[test]
+    fn test_title_qlt_no_title() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_qlt_too_short() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Hi".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TITLE-QLT001"));
+    }
+
+    #[test]
+    fn test_title_qlt_just_right() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("A Great Page Title for Testing".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_qlt_too_long() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("A".repeat(80));
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TITLE-QLT003"));
+    }
+
+    #[test]
+    fn test_title_qlt_single_word() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("Homepage".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        let findings = TitleLengthQualityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TITLE-QLT004"));
+    }
+
+    // MetaDescriptionQualityAnalyzer tests
+
+    #[test]
+    fn test_meta_qlt_no_description() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_meta_qlt_too_short() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Short".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT001"));
+    }
+
+    #[test]
+    fn test_meta_qlt_just_right() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A comprehensive guide to building modern web applications with Rust and WebAssembly.".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_meta_qlt_too_long() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(200));
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT002"));
+    }
+
+    #[test]
+    fn test_meta_qlt_duplicate_sentences() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Learn Rust programming. Learn Rust programming.".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT003"));
+    }
+
+    // InternalLinkAnchorAnalyzerV2 tests
+
+    #[test]
+    fn test_anchor_v2_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anchor_v2_good_diversity() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://example.com/a".to_string(), text: "Page A".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/b".to_string(), text: "Page B".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/c".to_string(), text: "Page C".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anchor_v2_low_diversity() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://example.com/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/b".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/c".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/d".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/e".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/f".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink { href: "https://example.com/g".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "ANCH-V2001"));
+    }
+
+    // WikipediaLinkAnalyzerV2 tests
+
+    #[test]
+    fn test_wiki_v2_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_wiki_v2_has_wiki_link() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Rust".to_string(), text: "Rust".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "WIKI-V2001"));
+    }
+
+    #[test]
+    fn test_wiki_v2_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Rust".to_string(), text: "Rust".to_string(), rel: vec!["nofollow".to_string()], is_external: true, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = WikipediaLinkAnalyzerV2::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WIKI-V2001"));
+        assert!(findings.iter().any(|f| f.code == "WIKI-V2002"));
+    }
+
+    #[test]
+    fn test_wiki_v2_no_wiki_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://github.com/rust-lang/rust".to_string(), text: "Rust GitHub".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).is_empty());
     }
 }

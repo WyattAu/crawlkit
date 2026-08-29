@@ -592,6 +592,57 @@ impl Storage {
         Ok(count)
     }
 
+    /// Purge crawls older than `max_age_days` days for a specific tenant.
+    ///
+    /// Only deletes crawls that contain pages belonging to the given tenant.
+    /// Cascades to pages, findings, links, images, schemas, and CrUX
+    /// metrics via foreign keys. Returns the number of crawls deleted.
+    pub fn purge_old_crawls_for_tenant(
+        &self,
+        max_age_days: u32,
+        tenant_id: &str,
+    ) -> Result<usize, StorageError> {
+        let conn = self.conn.lock();
+        let cutoff = Utc::now() - chrono::Duration::days(i64::from(max_age_days));
+        let cutoff_rfc = cutoff.to_rfc3339();
+
+        // Collect crawl IDs that have pages belonging to this tenant.
+        let crawl_ids: Vec<String> = {
+            let mut stmt = conn.prepare(
+                "SELECT DISTINCT c.id FROM crawls c
+                 JOIN pages p ON p.crawl_id = c.id
+                 WHERE c.start_time < ?1 AND (p.tenant_id = ?2 OR p.tenant_id IS NULL)",
+            )?;
+            let ids = stmt
+                .query_map(params![cutoff_rfc, tenant_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            ids
+        };
+
+        let count = crawl_ids.len();
+        if count == 0 {
+            return Ok(0);
+        }
+
+        // Delete in a transaction for atomicity.
+        let tx = conn.unchecked_transaction()?;
+        for crawl_id in &crawl_ids {
+            tx.execute("DELETE FROM links WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute("DELETE FROM findings WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute("DELETE FROM images WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute("DELETE FROM schemas WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute("DELETE FROM crux_metrics WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute("DELETE FROM pages WHERE crawl_id = ?1", params![crawl_id])?;
+            tx.execute("DELETE FROM crawls WHERE id = ?1", params![crawl_id])?;
+        }
+        tx.commit()?;
+
+        tracing::info!(
+            "Purged {count} crawls older than {max_age_days} days for tenant {tenant_id}"
+        );
+        Ok(count)
+    }
+
     /// Insert a single page into the database under the given crawl.
     /// Uses a single SQLite transaction for the page row + all link rows
     /// to avoid per-statement fsync overhead.
@@ -1730,6 +1781,14 @@ impl crate::storage_trait::StorageBackend for Storage {
 
     fn purge_old_crawls(&self, max_age_days: u32) -> Result<usize, StorageError> {
         self.purge_old_crawls(max_age_days)
+    }
+
+    fn purge_old_crawls_for_tenant(
+        &self,
+        max_age_days: u32,
+        tenant_id: &str,
+    ) -> Result<usize, StorageError> {
+        self.purge_old_crawls_for_tenant(max_age_days, tenant_id)
     }
 
     fn compare_crawls(

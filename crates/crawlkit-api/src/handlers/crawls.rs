@@ -99,7 +99,7 @@ pub async fn start_crawl(
 
     let result = CrawlResult {
         crawl_id: crawl_id.clone(),
-        tenant_id,
+        tenant_id: tenant_id.clone(),
         start_url: start_url.to_string(),
         status: "running".to_string(),
         pages_crawled: 0,
@@ -150,6 +150,7 @@ pub async fn start_crawl(
 
     // Spawn crawl task in background
     let crawl_id_clone = crawl_id.clone();
+    let tenant_id_clone = tenant_id.clone();
     let config = CrawlConfig {
         start_url,
         max_pages: req.max_pages,
@@ -159,7 +160,7 @@ pub async fn start_crawl(
     };
 
     tokio::spawn(async move {
-        run_crawl_task(state, crawl_id_clone, config, Some(permit)).await;
+        run_crawl_task(state, crawl_id_clone, config, Some(permit), Some(tenant_id_clone)).await;
     });
 
     Ok((
@@ -456,8 +457,9 @@ pub async fn run_crawl_task(
     config: crawlkit_engine::CrawlConfig,
     // Held for the crawl's duration; released on drop (backpressure slot).
     _permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    tenant_id: Option<String>,
 ) {
-    run_crawl_task_with_monitoring(state, crawl_id, config, _permit, None, None).await;
+    run_crawl_task_with_monitoring(state, crawl_id, config, _permit, None, None, tenant_id).await;
 }
 
 /// Run a crawl task with optional monitoring (compare against a previous crawl)
@@ -469,6 +471,7 @@ pub async fn run_crawl_task_with_monitoring(
     _permit: Option<tokio::sync::OwnedSemaphorePermit>,
     previous_crawl_id: Option<String>,
     schedule_id: Option<String>,
+    tenant_id: Option<String>,
 ) {
     use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 
@@ -478,6 +481,7 @@ pub async fn run_crawl_task_with_monitoring(
         crawl_config: config.clone(),
         previous_crawl_id,
         alert_threshold,
+        tenant_id,
         ..Default::default()
     };
 

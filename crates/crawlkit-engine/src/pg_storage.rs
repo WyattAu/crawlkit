@@ -1106,6 +1106,31 @@ impl StorageBackend for PgStorage {
         })
     }
 
+    fn purge_old_crawls_for_tenant(
+        &self,
+        max_age_days: u32,
+        tenant_id: &str,
+    ) -> Result<usize, StorageError> {
+        let pool = self.pool.clone();
+        let tenant_id = tenant_id.to_string();
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let result = sqlx::query(
+                "DELETE FROM crawls WHERE id IN (
+                    SELECT DISTINCT c.id FROM crawls c
+                    JOIN pages p ON p.crawl_id = c.id
+                    WHERE c.start_time < NOW() - ($1 || ' days')::INTERVAL
+                    AND (p.tenant_id = $2 OR p.tenant_id IS NULL)
+                )",
+            )
+            .bind(max_age_days as i64)
+            .bind(&tenant_id)
+            .execute(&pool)
+            .await?;
+            Ok(result.rows_affected() as usize)
+        })
+    }
+
     fn compare_crawls(
         &self,
         _baseline_crawl_id: &str,

@@ -3812,6 +3812,651 @@ impl Analyzer for ContentThinAnalyzer {
     }
 }
 
+// =========================================================================
+// MetaDescriptionUniquenessAnalyzer
+// =========================================================================
+
+pub struct MetaDescriptionUniquenessAnalyzer;
+
+impl Default for MetaDescriptionUniquenessAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetaDescriptionUniquenessAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for MetaDescriptionUniquenessAnalyzer {
+    fn name(&self) -> &str {
+        "meta-description-uniqueness"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let description = match &ctx.page.meta.description {
+            Some(d) if !d.trim().is_empty() => d.trim(),
+            _ => return findings,
+        };
+
+        if description.len() < 10 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "METADESC-UNI001".to_string(),
+                title: "Meta description is very short".to_string(),
+                description: format!(
+                    "Meta description is only {} characters. Very short descriptions may be \
+                     too generic to differentiate this page from others in search results.",
+                    description.len()
+                ),
+                url: url.clone(),
+                recommendation: "Write a unique, descriptive meta description of 120-160 \
+                                 characters for each page."
+                    .to_string(),
+            });
+        }
+
+        let lower = description.to_lowercase();
+        let generic_patterns = [
+            "welcome to",
+            "click here",
+            "learn more",
+            "read more",
+            "this page",
+            "this website",
+            "coming soon",
+            "under construction",
+        ];
+        for pattern in &generic_patterns {
+            if lower.contains(pattern) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "METADESC-UNI002".to_string(),
+                    title: "Meta description contains generic text".to_string(),
+                    description: format!(
+                        "Meta description contains the phrase \"{pattern}\", which is generic \
+                         boilerplate text."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Write a unique description that accurately summarizes the \
+                                     page content and includes relevant keywords."
+                        .to_string(),
+                });
+                break;
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentFreshnessDateAnalyzer
+// =========================================================================
+
+pub struct ContentFreshnessDateAnalyzer;
+
+impl Default for ContentFreshnessDateAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentFreshnessDateAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_time_sensitive_url(url: &str) -> bool {
+        let lower = url.to_lowercase();
+        [
+            "/blog/", "/news/", "/article/", "/post/", "/press/",
+            "/release/", "/update/", "/announcement/", "/changelog/",
+        ]
+        .iter()
+        .any(|p| lower.contains(p))
+    }
+
+    fn has_date_metadata(ctx: &AnalysisContext) -> bool {
+        for sd in &ctx.page.structured_data {
+            if sd.data.get("datePublished").is_some()
+                || sd.data.get("dateModified").is_some()
+                || sd.data.get("dateCreated").is_some()
+            {
+                return true;
+            }
+        }
+        false
+    }
+}
+
+impl Analyzer for ContentFreshnessDateAnalyzer {
+    fn name(&self) -> &str {
+        "content-freshness-date"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if Self::is_time_sensitive_url(url) && !Self::has_date_metadata(ctx) {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "FRESH-DATE001".to_string(),
+                title: "No date metadata on time-sensitive content".to_string(),
+                description: "This page appears to be time-sensitive content (blog, news, \
+                              article) but has no date metadata in structured data."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add datePublished and dateModified to the Article schema."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// StructuredDataNestingValidator
+// =========================================================================
+
+pub struct StructuredDataNestingValidator;
+
+impl Default for StructuredDataNestingValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl StructuredDataNestingValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for StructuredDataNestingValidator {
+    fn name(&self) -> &str {
+        "structured-data-nesting"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Product") {
+                continue;
+            }
+            let data = &sd.data;
+
+            match data.get("offers") {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "SDNEST001".to_string(),
+                        title: "Product schema missing nested Offer".to_string(),
+                        description: "A Product structured data block is missing the \"offers\" \
+                                      property containing an Offer object."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"offers\" with an Offer object."
+                            .to_string(),
+                    });
+                }
+                Some(offers) => {
+                    let offer_list: Vec<&serde_json::Value> = match offers {
+                        serde_json::Value::Array(arr) => arr.iter().collect(),
+                        other => vec![other],
+                    };
+                    for offer in offer_list {
+                        if offer.get("price").is_none() && offer.get("lowPrice").is_none() {
+                            findings.push(Finding {
+                                severity: Severity::Warning,
+                                category: IssueCategory::Schema,
+                                code: "SDNEST002".to_string(),
+                                title: "Product Offer missing price".to_string(),
+                                description: "A Product Offer object is missing the \"price\" property."
+                                    .to_string(),
+                                url: url.clone(),
+                                recommendation: "Add \"price\" with the product price."
+                                    .to_string(),
+                            });
+                        }
+                        if offer.get("availability").is_none() {
+                            findings.push(Finding {
+                                severity: Severity::Info,
+                                category: IssueCategory::Schema,
+                                code: "SDNEST003".to_string(),
+                                title: "Product Offer missing availability".to_string(),
+                                description: "A Product Offer object is missing the \"availability\" property."
+                                    .to_string(),
+                                url: url.clone(),
+                                recommendation: "Add \"availability\" with a Schema.org availability value."
+                                    .to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// LocalBusinessNapAnalyzerUtil
+// =========================================================================
+
+pub struct LocalBusinessNapAnalyzerUtil;
+
+impl Default for LocalBusinessNapAnalyzerUtil {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl LocalBusinessNapAnalyzerUtil {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for LocalBusinessNapAnalyzerUtil {
+    fn name(&self) -> &str {
+        "local-business-nap-util"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            let schema_type = sd.r#type.as_deref().unwrap_or("");
+            let is_local = matches!(
+                schema_type,
+                "LocalBusiness" | "Store" | "Restaurant" | "MedicalBusiness"
+            );
+            if !is_local {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("telephone").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "NAP-UTIL001".to_string(),
+                    title: "LocalBusiness missing telephone".to_string(),
+                    description: "A LocalBusiness structured data block is missing the \
+                                  \"telephone\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"telephone\" with the business phone number."
+                        .to_string(),
+                });
+            }
+
+            if data.get("address").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "NAP-UTIL002".to_string(),
+                    title: "LocalBusiness missing address".to_string(),
+                    description: "A LocalBusiness structured data block is missing the \
+                                  \"address\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"address\" with a PostalAddress object."
+                        .to_string(),
+                });
+            }
+
+            if data.get("name").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "NAP-UTIL003".to_string(),
+                    title: "LocalBusiness missing name".to_string(),
+                    description: "A LocalBusiness structured data block is missing the \"name\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"name\" with the full business name."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// EventLocationValidatorV2
+// =========================================================================
+
+pub struct EventLocationValidatorV2;
+
+impl Default for EventLocationValidatorV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EventLocationValidatorV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for EventLocationValidatorV2 {
+    fn name(&self) -> &str {
+        "event-location-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Event") {
+                continue;
+            }
+            let data = &sd.data;
+
+            match data.get("location") {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "ELOC-V2001".to_string(),
+                        title: "Event missing location".to_string(),
+                        description: "An Event structured data block is missing the \"location\" property."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"location\" with a Place, VirtualLocation, or PostalAddress."
+                            .to_string(),
+                    });
+                }
+                Some(location) => {
+                    if location.get("name").is_none()
+                        && location.get("url").is_none()
+                        && location.get("address").is_none()
+                    {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Schema,
+                            code: "ELOC-V2002".to_string(),
+                            title: "Event location missing name".to_string(),
+                            description: "The Event location object does not contain a \"name\", \
+                                          \"url\", or \"address\" sub-property."
+                                .to_string(),
+                            url: url.clone(),
+                            recommendation: "Add \"name\" to the location object."
+                                .to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// OrganizationLogoValidatorV2
+// =========================================================================
+
+pub struct OrganizationLogoValidatorV2;
+
+impl Default for OrganizationLogoValidatorV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl OrganizationLogoValidatorV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for OrganizationLogoValidatorV2 {
+    fn name(&self) -> &str {
+        "organization-logo-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Organization") {
+                continue;
+            }
+            let data = &sd.data;
+
+            match data.get("logo") {
+                None => {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "OLOGO-V2001".to_string(),
+                        title: "Organization missing logo".to_string(),
+                        description: "An Organization structured data block is missing the \
+                                      \"logo\" property."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation: "Add \"logo\" with an ImageObject or URL."
+                            .to_string(),
+                    });
+                }
+                Some(logo) => {
+                    if let Some(logo_str) = logo.as_str() {
+                        if logo_str.is_empty() {
+                            findings.push(Finding {
+                                severity: Severity::Warning,
+                                category: IssueCategory::Schema,
+                                code: "OLOGO-V2001".to_string(),
+                                title: "Organization empty logo".to_string(),
+                                description: "The Organization logo property is empty."
+                                    .to_string(),
+                                url: url.clone(),
+                                recommendation: "Provide a valid URL to the organization logo."
+                                    .to_string(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// PersonJobTitleValidatorV2
+// =========================================================================
+
+pub struct PersonJobTitleValidatorV2;
+
+impl Default for PersonJobTitleValidatorV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PersonJobTitleValidatorV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for PersonJobTitleValidatorV2 {
+    fn name(&self) -> &str {
+        "person-job-title-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Person") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("jobTitle").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "PJOB-V2001".to_string(),
+                    title: "Person missing jobTitle".to_string(),
+                    description: "A Person structured data block is missing the \"jobTitle\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"jobTitle\" with the person's current job title."
+                        .to_string(),
+                });
+            }
+
+            if data.get("worksFor").is_none() && data.get("affiliation").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "PJOB-V2002".to_string(),
+                    title: "Person missing worksFor/affiliation".to_string(),
+                    description: "A Person structured data block is missing \"worksFor\" or \
+                                  \"affiliation\" properties."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"worksFor\" with an Organization object."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// RecipeNutritionValidatorV2
+// =========================================================================
+
+pub struct RecipeNutritionValidatorV2;
+
+impl Default for RecipeNutritionValidatorV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl RecipeNutritionValidatorV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for RecipeNutritionValidatorV2 {
+    fn name(&self) -> &str {
+        "recipe-nutrition-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Recipe") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("nutrition").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Schema,
+                    code: "RNUT-V2001".to_string(),
+                    title: "Recipe missing nutrition information".to_string(),
+                    description: "A Recipe structured data block is missing the \"nutrition\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"nutrition\" with a NutritionInformation object."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CourseProviderValidatorV2
+// =========================================================================
+
+pub struct CourseProviderValidatorV2;
+
+impl Default for CourseProviderValidatorV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CourseProviderValidatorV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for CourseProviderValidatorV2 {
+    fn name(&self) -> &str {
+        "course-provider-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Course") {
+                continue;
+            }
+            let data = &sd.data;
+
+            if data.get("provider").is_none() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Schema,
+                    code: "CPROV-V2001".to_string(),
+                    title: "Course missing provider".to_string(),
+                    description: "A Course structured data block is missing the \"provider\" property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add \"provider\" with an Organization or Person object."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod meta_desc_length_tests {
     use super::*;
@@ -5650,5 +6295,261 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_content_lang_default() {
         let _ = ContentLanguageValidator::default();
+    }
+
+    // MetaDescriptionUniquenessAnalyzer tests
+
+    #[test]
+    fn test_meta_desc_uniq_no_description() {
+        let page = make_page("https://example.com");
+        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_meta_desc_uniq_very_short() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Hi".to_string());
+        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "METADESC-UNI001"));
+    }
+
+    #[test]
+    fn test_meta_desc_uniq_generic_text() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Welcome to our website, click here to learn more about our services.".to_string());
+        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "METADESC-UNI002"));
+    }
+
+    #[test]
+    fn test_meta_desc_uniq_good_description() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A comprehensive guide to Rust programming language covering ownership, borrowing, and lifetime concepts.".to_string());
+        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // ContentFreshnessDateAnalyzer tests
+
+    #[test]
+    fn test_fresh_date_no_date_on_blog() {
+        let page = make_page("https://example.com/blog/my-post");
+        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FRESH-DATE001"));
+    }
+
+    #[test]
+    fn test_fresh_date_with_date_on_blog() {
+        let mut page = make_page("https://example.com/blog/my-post");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "datePublished": "2024-01-01"}),
+        }];
+        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_fresh_date_non_blog_ignored() {
+        let page = make_page("https://example.com/about");
+        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // StructuredDataNestingValidator tests
+
+    #[test]
+    fn test_sd_nest_product_missing_offers() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SDNEST001"));
+    }
+
+    #[test]
+    fn test_sd_nest_product_offer_missing_price() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer"}}),
+        }];
+        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SDNEST002"));
+    }
+
+    #[test]
+    fn test_sd_nest_product_valid() {
+        let mut page = make_page("https://example.com/product");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "availability": "https://schema.org/InStock"}}),
+        }];
+        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_sd_nest_non_product_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "Test"}),
+        }];
+        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // LocalBusinessNapAnalyzerUtil tests
+
+    #[test]
+    fn test_nap_util_missing_phone() {
+        let mut page = make_page("https://example.com/business");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "Acme Store"}),
+        }];
+        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "NAP-UTIL001"));
+    }
+
+    #[test]
+    fn test_nap_util_valid() {
+        let mut page = make_page("https://example.com/business");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "Acme Store", "telephone": "+1-555-555-5555", "address": {"@type": "PostalAddress", "streetAddress": "123 Main St"}}),
+        }];
+        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    #[test]
+    fn test_nap_util_non_local_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // EventLocationValidatorV2 tests
+
+    #[test]
+    fn test_event_loc_v2_missing_location() {
+        let mut page = make_page("https://example.com/event");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Conference", "startDate": "2024-06-15"}),
+        }];
+        assert!(EventLocationValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "ELOC-V2001"));
+    }
+
+    #[test]
+    fn test_event_loc_v2_valid() {
+        let mut page = make_page("https://example.com/event");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Conference", "startDate": "2024-06-15", "location": {"@type": "Place", "name": "Convention Center"}}),
+        }];
+        assert!(EventLocationValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // OrganizationLogoValidatorV2 tests
+
+    #[test]
+    fn test_org_logo_v2_missing() {
+        let mut page = make_page("https://example.com/org");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization", "name": "Acme Corp"}),
+        }];
+        assert!(OrganizationLogoValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OLOGO-V2001"));
+    }
+
+    #[test]
+    fn test_org_logo_v2_valid() {
+        let mut page = make_page("https://example.com/org");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization", "name": "Acme Corp", "logo": "https://example.com/logo.png"}),
+        }];
+        assert!(OrganizationLogoValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // PersonJobTitleValidatorV2 tests
+
+    #[test]
+    fn test_person_job_v2_missing() {
+        let mut page = make_page("https://example.com/person");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person", "name": "John Doe"}),
+        }];
+        let findings = PersonJobTitleValidatorV2::new().analyze(&make_ctx(&page));
+        assert!(findings.iter().any(|f| f.code == "PJOB-V2001"));
+    }
+
+    #[test]
+    fn test_person_job_v2_valid() {
+        let mut page = make_page("https://example.com/person");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person", "name": "John Doe", "jobTitle": "Engineer", "worksFor": {"@type": "Organization", "name": "Acme"}}),
+        }];
+        assert!(PersonJobTitleValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // RecipeNutritionValidatorV2 tests
+
+    #[test]
+    fn test_recipe_nutrition_v2_missing() {
+        let mut page = make_page("https://example.com/recipe");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe", "name": "Pasta"}),
+        }];
+        assert!(RecipeNutritionValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "RNUT-V2001"));
+    }
+
+    #[test]
+    fn test_recipe_nutrition_v2_valid() {
+        let mut page = make_page("https://example.com/recipe");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe", "name": "Pasta", "nutrition": {"@type": "NutritionInformation", "calories": "400 calories"}}),
+        }];
+        assert!(RecipeNutritionValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+    }
+
+    // CourseProviderValidatorV2 tests
+
+    #[test]
+    fn test_course_prov_v2_missing() {
+        let mut page = make_page("https://example.com/course");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course", "name": "Rust Basics"}),
+        }];
+        assert!(CourseProviderValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CPROV-V2001"));
+    }
+
+    #[test]
+    fn test_course_prov_v2_valid() {
+        let mut page = make_page("https://example.com/course");
+        page.structured_data = vec![crate::parser::StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course", "name": "Rust Basics", "provider": {"@type": "Organization", "name": "Udemy"}}),
+        }];
+        assert!(CourseProviderValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
     }
 }

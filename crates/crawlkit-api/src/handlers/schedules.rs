@@ -314,7 +314,7 @@ pub async fn run_scheduler(state: AppState) {
             let crawl_id = Uuid::new_v4().to_string();
             let result = CrawlResult {
                 crawl_id: crawl_id.clone(),
-                tenant_id,
+                tenant_id: tenant_id.clone(),
                 start_url: config.start_url.to_string(),
                 status: "running".to_string(),
                 pages_crawled: 0,
@@ -343,6 +343,7 @@ pub async fn run_scheduler(state: AppState) {
             let state_clone = state.clone();
             let crawl_id_clone = crawl_id.clone();
             let schedule_id_clone = schedule_id.clone();
+            let tenant_id_clone = tenant_id.clone();
             tokio::spawn(async move {
                 super::crawls::run_crawl_task_with_monitoring(
                     state_clone,
@@ -351,6 +352,7 @@ pub async fn run_scheduler(state: AppState) {
                     permit,
                     previous_crawl_id,
                     Some(schedule_id_clone),
+                    Some(tenant_id_clone),
                 )
                 .await;
             });

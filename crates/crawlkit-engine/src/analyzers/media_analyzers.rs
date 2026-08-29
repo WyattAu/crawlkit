@@ -2775,3 +2775,123 @@ mod tests {
         assert!(findings.iter().any(|f| f.code == "CONN002"));
     }
 }
+
+// =========================================================================
+// ImageAspectRatioValidator
+// =========================================================================
+
+pub struct ImageAspectRatioValidator;
+impl Default for ImageAspectRatioValidator { fn default() -> Self { Self } }
+impl ImageAspectRatioValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for ImageAspectRatioValidator {
+    fn name(&self) -> &str { "image-aspect-ratio" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for img in &ctx.page.images {
+            if let (Some(w), Some(h)) = (img.width, img.height) {
+                if w > 0 && h > 0 {
+                    let ratio = w as f64 / h as f64;
+                    if ratio > 3.0 || ratio < 0.33 {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Images, code: "IMGAR001".to_string(), title: "Unusual image aspect ratio".to_string(), description: format!("Image {} has unusual aspect ratio {:.2}:1.", img.src, ratio), url: url.clone(), recommendation: "Check if the image dimensions are correct.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ImageFileSizeValidator
+// =========================================================================
+
+pub struct ImageFileSizeValidator;
+impl Default for ImageFileSizeValidator { fn default() -> Self { Self } }
+impl ImageFileSizeValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for ImageFileSizeValidator {
+    fn name(&self) -> &str { "image-file-size" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for img in &ctx.page.images {
+            if img.src.starts_with("data:") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Images, code: "IMGFS001".to_string(), title: "Inline data URI image".to_string(), description: format!("Image {} uses a data URI which increases page size.", img.src), url: url.clone(), recommendation: "Use external image files instead of data URIs.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ScriptAnalyzer
+// =========================================================================
+
+pub struct ScriptAnalyzer;
+impl Default for ScriptAnalyzer { fn default() -> Self { Self } }
+impl ScriptAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for ScriptAnalyzer {
+    fn name(&self) -> &str { "script-analysis" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let scripts = &ctx.page.scripts;
+        if scripts.len() > 20 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "SCRIPT001".to_string(), title: "Excessive script count".to_string(), description: format!("Page has {} scripts. Consider bundling or lazy-loading.", scripts.len()), url: url.clone(), recommendation: "Reduce script count by bundling, code-splitting, or lazy-loading.".to_string() });
+        }
+        let blocking = scripts.iter().filter(|s| !s.r#async && !s.defer).count();
+        if blocking > 3 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "SCRIPT002".to_string(), title: "Multiple blocking scripts".to_string(), description: format!("{} scripts are render-blocking.", blocking), url: url.clone(), recommendation: "Add async or defer attributes to non-critical scripts.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// StylesheetAnalyzer
+// =========================================================================
+
+pub struct StylesheetAnalyzer;
+impl Default for StylesheetAnalyzer { fn default() -> Self { Self } }
+impl StylesheetAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for StylesheetAnalyzer {
+    fn name(&self) -> &str { "stylesheet-analysis" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let styles = &ctx.page.styles;
+        if styles.len() > 10 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "STYLE001".to_string(), title: "Excessive stylesheet count".to_string(), description: format!("Page has {} stylesheets. Consider bundling.", styles.len()), url: url.clone(), recommendation: "Bundle CSS files to reduce HTTP requests.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// FormAnalyzer
+// =========================================================================
+
+pub struct FormAnalyzer;
+impl Default for FormAnalyzer { fn default() -> Self { Self } }
+impl FormAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for FormAnalyzer {
+    fn name(&self) -> &str { "form-analysis" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for form in &ctx.page.forms {
+            if form.action.is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FORM001".to_string(), title: "Form missing action URL".to_string(), description: "A form element has no action attribute.".to_string(), url: url.clone(), recommendation: "Add a valid action URL to the form.".to_string() });
+            }
+            if form.method.to_uppercase() == "GET" && form.has_search_input {
+                // Search forms using GET is normal; just informational
+            }
+        }
+        findings
+    }
+}

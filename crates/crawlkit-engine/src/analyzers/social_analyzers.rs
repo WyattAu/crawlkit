@@ -1539,3 +1539,50 @@ mod tests_social_preview {
         assert!(findings.iter().any(|f| f.code == "TWSITE002"));
     }
 }
+
+// =========================================================================
+// OpenGraphUrlValidator
+// =========================================================================
+
+pub struct OpenGraphUrlValidator;
+impl Default for OpenGraphUrlValidator { fn default() -> Self { Self } }
+impl OpenGraphUrlValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for OpenGraphUrlValidator {
+    fn name(&self) -> &str { "og-url-validator" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        // Check if og:url matches the page URL
+        if let Some(og_url) = &ctx.page.meta.og.url {
+            if og_url != url && !og_url.is_empty() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Social, code: "OGURL001".to_string(), title: "og:url doesn't match page URL".to_string(), description: format!("og:url is \"{}\" but page URL is \"{}\".", og_url, url), url: url.clone(), recommendation: "Set og:url to the canonical page URL.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// OpenGraphSiteNameValidator
+// =========================================================================
+
+pub struct OpenGraphSiteNameValidator;
+impl Default for OpenGraphSiteNameValidator { fn default() -> Self { Self } }
+impl OpenGraphSiteNameValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for OpenGraphSiteNameValidator {
+    fn name(&self) -> &str { "og-sitename-validator" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(site_name) = &ctx.page.meta.og.site_name {
+            if site_name.is_empty() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Social, code: "OGSITE001".to_string(), title: "Empty og:site_name".to_string(), description: "og:site_name is present but empty.".to_string(), url: url.clone(), recommendation: "Set og:site_name to the site name.".to_string() });
+            }
+        } else {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Social, code: "OGSITE002".to_string(), title: "Missing og:site_name".to_string(), description: "og:site_name tag is missing.".to_string(), url: url.clone(), recommendation: "Add og:site_name with the site name.".to_string() });
+        }
+        findings
+    }
+}

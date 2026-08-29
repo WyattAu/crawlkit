@@ -6272,3 +6272,67 @@ mod tests {
         assert!(findings.iter().any(|f| f.code == "COOP001"));
     }
 }
+
+// =========================================================================
+// FeaturePolicyAnalyzer
+// =========================================================================
+
+pub struct FeaturePolicyAnalyzer;
+impl Default for FeaturePolicyAnalyzer { fn default() -> Self { Self } }
+impl FeaturePolicyAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for FeaturePolicyAnalyzer {
+    fn name(&self) -> &str { "feature-policy" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_feature_policy = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("feature-policy"));
+        let has_permissions_policy = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("permissions-policy"));
+        if !has_feature_policy && !has_permissions_policy {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "FP001".to_string(), title: "No Feature-Policy or Permissions-Policy header".to_string(), description: "Neither Feature-Policy nor Permissions-Policy header is set.".to_string(), url: url.clone(), recommendation: "Add a Permissions-Policy header to control browser features.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ExpectCTAnalyzer
+// =========================================================================
+
+pub struct ExpectCTAnalyzer;
+impl Default for ExpectCTAnalyzer { fn default() -> Self { Self } }
+impl ExpectCTAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for ExpectCTAnalyzer {
+    fn name(&self) -> &str { "expect-ct" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_expect_ct = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("expect-ct"));
+        if !has_expect_ct && ctx.status_code == Some(200) {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "ECT001".to_string(), title: "No Expect-CT header".to_string(), description: "Expect-CT header is not set. Consider adding for Certificate Transparency enforcement.".to_string(), url: url.clone(), recommendation: "Add Expect-CT header with enforce and max-age directives.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CertificateTransparencyAnalyzer
+// =========================================================================
+
+pub struct CertificateTransparencyAnalyzer;
+impl Default for CertificateTransparencyAnalyzer { fn default() -> Self { Self } }
+impl CertificateTransparencyAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for CertificateTransparencyAnalyzer {
+    fn name(&self) -> &str { "certificate-transparency" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_sct = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("expect-ct") && v.contains("enforce"));
+        if !has_sct && ctx.status_code == Some(200) {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CT001".to_string(), title: "No Certificate Transparency enforcement".to_string(), description: "Expect-CT header with enforce directive is not set.".to_string(), url: url.clone(), recommendation: "Add Expect-CT: enforce, max-age=31536000 for CT compliance.".to_string() });
+        }
+        findings
+    }
+}

@@ -58,15 +58,17 @@ pub use http_analyzers::{
 };
 pub use media_analyzers::{
     AggregateRatingValidator, AsyncScriptAnalyzer, ConnectionAnalyzer, CriticalResourceAnalyzer,
-    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, ImageAnalyzer, ImageInfo,
-    ImageLazyLoadAnalyzer, PreloadHintAnalyzer, PricingSchemaValidator,
-    ProductVariantAnalyzer, ResourceCountAnalyzer, ResourceSizeAnalyzer,
+    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, FormAnalyzer, ImageAnalyzer, ImageAspectRatioValidator,
+    ImageFileSizeValidator, ImageInfo, ImageLazyLoadAnalyzer,
+    PreloadHintAnalyzer, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
+    ResourceSizeAnalyzer, ScriptAnalyzer, StylesheetAnalyzer,
 };
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AriaRolesAnalyzer, ColorContrastAnalyzer,
-    ContentTypeSniffingAnalyzer,
+    AccessibilityAnalyzer, AriaRolesAnalyzer, CertificateTransparencyAnalyzer,
+    ColorContrastAnalyzer, ContentTypeSniffingAnalyzer,
     ContentSecurityPolicyAnalyzer, CookieAnalyzer, CrossOriginIsolationAnalyzer,
-    CrossOriginResourcePolicyAnalyzer, FocusManagementAnalyzer, FocusOrderAnalyzer,
+    CrossOriginResourcePolicyAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer,
+    FocusManagementAnalyzer, FocusOrderAnalyzer,
     FontSizeAnalyzer, FormLabelAnalyzer, HeadingOrderAnalyzer, HstsPreloadAnalyzer,
     ImageAccessibilityAnalyzer, LandmarkRegionsAnalyzer, LinkAccessibilityAnalyzer,
     MixedContentAnalyzer, MobileFriendlinessChecker, PermissionPolicyAnalyzer,
@@ -81,14 +83,16 @@ pub use seo_analyzers::{
     HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
     HreflangValidator,
     InternalLinkAnchorAnalyzer, InternationalSeoAnalyzer, KeywordAnalyzer,
-    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer,
+    LanguageAttributeAnalyzer, LinkAnalyzer, LinkInfo,
+    MetaTagAnalyzer,
     MobileViewportAnalyzer, OpenSearchValidator,
     PaginationAnalyzer, RobotsMetaAnalyzer, RobotsTxtDirectivesAnalyzer,
     SitemapAnalyzer, SitemapEntry, SitemapUrlAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer,
 };
 pub use social_analyzers::{
-    OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphVideoAnalyzer,
+    OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphSiteNameValidator,
+    OpenGraphUrlValidator, OpenGraphVideoAnalyzer,
     SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterCardTypeAnalyzer,
     TwitterPlayerValidator, TwitterSiteAnalyzer,
 };
@@ -399,6 +403,10 @@ impl AnalyzerRegistry {
             Box::new(PaginationAnalyzer::new()),
             Box::new(OpenGraphImageValidator::new()),
             Box::new(OpenSearchValidator::new()),
+            // Additional SEO
+            Box::new(InternalLinkAnchorAnalyzer::new()),
+            Box::new(WikipediaLinkAnalyzer::new()),
+            Box::new(AnchorTextDiversityAnalyzer::new()),
             // Performance: response size, TTFB, cache headers, resource count
             Box::new(ResponseSizeAnalyzer::new()),
             Box::new(TtfbAnalyzer::new()),
@@ -554,10 +562,19 @@ impl AnalyzerRegistry {
             Box::new(RecipeNutritionValidator::new()),
             Box::new(CourseProviderValidator::new()),
             Box::new(JobPostingSalaryValidator::new()),
+            // Media analyzers
+            Box::new(ImageAspectRatioValidator::new()),
+            Box::new(ImageFileSizeValidator::new()),
+            Box::new(ScriptAnalyzer::new()),
+            Box::new(StylesheetAnalyzer::new()),
+            Box::new(FormAnalyzer::new()),
             // Security: HSTS, XSS protection, content-type sniffing
             Box::new(StrictTransportSecurityAnalyzer::new()),
             Box::new(XSSProtectionAnalyzer::new()),
             Box::new(ContentTypeSniffingAnalyzer::new()),
+            Box::new(FeaturePolicyAnalyzer::new()),
+            Box::new(ExpectCTAnalyzer::new()),
+            Box::new(CertificateTransparencyAnalyzer::new()),
         ];
 
         if include_ai {
@@ -1461,7 +1478,7 @@ mod tests {
     fn test_registry_default() {
         let config = default_config();
         let registry = AnalyzerRegistry::new(&config);
-        assert_eq!(registry.len(), 169);
+        assert_eq!(registry.len(), 180);
         assert!(!registry.is_empty());
     }
 

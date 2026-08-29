@@ -924,6 +924,125 @@ impl Analyzer for OpenSearchValidator {
 }
 
 // ---------------------------------------------------------------------------
+// HreflangSelfReferenceValidator
+// ---------------------------------------------------------------------------
+
+pub struct HreflangSelfReferenceValidator;
+
+impl HreflangSelfReferenceValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for HreflangSelfReferenceValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for HreflangSelfReferenceValidator {
+    fn name(&self) -> &str {
+        "hreflang-self-reference"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hreflang_tags = &ctx.page.meta.hreflang;
+
+        if hreflang_tags.is_empty() {
+            return findings;
+        }
+
+        let page_url_str = url.as_str();
+        let canonical_str = ctx.page.meta.canonical.as_ref().map(|c| c.as_str());
+
+        let has_self_ref = hreflang_tags.iter().any(|tag| {
+            let tag_url = tag.url.as_str();
+            tag_url == page_url_str
+                || Some(tag_url) == canonical_str
+                || tag_url.trim_end_matches('/') == page_url_str.trim_end_matches('/')
+        });
+
+        if !has_self_ref {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "HREFSELF001".to_string(),
+                title: "Missing self-referencing hreflang".to_string(),
+                description: "The page has hreflang tags but none reference this page itself. \
+                              Search engines require a self-referencing hreflang tag for each \
+                              localized page."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add a hreflang tag that points to this page's own URL (or \
+                                 canonical URL) to complete the international targeting setup."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OpenSearchDescriptionValidator
+// ---------------------------------------------------------------------------
+
+pub struct OpenSearchDescriptionValidator;
+
+impl OpenSearchDescriptionValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Default for OpenSearchDescriptionValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Analyzer for OpenSearchDescriptionValidator {
+    fn name(&self) -> &str {
+        "opensearch-description"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let has_opensearch = ctx.body.is_some_and(|body| {
+            let lower = body.to_lowercase();
+            (lower.contains(r#"rel="search""#)
+                && lower.contains(r#"type="application/opensearchdescription+xml""#))
+                || (lower.contains(r#"rel='search'"#)
+                    && lower.contains(r#"type='application/opensearchdescription+xml'"#))
+        });
+
+        if !has_opensearch {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "OPDESC001".to_string(),
+                title: "Missing OpenSearch description".to_string(),
+                description: "No <link rel=\"search\" type=\"application/opensearchdescription+xml\"> \
+                              tag was found. An OpenSearch description document allows browsers to \
+                              discover and add your site's search functionality."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Create an OpenSearch XML description file and add a <link> tag in \
+                                 the page head pointing to it."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
 // 13. Word Count Analyzer
 // ---------------------------------------------------------------------------
 
@@ -7279,5 +7398,219 @@ mod new_seo_tests {
         let mut ctx = make_ctx(&page, Some(200));
         ctx.robots_txt = Some(&robots);
         assert!(RobotsTxtSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTSSIZE001"));
+    }
+
+    // ---- HreflangSelfReferenceValidator tests ----
+
+    #[test]
+    fn test_href_self_no_hreflang() {
+        let page = make_page("https://example.com/en");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_href_self_has_self_ref() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_href_self_missing_self_ref() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "de".to_string(),
+                url: Url::parse("https://example.com/de").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).iter().any(|f| f.code == "HREFSELF001"));
+    }
+
+    #[test]
+    fn test_href_self_self_ref_via_canonical() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en/").unwrap(),
+            },
+        ];
+        page.meta.canonical = Some(Url::parse("https://example.com/en").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_href_self_xdefault_not_self() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "x-default".to_string(),
+                url: Url::parse("https://example.com/").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).iter().any(|f| f.code == "HREFSELF001"));
+    }
+
+    #[test]
+    fn test_href_self_trailing_slash_match() {
+        let mut page = make_page("https://example.com/en/");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_href_self_single_self_ref() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "en".to_string(),
+                url: Url::parse("https://example.com/en").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_href_self_multiple_langs_no_self() {
+        let mut page = make_page("https://example.com/en");
+        page.meta.hreflang = vec![
+            crate::meta::HreflangTag {
+                lang: "fr".to_string(),
+                url: Url::parse("https://example.com/fr").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "de".to_string(),
+                url: Url::parse("https://example.com/de").unwrap(),
+            },
+            crate::meta::HreflangTag {
+                lang: "es".to_string(),
+                url: Url::parse("https://example.com/es").unwrap(),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HreflangSelfReferenceValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "HREFSELF001");
+    }
+
+    #[test]
+    fn test_href_self_name() {
+        assert_eq!(HreflangSelfReferenceValidator::new().name(), "hreflang-self-reference");
+    }
+
+    #[test]
+    fn test_href_self_default() {
+        let _ = HreflangSelfReferenceValidator::default();
+    }
+
+    // ---- OpenSearchDescriptionValidator tests ----
+
+    #[test]
+    fn test_opdesc_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+    }
+
+    #[test]
+    fn test_opdesc_has_opensearch() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head><link rel="search" type="application/opensearchdescription+xml" title="Search" href="/opensearch.xml"></head></html>"#;
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_opdesc_no_opensearch() {
+        let page = make_page("https://example.com");
+        let body = "<html><head><title>Test</title></head></html>";
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+    }
+
+    #[test]
+    fn test_opdesc_single_quotes() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head><link rel='search' type='application/opensearchdescription+xml' title='Search' href='/opensearch.xml'></head></html>"#;
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_opdesc_wrong_type() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head><link rel="search" type="text/html" title="Search" href="/search"></head></html>"#;
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+    }
+
+    #[test]
+    fn test_opdesc_rel_search_wrong_type() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head><link rel="search" type="application/rss+xml" title="Feed" href="/feed.xml"></head></html>"#;
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+    }
+
+    #[test]
+    fn test_opdesc_empty_body() {
+        let page = make_page("https://example.com");
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some("");
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+    }
+
+    #[test]
+    fn test_opdesc_case_insensitive() {
+        let page = make_page("https://example.com");
+        let body = r#"<html><head><link REL="search" TYPE="application/opensearchdescription+xml" TITLE="Search" HREF="/opensearch.xml"></head></html>"#;
+        let mut ctx = make_ctx(&page, Some(200));
+        ctx.body = Some(body);
+        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_opdesc_name() {
+        assert_eq!(OpenSearchDescriptionValidator::new().name(), "opensearch-description");
+    }
+
+    #[test]
+    fn test_opdesc_default() {
+        let _ = OpenSearchDescriptionValidator::default();
     }
 }

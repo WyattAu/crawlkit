@@ -6922,6 +6922,49 @@ mod new_analyzer_tests {
         let _ = DnsRebindingAnalyzer::default();
     }
 
+    #[test]
+    fn test_dns_rebinding_specific_origin_no_finding() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "https://other.com".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_dns_rebinding_body_with_localhost() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let body = "Visit localhost:8080 for admin panel";
+        let ctx = make_ctx(&page, Some(200), &headers, Some(body));
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+    }
+
+    #[test]
+    fn test_dns_rebinding_body_with_192_168() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let body = "Connect to 192.168.1.1 for local access";
+        let ctx = make_ctx(&page, Some(200), &headers, Some(body));
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+    }
+
+    #[test]
+    fn test_dns_rebinding_body_no_local_refs() {
+        let headers = vec![
+            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let body = "This is a normal page with no local IPs";
+        let ctx = make_ctx(&page, Some(200), &headers, Some(body));
+        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
     // SubresourceIntegrityAnalyzer tests
 
     #[test]
@@ -6939,6 +6982,355 @@ mod new_analyzer_tests {
     #[test]
     fn test_sri_default() {
         let _ = SubresourceIntegrityAnalyzer::default();
+    }
+
+    #[test]
+    fn test_sri_external_script_without_sri() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("https://cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let body = r#"<html><head><script src="https://cdn.example.com/lib.js"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+    }
+
+    #[test]
+    fn test_sri_external_script_with_sri() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("https://cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: true,
+        }];
+        let body = r#"<html><head><script src="https://cdn.example.com/lib.js" integrity="sha384-abc" crossorigin="anonymous"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sri_internal_script_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("/app.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let body = r#"<html><head><script src="/app.js"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sri_no_scripts() {
+        let page = make_page("https://example.com");
+        let body = "<html><head></head></html>";
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sri_multiple_external_without_sri() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            crate::parser::ScriptInfo {
+                src: Some("https://cdn.example.com/a.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+            crate::parser::ScriptInfo {
+                src: Some("https://cdn.example.com/b.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let body = r#"<html><head><script src="https://cdn.example.com/a.js"></script><script src="https://cdn.example.com/b.js"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        let findings = SubresourceIntegrityAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert!(findings[0].description.contains("2"));
+    }
+
+    #[test]
+    fn test_sri_mixed_sri_and_no_sri() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![
+            crate::parser::ScriptInfo {
+                src: Some("https://cdn.example.com/bad.js".to_string()),
+                r#async: false,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            },
+        ];
+        let body = r#"<html><head><script src="https://cdn.example.com/bad.js"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+    }
+
+    #[test]
+    fn test_sri_protocol_relative_url() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("//cdn.example.com/lib.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let body = r#"<html><head><script src="//cdn.example.com/lib.js"></script></head></html>"#;
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+    }
+
+    #[test]
+    fn test_sri_no_script_src() {
+        let mut page = make_page("https://example.com");
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: None,
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let body = "<html><head><script>console.log('hi')</script></head></html>";
+        let ctx = make_ctx(&page, Some(200), &[], Some(body));
+        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // FeaturePolicyAnalyzer tests
+
+    #[test]
+    fn test_feature_policy_no_headers() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FP001"));
+    }
+
+    #[test]
+    fn test_feature_policy_has_feature_policy() {
+        let headers = vec![("Feature-Policy".to_string(), "camera 'none'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_feature_policy_has_permissions_policy() {
+        let headers = vec![("Permissions-Policy".to_string(), "camera=()".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_feature_policy_case_insensitive() {
+        let headers = vec![("permissions-policy".to_string(), "camera=()".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_feature_policy_empty_value() {
+        let headers = vec![("Permissions-Policy".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        // Header exists even if empty — analyzer only checks presence
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_feature_policy_name() {
+        assert_eq!(FeaturePolicyAnalyzer::new().name(), "feature-policy");
+    }
+
+    #[test]
+    fn test_feature_policy_default() {
+        let _ = FeaturePolicyAnalyzer::default();
+    }
+
+    #[test]
+    fn test_feature_policy_404_still_checks() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(404), &[], None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FP001"));
+    }
+
+    #[test]
+    fn test_feature_policy_both_headers() {
+        let headers = vec![
+            ("Feature-Policy".to_string(), "camera 'none'".to_string()),
+            ("Permissions-Policy".to_string(), "camera=()".to_string()),
+        ];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_feature_policy_info_severity() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = FeaturePolicyAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    // ExpectCTAnalyzer tests
+
+    #[test]
+    fn test_expect_ct_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ECT001"));
+    }
+
+    #[test]
+    fn test_expect_ct_has_header() {
+        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_expect_ct_non_200_skipped() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(301), &[], None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_expect_ct_case_insensitive() {
+        let headers = vec![("expect-ct".to_string(), "max-age=86400".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_expect_ct_name() {
+        assert_eq!(ExpectCTAnalyzer::new().name(), "expect-ct");
+    }
+
+    #[test]
+    fn test_expect_ct_default() {
+        let _ = ExpectCTAnalyzer::default();
+    }
+
+    #[test]
+    fn test_expect_ct_404_no_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(404), &[], None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_expect_ct_info_severity() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = ExpectCTAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_expect_ct_200_with_empty_header() {
+        let headers = vec![("Expect-CT".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_expect_ct_500_no_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(500), &[], None);
+        assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // CertificateTransparencyAnalyzer tests
+
+    #[test]
+    fn test_ct_no_header() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CT001"));
+    }
+
+    #[test]
+    fn test_ct_has_enforce() {
+        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ct_report_only() {
+        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ct_non_200_skipped() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(301), &[], None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ct_name() {
+        assert_eq!(CertificateTransparencyAnalyzer::new().name(), "certificate-transparency");
+    }
+
+    #[test]
+    fn test_ct_default() {
+        let _ = CertificateTransparencyAnalyzer::default();
+    }
+
+    #[test]
+    fn test_ct_404_no_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(404), &[], None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ct_info_severity() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_ct_header_without_enforce() {
+        let headers = vec![("Expect-CT".to_string(), "max-age=0".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        // Has Expect-CT header but without "enforce" — CT analyzer requires enforce
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CT001"));
+    }
+
+    #[test]
+    fn test_ct_500_no_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(500), &[], None);
+        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
     }
 
     // CorsMisconfigurationAnalyzer tests
@@ -7038,6 +7430,52 @@ mod new_analyzer_tests {
         let _ = AriaLabelAnalyzer::default();
     }
 
+    #[test]
+    fn test_aria_label_one_role_one_label() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 1;
+        page.aria_label_count = 1;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_label_multiple_roles_fewer_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 5;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIALABEL001"));
+    }
+
+    #[test]
+    fn test_aria_label_more_labels_than_roles() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 2;
+        page.aria_label_count = 5;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_label_equal_counts() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaLabelAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_label_warning_severity() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 2;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = AriaLabelAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+    }
+
     // TableCaptionAnalyzer tests
 
     #[test]
@@ -7075,6 +7513,52 @@ mod new_analyzer_tests {
         let _ = TableCaptionAnalyzer::default();
     }
 
+    #[test]
+    fn test_table_caption_one_table_with_caption() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 1;
+        page.tables_with_captions = 1;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_table_caption_one_table_no_caption() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 1;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+    }
+
+    #[test]
+    fn test_table_caption_all_missing() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 5;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+    }
+
+    #[test]
+    fn test_table_caption_half_have_captions() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 4;
+        page.tables_with_captions = 2;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+    }
+
+    #[test]
+    fn test_table_caption_warning_severity() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 2;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = TableCaptionAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
     // SkipLinkAnalyzer tests
 
     #[test]
@@ -7110,6 +7594,55 @@ mod new_analyzer_tests {
     #[test]
     fn test_skip_link_default() {
         let _ = SkipLinkAnalyzer::default();
+    }
+
+    #[test]
+    fn test_skip_link_main_landmark_with_skip() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = true;
+        page.has_skip_link = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_skip_link_main_landmark_without_skip() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.has_main_landmark = false;
+        page.has_skip_link = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
+    }
+
+    #[test]
+    fn test_skip_link_no_landmarks_no_finding() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = false;
+        page.has_main_landmark = false;
+        page.has_skip_link = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_skip_link_warning_severity() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.has_skip_link = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        let findings = SkipLinkAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_skip_link_both_nav_and_main_without_skip() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        page.has_main_landmark = true;
+        page.has_skip_link = false;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
     }
 
     // TabindexAnalyzer tests

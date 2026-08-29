@@ -1092,6 +1092,20 @@ impl StorageBackend for PgStorage {
         })
     }
 
+    fn purge_old_crawls(&self, max_age_days: u32) -> Result<usize, StorageError> {
+        let pool = self.pool.clone();
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let result = sqlx::query(
+                "DELETE FROM crawls WHERE start_time < NOW() - ($1 || ' days')::INTERVAL",
+            )
+            .bind(max_age_days as i64)
+            .execute(&pool)
+            .await?;
+            Ok(result.rows_affected() as usize)
+        })
+    }
+
     fn compare_crawls(
         &self,
         _baseline_crawl_id: &str,

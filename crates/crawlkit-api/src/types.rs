@@ -18,6 +18,7 @@ use utoipa::ToSchema;
 use crawlkit_engine::storage_trait::StorageBackend;
 use crawlkit_engine::AuditTrail;
 use crawlkit_engine::CrawlConfig;
+use crawlkit_engine::AccessLogger;
 
 use crate::auth;
 use crate::oidc::OidcManager;
@@ -252,6 +253,8 @@ pub struct AppState {
     /// `Idempotency-Key` → (crawl_id, created_at) for POST /crawls replay
     /// protection within the dedupe window.
     pub idempotency_keys: Arc<DashMap<String, IdempotencyEntry>>,
+    /// SOC 2 access logger: records every API request for compliance auditing.
+    pub access_logger: Arc<AccessLogger>,
 }
 
 /// A recorded idempotency-key mapping for crawl submissions.

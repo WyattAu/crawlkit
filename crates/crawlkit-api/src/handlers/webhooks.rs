@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::auth;
 use crate::types::*;
+use crawlkit_engine::AuditEventType;
 
 /// Register a webhook for crawl lifecycle events.
 ///
@@ -61,6 +62,14 @@ pub async fn create_webhook(
     };
 
     state.webhooks.insert(id.clone(), config);
+
+    state.audit_trail.record_tenant(
+        AuditEventType::WebhookCreated,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!("webhook created: {id} -> {url}"),
+    );
+
     Ok((
         StatusCode::CREATED,
         Json(WebhookCreatedResponse {
@@ -142,7 +151,15 @@ pub async fn delete_webhook(
     state
         .webhooks
         .remove(&id)
-        .map(|_| StatusCode::NO_CONTENT)
+        .map(|_| {
+            state.audit_trail.record_tenant(
+                AuditEventType::WebhookDeleted,
+                &claims.sub,
+                Some(extract_tenant(&claims)),
+                &format!("webhook deleted: {id}"),
+            );
+            StatusCode::NO_CONTENT
+        })
         .ok_or_else(|| ApiError::NotFound(format!("Webhook {id} not found")))
 }
 

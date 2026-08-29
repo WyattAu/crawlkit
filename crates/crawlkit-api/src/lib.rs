@@ -10,6 +10,7 @@
 
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+pub mod access_log_mw;
 pub mod auth;
 pub mod auth_mw;
 pub mod handlers;

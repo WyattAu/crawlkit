@@ -158,6 +158,11 @@ pub trait StorageBackend: Send + Sync {
     /// Release any resources held by the backend (connections, caches, etc.).
     fn finish(&self) -> Result<(), StorageError>;
 
+    /// Purge crawls older than `max_age_days` days.
+    ///
+    /// Returns the number of crawls deleted.
+    fn purge_old_crawls(&self, max_age_days: u32) -> Result<usize, StorageError>;
+
     /// Compare two crawls within the same storage backend.
     ///
     /// Returns a [`CrawlDiff`](crate::compare::CrawlDiff) describing

@@ -86,6 +86,13 @@ pub mod article_generator;
 /// compliance and security auditing.
 #[cfg(feature = "full")]
 pub mod audit;
+/// API access logging for SOC 2 compliance.
+///
+/// Records every API access with user identity, timestamp, action,
+/// resource, and outcome. Supports querying by user, action prefix,
+/// time range, and success/failure status.
+#[cfg(feature = "full")]
+pub mod access_log;
 /// Adapters for third-party backlink data sources (Ahrefs, GSC, Majestic).
 ///
 /// Defines the BacklinkAdapter trait for
@@ -354,6 +361,8 @@ pub use analyzers::{
 #[cfg(feature = "full")]
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
 #[cfg(feature = "full")]
+pub use access_log::{AccessLogEntry, AccessLogFilter, AccessLogger};
+#[cfg(feature = "full")]
 pub use backlink_adapters::{
     AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
     GscAdapter, MajesticAdapter,
@@ -612,6 +621,11 @@ pub struct CrawlConfig {
     /// Custom extraction rules applied to each crawled page.
     #[serde(default)]
     pub extraction: extraction::ExtractionConfig,
+
+    /// Data retention policy: automatically purge crawls older than this
+    /// many days. `None` means data is retained indefinitely.
+    #[serde(default)]
+    pub data_retention_days: Option<u32>,
 }
 
 impl Default for CrawlConfig {
@@ -631,6 +645,7 @@ impl Default for CrawlConfig {
             allowed_patterns: Vec::new(),
             disallowed_patterns: Vec::new(),
             extraction: extraction::ExtractionConfig::default(),
+            data_retention_days: None,
         }
     }
 }

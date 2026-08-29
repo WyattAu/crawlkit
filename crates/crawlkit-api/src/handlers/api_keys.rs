@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::auth;
 use crate::types::*;
+use crawlkit_engine::AuditEventType;
 
 /// Create a new API key. Requires the `apikey:write` permission.
 #[utoipa::path(
@@ -51,6 +52,13 @@ pub async fn create_api_key(
             }
         }
     }
+
+    state.audit_trail.record_tenant(
+        AuditEventType::ApiKeyCreated,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!("API key created: {name}"),
+    );
 
     Ok((
         StatusCode::CREATED,
@@ -127,6 +135,12 @@ pub async fn delete_api_key(
                 tracing::error!("Failed to persist API key deletion: {e}");
             }
         }
+        state.audit_trail.record_tenant(
+            AuditEventType::ApiKeyRevoked,
+            &claims.sub,
+            Some(extract_tenant(&claims)),
+            &format!("API key revoked: {key}"),
+        );
     }
     removed
         .map(|_| StatusCode::NO_CONTENT)

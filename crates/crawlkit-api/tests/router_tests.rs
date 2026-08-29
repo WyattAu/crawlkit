@@ -62,6 +62,7 @@ fn make_state_with_capacity(dir: &std::path::Path, crawl_capacity: usize) -> App
         schedules: Arc::new(DashMap::new()),
         http_client: reqwest::Client::new(),
         auth: Arc::new(AuthManager::new("test-secret".to_string())),
+        access_logger: Arc::new(crawlkit_engine::access_log::AccessLogger::new(10_000)),
         oidc: None,
         oidc_states: Arc::new(DashMap::new()),
         tenants: Arc::new(DashMap::new()),

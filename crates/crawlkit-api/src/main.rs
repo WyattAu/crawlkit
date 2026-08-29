@@ -155,6 +155,7 @@ async fn main() -> anyhow::Result<()> {
             crawlkit_api::types::crawl_capacity_from_env(),
         )),
         idempotency_keys: Arc::new(DashMap::new()),
+        access_logger: Arc::new(crawlkit_engine::AccessLogger::new(10_000)),
     };
 
     // Restore persisted API-plane state into memory.

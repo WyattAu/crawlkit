@@ -4,6 +4,7 @@ use tower_http::cors::{AllowHeaders, Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use utoipa_swagger_ui::SwaggerUi;
 
+use crate::access_log_mw::access_log_middleware;
 use crate::auth_mw::auth_middleware as jwt_auth_middleware;
 use crate::handlers::api_keys::*;
 use crate::handlers::audit::*;
@@ -133,6 +134,10 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             request_metrics_middleware,
+        ))
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            access_log_middleware,
         ))
         .layer(TraceLayer::new_for_http())
         .with_state(state)

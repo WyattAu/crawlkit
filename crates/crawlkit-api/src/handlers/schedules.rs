@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 use crate::auth;
 use crate::types::*;
+use crawlkit_engine::AuditEventType;
 
 /// Create a recurring crawl schedule (minimum interval: 60 seconds).
 #[utoipa::path(
@@ -43,6 +44,9 @@ pub async fn create_schedule(
         ));
     }
 
+    let start_url_str = start_url.to_string();
+    let interval_secs = req.interval_secs;
+
     let crawl_config = crawlkit_engine::CrawlConfig {
         start_url,
         max_pages: req.max_pages,
@@ -75,7 +79,15 @@ pub async fn create_schedule(
         created_at: schedule.created_at,
     };
 
-    state.schedules.insert(id, schedule);
+    state.schedules.insert(id.clone(), schedule);
+
+    state.audit_trail.record_tenant(
+        AuditEventType::ScheduleCreated,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!("schedule created: {id} for {start_url_str} every {interval_secs}s"),
+    );
+
     Ok((StatusCode::CREATED, Json(response)))
 }
 
@@ -157,7 +169,15 @@ pub async fn delete_schedule(
     state
         .schedules
         .remove(&id)
-        .map(|_| StatusCode::NO_CONTENT)
+        .map(|_| {
+            state.audit_trail.record_tenant(
+                AuditEventType::ScheduleDeleted,
+                &claims.sub,
+                Some(extract_tenant(&claims)),
+                &format!("schedule deleted: {id}"),
+            );
+            StatusCode::NO_CONTENT
+        })
         .ok_or_else(|| ApiError::NotFound(format!("Schedule {id} not found")))
 }
 
@@ -254,6 +274,13 @@ pub async fn update_schedule(
         last_run_at: entry.last_run_at,
         created_at: entry.created_at,
     };
+
+    state.audit_trail.record_tenant(
+        AuditEventType::ScheduleUpdated,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!("schedule updated: {id}"),
+    );
 
     Ok(Json(response))
 }

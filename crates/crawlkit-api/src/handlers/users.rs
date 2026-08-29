@@ -5,6 +5,7 @@ use uuid::Uuid;
 
 use crate::auth;
 use crate::types::*;
+use crawlkit_engine::AuditEventType;
 
 /// List users visible to the caller (own tenant, or all for admins).
 #[utoipa::path(
@@ -87,6 +88,7 @@ pub async fn create_user(
         .map_err(|e| ApiError::Internal(format!("Failed to hash password: {e}")))?;
     let user_id = Uuid::new_v4().to_string();
     let tenant_id = extract_tenant(&claims).to_string();
+    let email = req.email.clone();
     let response = UserResponse {
         id: user_id.clone(),
         email: req.email.clone(),
@@ -114,6 +116,13 @@ pub async fn create_user(
             }
         }
     }
+
+    state.audit_trail.record_tenant(
+        AuditEventType::UserCreated,
+        &claims.sub,
+        Some(extract_tenant(&claims)),
+        &format!("user created: {} ({})", response.id, email),
+    );
 
     Ok((StatusCode::CREATED, Json(response)))
 }
@@ -156,6 +165,12 @@ pub async fn delete_user(
                 tracing::error!("Failed to persist user deletion {id}: {e}");
             }
         }
+        state.audit_trail.record_tenant(
+            AuditEventType::UserDeleted,
+            &claims.sub,
+            Some(extract_tenant(&claims)),
+            &format!("user deleted: {id}"),
+        );
         Ok(StatusCode::NO_CONTENT)
     } else {
         Err(ApiError::NotFound(format!("User {id} not found")))

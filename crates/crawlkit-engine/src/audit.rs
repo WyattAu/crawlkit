@@ -24,6 +24,13 @@ pub enum AuditEventType {
     SessionRevoked,
     TenantCreated,
     TenantDeleted,
+    WebhookCreated,
+    WebhookDeleted,
+    ScheduleCreated,
+    ScheduleUpdated,
+    ScheduleDeleted,
+    UserCreated,
+    UserDeleted,
 }
 
 /// An audit trail event.

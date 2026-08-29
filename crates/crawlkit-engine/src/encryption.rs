@@ -68,6 +68,12 @@ pub struct EncryptionManager {
     config: EncryptionConfig,
     initialized: Arc<RwLock<bool>>,
     key: Arc<RwLock<Option<Vec<u8>>>>,
+    /// Previous key retained during rotation so old ciphertext can still be
+    /// decrypted while re-encryption is in progress.
+    old_key: Arc<RwLock<Option<Vec<u8>>>>,
+    /// `true` between [`rotate_key`](Self::rotate_key) and
+    /// [`complete_rotation`](Self::complete_rotation).
+    rotation_pending: Arc<RwLock<bool>>,
 }
 
 impl EncryptionManager {
@@ -78,6 +84,8 @@ impl EncryptionManager {
             config,
             initialized: Arc::new(RwLock::new(false)),
             key: Arc::new(RwLock::new(None)),
+            old_key: Arc::new(RwLock::new(None)),
+            rotation_pending: Arc::new(RwLock::new(false)),
         }
     }
 
@@ -219,17 +227,16 @@ impl EncryptionManager {
 
     /// Decrypt data using AES-256-GCM.
     ///
+    /// During key rotation, if decryption with the current key fails,
+    /// the old key is tried automatically so that pre-rotation data
+    /// remains accessible.
+    ///
     /// # Errors
-    /// Returns error if decryption fails.
+    /// Returns error if decryption fails with both keys.
     pub fn decrypt(&self, ciphertext: &[u8]) -> Result<Vec<u8>, EncryptionError> {
         if !self.config.enabled {
             return Ok(ciphertext.to_vec());
         }
-
-        let key = self.key.read();
-        let key = key.as_ref().ok_or_else(|| {
-            EncryptionError::InitializationFailed("Encryption not initialized".to_string())
-        })?;
 
         if ciphertext.len() < 12 {
             return Err(EncryptionError::InvalidKeyFormat(
@@ -237,7 +244,31 @@ impl EncryptionManager {
             ));
         }
 
-        // Extract nonce from ciphertext
+        // Try current key first.
+        let current_key = self.key.read().clone();
+        if let Some(key) = &current_key {
+            if let Ok(plaintext) = Self::decrypt_with_key(key, ciphertext) {
+                return Ok(plaintext);
+            }
+        }
+
+        // During rotation, fall back to old key.
+        if *self.rotation_pending.read() {
+            let old_key = self.old_key.read().clone();
+            if let Some(key) = &old_key {
+                if let Ok(plaintext) = Self::decrypt_with_key(key, ciphertext) {
+                    return Ok(plaintext);
+                }
+            }
+        }
+
+        Err(EncryptionError::InitializationFailed(
+            "Decryption failed with all available keys".to_string(),
+        ))
+    }
+
+    /// Decrypt `ciphertext` using the given 32-byte key.
+    fn decrypt_with_key(key: &[u8], ciphertext: &[u8]) -> Result<Vec<u8>, EncryptionError> {
         let (nonce_bytes, actual_ciphertext) = ciphertext.split_at(12);
 
         use aes_gcm::{aead::Aead, Aes256Gcm, KeyInit, Nonce};
@@ -246,11 +277,51 @@ impl EncryptionManager {
             .map_err(|e| EncryptionError::InvalidKeyFormat(format!("Invalid key: {}", e)))?;
 
         let nonce = Nonce::from_slice(nonce_bytes);
-        let plaintext = cipher.decrypt(nonce, actual_ciphertext).map_err(|e| {
+        cipher.decrypt(nonce, actual_ciphertext).map_err(|e| {
             EncryptionError::InitializationFailed(format!("Decryption failed: {}", e))
-        })?;
+        })
+    }
 
-        Ok(plaintext)
+    /// Rotate to a new encryption key.
+    ///
+    /// The old key is retained internally so that data encrypted with it
+    /// can still be decrypted via [`decrypt`](Self::decrypt). New
+    /// writes use the new key. Callers should re-encrypt stored data
+    /// after rotation by iterating over all encrypted blobs and calling
+    /// `decrypt` (which uses the old key when the nonce prefix matches)
+    /// followed by `encrypt` with the new key.
+    ///
+    /// # Errors
+    /// Returns error if the new key has an invalid length.
+    pub fn rotate_key(&self, new_key: &[u8; 32]) -> Result<(), EncryptionError> {
+        let mut key_guard = self.key.write();
+
+        // Swap current key into the old-key slot.
+        let old_key = key_guard.take();
+        *self.old_key.write() = old_key;
+
+        // Set the new key.
+        *key_guard = Some(new_key.to_vec());
+        drop(key_guard);
+
+        *self.rotation_pending.write() = true;
+        tracing::info!("Encryption key rotated; old key retained for re-encryption");
+        Ok(())
+    }
+
+    /// Mark a rotation as complete after all data has been re-encrypted.
+    ///
+    /// Drops the retained old key so it can no longer be used for decryption.
+    pub fn complete_rotation(&self) {
+        *self.old_key.write() = None;
+        *self.rotation_pending.write() = false;
+        tracing::info!("Key rotation completed; old key discarded");
+    }
+
+    /// Whether a key rotation is in progress (old key retained).
+    #[must_use]
+    pub fn is_rotation_pending(&self) -> bool {
+        *self.rotation_pending.read()
     }
 
     /// Check if initialized.
@@ -362,5 +433,58 @@ mod tests {
         let decrypted = manager.decrypt(&encrypted).unwrap();
 
         assert_eq!(data.to_vec(), decrypted);
+    }
+
+    #[test]
+    fn test_key_rotation_reencrypts_with_new_key() {
+        let old_key = [1u8; 32];
+        let new_key = [2u8; 32];
+
+        let config = EncryptionConfig {
+            enabled: true,
+            key_source: KeySource::EnvVar("TEST_KEY".to_string()),
+            algorithm: EncryptionAlgorithm::Aes256Gcm,
+        };
+
+        let manager = EncryptionManager::new(config);
+        *manager.key.write() = Some(old_key.to_vec());
+        *manager.initialized.write() = true;
+
+        // Encrypt with old key.
+        let plaintext = b"rotation test data";
+        let ciphertext_old = manager.encrypt(plaintext).unwrap();
+
+        // Rotate key.
+        manager.rotate_key(&new_key).unwrap();
+        assert!(manager.is_rotation_pending());
+
+        // New encryption uses new key.
+        let ciphertext_new = manager.encrypt(plaintext).unwrap();
+        assert_ne!(ciphertext_old, ciphertext_new);
+
+        // Decryption works for both old and new ciphertext.
+        assert_eq!(manager.decrypt(&ciphertext_old).unwrap(), plaintext);
+        assert_eq!(manager.decrypt(&ciphertext_new).unwrap(), plaintext);
+
+        // Complete rotation drops old key.
+        manager.complete_rotation();
+        assert!(!manager.is_rotation_pending());
+        // Old ciphertext can no longer be decrypted.
+        assert!(manager.decrypt(&ciphertext_old).is_err());
+        // New ciphertext still works.
+        assert_eq!(manager.decrypt(&ciphertext_new).unwrap(), plaintext);
+    }
+
+    #[test]
+    fn test_rotation_pending_flag() {
+        let manager = EncryptionManager::default();
+        assert!(!manager.is_rotation_pending());
+
+        let new_key = [99u8; 32];
+        manager.rotate_key(&new_key).unwrap();
+        assert!(manager.is_rotation_pending());
+
+        manager.complete_rotation();
+        assert!(!manager.is_rotation_pending());
     }
 }

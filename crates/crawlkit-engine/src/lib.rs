@@ -232,9 +232,11 @@ pub mod plugin_runtime;
 
 #[cfg(feature = "full")]
 pub use plugin::{
-    ManifestError, PluginError, PluginManifest, PluginMetadata, PluginRegistry, WasmConfig,
-    WasmPlugin,
+    ManifestError, PluginError, PluginInstance, PluginKind, PluginManifest, PluginMetadata,
+    PluginRegistry, WasmConfig, WasmPlugin,
 };
+#[cfg(all(feature = "full", feature = "wasi-preview2"))]
+pub use plugin::WasiPlugin;
 pub use plugin_index::{
     install_plugin, list_installed_plugins, parse_plugin_index, PluginIndexEntry, PluginIndexError,
 };
@@ -307,6 +309,12 @@ pub mod wasm_analyzers;
 /// into Playwright-rendered pages to capture LCP, CLS, INP, FCP, and TTFB.
 #[cfg(feature = "full")]
 pub mod web_vitals;
+/// LLM-powered post-crawl analysis plugin (user-brings-own-key).
+///
+/// Configurable with provider, model, and prompt templates. Supports
+/// OpenAI and Anthropic APIs via [`LlmConfig`](llm_analyzer::LlmConfig).
+#[cfg(feature = "full")]
+pub mod llm_analyzer;
 
 pub use ai_analyzers::{
     AiAnswerBoxAnalyzer, AiCitationEligibilityAnalyzer, AiContentStructureAnalyzer,

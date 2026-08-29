@@ -16,13 +16,13 @@ use std::path::{Path, PathBuf};
 use parking_lot::Mutex;
 
 use crate::analyzers::Finding;
-use crate::plugin::{PluginError, WasmConfig, WasmPlugin};
+use crate::plugin::{PluginError, PluginInstance, WasmConfig};
 use crate::types::IssueCategory;
 
 /// A plugin loaded and ready to execute during a crawl.
 pub struct CrawlPlugin {
     pub name: String,
-    plugin: Mutex<WasmPlugin>,
+    plugin: Mutex<PluginInstance>,
 }
 
 impl CrawlPlugin {
@@ -32,7 +32,7 @@ impl CrawlPlugin {
     /// never abort a crawl.
     pub fn analyze(&self, html: &str, url: &str, context_json: Option<&str>) -> Vec<Finding> {
         let mut plugin = self.plugin.lock();
-        match plugin.analyze_with_context(html, url, context_json) {
+        match plugin.analyze(html, url, context_json) {
             Ok(json) => parse_plugin_findings(&json),
             Err(e) => {
                 tracing::warn!(plugin = %self.name, error = %e, "plugin analysis failed");
@@ -60,13 +60,13 @@ pub fn load_plugins_from_dir(dir: &Path, config: &WasmConfig) -> Vec<CrawlPlugin
         if !path.join("crawlkit-plugin.toml").exists() {
             continue;
         }
-        match WasmPlugin::load_with_config(&path, config) {
-            Ok(plugin) => {
-                let name = plugin.metadata().name.clone();
+        match crate::plugin::load_plugin_from_dir(&path, config) {
+            Ok(instance) => {
+                let name = instance.metadata().name.clone();
                 tracing::info!(plugin = %name, "loaded crawl plugin");
                 out.push(CrawlPlugin {
                     name,
-                    plugin: Mutex::new(plugin),
+                    plugin: Mutex::new(instance),
                 });
             }
             Err(e) => {

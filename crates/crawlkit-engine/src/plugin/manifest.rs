@@ -17,6 +17,9 @@ pub struct PluginMetadata {
     pub author: String,
     pub description: String,
     pub license: String,
+    /// Plugin kind: `"wasm"` (default, core ABI) or `"wasi-component"`
+    /// (WASI Preview 2 component model). When absent, defaults to `"wasm"`.
+    pub kind: Option<String>,
     pub trust_level: Option<String>,
     pub entry: PluginEntry,
     pub permissions: Option<PluginPermissions>,
@@ -29,6 +32,32 @@ pub struct PluginMetadata {
     /// Key id of the signer — the first 16 hex characters of the signer's
     /// ed25519 public key.
     pub signed_by: Option<String>,
+}
+
+/// Plugin kind discriminator.
+///
+/// Determines which runtime adapter handles the plugin. The `kind` field
+/// in the manifest maps to this enum; absent or `"wasm"` means the legacy
+/// core ABI, `"wasi-component"` means WASI Preview 2.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PluginKind {
+    /// Legacy core WASM ABI (`crawlkit_plugin_init`, `crawlkit_plugin_analyze`).
+    /// This is the default when `kind` is absent from the manifest.
+    Wasm,
+    /// WASI Preview 2 component model.
+    #[serde(rename = "wasi-component")]
+    WasiComponent,
+}
+
+impl PluginKind {
+    /// Parse a `kind` string from the manifest, defaulting to [`Wasm`](Self::Wasm).
+    pub fn from_manifest(s: Option<&str>) -> Self {
+        match s {
+            Some("wasi-component") => Self::WasiComponent,
+            _ => Self::Wasm,
+        }
+    }
 }
 
 /// Plugin entry point configuration.

@@ -1,6 +1,8 @@
 mod crypto;
 mod manifest;
 mod sandbox;
+#[cfg(feature = "wasi-preview2")]
+pub mod wasi_preview2;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -11,9 +13,11 @@ use thiserror::Error;
 pub use crypto::{sign_plugin_wasm, verify_plugin_artifact, TrustedPluginKey, TRUSTED_PLUGIN_KEYS};
 pub use manifest::{
     validate_license, validate_manifest, validate_version, PluginAnalyzerInfo, PluginEntry,
-    PluginManifest, PluginMetadata, PluginPermissions,
+    PluginKind, PluginManifest, PluginMetadata, PluginPermissions,
 };
 pub use sandbox::WasmConfig;
+#[cfg(feature = "wasi-preview2")]
+pub use wasi_preview2::WasiPlugin;
 
 pub(crate) use crypto::verify_plugin_trust;
 pub(crate) use manifest::read_plugin_manifest;
@@ -734,9 +738,50 @@ impl Drop for EpochWatchdog {
     }
 }
 
+/// A loaded plugin instance — either a core ABI [`WasmPlugin`] or a
+/// WASI Preview 2 [`WasiPlugin`].
+///
+/// This enum provides a uniform interface for the plugin registry and
+/// runtime without requiring dynamic dispatch.
+pub enum PluginInstance {
+    /// Core WASM ABI plugin (legacy, default).
+    Wasm(WasmPlugin),
+    /// WASI Preview 2 component plugin.
+    #[cfg(feature = "wasi-preview2")]
+    Wasi(WasiPlugin),
+}
+
+impl PluginInstance {
+    /// Get the plugin metadata.
+    pub fn metadata(&self) -> &PluginMetadata {
+        match self {
+            Self::Wasm(p) => p.metadata(),
+            #[cfg(feature = "wasi-preview2")]
+            Self::Wasi(p) => p.metadata(),
+        }
+    }
+
+    /// Analyze HTML content using the plugin.
+    pub fn analyze(
+        &mut self,
+        html: &str,
+        url: &str,
+        context_json: Option<&str>,
+    ) -> Result<String, PluginError> {
+        match self {
+            Self::Wasm(p) => match context_json {
+                Some(ctx) => p.analyze_with_context(html, url, Some(ctx)),
+                None => p.analyze(html, url),
+            },
+            #[cfg(feature = "wasi-preview2")]
+            Self::Wasi(p) => p.analyze(html, url, context_json),
+        }
+    }
+}
+
 /// Plugin registry managing all loaded plugins.
 pub struct PluginRegistry {
-    plugins: Arc<RwLock<Vec<WasmPlugin>>>,
+    plugins: Arc<RwLock<Vec<PluginInstance>>>,
     search_paths: Vec<PathBuf>,
 }
 
@@ -756,6 +801,11 @@ impl PluginRegistry {
 
     /// Scan search paths and load all valid plugins.
     pub fn load_all(&mut self) -> Vec<PluginError> {
+        self.load_all_with_config(&WasmConfig::default())
+    }
+
+    /// Scan search paths and load all valid plugins with custom config.
+    pub fn load_all_with_config(&mut self, config: &WasmConfig) -> Vec<PluginError> {
         let mut errors = Vec::new();
 
         for search_path in &self.search_paths {
@@ -767,14 +817,16 @@ impl PluginRegistry {
                 for entry in entries.flatten() {
                     let plugin_dir = entry.path();
                     if plugin_dir.is_dir() {
-                        match WasmPlugin::load(&plugin_dir) {
-                            Ok(plugin) => {
+                        match load_plugin_from_dir(&plugin_dir, config) {
+                            Ok(instance) => {
+                                let meta = instance.metadata();
                                 tracing::info!(
-                                    "Loaded plugin: {} v{}",
-                                    plugin.metadata().name,
-                                    plugin.metadata().version
+                                    "Loaded plugin: {} v{} ({})",
+                                    meta.name,
+                                    meta.version,
+                                    meta.kind.as_deref().unwrap_or("wasm"),
                                 );
-                                self.plugins.write().push(plugin);
+                                self.plugins.write().push(instance);
                             }
                             Err(e) => {
                                 tracing::warn!(
@@ -813,10 +865,33 @@ impl PluginRegistry {
         let mut plugins = self.plugins.write();
 
         for plugin in plugins.iter_mut() {
-            results.push(plugin.analyze(html, url));
+            results.push(plugin.analyze(html, url, None));
         }
 
         results
+    }
+}
+
+/// Load a single plugin from a directory, dispatching to the correct
+/// adapter based on the manifest's `kind` field.
+pub fn load_plugin_from_dir(
+    plugin_dir: &Path,
+    config: &WasmConfig,
+) -> Result<PluginInstance, PluginError> {
+    // Peek at the manifest to determine the plugin kind before loading.
+    let manifest = manifest::read_plugin_manifest(plugin_dir)?;
+    let kind = PluginKind::from_manifest(manifest.plugin.kind.as_deref());
+
+    match kind {
+        PluginKind::Wasm => WasmPlugin::load_with_config(plugin_dir, config).map(PluginInstance::Wasm),
+        #[cfg(feature = "wasi-preview2")]
+        PluginKind::WasiComponent => {
+            wasi_preview2::WasiPlugin::load(plugin_dir, config).map(PluginInstance::Wasi)
+        }
+        #[cfg(not(feature = "wasi-preview2"))]
+        PluginKind::WasiComponent => Err(PluginError::LoadFailed(
+            "WASI Preview 2 support is not enabled (compile with wasi-preview2 feature)".to_string(),
+        )),
     }
 }
 
@@ -901,6 +976,7 @@ mod tests {
             author: "Test Author".to_string(),
             description: "A test plugin".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -924,6 +1000,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -950,6 +1027,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -976,6 +1054,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -1002,6 +1081,7 @@ mod tests {
             author: "Author".to_string(),
             description: "a".repeat(501),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -1028,6 +1108,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "Proprietary".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.wasm".to_string()),
@@ -1054,6 +1135,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: None,
@@ -1080,6 +1162,7 @@ mod tests {
             author: "Author".to_string(),
             description: "Desc".to_string(),
             license: "MIT".to_string(),
+            kind: None,
             trust_level: None,
             entry: PluginEntry {
                 wasm: Some("plugin.js".to_string()),

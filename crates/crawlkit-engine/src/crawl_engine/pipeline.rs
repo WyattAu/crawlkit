@@ -4,7 +4,8 @@ use super::fetch::{FetchOutcome, FetchedPage, Freshness};
 use super::CrawlEngineConfig;
 use crate::analyzers::AnalyzerRegistry;
 use crate::encryption::EncryptionManager;
-use crate::queue::{Priority, UrlQueue};
+use crate::queue::{Priority, QueueEntry};
+use crate::queue_trait::Queue;
 use crate::storage::{Issue, PageData};
 use crate::storage_trait::StorageBackend;
 use crate::{Metrics, RedirectHop, ResourceMonitor};
@@ -12,7 +13,6 @@ use chrono::Utc;
 use dashmap::DashSet;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use url::Url;
 
 use super::OnPageCrawled;
@@ -35,7 +35,7 @@ pub(crate) struct CrawlRun<'a> {
     pub(crate) on_page: Option<OnPageCrawled>,
     pub(crate) metrics: Metrics,
     pub(crate) resource_monitor: ResourceMonitor,
-    pub(crate) queue: Arc<Mutex<UrlQueue>>,
+    pub(crate) queue: Arc<dyn Queue>,
     pub(crate) plugins: Vec<crate::plugin_runtime::CrawlPlugin>,
 }
 
@@ -149,7 +149,7 @@ impl CrawlRun<'_> {
             cb(fetched.entry.url.as_ref(), &page_id, findings.len());
         }
 
-        self.extract_links(&parsed, fetched.entry.depth).await;
+        self.extract_links(&parsed, fetched.entry.depth);
     }
 
     /// Re-render with JavaScript when the decision engine requires it.
@@ -375,9 +375,8 @@ impl CrawlRun<'_> {
     }
 
     /// Apply scope/pattern filters and enqueue newly discovered links.
-    async fn extract_links(&self, parsed: &crate::ParsedPage, depth: usize) {
+    fn extract_links(&self, parsed: &crate::ParsedPage, depth: usize) {
         let max_depth = self.cfg.crawl_config.max_depth;
-        let queue = self.queue.lock().await;
         for link in &parsed.links {
             let link_url = match Url::parse(&link.href) {
                 Ok(u) => u,
@@ -420,7 +419,15 @@ impl CrawlRun<'_> {
             } else {
                 Priority::LOW
             };
-            queue.push(link_url, depth + 1, priority);
+            let entry = QueueEntry {
+                url: link_url.clone(),
+                canonical_url: link_url,
+                depth: depth + 1,
+                priority,
+                discovered_at: Utc::now(),
+                referrer: None,
+            };
+            self.queue.push(entry).unwrap();
         }
     }
 }

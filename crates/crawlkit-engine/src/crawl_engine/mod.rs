@@ -1,3 +1,5 @@
+#![allow(clippy::unwrap_used)]
+
 mod counters;
 mod dedup;
 mod fetch;
@@ -6,7 +8,8 @@ mod pipeline;
 use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzerRegistry};
 use crate::analyzers::AnalyzerRegistry;
 use crate::http::{HttpClient, HttpClientConfig};
-use crate::queue::{Priority, UrlQueue};
+use crate::queue::{Priority, QueueEntry};
+use crate::queue_trait::Queue;
 use crate::ratelimit::RateLimiter;
 use crate::robots::RobotsTxtCache;
 use crate::sitemap::SitemapCache;
@@ -22,7 +25,6 @@ use futures::StreamExt;
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 use url::Url;
 
 pub(crate) use counters::bump;
@@ -125,6 +127,10 @@ pub struct CrawlEngineConfig {
 
     /// Post-crawl analyzers that run after the main crawl loop completes.
     pub post_crawl_analyzers: PostCrawlAnalyzerRegistry,
+
+    /// Optional queue backend override. When `None`, the default
+    /// [`UrlQueue`](crate::queue::UrlQueue) is used.
+    pub queue: Option<Arc<dyn Queue>>,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -144,6 +150,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("timeout_secs", &self.timeout_secs)
             .field("plugin_dirs", &self.plugin_dirs)
             .field("post_crawl_analyzers", &self.post_crawl_analyzers.len())
+            .field("queue", &self.queue.is_some())
             .field("delay_ms", &self.delay_ms)
             .field("concurrency", &self.concurrency)
             .field("incremental", &self.incremental)
@@ -175,6 +182,7 @@ impl Default for CrawlEngineConfig {
             allow_http: false,
             plugin_dirs: Vec::new(),
             post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(),
+            queue: None,
         }
     }
 }
@@ -241,6 +249,7 @@ pub type OnPageCrawled = Arc<dyn Fn(&str, &str, usize) + Send + Sync>;
 pub struct CrawlEngine {
     config: CrawlEngineConfig,
     storage: Arc<dyn StorageBackend>,
+    queue: Arc<dyn Queue>,
 }
 
 impl CrawlEngine {
@@ -260,15 +269,18 @@ impl CrawlEngine {
     /// let engine = CrawlEngine::new(CrawlEngineConfig::default(), storage);
     /// ```
     pub fn new(config: CrawlEngineConfig, storage: impl StorageBackend + 'static) -> Self {
+        let queue = Self::resolve_queue(&config);
         Self {
             config,
             storage: Arc::new(storage),
+            queue,
         }
     }
 
     /// Create a new crawl engine from an Arc-wrapped storage, sharing ownership.
     pub fn new_shared(config: CrawlEngineConfig, storage: Arc<dyn StorageBackend>) -> Self {
-        Self { config, storage }
+        let queue = Self::resolve_queue(&config);
+        Self { config, storage, queue }
     }
 
     /// Create a new crawl engine, returning an error if storage creation fails.
@@ -277,6 +289,16 @@ impl CrawlEngine {
         storage: impl StorageBackend + 'static,
     ) -> Result<Self, crate::CrawlError> {
         Ok(Self::new(config, storage))
+    }
+
+    fn resolve_queue(config: &CrawlEngineConfig) -> Arc<dyn Queue> {
+        config.queue.clone().unwrap_or_else(|| {
+            let scope = crate::queue::ScopeConfig {
+                max_depth: config.crawl_config.max_depth,
+                ..Default::default()
+            };
+            Arc::new(crate::queue::UrlQueue::new(scope)) as Arc<dyn Queue>
+        })
     }
 
     /// Run the crawl starting from the given URL.
@@ -373,12 +395,6 @@ impl CrawlEngine {
 
         let determinism = cfg.seed.map(DeterminismController::new);
 
-        let scope = crate::queue::ScopeConfig {
-            max_depth: cfg.crawl_config.max_depth,
-            ..Default::default()
-        };
-        let queue = Arc::new(Mutex::new(UrlQueue::new(scope)));
-
         let rate_limiter = RateLimiter::new(
             concurrency as f64,
             1.0 / (cfg.crawl_config.request_delay.as_millis() as f64 / 1000.0),
@@ -389,7 +405,7 @@ impl CrawlEngine {
 
         // Seed, incremental history, and sitemap URLs into the queue.
         let mut known_sitemap_urls = self
-            .prefill_queue(&queue, &seed_url, &crawl_id, &robots_cache, &sitemap_cache)
+            .prefill_queue(&self.queue, &seed_url, &crawl_id, &robots_cache, &sitemap_cache)
             .await;
 
         // Crawl plugins: loaded once per crawl from the configured dirs
@@ -424,7 +440,7 @@ impl CrawlEngine {
             on_page,
             metrics,
             resource_monitor,
-            queue: queue.clone(),
+            queue: Arc::clone(&self.queue),
             plugins,
         };
         let crawl_start = std::time::Instant::now();
@@ -475,10 +491,7 @@ impl CrawlEngine {
             while in_flight.len() < concurrency
                 && current(&run.counters.pages_crawled) + in_flight.len() < max_pages
             {
-                let entry = {
-                    let q = queue.lock().await;
-                    q.pop()
-                };
+                let entry = self.queue.pop().unwrap();
 
                 let entry = match entry {
                     Some(e) => e,
@@ -519,10 +532,17 @@ impl CrawlEngine {
                         let sitemap_urls = robots_cache.sitemaps(scheme, &domain).await;
                         if !sitemap_urls.is_empty() {
                             let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
-                            let q = queue.lock().await;
                             for sm_entry in &entries {
                                 if let Ok(url) = Url::parse(&sm_entry.url) {
-                                    q.push(url, 0, Priority::HIGHEST);
+                                    let entry = QueueEntry {
+                                        url: url.clone(),
+                                        canonical_url: url,
+                                        depth: 0,
+                                        priority: Priority::HIGHEST,
+                                        discovered_at: chrono::Utc::now(),
+                                        referrer: None,
+                                    };
+                                    self.queue.push(entry).unwrap();
                                 }
                             }
                         }
@@ -617,7 +637,7 @@ impl CrawlEngine {
     /// the dispatch loop fetches each origin's sitemaps at most once.
     async fn prefill_queue(
         &self,
-        queue: &Arc<Mutex<UrlQueue>>,
+        queue: &Arc<dyn Queue>,
         seed_url: &Url,
         crawl_id: &str,
         robots_cache: &Arc<RobotsTxtCache>,
@@ -626,7 +646,14 @@ impl CrawlEngine {
         let cfg = &self.config;
 
         // Seed the queue
-        queue.lock().await.push(seed_url.clone(), 0, Priority::HIGH);
+        queue.push(QueueEntry {
+            url: seed_url.clone(),
+            canonical_url: seed_url.clone(),
+            depth: 0,
+            priority: Priority::HIGH,
+            discovered_at: chrono::Utc::now(),
+            referrer: None,
+        }).unwrap();
 
         // Incremental mode: seed from the previous crawl's page set so pages
         // that are reachable only through link extraction still get
@@ -658,12 +685,16 @@ impl CrawlEngine {
             if let Some((previous_crawl, prev_urls)) = previous {
                 if !prev_urls.is_empty() {
                     let count = prev_urls.len();
-                    {
-                        let q = queue.lock().await;
-                        for url_str in &prev_urls {
-                            if let Ok(url) = Url::parse(url_str) {
-                                q.push(url, 0, Priority::HIGHEST);
-                            }
+                    for url_str in &prev_urls {
+                        if let Ok(url) = Url::parse(url_str) {
+                            queue.push(QueueEntry {
+                                url: url.clone(),
+                                canonical_url: url,
+                                depth: 0,
+                                priority: Priority::HIGHEST,
+                                discovered_at: chrono::Utc::now(),
+                                referrer: None,
+                            }).unwrap();
                         }
                     }
                     tracing::info!(
@@ -683,11 +714,17 @@ impl CrawlEngine {
                 tracing::info!("Found {} sitemap URLs in robots.txt", sitemap_urls.len());
                 let entries = sitemap_cache.fetch_all(&sitemap_urls).await;
                 tracing::info!("Parsed {} URLs from sitemaps", entries.len());
-                let q = queue.lock().await;
                 for entry in &entries {
                     if known_sitemap_urls.insert(entry.url.clone()) {
                         if let Ok(url) = Url::parse(&entry.url) {
-                            q.push(url, 0, Priority::HIGHEST);
+                            queue.push(QueueEntry {
+                                url: url.clone(),
+                                canonical_url: url,
+                                depth: 0,
+                                priority: Priority::HIGHEST,
+                                discovered_at: chrono::Utc::now(),
+                                referrer: None,
+                            }).unwrap();
                         }
                     }
                 }

@@ -4,8 +4,8 @@ use sqlx::PgPool;
 use sqlx::Row;
 use url::Url;
 
-use crate::storage::{CrawlStats, Issue, IssueFilter, PageData, StorageError};
-use crate::storage_trait::StorageBackend;
+use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
+use crate::storage_trait::{CrawlMeta, StorageBackend, TopIssue};
 
 /// PostgreSQL-backed storage for crawl data.
 ///
@@ -140,6 +140,23 @@ fn row_to_page_data(row: &sqlx::postgres::PgRow) -> Result<PageData, sqlx::error
         cwv_lcp: row.try_get("cwv_lcp")?,
         cwv_cls: row.try_get("cwv_cls")?,
         cwv_inp: row.try_get("cwv_inp")?,
+        has_structured_data: row.try_get::<Option<bool>, _>("has_structured_data")?,
+        schema_types: row.try_get("schema_types")?,
+        viewport_ok: row.try_get::<Option<bool>, _>("viewport_ok")?,
+        has_csp: row.try_get::<Option<bool>, _>("has_csp")?,
+        has_hsts: row.try_get::<Option<bool>, _>("has_hsts")?,
+        images_total: row
+            .try_get::<Option<i64>, _>("images_total")?
+            .map(|v| v as usize),
+        images_missing_alt: row
+            .try_get::<Option<i64>, _>("images_missing_alt")?
+            .map(|v| v as usize),
+        h1_count: row
+            .try_get::<Option<i64>, _>("h1_count")?
+            .map(|v| v as usize),
+        heading_count: row
+            .try_get::<Option<i64>, _>("heading_count")?
+            .map(|v| v as usize),
     })
 }
 
@@ -301,8 +318,8 @@ impl StorageBackend for PgStorage {
             let mut tx = pool.begin().await?;
 
             sqlx::query(
-                "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
                  ON CONFLICT (id) DO UPDATE SET
                      crawl_id = EXCLUDED.crawl_id,
                      url = EXCLUDED.url,
@@ -320,7 +337,16 @@ impl StorageBackend for PgStorage {
                      last_modified = EXCLUDED.last_modified,
                      cwv_lcp = EXCLUDED.cwv_lcp,
                      cwv_cls = EXCLUDED.cwv_cls,
-                     cwv_inp = EXCLUDED.cwv_inp",
+                     cwv_inp = EXCLUDED.cwv_inp,
+                     has_structured_data = EXCLUDED.has_structured_data,
+                     schema_types = EXCLUDED.schema_types,
+                     viewport_ok = EXCLUDED.viewport_ok,
+                     has_csp = EXCLUDED.has_csp,
+                     has_hsts = EXCLUDED.has_hsts,
+                     images_total = EXCLUDED.images_total,
+                     images_missing_alt = EXCLUDED.images_missing_alt,
+                     h1_count = EXCLUDED.h1_count,
+                     heading_count = EXCLUDED.heading_count",
             )
             .bind(&page.id)
             .bind(&crawl_id)
@@ -340,6 +366,15 @@ impl StorageBackend for PgStorage {
             .bind(page.cwv_lcp)
             .bind(page.cwv_cls)
             .bind(page.cwv_inp)
+            .bind(page.has_structured_data)
+            .bind(&page.schema_types)
+            .bind(page.viewport_ok)
+            .bind(page.has_csp)
+            .bind(page.has_hsts)
+            .bind(page.images_total.map(|v| v as i64))
+            .bind(page.images_missing_alt.map(|v| v as i64))
+            .bind(page.h1_count.map(|v| v as i64))
+            .bind(page.heading_count.map(|v| v as i64))
             .execute(&mut *tx)
             .await?;
 
@@ -377,8 +412,8 @@ impl StorageBackend for PgStorage {
 
             for page in &pages {
                 sqlx::query(
-                    "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+                    "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
                      ON CONFLICT (id) DO UPDATE SET
                          crawl_id = EXCLUDED.crawl_id,
                          url = EXCLUDED.url,
@@ -396,7 +431,16 @@ impl StorageBackend for PgStorage {
                          last_modified = EXCLUDED.last_modified,
                          cwv_lcp = EXCLUDED.cwv_lcp,
                          cwv_cls = EXCLUDED.cwv_cls,
-                         cwv_inp = EXCLUDED.cwv_inp",
+                         cwv_inp = EXCLUDED.cwv_inp,
+                         has_structured_data = EXCLUDED.has_structured_data,
+                         schema_types = EXCLUDED.schema_types,
+                         viewport_ok = EXCLUDED.viewport_ok,
+                         has_csp = EXCLUDED.has_csp,
+                         has_hsts = EXCLUDED.has_hsts,
+                         images_total = EXCLUDED.images_total,
+                         images_missing_alt = EXCLUDED.images_missing_alt,
+                         h1_count = EXCLUDED.h1_count,
+                         heading_count = EXCLUDED.heading_count",
                 )
                 .bind(&page.id)
                 .bind(&crawl_id)
@@ -416,6 +460,15 @@ impl StorageBackend for PgStorage {
                 .bind(page.cwv_lcp)
                 .bind(page.cwv_cls)
                 .bind(page.cwv_inp)
+                .bind(page.has_structured_data)
+                .bind(&page.schema_types)
+                .bind(page.viewport_ok)
+                .bind(page.has_csp)
+                .bind(page.has_hsts)
+                .bind(page.images_total.map(|v| v as i64))
+                .bind(page.images_missing_alt.map(|v| v as i64))
+                .bind(page.h1_count.map(|v| v as i64))
+                .bind(page.heading_count.map(|v| v as i64))
                 .execute(&mut *tx)
                 .await?;
 
@@ -448,7 +501,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let result = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
                  FROM pages WHERE crawl_id = $1 AND url = $2",
             )
             .bind(&crawl_id)
@@ -470,7 +523,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
                  FROM pages WHERE crawl_id = $1 ORDER BY fetched_at ASC LIMIT $2",
             )
             .bind(&crawl_id)
@@ -498,7 +551,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
                  FROM pages WHERE crawl_id = $1 AND (tenant_id = $2 OR tenant_id IS NULL)
                  ORDER BY fetched_at ASC LIMIT $3",
             )
@@ -719,6 +772,240 @@ impl StorageBackend for PgStorage {
                     Ok::<_, StorageError>((etag, last_modified))
                 })
                 .transpose()
+        })
+    }
+
+    fn update_page_fetched_at(
+        &self,
+        page_id: &str,
+        fetched_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), StorageError> {
+        let pool = self.pool.clone();
+        let page_id = page_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            sqlx::query("UPDATE pages SET fetched_at = $1 WHERE id = $2")
+                .bind(fetched_at)
+                .bind(&page_id)
+                .execute(&pool)
+                .await?;
+            Ok(())
+        })
+    }
+
+    fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {
+        let pool = self.pool.clone();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let result = sqlx::query_scalar::<_, String>(
+                "SELECT id FROM crawls ORDER BY start_time DESC LIMIT 1",
+            )
+            .fetch_optional(&pool)
+            .await?;
+
+            Ok(result)
+        })
+    }
+
+    fn get_previous_crawl_id(&self, exclude_id: &str) -> Result<Option<String>, StorageError> {
+        let pool = self.pool.clone();
+        let exclude_id = exclude_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let result = sqlx::query_scalar::<_, String>(
+                "SELECT id FROM crawls WHERE id != $1 ORDER BY start_time DESC LIMIT 1",
+            )
+            .bind(&exclude_id)
+            .fetch_optional(&pool)
+            .await?;
+
+            Ok(result)
+        })
+    }
+
+    fn get_page_urls(&self, crawl_id: &str) -> Result<Vec<String>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query_scalar::<_, String>(
+                "SELECT url FROM pages WHERE crawl_id = $1 ORDER BY url",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            Ok(rows)
+        })
+    }
+
+    fn get_links_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<(String, Vec<String>)>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query(
+                "SELECT l.source_url, l.target_url
+                 FROM links l
+                 JOIN pages p ON l.page_id = p.id
+                 WHERE p.crawl_id = $1
+                 ORDER BY l.source_url",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            let mut links: std::collections::HashMap<String, Vec<String>> =
+                std::collections::HashMap::new();
+            for row in &rows {
+                let source: String = row.try_get("source_url")?;
+                let target: String = row.try_get("target_url")?;
+                links.entry(source).or_default().push(target);
+            }
+
+            Ok(links.into_iter().collect())
+        })
+    }
+
+    fn get_external_links(&self, crawl_id: &str) -> Result<Vec<(String, String)>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query(
+                "SELECT l.source_url, l.target_url
+                 FROM links l
+                 JOIN pages p ON l.page_id = p.id
+                 WHERE p.crawl_id = $1 AND l.is_external = true",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            let links = rows
+                .iter()
+                .map(|r| {
+                    let source: String = r.try_get("source_url")?;
+                    let target: String = r.try_get("target_url")?;
+                    Ok::<_, StorageError>((source, target))
+                })
+                .collect::<Result<Vec<_>, _>>()?;
+
+            Ok(links)
+        })
+    }
+
+    fn get_crawl_meta(&self, crawl_id: &str) -> Result<CrawlMeta, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let row = sqlx::query(
+                "SELECT id, target_url, start_time, end_time, pages_crawled, total_issues
+                 FROM crawls WHERE id = $1",
+            )
+            .bind(&crawl_id)
+            .fetch_optional(&pool)
+            .await?
+            .ok_or_else(|| StorageError::PgDatabase(sqlx::Error::RowNotFound))?;
+
+            Ok(CrawlMeta {
+                id: row.try_get("id")?,
+                target_url: row.try_get("target_url")?,
+                start_time: row.try_get("start_time")?,
+                end_time: row.try_get("end_time")?,
+                pages_crawled: row.try_get::<Option<i64>, _>("pages_crawled")?.unwrap_or(0) as usize,
+                total_issues: row.try_get::<Option<i64>, _>("total_issues")?.unwrap_or(0) as usize,
+            })
+        })
+    }
+
+    fn get_top_issues(
+        &self,
+        crawl_id: &str,
+        limit: usize,
+    ) -> Result<Vec<TopIssue>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query(
+                "SELECT f.severity, f.code, f.title, COUNT(DISTINCT f.page_id) as affected_pages
+                 FROM findings f
+                 JOIN pages p ON f.page_id = p.id
+                 WHERE p.crawl_id = $1
+                 GROUP BY f.severity, f.code, f.title
+                 ORDER BY
+                   CASE f.severity WHEN 'critical' THEN 0 WHEN 'error' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
+                   affected_pages DESC
+                 LIMIT $2",
+            )
+            .bind(&crawl_id)
+            .bind(limit as i64)
+            .fetch_all(&pool)
+            .await?;
+
+            let issues = rows
+                .iter()
+                .map(|r| {
+                    Ok(TopIssue {
+                        severity: r.try_get("severity")?,
+                        code: r.try_get("code")?,
+                        title: r.try_get("title")?,
+                        affected_pages: r.try_get::<i64, _>("affected_pages")? as usize,
+                    })
+                })
+                .collect::<Result<Vec<_>, StorageError>>()?;
+
+            Ok(issues)
+        })
+    }
+
+    fn get_crux_metrics_for_crawl(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<CruxMetrics>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query(
+                "SELECT cm.url, cm.lcp_p75, cm.inp_p75, cm.cls_p75, cm.fcp_p75, cm.ttfb_p75
+                 FROM crux_metrics cm
+                 JOIN pages p ON cm.page_id = p.id
+                 WHERE p.crawl_id = $1",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            let metrics = rows
+                .iter()
+                .map(|r| {
+                    Ok(CruxMetrics {
+                        url: r.try_get("url")?,
+                        lcp_p75: r.try_get("lcp_p75")?,
+                        inp_p75: r.try_get("inp_p75")?,
+                        cls_p75: r.try_get("cls_p75")?,
+                        fcp_p75: r.try_get("fcp_p75")?,
+                        ttfb_p75: r.try_get("ttfb_p75")?,
+                    })
+                })
+                .collect::<Result<Vec<_>, StorageError>>()?;
+
+            Ok(metrics)
         })
     }
 
@@ -1025,6 +1312,185 @@ mod tests {
             .get_latest_conditional("https://example.com/")
             .unwrap();
         assert!(result.is_some());
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_rich_page_fields_roundtrip() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let mut page = test_page(&unique("p"), "https://example.com/", 200);
+        page.has_structured_data = Some(true);
+        page.schema_types = Some("Article,WebPage".to_string());
+        page.viewport_ok = Some(true);
+        page.has_csp = Some(true);
+        page.has_hsts = Some(false);
+        page.images_total = Some(12);
+        page.images_missing_alt = Some(3);
+        page.h1_count = Some(1);
+        page.heading_count = Some(7);
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let retrieved = storage
+            .get_page(&crawl_id, "https://example.com/")
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.has_structured_data, Some(true));
+        assert_eq!(
+            retrieved.schema_types.as_deref(),
+            Some("Article,WebPage")
+        );
+        assert_eq!(retrieved.viewport_ok, Some(true));
+        assert_eq!(retrieved.has_csp, Some(true));
+        assert_eq!(retrieved.has_hsts, Some(false));
+        assert_eq!(retrieved.images_total, Some(12));
+        assert_eq!(retrieved.images_missing_alt, Some(3));
+        assert_eq!(retrieved.h1_count, Some(1));
+        assert_eq!(retrieved.heading_count, Some(7));
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_rich_page_fields_null_defaults() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let page = test_page(&unique("p"), "https://example.com/null-fields", 200);
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let retrieved = storage
+            .get_page(&crawl_id, "https://example.com/null-fields")
+            .unwrap()
+            .unwrap();
+        assert_eq!(retrieved.has_structured_data, None);
+        assert_eq!(retrieved.schema_types, None);
+        assert_eq!(retrieved.viewport_ok, None);
+        assert_eq!(retrieved.has_csp, None);
+        assert_eq!(retrieved.has_hsts, None);
+        assert_eq!(retrieved.images_total, None);
+        assert_eq!(retrieved.images_missing_alt, None);
+        assert_eq!(retrieved.h1_count, None);
+        assert_eq!(retrieved.heading_count, None);
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_update_page_fetched_at() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let page = test_page(&unique("p"), "https://example.com/", 200);
+        let page_id = page.id.clone();
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let new_time = chrono::Utc::now();
+        storage.update_page_fetched_at(&page_id, new_time).unwrap();
+
+        let retrieved = storage
+            .get_page(&crawl_id, "https://example.com/")
+            .unwrap()
+            .unwrap();
+        let diff = (retrieved.fetched_at - new_time).num_milliseconds().abs();
+        assert!(diff < 1000, "fetched_at should be close to updated time");
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_crawl_meta_and_ids() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        storage.finish_crawl(&crawl_id, 0, 0).unwrap();
+
+        let latest = storage.get_latest_crawl_id().unwrap();
+        assert_eq!(latest.as_deref(), Some(crawl_id.as_str()));
+
+        let crawl_id2 = storage.start_crawl("https://other.com", None).unwrap();
+        storage.finish_crawl(&crawl_id2, 0, 0).unwrap();
+
+        let prev = storage.get_previous_crawl_id(&crawl_id2).unwrap();
+        assert_eq!(prev.as_deref(), Some(crawl_id.as_str()));
+
+        let meta = storage.get_crawl_meta(&crawl_id2).unwrap();
+        assert_eq!(meta.target_url, "https://other.com");
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_page_urls() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let p1 = test_page(&unique("p"), "https://example.com/a", 200);
+        let p2 = test_page(&unique("p"), "https://example.com/b", 200);
+        storage.insert_page(&crawl_id, &p1).unwrap();
+        storage.insert_page(&crawl_id, &p2).unwrap();
+
+        let urls = storage.get_page_urls(&crawl_id).unwrap();
+        assert_eq!(urls.len(), 2);
+        assert!(urls.contains(&"https://example.com/a".to_string()));
+        assert!(urls.contains(&"https://example.com/b".to_string()));
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_links_for_crawl_and_external() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let mut page = test_page(&unique("p"), "https://example.com/", 200);
+        page.links = vec![
+            Url::parse("https://example.com/about").unwrap(),
+            Url::parse("https://external.com/page").unwrap(),
+        ];
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let all_links = storage.get_links_for_crawl(&crawl_id).unwrap();
+        assert_eq!(all_links.len(), 1);
+        assert_eq!(all_links[0].1.len(), 2);
+
+        let ext_links = storage.get_external_links(&crawl_id).unwrap();
+        assert_eq!(ext_links.len(), 1);
+        assert_eq!(ext_links[0].1, "https://external.com/page");
+        storage.finish().unwrap();
+    }
+
+    #[test]
+    #[ignore]
+    fn test_pg_top_issues() {
+        let storage = sync_test_storage();
+
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let page = test_page(&unique("p"), "https://example.com/", 200);
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        let issues = vec![
+            test_issue(
+                &unique("i"),
+                page.id.as_str(),
+                IssueCategory::Seo,
+                Severity::Error,
+            ),
+            test_issue(
+                &unique("i"),
+                page.id.as_str(),
+                IssueCategory::Seo,
+                Severity::Error,
+            ),
+        ];
+        storage.insert_issues_batch(&issues).unwrap();
+
+        let top = storage.get_top_issues(&crawl_id, 10).unwrap();
+        assert_eq!(top.len(), 1);
+        assert_eq!(top[0].affected_pages, 2);
+        assert_eq!(top[0].severity, "error");
         storage.finish().unwrap();
     }
 }

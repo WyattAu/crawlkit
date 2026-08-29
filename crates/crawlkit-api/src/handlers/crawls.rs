@@ -457,10 +457,27 @@ pub async fn run_crawl_task(
     // Held for the crawl's duration; released on drop (backpressure slot).
     _permit: Option<tokio::sync::OwnedSemaphorePermit>,
 ) {
+    run_crawl_task_with_monitoring(state, crawl_id, config, _permit, None, None).await;
+}
+
+/// Run a crawl task with optional monitoring (compare against a previous crawl)
+/// and schedule tracking (update `last_crawl_id` when done).
+pub async fn run_crawl_task_with_monitoring(
+    state: AppState,
+    crawl_id: String,
+    config: crawlkit_engine::CrawlConfig,
+    _permit: Option<tokio::sync::OwnedSemaphorePermit>,
+    previous_crawl_id: Option<String>,
+    schedule_id: Option<String>,
+) {
     use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
+
+    let alert_threshold = previous_crawl_id.as_ref().map(|_| 1);
 
     let engine_config = CrawlEngineConfig {
         crawl_config: config.clone(),
+        previous_crawl_id,
+        alert_threshold,
         ..Default::default()
     };
 
@@ -478,9 +495,6 @@ pub async fn run_crawl_task(
 
     match result {
         Ok(output) => {
-            // The engine has already finished its own storage row
-            // (`output.crawl_id`); bind it to the public crawl id so that
-            // stats/findings/backlinks resolve to the row holding pages.
             if let Some(mut entry) = state.crawl_results.get_mut(&crawl_id) {
                 entry.storage_crawl_id = Some(output.crawl_id.clone());
                 entry.status = "completed".to_string();
@@ -538,6 +552,28 @@ pub async fn run_crawl_task(
                 output.pages_crawled,
                 output.issues_found,
             );
+
+            // If monitoring detected an alert, fire monitoring webhooks
+            // and update the schedule's last_crawl_id.
+            if let Some(ref monitoring) = output.monitoring {
+                if monitoring.alert_triggered {
+                    super::webhooks::fire_monitoring_webhooks(
+                        &state,
+                        &crawl_id,
+                        &tenant_id,
+                        monitoring,
+                    );
+                }
+            }
+
+            // Update the schedule's last_crawl_id so the next run can
+            // compare against this crawl.
+            if let Some(ref sid) = schedule_id {
+                if let Some(mut schedule) = state.schedules.get_mut(sid) {
+                    schedule.last_crawl_id = Some(output.crawl_id.clone());
+                }
+            }
+
             tracing::info!(
                 "Crawl {crawl_id} completed: {} pages, {} issues",
                 output.pages_crawled,

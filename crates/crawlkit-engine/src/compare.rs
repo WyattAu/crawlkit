@@ -140,6 +140,122 @@ pub fn compare_crawls(baseline_path: &Path, target_path: &Path) -> Result<CrawlD
     compare_crawl_ids(&baseline_conn, &baseline_crawl, &target_conn, &target_crawl)
 }
 
+/// Compare two crawl IDs that live in the **same** database.
+///
+/// This avoids the deadlock that would occur if [`compare_crawl_ids`] were
+/// called with the same `Connection` for both arguments (interior `Mutex`).
+pub fn compare_same_db(
+    conn: &Connection,
+    baseline_crawl_id: &str,
+    target_crawl_id: &str,
+) -> Result<CrawlDiff, CompareError> {
+    let baseline_pages = load_pages(conn, baseline_crawl_id)?;
+    let target_pages = load_pages(conn, target_crawl_id)?;
+
+    let baseline_map: std::collections::HashMap<&str, &ComparePage> =
+        baseline_pages.iter().map(|p| (p.url.as_str(), p)).collect();
+    let target_map: std::collections::HashMap<&str, &ComparePage> =
+        target_pages.iter().map(|p| (p.url.as_str(), p)).collect();
+
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut status_changes = Vec::new();
+    let mut title_changes = Vec::new();
+    let mut content_changes = Vec::new();
+    let mut size_changes = Vec::new();
+
+    for url in target_map.keys() {
+        if !baseline_map.contains_key(url) {
+            added.push(DiffEntry {
+                url: url.to_string(),
+                change: ChangeKind::Added,
+            });
+        }
+    }
+
+    for url in baseline_map.keys() {
+        if !target_map.contains_key(url) {
+            removed.push(DiffEntry {
+                url: url.to_string(),
+                change: ChangeKind::Removed,
+            });
+        }
+    }
+
+    for (url, &baseline_page) in &baseline_map {
+        if let Some(&target_page) = target_map.get(url) {
+            if baseline_page.status_code != target_page.status_code {
+                status_changes.push(DiffEntry {
+                    url: url.to_string(),
+                    change: ChangeKind::StatusChanged {
+                        from: baseline_page.status_code,
+                        to: target_page.status_code,
+                    },
+                });
+            }
+            if baseline_page.title != target_page.title {
+                title_changes.push(DiffEntry {
+                    url: url.to_string(),
+                    change: ChangeKind::TitleChanged {
+                        from: baseline_page.title.clone(),
+                        to: target_page.title.clone(),
+                    },
+                });
+            }
+            if significant_content_change(&baseline_page.word_count, &target_page.word_count) {
+                content_changes.push(DiffEntry {
+                    url: url.to_string(),
+                    change: ChangeKind::ContentChanged {
+                        from: baseline_page.word_count,
+                        to: target_page.word_count,
+                    },
+                });
+            }
+            if significant_size_change(&baseline_page.body_size, &target_page.body_size) {
+                size_changes.push(DiffEntry {
+                    url: url.to_string(),
+                    change: ChangeKind::SizeChanged {
+                        from: baseline_page.body_size,
+                        to: target_page.body_size,
+                    },
+                });
+            }
+        }
+    }
+
+    let baseline_crux = load_crux(conn, baseline_crawl_id)?;
+    let target_crux = load_crux(conn, target_crawl_id)?;
+
+    let baseline_crux_map: std::collections::HashMap<&str, &CompareCrux> =
+        baseline_crux.iter().map(|c| (c.url.as_str(), c)).collect();
+    let target_crux_map: std::collections::HashMap<&str, &CompareCrux> =
+        target_crux.iter().map(|c| (c.url.as_str(), c)).collect();
+
+    let mut cwv_changes = Vec::new();
+
+    for (url, &b) in &baseline_crux_map {
+        if let Some(&t) = target_crux_map.get(url) {
+            check_cwv_regression(url, "LCP", b.lcp_p75, t.lcp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "CLS", b.cls_p75, t.cls_p75, &mut cwv_changes);
+            check_cwv_regression(url, "INP", b.inp_p75, t.inp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "FCP", b.fcp_p75, t.fcp_p75, &mut cwv_changes);
+            check_cwv_regression(url, "TTFB", b.ttfb_p75, t.ttfb_p75, &mut cwv_changes);
+        }
+    }
+
+    Ok(CrawlDiff {
+        baseline_pages: baseline_pages.len(),
+        target_pages: target_pages.len(),
+        added,
+        removed,
+        status_changes,
+        title_changes,
+        content_changes,
+        size_changes,
+        cwv_changes,
+    })
+}
+
 /// Compare two specific crawl IDs within the same or different databases.
 pub fn compare_crawl_ids(
     baseline_conn: &Connection,

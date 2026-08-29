@@ -1638,6 +1638,16 @@ impl crate::storage_trait::StorageBackend for Storage {
         self.clear_cache();
         Ok(())
     }
+
+    fn compare_crawls(
+        &self,
+        baseline_crawl_id: &str,
+        target_crawl_id: &str,
+    ) -> Result<crate::compare::CrawlDiff, StorageError> {
+        let conn = self.conn();
+        crate::compare::compare_same_db(&conn, baseline_crawl_id, target_crawl_id)
+            .map_err(|e| StorageError::Database(rusqlite::Error::InvalidParameterName(e.to_string())))
+    }
 }
 
 #[cfg(test)]

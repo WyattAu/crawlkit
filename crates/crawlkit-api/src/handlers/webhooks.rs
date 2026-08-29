@@ -34,9 +34,12 @@ pub async fn create_webhook(
     validate_public_url(&req.url)?;
 
     for event in &req.events {
-        if event != "crawl.completed" && event != "crawl.failed" {
+        if event != "crawl.completed"
+            && event != "crawl.failed"
+            && event != "monitoring.alert_triggered"
+        {
             return Err(ApiError::BadRequest(format!(
-                "Invalid event type: {event}. Must be 'crawl.completed' or 'crawl.failed'"
+                "Invalid event type: {event}. Must be 'crawl.completed', 'crawl.failed', or 'monitoring.alert_triggered'"
             )));
         }
     }
@@ -291,6 +294,71 @@ pub fn fire_webhooks(
             tokio::spawn(async move {
                 if let Err(e) = deliver_webhook(&client, &webhook, &payload).await {
                     tracing::error!("Webhook delivery failed: {e}");
+                }
+            });
+        }
+    });
+}
+
+/// Fire `monitoring.alert_triggered` webhooks with monitoring delta details.
+pub fn fire_monitoring_webhooks(
+    state: &AppState,
+    crawl_id: &str,
+    tenant_id: &str,
+    monitoring: &crawlkit_engine::monitoring::MonitoringResult,
+) {
+    let matching: Vec<WebhookConfig> = state
+        .webhooks
+        .iter()
+        .filter(|entry| entry.value().tenant_id == tenant_id)
+        .filter(|entry| {
+            entry
+                .value()
+                .events
+                .iter()
+                .any(|e| e == "monitoring.alert_triggered")
+        })
+        .map(|entry| entry.value().clone())
+        .collect();
+
+    if matching.is_empty() {
+        return;
+    }
+
+    let body = serde_json::json!({
+        "event": "monitoring.alert_triggered",
+        "crawl_id": crawl_id,
+        "monitoring": {
+            "new_pages": monitoring.new_pages,
+            "removed_pages": monitoring.removed_pages,
+            "changed_pages": monitoring.changed_pages,
+            "cwv_regressions": monitoring.cwv_regressions,
+            "alert_triggered": monitoring.alert_triggered,
+        },
+        "timestamp": Utc::now().to_rfc3339(),
+    });
+
+    let client = state.http_client.clone();
+    tokio::spawn(async move {
+        for webhook in matching {
+            let client = client.clone();
+            let body = body.clone();
+            let webhook_url = webhook.url.clone();
+            let webhook_secret = webhook.secret.clone();
+            tokio::spawn(async move {
+                let body_bytes = serde_json::to_vec(&body).unwrap_or_default();
+                let signature = sign_webhook_payload(&webhook_secret, &body_bytes);
+                if let Err(e) = client
+                    .post(&webhook_url)
+                    .header("Content-Type", "application/json")
+                    .header("X-Webhook-Event", "monitoring.alert_triggered")
+                    .header("X-Webhook-Signature", format!("sha256={signature}"))
+                    .body(body_bytes)
+                    .timeout(std::time::Duration::from_secs(10))
+                    .send()
+                    .await
+                {
+                    tracing::error!("Monitoring webhook delivery failed: {e}");
                 }
             });
         }

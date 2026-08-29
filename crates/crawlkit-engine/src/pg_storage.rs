@@ -1040,6 +1040,17 @@ impl StorageBackend for PgStorage {
             Ok(())
         })
     }
+
+    fn compare_crawls(
+        &self,
+        _baseline_crawl_id: &str,
+        _target_crawl_id: &str,
+    ) -> Result<crate::compare::CrawlDiff, StorageError> {
+        Err(StorageError::Database(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "compare_crawls is not yet supported for Postgres storage",
+        ))))
+    }
 }
 
 #[cfg(test)]

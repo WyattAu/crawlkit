@@ -154,6 +154,17 @@ pub trait StorageBackend: Send + Sync {
 
     /// Release any resources held by the backend (connections, caches, etc.).
     fn finish(&self) -> Result<(), StorageError>;
+
+    /// Compare two crawls within the same storage backend.
+    ///
+    /// Returns a [`CrawlDiff`](crate::compare::CrawlDiff) describing
+    /// added, removed, and changed pages between `baseline_crawl_id` and
+    /// `target_crawl_id`.
+    fn compare_crawls(
+        &self,
+        baseline_crawl_id: &str,
+        target_crawl_id: &str,
+    ) -> Result<crate::compare::CrawlDiff, StorageError>;
 }
 
 /// Create an in-memory storage backend suitable for testing.

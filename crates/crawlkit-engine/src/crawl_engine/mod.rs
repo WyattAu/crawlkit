@@ -136,6 +136,16 @@ pub struct CrawlEngineConfig {
     /// When set, the engine fetches CrUX data after crawl completion
     /// and populates `cwv_lcp`, `cwv_cls`, `cwv_inp` on stored pages.
     pub crux_api_key: Option<String>,
+
+    /// Previous crawl ID to compare against (enables monitoring mode).
+    ///
+    /// When set, the engine compares the just-finished crawl against this
+    /// baseline and populates [`CrawlOutput::monitoring`] with the delta.
+    pub previous_crawl_id: Option<String>,
+
+    /// Minimum number of total changes (new + removed + changed + regressions)
+    /// required to trigger a monitoring alert. `0` means any change triggers.
+    pub alert_threshold: Option<usize>,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -161,6 +171,8 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("incremental", &self.incremental)
             .field("force", &self.force)
             .field("crux_api_key", &self.crux_api_key.is_some())
+            .field("previous_crawl_id", &self.previous_crawl_id)
+            .field("alert_threshold", &self.alert_threshold)
             .finish()
     }
 }
@@ -190,6 +202,8 @@ impl Default for CrawlEngineConfig {
             post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(),
             queue: None,
             crux_api_key: None,
+            previous_crawl_id: None,
+            alert_threshold: None,
         }
     }
 }
@@ -223,6 +237,8 @@ pub struct CrawlOutput {
     pub metrics: crate::MetricsSnapshot,
     /// The elapsed wall-clock time for the crawl.
     pub elapsed: Duration,
+    /// Monitoring delta result, populated when `previous_crawl_id` is set.
+    pub monitoring: Option<crate::monitoring::MonitoringResult>,
 }
 
 /// Callback invoked for each page successfully crawled and stored.
@@ -836,6 +852,50 @@ impl CrawlEngine {
             self.populate_crux_field_data(&client, &crawl_id).await;
         }
 
+        // Monitoring: compare against the previous crawl when configured.
+        let monitoring = if let Some(ref previous_crawl_id) = self.config.previous_crawl_id {
+            let storage_clone = Arc::clone(&self.storage);
+            let baseline_id = previous_crawl_id.clone();
+            let target_id = crawl_id.clone();
+            let threshold = self.config.alert_threshold.unwrap_or(1);
+            tokio::task::spawn_blocking(move || {
+                match storage_clone.compare_crawls(&baseline_id, &target_id) {
+                    Ok(diff) => {
+                        let result = crate::monitoring::analyze_crawl_delta(&diff, threshold);
+                        if result.alert_triggered {
+                            tracing::warn!(
+                                new = result.new_pages,
+                                removed = result.removed_pages,
+                                changed = result.changed_pages,
+                                cwv_regressions = result.cwv_regressions,
+                                "Monitoring alert triggered: significant changes detected"
+                            );
+                        } else {
+                            tracing::info!(
+                                new = result.new_pages,
+                                removed = result.removed_pages,
+                                changed = result.changed_pages,
+                                cwv_regressions = result.cwv_regressions,
+                                "Monitoring: changes below alert threshold ({threshold})"
+                            );
+                        }
+                        Some(result)
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "Monitoring comparison failed");
+                        None
+                    }
+                }
+            })
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(error = %e, "Monitoring comparison task failed");
+                None
+            })
+        } else {
+            None
+        };
+
         CrawlOutput {
             crawl_id,
             pages_crawled: stats.pages_crawled,
@@ -850,6 +910,7 @@ impl CrawlEngine {
             seed_domain: run.seed_domain.clone(),
             metrics: snapshot,
             elapsed,
+            monitoring,
         }
     }
 
@@ -1092,6 +1153,7 @@ mod tests {
             seed_domain: "example.com".to_string(),
             metrics: crate::Metrics::new().snapshot(),
             elapsed: Duration::from_secs(1),
+            monitoring: None,
         };
         let cloned = output;
         assert_eq!(cloned.crawl_id, "test");

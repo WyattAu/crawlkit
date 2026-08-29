@@ -121,6 +121,14 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         None => crawlkit_engine::plugin_runtime::default_plugin_dirs(),
     };
 
+    // In monitoring mode, resolve the previous crawl ID from storage before
+    // starting the new crawl (storage will overwrite the crawl row).
+    let previous_crawl_id_for_monitoring = if params.monitor {
+        storage.get_latest_crawl_id().ok().flatten()
+    } else {
+        None
+    };
+
     let engine_config = CrawlEngineConfig {
         crawl_config: crawlkit_engine::CrawlConfig {
             respect_robots_txt: params.respect_robots.unwrap_or(true),
@@ -155,6 +163,8 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
         queue: None,
         crux_api_key: std::env::var("CRUX_API_KEY").ok().filter(|k| !k.is_empty()),
+        previous_crawl_id: previous_crawl_id_for_monitoring,
+        alert_threshold: params.alert_threshold,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);
@@ -206,6 +216,10 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
     log_metrics(&result);
     export_metrics(&result, params)?;
     check_alerts(&result, &output_dir)?;
+
+    if let Some(ref monitoring) = result.monitoring {
+        report_monitoring(monitoring, &output_dir)?;
+    }
 
     write_output(&engine, &result, params, &output_dir)?;
 
@@ -371,6 +385,34 @@ fn write_output(
             );
         }
     }
+    Ok(())
+}
+
+fn report_monitoring(
+    result: &crawlkit_engine::monitoring::MonitoringResult,
+    output_dir: &std::path::Path,
+) -> Result<()> {
+    let json_path = output_dir.join("monitoring.json");
+    std::fs::write(&json_path, serde_json::to_string_pretty(result)?)?;
+
+    if result.alert_triggered {
+        tracing::warn!(
+            "MONITORING ALERT: new={}, removed={}, changed={}, cwv_regressions={}",
+            result.new_pages,
+            result.removed_pages,
+            result.changed_pages,
+            result.cwv_regressions,
+        );
+    } else {
+        tracing::info!(
+            "Monitoring: new={}, removed={}, changed={}, cwv_regressions={} (below threshold)",
+            result.new_pages,
+            result.removed_pages,
+            result.changed_pages,
+            result.cwv_regressions,
+        );
+    }
+    tracing::info!("Wrote monitoring results to {}", json_path.display());
     Ok(())
 }
 

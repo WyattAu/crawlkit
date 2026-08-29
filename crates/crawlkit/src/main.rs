@@ -77,6 +77,8 @@ async fn main() -> Result<()> {
             incremental,
             force,
             plugins,
+            monitor,
+            alert_threshold,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -113,6 +115,8 @@ async fn main() -> Result<()> {
                 force,
                 plugins,
                 feature_flags,
+                monitor,
+                alert_threshold,
             };
             cli::crawl::run(&params).await
         }
@@ -157,6 +161,7 @@ async fn main() -> Result<()> {
             .await
         }
         Commands::Plugin { command } => cli::plugin::run(command),
+        Commands::LogAnalyze(args) => cli::log_analyze::run(args),
     }
 }
 

@@ -189,6 +189,13 @@ pub mod js_render_decision;
 /// canonical conflicts, redirect chains, and orphan pages.
 #[cfg(feature = "full")]
 pub mod post_crawl;
+/// Monitoring: delta analysis for scheduled crawl comparison.
+///
+/// Compares two crawl results and determines whether significant changes
+/// occurred, producing a [`MonitoringResult`](monitoring::MonitoringResult)
+/// that can drive alerting and webhook delivery.
+#[cfg(feature = "full")]
+pub mod monitoring;
 /// Search query tracking and SERP analysis.
 ///
 /// Tracks search engine result pages (SERPs) for target keywords
@@ -399,6 +406,10 @@ pub mod meta;
 /// [`HtmlParser::parse`] produces a [`ParsedPage`] with all SEO-relevant data
 /// extracted from raw HTML, including accessibility landmarks and social metadata.
 pub mod parser;
+/// Web server access log parsing for Nginx/Apache combined and JSON formats.
+pub mod log_parser;
+/// Log analysis: crawler breakdown, status codes, top URLs, and error reporting.
+pub mod log_analyzer;
 
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{

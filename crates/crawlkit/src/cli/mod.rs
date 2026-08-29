@@ -2,10 +2,12 @@ pub mod backlinks;
 pub mod compare;
 pub mod crawl;
 pub mod inspect;
+pub mod log_analyze;
 pub mod plugin;
 pub mod report;
 pub mod util;
 
+pub use log_analyze::LogAnalyzeArgs;
 pub use plugin::PluginCommands;
 
 use clap::{Parser, Subcommand};
@@ -186,6 +188,16 @@ pub enum Commands {
         /// $CRAWLKIT_PLUGIN_DIRS); pass an empty value to disable.
         #[arg(long)]
         plugins: Option<Vec<PathBuf>>,
+
+        /// Enable monitoring mode: compare this crawl against the previous one
+        /// and trigger alerts on significant changes.
+        #[arg(long)]
+        monitor: bool,
+
+        /// Minimum total changes (new + removed + changed + regressions)
+        /// required to trigger a monitoring alert. Default: 1 (any change).
+        #[arg(long)]
+        alert_threshold: Option<usize>,
     },
 
     /// Compare two crawl results
@@ -270,6 +282,9 @@ pub enum Commands {
         #[command(subcommand)]
         command: PluginCommands,
     },
+
+    /// Analyze web server access logs
+    LogAnalyze(LogAnalyzeArgs),
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.
@@ -300,4 +315,8 @@ pub struct CrawlParams {
     /// (~/.crawlkit/plugins + CRAWLKIT_PLUGIN_DIRS); `Some(dirs)` =
     /// explicit; empty = disabled.
     pub plugins: Option<Vec<PathBuf>>,
+    /// Enable monitoring mode (compare against previous crawl).
+    pub monitor: bool,
+    /// Minimum changes required to trigger a monitoring alert.
+    pub alert_threshold: Option<usize>,
 }

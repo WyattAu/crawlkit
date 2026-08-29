@@ -61,6 +61,7 @@ pub async fn create_schedule(
         enabled: true,
         next_run: now + chrono::Duration::seconds(req.interval_secs as i64),
         last_run_at: None,
+        last_crawl_id: None,
         created_at: now,
     };
 
@@ -262,17 +263,22 @@ pub async fn run_scheduler(state: AppState) {
         tokio::time::sleep(std::time::Duration::from_secs(60)).await;
         let now = Utc::now();
 
-        let due: Vec<(String, crawlkit_engine::CrawlConfig, String)> = state
+        let due: Vec<(String, crawlkit_engine::CrawlConfig, String, Option<String>)> = state
             .schedules
             .iter()
             .filter(|entry| entry.value().enabled && entry.value().next_run <= now)
             .map(|entry| {
                 let s = entry.value();
-                (s.id.clone(), s.crawl_config.clone(), s.tenant_id.clone())
+                (
+                    s.id.clone(),
+                    s.crawl_config.clone(),
+                    s.tenant_id.clone(),
+                    s.last_crawl_id.clone(),
+                )
             })
             .collect();
 
-        for (schedule_id, config, tenant_id) in due {
+        for (schedule_id, config, tenant_id, previous_crawl_id) in due {
             if let Some(mut schedule) = state.schedules.get_mut(&schedule_id) {
                 schedule.last_run_at = Some(now);
                 schedule.next_run = now + chrono::Duration::seconds(schedule.interval_secs as i64);
@@ -309,8 +315,17 @@ pub async fn run_scheduler(state: AppState) {
 
             let state_clone = state.clone();
             let crawl_id_clone = crawl_id.clone();
+            let schedule_id_clone = schedule_id.clone();
             tokio::spawn(async move {
-                super::crawls::run_crawl_task(state_clone, crawl_id_clone, config, permit).await;
+                super::crawls::run_crawl_task_with_monitoring(
+                    state_clone,
+                    crawl_id_clone,
+                    config,
+                    permit,
+                    previous_crawl_id,
+                    Some(schedule_id_clone),
+                )
+                .await;
             });
 
             tracing::info!("Scheduled crawl {crawl_id} started from schedule {schedule_id}");

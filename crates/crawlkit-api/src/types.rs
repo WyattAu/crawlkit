@@ -555,6 +555,8 @@ pub struct ScheduleConfig {
     pub enabled: bool,
     pub next_run: DateTime<Utc>,
     pub last_run_at: Option<DateTime<Utc>>,
+    /// Storage crawl ID from the most recent run (used as baseline for monitoring).
+    pub last_crawl_id: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

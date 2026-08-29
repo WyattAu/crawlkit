@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 27 (v5.3.1 Truth & Depth Stabilization)
-**Version:** 5.3.1
+**Current Phase:** Phase 28 (v5.4.0 Scale)
+**Version:** 5.4.0
 **Status:** Released
 **Last Updated:** 2026-08-28
 **MSRV:** 1.94.0

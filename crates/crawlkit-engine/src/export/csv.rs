@@ -25,6 +25,24 @@ pub struct CsvColumnSelector {
     pub body_size: bool,
     /// If true, include fetched_at timestamp.
     pub fetched_at: bool,
+    /// If true, include has_structured_data.
+    pub has_structured_data: bool,
+    /// If true, include schema_types.
+    pub schema_types: bool,
+    /// If true, include viewport_ok.
+    pub viewport_ok: bool,
+    /// If true, include has_csp.
+    pub has_csp: bool,
+    /// If true, include has_hsts.
+    pub has_hsts: bool,
+    /// If true, include images_total.
+    pub images_total: bool,
+    /// If true, include images_missing_alt.
+    pub images_missing_alt: bool,
+    /// If true, include h1_count.
+    pub h1_count: bool,
+    /// If true, include heading_count.
+    pub heading_count: bool,
     /// If true, include issue count per page.
     pub issue_count: bool,
     /// If true, include all issues as JSON array.
@@ -46,6 +64,15 @@ impl CsvColumnSelector {
             load_time_ms: true,
             body_size: true,
             fetched_at: true,
+            has_structured_data: true,
+            schema_types: true,
+            viewport_ok: true,
+            has_csp: true,
+            has_hsts: true,
+            images_total: true,
+            images_missing_alt: true,
+            h1_count: true,
+            heading_count: true,
             issue_count: true,
             issues_json: true,
             links_json: true,
@@ -81,6 +108,33 @@ impl CsvColumnSelector {
         }
         if self.fetched_at {
             h.push("fetched_at");
+        }
+        if self.has_structured_data {
+            h.push("has_structured_data");
+        }
+        if self.schema_types {
+            h.push("schema_types");
+        }
+        if self.viewport_ok {
+            h.push("viewport_ok");
+        }
+        if self.has_csp {
+            h.push("has_csp");
+        }
+        if self.has_hsts {
+            h.push("has_hsts");
+        }
+        if self.images_total {
+            h.push("images_total");
+        }
+        if self.images_missing_alt {
+            h.push("images_missing_alt");
+        }
+        if self.h1_count {
+            h.push("h1_count");
+        }
+        if self.heading_count {
+            h.push("heading_count");
         }
         if self.issue_count {
             h.push("issue_count");
@@ -145,6 +199,53 @@ pub fn export_csv(
         }
         if selector.fetched_at {
             record.push(page.fetched_at.clone());
+        }
+        if selector.has_structured_data {
+            record.push(
+                page.has_structured_data
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            );
+        }
+        if selector.schema_types {
+            record.push(page.schema_types.clone().unwrap_or_default());
+        }
+        if selector.viewport_ok {
+            record.push(
+                page.viewport_ok
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            );
+        }
+        if selector.has_csp {
+            record.push(page.has_csp.map(|v| v.to_string()).unwrap_or_default());
+        }
+        if selector.has_hsts {
+            record.push(page.has_hsts.map(|v| v.to_string()).unwrap_or_default());
+        }
+        if selector.images_total {
+            record.push(
+                page.images_total
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            );
+        }
+        if selector.images_missing_alt {
+            record.push(
+                page.images_missing_alt
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            );
+        }
+        if selector.h1_count {
+            record.push(page.h1_count.map(|v| v.to_string()).unwrap_or_default());
+        }
+        if selector.heading_count {
+            record.push(
+                page.heading_count
+                    .map(|v| v.to_string())
+                    .unwrap_or_default(),
+            );
         }
         if selector.issue_count {
             record.push(issue_count.to_string());

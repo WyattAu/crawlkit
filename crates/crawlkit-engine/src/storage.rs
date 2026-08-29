@@ -82,6 +82,58 @@ pub struct PageData {
     pub cwv_cls: Option<f64>,
     /// Interaction to Next Paint in milliseconds (lab measurement).
     pub cwv_inp: Option<f64>,
+    /// Whether the page has any structured data (JSON-LD, microdata, RDFa).
+    pub has_structured_data: Option<bool>,
+    /// Comma-separated list of schema types present on the page.
+    pub schema_types: Option<String>,
+    /// Whether the viewport meta tag is properly configured.
+    pub viewport_ok: Option<bool>,
+    /// Whether the page has a Content-Security-Policy header.
+    pub has_csp: Option<bool>,
+    /// Whether the page has a Strict-Transport-Security header.
+    pub has_hsts: Option<bool>,
+    /// Total number of images on the page.
+    pub images_total: Option<usize>,
+    /// Number of images missing alt text.
+    pub images_missing_alt: Option<usize>,
+    /// Number of H1 headings on the page.
+    pub h1_count: Option<usize>,
+    /// Total number of headings (H1-H6) on the page.
+    pub heading_count: Option<usize>,
+}
+
+impl Default for PageData {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            url: Url::parse("https://example.com").unwrap(),
+            final_url: Url::parse("https://example.com").unwrap(),
+            status_code: 200,
+            title: None,
+            description: None,
+            canonical_url: None,
+            word_count: None,
+            load_time_ms: None,
+            body_size: None,
+            fetched_at: chrono::Utc::now(),
+            links: Vec::new(),
+            tenant_id: None,
+            etag: None,
+            last_modified: None,
+            cwv_lcp: None,
+            cwv_cls: None,
+            cwv_inp: None,
+            has_structured_data: None,
+            schema_types: None,
+            viewport_ok: None,
+            has_csp: None,
+            has_hsts: None,
+            images_total: None,
+            images_missing_alt: None,
+            h1_count: None,
+            heading_count: None,
+        }
+    }
 }
 
 /// An issue/finding detected during analysis.
@@ -320,6 +372,7 @@ impl Storage {
     /// Create the database schema if it doesn't already exist.
     fn create_schema(&self) -> Result<(), StorageError> {
         let conn = self.conn.lock();
+
         conn.execute_batch(
             "
             CREATE TABLE IF NOT EXISTS crawls (
@@ -420,6 +473,33 @@ impl Storage {
             CREATE INDEX IF NOT EXISTS idx_findings_tenant ON findings(tenant_id);
             ",
         )?;
+
+        // Migrate: add new columns if they don't exist yet.
+        let columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(pages)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let new_columns = [
+            "has_structured_data",
+            "schema_types",
+            "viewport_ok",
+            "has_csp",
+            "has_hsts",
+            "images_total",
+            "images_missing_alt",
+            "h1_count",
+            "heading_count",
+        ];
+        for col in new_columns {
+            if !columns.contains(&col.to_string()) {
+                conn.execute(
+                    &format!("ALTER TABLE pages ADD COLUMN {} TEXT", col),
+                    [],
+                )?;
+            }
+        }
+
         Ok(())
     }
 
@@ -491,6 +571,15 @@ impl Storage {
     ///     cwv_lcp: None,
     ///     cwv_cls: None,
     ///     cwv_inp: None,
+    ///     has_structured_data: None,
+    ///     schema_types: None,
+    ///     viewport_ok: None,
+    ///     has_csp: None,
+    ///     has_hsts: None,
+    ///     images_total: None,
+    ///     images_missing_alt: None,
+    ///     h1_count: None,
+    ///     heading_count: None,
     /// };
     ///
     /// storage.insert_page(&crawl_id, &page).unwrap();
@@ -502,8 +591,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
             params![
                 page.id,
                 crawl_id,
@@ -523,6 +612,15 @@ impl Storage {
                 page.cwv_lcp,
                 page.cwv_cls,
                 page.cwv_inp,
+                page.has_structured_data.map(|v| if v { 1 } else { 0 }),
+                page.schema_types,
+                page.viewport_ok.map(|v| if v { 1 } else { 0 }),
+                page.has_csp.map(|v| if v { 1 } else { 0 }),
+                page.has_hsts.map(|v| if v { 1 } else { 0 }),
+                page.images_total.map(|v| v as i64),
+                page.images_missing_alt.map(|v| v as i64),
+                page.h1_count.map(|v| v as i64),
+                page.heading_count.map(|v| v as i64),
             ],
         )?;
 
@@ -565,8 +663,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -592,6 +690,15 @@ impl Storage {
                 page.cwv_lcp,
                 page.cwv_cls,
                 page.cwv_inp,
+                page.has_structured_data.map(|v| if v { 1 } else { 0 }),
+                page.schema_types,
+                page.viewport_ok.map(|v| if v { 1 } else { 0 }),
+                page.has_csp.map(|v| if v { 1 } else { 0 }),
+                page.has_hsts.map(|v| if v { 1 } else { 0 }),
+                page.images_total.map(|v| v as i64),
+                page.images_missing_alt.map(|v| v as i64),
+                page.h1_count.map(|v| v as i64),
+                page.heading_count.map(|v| v as i64),
             ])?;
 
             for link in &page.links {
@@ -704,7 +811,7 @@ impl Storage {
 
         let conn = self.conn.lock();
         let result = conn.query_row(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
              FROM pages WHERE crawl_id = ?1 AND url = ?2",
             params![crawl_id, url],
             Self::row_to_page_data,
@@ -745,6 +852,15 @@ impl Storage {
             cwv_lcp: row.get(14)?,
             cwv_cls: row.get(15)?,
             cwv_inp: row.get(16)?,
+            has_structured_data: row.get::<_, Option<i64>>(17)?.map(|v| v != 0),
+            schema_types: row.get(18)?,
+            viewport_ok: row.get::<_, Option<i64>>(19)?.map(|v| v != 0),
+            has_csp: row.get::<_, Option<i64>>(20)?.map(|v| v != 0),
+            has_hsts: row.get::<_, Option<i64>>(21)?.map(|v| v != 0),
+            images_total: row.get::<_, Option<i64>>(22)?.map(|v| v as usize),
+            images_missing_alt: row.get::<_, Option<i64>>(23)?.map(|v| v as usize),
+            h1_count: row.get::<_, Option<i64>>(24)?.map(|v| v as usize),
+            heading_count: row.get::<_, Option<i64>>(25)?.map(|v| v as usize),
         })
     }
 
@@ -782,6 +898,15 @@ impl Storage {
     ///     cwv_lcp: None,
     ///     cwv_cls: None,
     ///     cwv_inp: None,
+    ///     has_structured_data: None,
+    ///     schema_types: None,
+    ///     viewport_ok: None,
+    ///     has_csp: None,
+    ///     has_hsts: None,
+    ///     images_total: None,
+    ///     images_missing_alt: None,
+    ///     h1_count: None,
+    ///     heading_count: None,
     /// };
     /// storage.insert_page(&crawl_id, &page).unwrap();
     ///
@@ -792,7 +917,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -913,7 +1038,7 @@ impl Storage {
     ) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
              FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
              ORDER BY fetched_at ASC LIMIT ?3",
         )?;
@@ -1501,6 +1626,15 @@ mod tests {
             cwv_lcp: None,
             cwv_cls: None,
             cwv_inp: None,
+            has_structured_data: None,
+            schema_types: None,
+            viewport_ok: None,
+            has_csp: None,
+            has_hsts: None,
+            images_total: None,
+            images_missing_alt: None,
+            h1_count: None,
+            heading_count: None,
         }
     }
 

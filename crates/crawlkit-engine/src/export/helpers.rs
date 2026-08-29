@@ -97,6 +97,15 @@ pub(super) struct PageRow {
     pub load_time_ms: Option<u64>,
     pub body_size: Option<usize>,
     pub fetched_at: String,
+    pub has_structured_data: Option<bool>,
+    pub schema_types: Option<String>,
+    pub viewport_ok: Option<bool>,
+    pub has_csp: Option<bool>,
+    pub has_hsts: Option<bool>,
+    pub images_total: Option<usize>,
+    pub images_missing_alt: Option<usize>,
+    pub h1_count: Option<usize>,
+    pub heading_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -170,6 +179,15 @@ pub(super) fn read_pages(
             load_time_ms: p.load_time_ms,
             body_size: p.body_size,
             fetched_at: p.fetched_at.to_rfc3339(),
+            has_structured_data: p.has_structured_data,
+            schema_types: p.schema_types,
+            viewport_ok: p.viewport_ok,
+            has_csp: p.has_csp,
+            has_hsts: p.has_hsts,
+            images_total: p.images_total,
+            images_missing_alt: p.images_missing_alt,
+            h1_count: p.h1_count,
+            heading_count: p.heading_count,
         })
         .collect();
     rows.sort_by(|a, b| a.url.cmp(&b.url));

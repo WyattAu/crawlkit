@@ -273,7 +273,7 @@ impl CrawlRun<'_> {
             description: parsed.meta.description.clone(),
             canonical_url: parsed.meta.canonical.clone(),
             word_count: Some(parsed.word_count),
-            load_time_ms: None,
+            load_time_ms: Some(result.response_time.as_millis() as u64),
             body_size: Some(result.body.len()),
             fetched_at: Utc::now(),
             links: parsed
@@ -287,6 +287,38 @@ impl CrawlRun<'_> {
             cwv_lcp: None,
             cwv_cls: None,
             cwv_inp: None,
+            has_structured_data: Some(!parsed.structured_data.is_empty()),
+            schema_types: Some(
+                parsed
+                    .structured_data
+                    .iter()
+                    .filter_map(|sd| sd.r#type.as_deref())
+                    .collect::<Vec<_>>()
+                    .join(","),
+            ),
+            viewport_ok: Some(
+                parsed
+                    .meta
+                    .viewport
+                    .as_deref()
+                    .map_or(false, |v| v.contains("device-width")),
+            ),
+            has_csp: Some(
+                result
+                    .headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("content-security-policy")),
+            ),
+            has_hsts: Some(
+                result
+                    .headers
+                    .iter()
+                    .any(|(k, _)| k.eq_ignore_ascii_case("strict-transport-security")),
+            ),
+            images_total: Some(parsed.images.len()),
+            images_missing_alt: Some(parsed.images.iter().filter(|i| !i.has_alt).count()),
+            h1_count: Some(parsed.headings.iter().filter(|h| h.level == 1).count()),
+            heading_count: Some(parsed.headings.len()),
         };
         if let Some(encryption) = self.cfg.encryption.as_ref() {
             if encryption.is_enabled() {

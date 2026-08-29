@@ -29,7 +29,7 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 1807 passing (unit/lib: 1807; integration/doc: additional)
+- **Test Count:** 2015+ passing (engine: 1919, API: 96, integration/doc: additional)
 - **Analyzer Count:** 204 (185 single-page + 19 cross-page)
 - **Clippy Warnings:** 0
 - **Unsafe Code:** Denied (workspace-level); FFI crates override to allow with SAFETY comments

@@ -19,6 +19,10 @@ workspace = true
 name = "crawlkit_benchmarks"
 harness = false
 
+[[example]]
+name = "throughput_bench"
+path = "examples/throughput_bench.rs"
+
 [features]
 default = ["full"]
 full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek"]

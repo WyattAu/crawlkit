@@ -14,6 +14,11 @@ use std::collections::HashMap;
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
+/// Normalize a URL by stripping trailing slashes for consistent comparison.
+fn normalize_url(url: &str) -> &str {
+    url.strip_suffix('/').unwrap_or(url)
+}
+
 /// Advanced canonical and hreflang analyzer that catches issues
 /// Ahrefs and other premium tools detect but basic crawlers miss.
 pub struct AdvancedCanonicalAnalyzer;
@@ -350,9 +355,9 @@ impl Analyzer for HreflangReciprocalValidator {
 
         // HREFR001: Hreflang references a URL that doesn't link back
         for tag in hreflang_tags {
-            let tag_url = tag.url.as_str();
-            if tag_url != url {
-                let has_link_back = ctx.page.links.iter().any(|l| l.href == tag_url);
+            let tag_url = normalize_url(tag.url.as_str());
+            if tag_url != normalize_url(url) {
+                let has_link_back = ctx.page.links.iter().any(|l| normalize_url(&l.href) == tag_url);
                 if !has_link_back {
                     findings.push(Finding {
                         severity: Severity::Warning,
@@ -825,7 +830,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // TODO: fix hreflang URL comparison (trailing slash normalization issue)
     fn test_hreflang_reciprocal_valid_setup() {
         use crate::parser::ExtractedLink;
 

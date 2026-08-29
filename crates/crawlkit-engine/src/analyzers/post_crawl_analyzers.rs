@@ -1142,8 +1142,19 @@ impl PostCrawlAnalyzer for SchemaCoverageAnalyzer {
         let mut findings = Vec::new();
         let total = data.pages.len();
         if total == 0 { return findings; }
-        // Note: PageData doesn't have structured_data field, so we can't check schema coverage from cross-page data
-        // This analyzer serves as a placeholder for future enhancement when PageData includes schema info
+        let with_schema = data.pages.iter().filter(|p| p.has_structured_data == Some(true)).count();
+        let pct = with_schema as f64 / total as f64 * 100.0;
+        if pct < 10.0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "SCHEMA-COV001".to_string(),
+                title: "Low structured data coverage".to_string(),
+                description: format!("Only {}/{} pages ({:.0}%) have structured data.", with_schema, total, pct),
+                url: data.seed_url.clone(),
+                recommendation: "Add structured data to more pages.".to_string(),
+            });
+        }
         findings
     }
 }
@@ -1169,7 +1180,18 @@ impl PostCrawlAnalyzer for MobileReadinessAnalyzer {
         let mut findings = Vec::new();
         let total = data.pages.len();
         if total == 0 { return findings; }
-        // Note: PageData doesn't have viewport info; this is a placeholder
+        let no_viewport = data.pages.iter().filter(|p| p.viewport_ok == Some(false)).count();
+        if no_viewport as f64 / total as f64 > 0.2 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Mobile,
+                code: "MOBILE-C001".to_string(),
+                title: "High rate of missing viewport".to_string(),
+                description: format!("{}/{} pages ({:.0}%) missing proper viewport.", no_viewport, total, no_viewport as f64 / total as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Add viewport meta tag to all pages.".to_string(),
+            });
+        }
         findings
     }
 }
@@ -1192,8 +1214,34 @@ impl PostCrawlAnalyzer for SecurityPostureAnalyzer {
     fn name(&self) -> &str { "security-posture" }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
-        // Note: PageData doesn't have header info; this is a placeholder
-        Vec::new()
+        let mut findings = Vec::new();
+        let total = data.pages.len();
+        if total == 0 { return findings; }
+        let no_csp = data.pages.iter().filter(|p| p.has_csp == Some(false)).count();
+        let no_hsts = data.pages.iter().filter(|p| p.has_hsts == Some(false)).count();
+        if no_csp as f64 / total as f64 > 0.3 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "SEC-C001".to_string(),
+                title: "Low CSP coverage".to_string(),
+                description: format!("{}/{} pages ({:.0}%) missing CSP header.", no_csp, total, no_csp as f64 / total as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Add Content-Security-Policy headers.".to_string(),
+            });
+        }
+        if no_hsts as f64 / total as f64 > 0.5 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "SEC-C002".to_string(),
+                title: "Low HSTS coverage".to_string(),
+                description: format!("{}/{} pages ({:.0}%) missing HSTS header.", no_hsts, total, no_hsts as f64 / total as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Add Strict-Transport-Security headers.".to_string(),
+            });
+        }
+        findings
     }
 }
 
@@ -1215,8 +1263,23 @@ impl PostCrawlAnalyzer for ImageOptimizationAnalyzer {
     fn name(&self) -> &str { "image-optimization" }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
-        // Note: PageData doesn't have image info; this is a placeholder
-        Vec::new()
+        let mut findings = Vec::new();
+        let total = data.pages.len();
+        if total == 0 { return findings; }
+        let total_images: usize = data.pages.iter().filter_map(|p| p.images_total).sum();
+        let missing_alt: usize = data.pages.iter().filter_map(|p| p.images_missing_alt).sum();
+        if total_images > 0 && missing_alt as f64 / total_images as f64 > 0.5 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Images,
+                code: "IMG-OPT001".to_string(),
+                title: "High rate of missing alt text".to_string(),
+                description: format!("{}/{} images ({:.0}%) missing alt text across crawl.", missing_alt, total_images, missing_alt as f64 / total_images as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Add descriptive alt text to all images.".to_string(),
+            });
+        }
+        findings
     }
 }
 
@@ -1238,8 +1301,34 @@ impl PostCrawlAnalyzer for HeadingStructureAnalyzer {
     fn name(&self) -> &str { "heading-structure" }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
-        // Note: PageData doesn't have heading info; this is a placeholder
-        Vec::new()
+        let mut findings = Vec::new();
+        let total = data.pages.len();
+        if total == 0 { return findings; }
+        let no_h1 = data.pages.iter().filter(|p| p.h1_count == Some(0)).count();
+        let multi_h1 = data.pages.iter().filter(|p| p.h1_count.map_or(false, |c| c > 1)).count();
+        if no_h1 as f64 / total as f64 > 0.3 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "HEAD-C001".to_string(),
+                title: "High rate of pages without H1".to_string(),
+                description: format!("{}/{} pages ({:.0}%) missing H1 heading.", no_h1, total, no_h1 as f64 / total as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Add a unique H1 heading to each page.".to_string(),
+            });
+        }
+        if multi_h1 as f64 / total as f64 > 0.2 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "HEAD-C002".to_string(),
+                title: "High rate of multiple H1s".to_string(),
+                description: format!("{}/{} pages ({:.0}%) have multiple H1 headings.", multi_h1, total, multi_h1 as f64 / total as f64 * 100.0),
+                url: data.seed_url.clone(),
+                recommendation: "Use a single H1 per page.".to_string(),
+            });
+        }
+        findings
     }
 }
 
@@ -1261,8 +1350,26 @@ impl PostCrawlAnalyzer for CanonicalConsistencyAnalyzer {
     fn name(&self) -> &str { "canonical-consistency" }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
-        // Note: PageData doesn't have canonical info; this is a placeholder
-        Vec::new()
+        let mut findings = Vec::new();
+        let total = data.pages.len();
+        if total == 0 { return findings; }
+        let with_canonical = data.pages.iter().filter(|p| p.canonical_url.is_some()).count();
+        let self_canonical = data.pages.iter().filter(|p| {
+            p.canonical_url.as_ref().map_or(false, |c| c.as_str() == p.url.as_str())
+        }).count();
+        let pct_self = if with_canonical > 0 { self_canonical as f64 / with_canonical as f64 * 100.0 } else { 0.0 };
+        if pct_self > 90.0 && with_canonical > 5 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "CANON-C001".to_string(),
+                title: "High self-referencing canonical rate".to_string(),
+                description: format!("{}/{} pages with canonical ({:.0}%) are self-referencing.", self_canonical, with_canonical, pct_self),
+                url: data.seed_url.clone(),
+                recommendation: "Self-referencing canonical is valid but may indicate missing cross-page canonical strategy.".to_string(),
+            });
+        }
+        findings
     }
 }
 
@@ -1357,6 +1464,15 @@ mod tests {
             cwv_lcp: None,
             cwv_cls: None,
             cwv_inp: None,
+            has_structured_data: None,
+            schema_types: None,
+            viewport_ok: None,
+            has_csp: None,
+            has_hsts: None,
+            images_total: None,
+            images_missing_alt: None,
+            h1_count: None,
+            heading_count: None,
         }
     }
 
@@ -2485,5 +2601,356 @@ mod tests {
         };
         let findings = registry.analyze_crawl(&data);
         assert!(findings.is_empty());
+    }
+
+    // ===== SchemaCoverageAnalyzer tests =====
+
+    #[test]
+    fn test_schema_coverage_low_fires() {
+        let analyzer = SchemaCoverageAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.has_structured_data = Some(false);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "SCHEMA-COV001"));
+    }
+
+    #[test]
+    fn test_schema_coverage_ok() {
+        let analyzer = SchemaCoverageAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.has_structured_data = Some(i < 3);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "SCHEMA-COV001"));
+    }
+
+    #[test]
+    fn test_schema_coverage_empty_crawl() {
+        let analyzer = SchemaCoverageAnalyzer::new();
+        let data = CrawlData { pages: vec![], links: vec![], issues: vec![], seed_url: "https://example.com".to_string() };
+        assert!(analyzer.analyze_crawl(&data).is_empty());
+    }
+
+    // ===== MobileReadinessAnalyzer tests =====
+
+    #[test]
+    fn test_mobile_readiness_high_missing() {
+        let analyzer = MobileReadinessAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.viewport_ok = Some(i < 3);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "MOBILE-C001"));
+    }
+
+    #[test]
+    fn test_mobile_readiness_ok() {
+        let analyzer = MobileReadinessAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.viewport_ok = Some(i >= 2);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "MOBILE-C001"));
+    }
+
+    #[test]
+    fn test_mobile_readiness_empty_crawl() {
+        let analyzer = MobileReadinessAnalyzer::new();
+        let data = CrawlData { pages: vec![], links: vec![], issues: vec![], seed_url: "https://example.com".to_string() };
+        assert!(analyzer.analyze_crawl(&data).is_empty());
+    }
+
+    // ===== SecurityPostureAnalyzer tests =====
+
+    #[test]
+    fn test_security_posture_low_csp() {
+        let analyzer = SecurityPostureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.has_csp = Some(i < 2);
+                p.has_hsts = Some(true);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "SEC-C001"));
+    }
+
+    #[test]
+    fn test_security_posture_low_hsts() {
+        let analyzer = SecurityPostureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.has_csp = Some(true);
+                p.has_hsts = Some(i < 3);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "SEC-C002"));
+    }
+
+    #[test]
+    fn test_security_posture_ok() {
+        let analyzer = SecurityPostureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.has_csp = Some(true);
+                p.has_hsts = Some(true);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "SEC-C001"));
+        assert!(!findings.iter().any(|f| f.code == "SEC-C002"));
+    }
+
+    // ===== ImageOptimizationAnalyzer tests =====
+
+    #[test]
+    fn test_image_optimization_high_missing_alt() {
+        let analyzer = ImageOptimizationAnalyzer::new();
+        let pages: Vec<PageData> = (0..5)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.images_total = Some(10);
+                p.images_missing_alt = Some(8);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "IMG-OPT001"));
+    }
+
+    #[test]
+    fn test_image_optimization_ok() {
+        let analyzer = ImageOptimizationAnalyzer::new();
+        let pages: Vec<PageData> = (0..5)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.images_total = Some(10);
+                p.images_missing_alt = Some(2);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "IMG-OPT001"));
+    }
+
+    #[test]
+    fn test_image_optimization_no_images() {
+        let analyzer = ImageOptimizationAnalyzer::new();
+        let pages: Vec<PageData> = (0..5)
+            .map(|i| test_page(&format!("https://example.com/p{i}")))
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "IMG-OPT001"));
+    }
+
+    // ===== HeadingStructureAnalyzer tests =====
+
+    #[test]
+    fn test_heading_structure_missing_h1() {
+        let analyzer = HeadingStructureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.h1_count = Some(if i < 2 { 1 } else { 0 });
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "HEAD-C001"));
+    }
+
+    #[test]
+    fn test_heading_structure_multi_h1() {
+        let analyzer = HeadingStructureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.h1_count = Some(if i < 3 { 3 } else { 1 });
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "HEAD-C002"));
+    }
+
+    #[test]
+    fn test_heading_structure_ok() {
+        let analyzer = HeadingStructureAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.h1_count = Some(1);
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "HEAD-C001"));
+        assert!(!findings.iter().any(|f| f.code == "HEAD-C002"));
+    }
+
+    // ===== CanonicalConsistencyAnalyzer tests =====
+
+    #[test]
+    fn test_canonical_consistency_high_self_ref() {
+        let analyzer = CanonicalConsistencyAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let url = format!("https://example.com/p{i}");
+                let mut p = test_page(&url);
+                p.canonical_url = Some(Url::parse(&url).unwrap());
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(findings.iter().any(|f| f.code == "CANON-C001"));
+    }
+
+    #[test]
+    fn test_canonical_consistency_mixed() {
+        let analyzer = CanonicalConsistencyAnalyzer::new();
+        let pages: Vec<PageData> = (0..10)
+            .map(|i| {
+                let mut p = test_page(&format!("https://example.com/p{i}"));
+                p.canonical_url = Some(Url::parse("https://example.com/canonical").unwrap());
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "CANON-C001"));
+    }
+
+    #[test]
+    fn test_canonical_consistency_few_canonicals() {
+        let analyzer = CanonicalConsistencyAnalyzer::new();
+        let pages: Vec<PageData> = (0..4)
+            .map(|i| {
+                let url = format!("https://example.com/p{i}");
+                let mut p = test_page(&url);
+                p.canonical_url = Some(Url::parse(&url).unwrap());
+                p
+            })
+            .collect();
+        let data = CrawlData {
+            pages,
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        let findings = analyzer.analyze_crawl(&data);
+        assert!(!findings.iter().any(|f| f.code == "CANON-C001"));
     }
 }

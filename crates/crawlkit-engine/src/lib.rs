@@ -122,6 +122,13 @@ pub mod compare;
 /// opportunities for new content creation.
 #[cfg(feature = "full")]
 pub mod content_gap;
+/// Distributed crawling coordination: leader election and URL partitioning.
+///
+/// Provides [`CrawlCoordinator`] for partitioning URLs across multiple
+/// crawler instances by domain hash, and defines [`PartitionStrategy`]
+/// for hash-based or range-based partitioning.
+#[cfg(feature = "full")]
+pub mod coordination;
 /// CrUX (Chrome User Experience Report) field data client.
 ///
 /// Fetches real-world Core Web Vitals (LCP, CLS, INP, FCP, TTFB) from the
@@ -315,6 +322,18 @@ pub mod web_vitals;
 /// OpenAI and Anthropic APIs via [`LlmConfig`](llm_analyzer::LlmConfig).
 #[cfg(feature = "full")]
 pub mod llm_analyzer;
+/// Google Search Console API client.
+///
+/// Full integration with GSC Search Analytics, URL Inspection,
+/// and site management APIs.
+#[cfg(feature = "full")]
+pub mod gsc;
+/// Historical trend analysis across multiple crawl snapshots.
+///
+/// Computes time-series trends for pages crawled, issues found,
+/// and health scores, with linear regression for trend direction.
+#[cfg(feature = "full")]
+pub mod trends;
 
 pub use ai_analyzers::{
     AiAnswerBoxAnalyzer, AiCitationEligibilityAnalyzer, AiContentStructureAnalyzer,
@@ -338,6 +357,13 @@ pub use audit::{AuditEvent, AuditEventType, AuditTrail};
 pub use backlink_adapters::{
     AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
     GscAdapter, MajesticAdapter,
+};
+#[cfg(feature = "full")]
+pub use gsc::{GscAnalytics, GscClient, GscError, GscRow, UrlInspection};
+#[cfg(feature = "full")]
+pub use trends::{
+    analyze_trends, compute_health_score, trend_to_json, trend_to_markdown, CrawlSnapshot,
+    TrendAnalysis, TrendDirection, TrendError, TrendPoint, TrendSummary,
 };
 #[cfg(feature = "full")]
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};

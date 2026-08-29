@@ -165,6 +165,10 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         crux_api_key: std::env::var("CRUX_API_KEY").ok().filter(|k| !k.is_empty()),
         previous_crawl_id: previous_crawl_id_for_monitoring,
         alert_threshold: params.alert_threshold,
+        distributed_mode: false,
+        partition_strategy: None,
+        instance_id: None,
+        instance_count: None,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

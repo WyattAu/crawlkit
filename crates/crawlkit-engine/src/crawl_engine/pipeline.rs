@@ -3,6 +3,7 @@ use super::dedup::ContentHashes;
 use super::fetch::{FetchOutcome, FetchedPage, Freshness};
 use super::CrawlEngineConfig;
 use crate::analyzers::AnalyzerRegistry;
+use crate::coordination::CrawlCoordinator;
 use crate::encryption::EncryptionManager;
 use crate::queue::{Priority, QueueEntry};
 use crate::queue_trait::Queue;
@@ -37,6 +38,7 @@ pub(crate) struct CrawlRun<'a> {
     pub(crate) resource_monitor: ResourceMonitor,
     pub(crate) queue: Arc<dyn Queue>,
     pub(crate) plugins: Vec<crate::plugin_runtime::CrawlPlugin>,
+    pub(crate) coordinator: Option<CrawlCoordinator>,
 }
 
 impl CrawlRun<'_> {
@@ -428,6 +430,13 @@ impl CrawlRun<'_> {
             }
             if let Some(max) = max_depth {
                 if depth + 1 > max {
+                    continue;
+                }
+            }
+
+            // In distributed mode, only enqueue URLs assigned to this instance
+            if let Some(ref coordinator) = self.coordinator {
+                if !coordinator.should_process(link_url.as_str()) {
                     continue;
                 }
             }

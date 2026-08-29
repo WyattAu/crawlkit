@@ -7,6 +7,7 @@ mod pipeline;
 
 use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzerRegistry};
 use crate::analyzers::AnalyzerRegistry;
+use crate::coordination::{CrawlCoordinator, PartitionStrategy};
 use crate::http::{HttpClient, HttpClientConfig};
 use crate::queue::{Priority, QueueEntry};
 use crate::queue_trait::Queue;
@@ -146,6 +147,24 @@ pub struct CrawlEngineConfig {
     /// Minimum number of total changes (new + removed + changed + regressions)
     /// required to trigger a monitoring alert. `0` means any change triggers.
     pub alert_threshold: Option<usize>,
+
+    /// Enable distributed crawling mode.
+    ///
+    /// When `true`, the engine creates a [`CrawlCoordinator`] that filters URLs
+    /// so each instance only processes its partition. Requires `instance_id` and
+    /// `instance_count` to be set.
+    pub distributed_mode: bool,
+
+    /// URL partitioning strategy for distributed mode.
+    pub partition_strategy: Option<PartitionStrategy>,
+
+    /// This instance's zero-based index within the cluster.
+    /// Required when `distributed_mode` is `true`.
+    pub instance_id: Option<u32>,
+
+    /// Total number of crawler instances in the cluster.
+    /// Required when `distributed_mode` is `true`.
+    pub instance_count: Option<u32>,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -173,6 +192,10 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("crux_api_key", &self.crux_api_key.is_some())
             .field("previous_crawl_id", &self.previous_crawl_id)
             .field("alert_threshold", &self.alert_threshold)
+            .field("distributed_mode", &self.distributed_mode)
+            .field("partition_strategy", &self.partition_strategy)
+            .field("instance_id", &self.instance_id)
+            .field("instance_count", &self.instance_count)
             .finish()
     }
 }
@@ -204,6 +227,10 @@ impl Default for CrawlEngineConfig {
             crux_api_key: None,
             previous_crawl_id: None,
             alert_threshold: None,
+            distributed_mode: false,
+            partition_strategy: None,
+            instance_id: None,
+            instance_count: None,
         }
     }
 }
@@ -465,6 +492,16 @@ impl CrawlEngine {
             resource_monitor,
             queue: Arc::clone(&self.queue),
             plugins,
+            coordinator: if cfg.distributed_mode {
+                let instance_id = cfg.instance_id.unwrap_or(0);
+                let instance_count = cfg.instance_count.unwrap_or(1);
+                let strategy = cfg
+                    .partition_strategy
+                    .unwrap_or(PartitionStrategy::Hash);
+                Some(CrawlCoordinator::new(instance_id, instance_count, strategy))
+            } else {
+                None
+            },
         };
         let crawl_start = std::time::Instant::now();
 
@@ -520,6 +557,13 @@ impl CrawlEngine {
                     Some(e) => e,
                     None => break,
                 };
+
+                // In distributed mode, skip URLs not assigned to this instance
+                if let Some(ref coordinator) = run.coordinator {
+                    if !coordinator.should_process(entry.url.as_str()) {
+                        continue;
+                    }
+                }
 
                 if run.visited.contains(&entry.url.to_string()) {
                     continue;

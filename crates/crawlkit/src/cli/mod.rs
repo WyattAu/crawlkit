@@ -1,10 +1,12 @@
 pub mod backlinks;
 pub mod compare;
 pub mod crawl;
+pub mod gsc;
 pub mod inspect;
 pub mod log_analyze;
 pub mod plugin;
 pub mod report;
+pub mod trend;
 pub mod util;
 
 pub use log_analyze::LogAnalyzeArgs;
@@ -285,6 +287,56 @@ pub enum Commands {
 
     /// Analyze web server access logs
     LogAnalyze(LogAnalyzeArgs),
+
+    /// Analyze trends across multiple crawl snapshots
+    Trend {
+        /// Path to crawl database or directory
+        #[arg(short, long)]
+        db: PathBuf,
+
+        /// Specific crawl IDs to analyze (auto-discovers all if empty)
+        #[arg(long)]
+        crawl_ids: Vec<String>,
+
+        /// Output file for the trend report
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Output format: json or md
+        #[arg(long, default_value = "json")]
+        format: String,
+    },
+
+    /// Fetch and analyze Google Search Console data
+    Gsc {
+        /// Site URL to query (overrides GSC_SITE_URL env var)
+        #[arg(long)]
+        site_url: Option<String>,
+
+        /// Output file for the analysis
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Output format: json or md
+        #[arg(long, default_value = "json")]
+        format: String,
+
+        /// Start date (YYYY-MM-DD)
+        #[arg(long, default_value = "2026-01-01")]
+        start_date: String,
+
+        /// End date (YYYY-MM-DD)
+        #[arg(long, default_value = "2026-01-31")]
+        end_date: String,
+
+        /// Dimension to analyze: query, page, or all
+        #[arg(long, default_value = "all")]
+        dimension: String,
+
+        /// Maximum number of results
+        #[arg(long, default_value = "100")]
+        limit: usize,
+    },
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.

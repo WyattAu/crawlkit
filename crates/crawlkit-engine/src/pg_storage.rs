@@ -99,6 +99,42 @@ impl PgStorage {
     pub fn pool(&self) -> &PgPool {
         &self.pool
     }
+
+    /// Attempt to acquire a non-blocking Postgres advisory lock.
+    ///
+    /// Uses `pg_try_advisory_lock(lock_id)` which returns `true` if the lock
+    /// was acquired and `false` if it is already held by another session.
+    /// Advisory locks are session-scoped and released automatically when the
+    /// connection is closed.
+    ///
+    /// # Arguments
+    ///
+    /// * `lock_id` - A unique identifier for the lock (typically a crawl ID hash
+    ///   or a fixed cluster-wide constant).
+    pub async fn try_advisory_lock(&self, lock_id: i32) -> Result<bool, StorageError> {
+        let pool = self.pool.clone();
+        let result = sqlx::query_scalar::<_, bool>("SELECT pg_try_advisory_lock($1)")
+            .bind(lock_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| StorageError::PgDatabase(e))?;
+        Ok(result)
+    }
+
+    /// Release a previously acquired advisory lock.
+    ///
+    /// # Arguments
+    ///
+    /// * `lock_id` - The same lock identifier used with [`try_advisory_lock`](Self::try_advisory_lock).
+    pub async fn release_advisory_lock(&self, lock_id: i32) -> Result<(), StorageError> {
+        let pool = self.pool.clone();
+        sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(lock_id)
+            .fetch_one(&pool)
+            .await
+            .map_err(|e| StorageError::PgDatabase(e))?;
+        Ok(())
+    }
 }
 
 /// Helper to parse a URL string with a fallback to "about:invalid".
@@ -846,6 +882,21 @@ impl StorageBackend for PgStorage {
             .await?;
 
             Ok(result)
+        })
+    }
+
+    fn list_crawls(&self) -> Result<Vec<(String, String)>, StorageError> {
+        let pool = self.pool.clone();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            let rows = sqlx::query_as::<_, (String, String)>(
+                "SELECT id, start_time::text FROM crawls ORDER BY start_time ASC",
+            )
+            .fetch_all(&pool)
+            .await?;
+
+            Ok(rows)
         })
     }
 

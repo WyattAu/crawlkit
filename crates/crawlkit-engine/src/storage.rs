@@ -1192,6 +1192,45 @@ impl Storage {
         }
     }
 
+    /// List all crawl IDs with their timestamps, ordered chronologically.
+    ///
+    /// Returns `(crawl_id, start_time_rfc3339)` tuples.
+    pub fn list_crawls(&self) -> Result<Vec<(String, String)>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, start_time FROM crawls ORDER BY start_time ASC",
+        )?;
+        let rows = stmt
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Get metadata for a single crawl (target URL, timestamps, counts).
+    pub fn get_crawl_meta(
+        &self,
+        crawl_id: &str,
+    ) -> Result<crate::storage_trait::CrawlMeta, StorageError> {
+        let conn = self.conn.lock();
+        conn.query_row(
+            "SELECT id, target_url, start_time, end_time, pages_crawled, total_issues FROM crawls WHERE id = ?1",
+            params![crawl_id],
+            |row| {
+                Ok(crate::storage_trait::CrawlMeta {
+                    id: row.get(0)?,
+                    target_url: row.get(1)?,
+                    start_time: row.get(2)?,
+                    end_time: row.get(3)?,
+                    pages_crawled: row.get::<_, i64>(4)? as usize,
+                    total_issues: row.get::<_, i64>(5)? as usize,
+                })
+            },
+        )
+        .map_err(StorageError::from)
+    }
+
     /// Get all links for a crawl, grouped by source URL.
     ///
     /// Returns `Vec<(source_url, Vec<target_url>)>` suitable for
@@ -1533,6 +1572,10 @@ impl crate::storage_trait::StorageBackend for Storage {
         cwv_inp: Option<f64>,
     ) -> Result<(), StorageError> {
         Storage::update_page_cwv(self, page_id, cwv_lcp, cwv_cls, cwv_inp)
+    }
+
+    fn list_crawls(&self) -> Result<Vec<(String, String)>, StorageError> {
+        Storage::list_crawls(self)
     }
 
     fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError> {

@@ -117,6 +117,9 @@ pub trait StorageBackend: Send + Sync {
         cwv_inp: Option<f64>,
     ) -> Result<(), StorageError>;
 
+    /// List all crawl IDs with their timestamps, ordered chronologically.
+    fn list_crawls(&self) -> Result<Vec<(String, String)>, StorageError>;
+
     /// Get the most recent crawl ID.
     fn get_latest_crawl_id(&self) -> Result<Option<String>, StorageError>;
 

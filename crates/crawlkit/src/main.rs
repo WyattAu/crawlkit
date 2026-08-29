@@ -162,6 +162,32 @@ async fn main() -> Result<()> {
         }
         Commands::Plugin { command } => cli::plugin::run(command),
         Commands::LogAnalyze(args) => cli::log_analyze::run(args),
+        Commands::Trend {
+            db,
+            crawl_ids,
+            output,
+            format,
+        } => cli::trend::run(&db, &crawl_ids, output.as_deref(), &format),
+        Commands::Gsc {
+            site_url,
+            output,
+            format,
+            start_date,
+            end_date,
+            dimension,
+            limit,
+        } => {
+            cli::gsc::run(
+                site_url.as_deref(),
+                output.as_deref(),
+                &format,
+                &start_date,
+                &end_date,
+                &dimension,
+                limit,
+            )
+            .await
+        }
     }
 }
 

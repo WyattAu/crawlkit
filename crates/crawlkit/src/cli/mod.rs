@@ -201,6 +201,10 @@ pub enum Commands {
         /// required to trigger a monitoring alert. Default: 1 (any change).
         #[arg(long)]
         alert_threshold: Option<usize>,
+
+        /// Enable LLM-powered analysis (requires API key in env)
+        #[arg(long)]
+        llm: bool,
     },
 
     /// Compare two crawl results
@@ -391,4 +395,6 @@ pub struct CrawlParams {
     pub monitor: bool,
     /// Minimum changes required to trigger a monitoring alert.
     pub alert_threshold: Option<usize>,
+    /// Enable LLM-powered analysis (requires API key in env).
+    pub llm: bool,
 }

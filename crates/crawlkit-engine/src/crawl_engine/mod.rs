@@ -222,7 +222,7 @@ impl Default for CrawlEngineConfig {
             force: false,
             allow_http: false,
             plugin_dirs: Vec::new(),
-            post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(),
+            post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(&CrawlConfig::default()),
             queue: None,
             crux_api_key: None,
             previous_crawl_id: None,

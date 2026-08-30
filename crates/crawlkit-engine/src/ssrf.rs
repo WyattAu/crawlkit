@@ -37,7 +37,7 @@ pub fn is_public_url(url: &str) -> bool {
     true
 }
 
-fn is_private_ip(ip: IpAddr) -> bool {
+pub(crate) fn is_private_ip(ip: IpAddr) -> bool {
     match ip {
         IpAddr::V4(v4) => {
             v4.is_private()

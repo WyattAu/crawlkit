@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crawlkit_engine::analyzers::post_crawl_analyzers::PostCrawlAnalyzerRegistry;
+use crawlkit_engine::analyzers::post_crawl_analyzers;
 use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
 use crawlkit_engine::storage::{Severity, Storage};
@@ -129,16 +129,22 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         None
     };
 
-    let engine_config = CrawlEngineConfig {
-        crawl_config: crawlkit_engine::CrawlConfig {
-            respect_robots_txt: params.respect_robots.unwrap_or(true),
-            max_time: params.max_time_secs.map(std::time::Duration::from_secs),
-            max_depth: params.depth,
-            request_delay: std::time::Duration::from_millis(params.delay.unwrap_or(100)),
-            max_pages,
-            concurrency,
+    let crawl_config = crawlkit_engine::CrawlConfig {
+        respect_robots_txt: params.respect_robots.unwrap_or(true),
+        max_time: params.max_time_secs.map(std::time::Duration::from_secs),
+        max_depth: params.depth,
+        request_delay: std::time::Duration::from_millis(params.delay.unwrap_or(100)),
+        max_pages,
+        concurrency,
+        llm: crawlkit_engine::llm_analyzer::LlmConfig {
+            enabled: params.llm,
             ..Default::default()
         },
+        ..Default::default()
+    };
+
+    let engine_config = CrawlEngineConfig {
+        crawl_config: crawl_config.clone(),
         feature_flags: params.feature_flags.clone(),
         enable_js_rendering: params.javascript,
         js_renderer,
@@ -160,7 +166,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         force: params.force,
         allow_http: false,
         plugin_dirs,
-        post_crawl_analyzers: PostCrawlAnalyzerRegistry::new(),
+        post_crawl_analyzers: post_crawl_analyzers::build_post_crawl_registry(&crawl_config),
         queue: None,
         crux_api_key: std::env::var("CRUX_API_KEY").ok().filter(|k| !k.is_empty()),
         previous_crawl_id: previous_crawl_id_for_monitoring,

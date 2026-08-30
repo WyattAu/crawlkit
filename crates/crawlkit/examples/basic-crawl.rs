@@ -49,6 +49,7 @@ async fn main() -> Result<()> {
         allowed_patterns: Vec::new(),
         disallowed_patterns: vec!["/admin/*".to_string(), "/api/*".to_string()],
         extraction: Default::default(),
+        llm: Default::default(),
         data_retention_days: None,
     };
 

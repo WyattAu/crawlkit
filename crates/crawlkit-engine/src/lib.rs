@@ -635,6 +635,10 @@ pub struct CrawlConfig {
     #[serde(default)]
     pub extraction: extraction::ExtractionConfig,
 
+    /// LLM-powered analysis configuration.
+    #[serde(default)]
+    pub llm: llm_analyzer::LlmConfig,
+
     /// Data retention policy: automatically purge crawls older than this
     /// many days. `None` means data is retained indefinitely.
     #[serde(default)]
@@ -658,6 +662,7 @@ impl Default for CrawlConfig {
             allowed_patterns: Vec::new(),
             disallowed_patterns: Vec::new(),
             extraction: extraction::ExtractionConfig::default(),
+            llm: llm_analyzer::LlmConfig::default(),
             data_retention_days: None,
         }
     }

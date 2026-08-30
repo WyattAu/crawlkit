@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use url::Url;
 
+use crate::ssrf::is_private_ip;
 use crate::{CrawlConfig, CrawlError, FetchResult, RedirectHop};
 
 /// Extract conditional request headers (ETag, Last-Modified) from response headers.
@@ -300,6 +301,37 @@ impl From<&CrawlConfig> for HttpClientConfig {
             seed: None,
         }
     }
+}
+
+/// Resolve the domain of a URL and check that no resolved IP is private.
+///
+/// Prevents DNS rebinding attacks where a domain resolves to a private IP
+/// after the initial check. Returns `Ok(())` if all resolved IPs are public,
+/// or `Err(CrawlError)` if any private IP is detected.
+async fn dns_pin_check(url: &Url) -> Result<(), CrawlError> {
+    let host = match url.host_str() {
+        Some(h) => h,
+        None => return Ok(()),
+    };
+    let host = host.trim_matches(['[', ']']);
+    if host.parse::<std::net::IpAddr>().is_ok() {
+        return Ok(());
+    }
+    let socket_addr = format!("{host}:0");
+    let addrs = tokio::net::lookup_host(&socket_addr)
+        .await
+        .map_err(|e| {
+            CrawlError::Internal(format!("DNS resolution failed for {host}: {e}"))
+        })?;
+    for addr in addrs {
+        if is_private_ip(addr.ip()) {
+            return Err(CrawlError::Internal(format!(
+                "DNS rebinding blocked: {host} resolved to private IP {}",
+                addr.ip()
+            )));
+        }
+    }
+    Ok(())
 }
 
 /// An HTTP client with retry, redirect tracking, and user-agent rotation.
@@ -594,6 +626,7 @@ impl HttpClient {
         &self,
         url: &Url,
     ) -> Result<(Url, StatusCode, Vec<(String, String)>, String, Duration), CrawlError> {
+        dns_pin_check(url).await?;
         let mut last_error: Option<CrawlError> = None;
         let max_retries = self.config.retry_policy.max_retries;
 

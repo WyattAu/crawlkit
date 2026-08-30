@@ -5051,8 +5051,25 @@ impl Default for FocusTrapMissingValidator { fn default() -> Self { Self::new() 
 impl FocusTrapMissingValidator { pub fn new() -> Self { Self } }
 impl Analyzer for FocusTrapMissingValidator {
     fn name(&self) -> &str { "focus-trap-missing-v6" }
-    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
-        Vec::new()
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let has_dialog = body.contains("role=\"dialog\"") || body.contains("role=\"alertdialog\"");
+            let has_aria_modal = body.contains("aria-modal=\"true\"");
+            if has_dialog && !has_aria_modal {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "FOCTR001".to_string(),
+                    title: "Dialog without aria-modal".to_string(),
+                    description: "A dialog or alertdialog element is missing aria-modal=\"true\", which means keyboard focus may escape the dialog.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Add aria-modal=\"true\" to dialog elements to trap focus.".to_string(),
+                });
+            }
+        }
+        findings
     }
 }
 
@@ -9157,7 +9174,13 @@ mod v2_analyzer_tests {
     #[test]
     fn test_focus_tabindex() { let mut p = make_page("https://example.com"); p.has_positive_tabindex = true; let f = FocusTabindexPositiveValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
     #[test]
-    fn test_focus_trap() { let p = make_page("https://example.com"); assert!(FocusTrapMissingValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    fn test_focus_trap_no_body() { let p = make_page("https://example.com"); assert!(FocusTrapMissingValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_focus_trap_dialog_without_aria_modal() { let p = make_page("https://example.com"); let body = r#"<div role="dialog"><p>Content</p></div>"#; let f = FocusTrapMissingValidator::new().analyze(&make_ctx(&p, Some(body))); assert_eq!(f.len(), 1); assert_eq!(f[0].code, "FOCTR001"); }
+    #[test]
+    fn test_focus_trap_dialog_with_aria_modal() { let p = make_page("https://example.com"); let body = r#"<div role="dialog" aria-modal="true"><p>Content</p></div>"#; assert!(FocusTrapMissingValidator::new().analyze(&make_ctx(&p, Some(body))).is_empty()); }
+    #[test]
+    fn test_focus_trap_alertdialog_without_aria_modal() { let p = make_page("https://example.com"); let body = r#"<div role="alertdialog"><p>Alert</p></div>"#; let f = FocusTrapMissingValidator::new().analyze(&make_ctx(&p, Some(body))); assert_eq!(f.len(), 1); assert_eq!(f[0].code, "FOCTR001"); }
     #[test]
     fn test_heading_skip_deep() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }, Heading { level: 3, text: "H3".into(), length: 2 }]; let f = HeadingSkipLevelsDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
     #[test]

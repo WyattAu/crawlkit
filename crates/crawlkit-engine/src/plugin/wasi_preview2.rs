@@ -22,12 +22,13 @@
 //!
 //! # Gate Coverage
 //!
-//! - **Gate 3**: WASI Preview 2 component model support (this module)
-//! - **Gate 4**: WASI CLI commands — stubbed (trap on call)
-//! - **Gate 5**: WASI HTTP outcalls — stubbed (trap on call)
+//! - **Gate 3**: WASI Preview 2 component model support (this module) — IMPLEMENTED
+//! - **Gate 4**: WASI CLI commands — PLANNED (requires wasmtime-wasi crate)
+//! - **Gate 5**: WASI HTTP outcalls — PLANNED (requires wasmtime-wasi crate)
 //!
-//! Full WASI host implementations for Gates 4 and 5 require the
-//! `wasmtime-wasi` crate. The structural scaffolding is in place;
+//! Gates 4 and 5 are structural scaffolding only. Full WASI host
+//! implementations require the `wasmtime-wasi` crate which adds
+//! significant binary size. These are planned for a future release.
 //! link the actual WASI implementations when `wasmtime-wasi` is added
 //! as a dependency.
 

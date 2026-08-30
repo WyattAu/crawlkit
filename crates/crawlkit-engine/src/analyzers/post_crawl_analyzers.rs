@@ -97,7 +97,10 @@ impl Default for PostCrawlAnalyzerRegistry {
 }
 
 /// Build the default post-crawl analyzer registry with all built-in analyzers.
-pub fn build_post_crawl_registry() -> PostCrawlAnalyzerRegistry {
+///
+/// If `config.llm.enabled` is true and the API key environment variable is
+/// set, the [`LlmPostCrawlAnalyzer`] is also registered.
+pub fn build_post_crawl_registry(config: &crate::CrawlConfig) -> PostCrawlAnalyzerRegistry {
     let mut registry = PostCrawlAnalyzerRegistry::new();
     registry.register(Box::new(InternalLinkGraphAnalyzer::new()));
     registry.register(Box::new(CrossPageDuplicateContentDetector::new()));
@@ -118,6 +121,19 @@ pub fn build_post_crawl_registry() -> PostCrawlAnalyzerRegistry {
     registry.register(Box::new(HeadingStructureAnalyzer::new()));
     registry.register(Box::new(CanonicalConsistencyAnalyzer::new()));
     registry.register(Box::new(OverallHealthScoreAnalyzer::new()));
+
+    // Conditionally register LLM analyzer (Option E design).
+    if config.llm.enabled {
+        match crate::llm_analyzer::LlmPostCrawlAnalyzer::new(config.llm.clone()) {
+            Ok(analyzer) => {
+                registry.register(Box::new(analyzer));
+            }
+            Err(e) => {
+                tracing::warn!("LLM analyzer not registered: {e}");
+            }
+        }
+    }
+
     registry
 }
 
@@ -2575,13 +2591,13 @@ mod tests {
 
     #[test]
     fn test_build_registry_returns_nineteen_analyzers() {
-        let registry = build_post_crawl_registry();
+        let registry = build_post_crawl_registry(&crate::CrawlConfig::default());
         assert_eq!(registry.len(), 19);
     }
 
     #[test]
     fn test_build_registry_analyzer_names() {
-        let registry = build_post_crawl_registry();
+        let registry = build_post_crawl_registry(&crate::CrawlConfig::default());
         let names: Vec<&str> = registry.iter().map(|a| a.name()).collect();
         assert!(names.contains(&"internal-link-graph"));
         assert!(names.contains(&"cross-page-duplicate-content"));
@@ -2593,7 +2609,7 @@ mod tests {
 
     #[test]
     fn test_build_registry_run_on_empty_data() {
-        let registry = build_post_crawl_registry();
+        let registry = build_post_crawl_registry(&crate::CrawlConfig::default());
         let data = CrawlData {
             pages: vec![],
             links: vec![],

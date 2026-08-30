@@ -71,12 +71,18 @@ pub enum LlmError {
 /// Configuration for LLM-powered analysis.
 ///
 /// Serializable from `crawlkit.toml` `[llm]` section.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct LlmConfig {
+    /// Whether LLM analysis is enabled.
+    #[serde(default)]
+    pub enabled: bool,
+
     /// Provider: `"openai"` or `"anthropic"`.
+    #[serde(default = "default_provider")]
     pub provider: String,
 
     /// Model to use (e.g. `"gpt-4"`, `"claude-3-opus"`).
+    #[serde(default = "default_model")]
     pub model: String,
 
     /// Name of the environment variable holding the API key.
@@ -92,6 +98,27 @@ pub struct LlmConfig {
     /// Analysis prompts to run.
     #[serde(default)]
     pub prompts: Vec<LlmPrompt>,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            provider: "openai".to_string(),
+            model: "gpt-4".to_string(),
+            api_key_env: None,
+            max_tokens: 1024,
+            prompts: Vec::new(),
+        }
+    }
+}
+
+fn default_provider() -> String {
+    "openai".to_string()
+}
+
+fn default_model() -> String {
+    "gpt-4".to_string()
 }
 
 fn default_max_tokens() -> u32 {
@@ -118,7 +145,7 @@ impl LlmConfig {
 }
 
 /// A single LLM analysis prompt.
-#[derive(Debug, Clone, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
 pub struct LlmPrompt {
     /// Human-readable name for this analysis.
     pub name: String,
@@ -660,6 +687,7 @@ api_key_env = "MY_CUSTOM_KEY"
     #[test]
     fn test_config_resolve_api_key_openai_default() {
         let config = LlmConfig {
+            enabled: true,
             provider: "openai".into(),
             model: "gpt-4".into(),
             api_key_env: None,
@@ -674,6 +702,7 @@ api_key_env = "MY_CUSTOM_KEY"
     #[test]
     fn test_config_resolve_api_key_anthropic_default() {
         let config = LlmConfig {
+            enabled: true,
             provider: "anthropic".into(),
             model: "claude-3".into(),
             api_key_env: None,
@@ -687,6 +716,7 @@ api_key_env = "MY_CUSTOM_KEY"
     #[test]
     fn test_config_resolve_api_key_unknown_provider() {
         let config = LlmConfig {
+            enabled: true,
             provider: "ollama".into(),
             model: "llama3".into(),
             api_key_env: None,

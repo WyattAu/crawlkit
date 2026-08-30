@@ -150,7 +150,6 @@ pub async fn start_crawl(
 
     // Spawn crawl task in background
     let crawl_id_clone = crawl_id.clone();
-    let tenant_id_clone = tenant_id.clone();
     let config = CrawlConfig {
         start_url,
         max_pages: req.max_pages,
@@ -160,7 +159,7 @@ pub async fn start_crawl(
     };
 
     tokio::spawn(async move {
-        run_crawl_task(state, crawl_id_clone, config, Some(permit), Some(tenant_id_clone)).await;
+        run_crawl_task(state, crawl_id_clone, config, Some(permit), Some(tenant_id)).await;
     });
 
     Ok((

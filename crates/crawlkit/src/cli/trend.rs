@@ -85,7 +85,7 @@ pub fn run(
     }
 
     // Sort chronologically
-    snapshots.sort_by(|a, b| a.timestamp.cmp(&b.timestamp));
+    snapshots.sort_by_key(|s| s.timestamp);
 
     pb.set_message("Computing trends...");
 

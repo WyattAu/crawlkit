@@ -6503,6 +6503,1998 @@ impl Analyzer for ExternalLinksAuthorityScoreDeepValidator {
     }
 }
 
+// =========================================================================
+// V8 Content Validators (30)
+// =========================================================================
+
+pub struct ApartmentMissingNumberOfRoomsValidatorV2;
+impl Default for ApartmentMissingNumberOfRoomsValidatorV2 { fn default() -> Self { Self::new() } }
+impl ApartmentMissingNumberOfRoomsValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ApartmentMissingNumberOfRoomsValidatorV2 {
+    fn name(&self) -> &str { "apartment-missing-number-of-rooms-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Apartment" { continue; }
+            match sd.data.get("numberOfRooms") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "APTROOM-V2001".to_string(), title: "Apartment missing numberOfRooms".to_string(), description: "Apartment schema is missing the numberOfRooms property.".to_string(), url: url.clone(), recommendation: "Add numberOfRooms to Apartment structured data.".to_string() });
+                }
+                Some(v) if v.as_str().map_or(false, |s| s.trim().is_empty()) => {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "APTROOM-V2001".to_string(), title: "Apartment has empty numberOfRooms".to_string(), description: "numberOfRooms is empty or whitespace only.".to_string(), url: url.clone(), recommendation: "Add numberOfRooms to Apartment structured data.".to_string() });
+                }
+                _ => {}
+            }
+        }
+        findings
+    }
+}
+
+pub struct CarMissingModelValidatorV2;
+impl Default for CarMissingModelValidatorV2 { fn default() -> Self { Self::new() } }
+impl CarMissingModelValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for CarMissingModelValidatorV2 {
+    fn name(&self) -> &str { "car-missing-model-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Car" { continue; }
+            if sd.data.get("model").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "CARMODEL-V2001".to_string(), title: "Car missing model".to_string(), description: "Car schema is missing the model property.".to_string(), url: url.clone(), recommendation: "Add model to Car structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MusicAlbumMissingTracksValidatorV2;
+impl Default for MusicAlbumMissingTracksValidatorV2 { fn default() -> Self { Self::new() } }
+impl MusicAlbumMissingTracksValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for MusicAlbumMissingTracksValidatorV2 {
+    fn name(&self) -> &str { "music-album-missing-tracks-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "MusicAlbum" { continue; }
+            if sd.data.get("track").is_none() && sd.data.get("numTracks").is_none() && sd.data.get("numberOfTracks").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "MUSCTRACKS-V2001".to_string(), title: "MusicAlbum missing tracks".to_string(), description: "MusicAlbum schema has no track, numTracks, or numberOfTracks property.".to_string(), url: url.clone(), recommendation: "Add track or numberOfTracks to MusicAlbum.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TVSeriesMissingEpisodesValidatorV2;
+impl Default for TVSeriesMissingEpisodesValidatorV2 { fn default() -> Self { Self::new() } }
+impl TVSeriesMissingEpisodesValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for TVSeriesMissingEpisodesValidatorV2 {
+    fn name(&self) -> &str { "tv-series-missing-episodes-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "TVSeries" { continue; }
+            if sd.data.get("episode").is_none() && sd.data.get("numberOfEpisodes").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "TVEP-V2001".to_string(), title: "TVSeries missing episodes".to_string(), description: "TVSeries schema has no episode or numberOfEpisodes property.".to_string(), url: url.clone(), recommendation: "Add episode or numberOfEpisodes to TVSeries.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MovieMissingDirectorValidatorV2;
+impl Default for MovieMissingDirectorValidatorV2 { fn default() -> Self { Self::new() } }
+impl MovieMissingDirectorValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for MovieMissingDirectorValidatorV2 {
+    fn name(&self) -> &str { "movie-missing-director-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Movie" { continue; }
+            if sd.data.get("director").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "MOVDIR-V2001".to_string(), title: "Movie missing director".to_string(), description: "Movie schema is missing the director property.".to_string(), url: url.clone(), recommendation: "Add director to Movie structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct BookMissingAuthorValidatorV2;
+impl Default for BookMissingAuthorValidatorV2 { fn default() -> Self { Self::new() } }
+impl BookMissingAuthorValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for BookMissingAuthorValidatorV2 {
+    fn name(&self) -> &str { "book-missing-author-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Book" { continue; }
+            if sd.data.get("author").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "BOOKAUTH-V2001".to_string(), title: "Book missing author".to_string(), description: "Book schema is missing the author property.".to_string(), url: url.clone(), recommendation: "Add author to Book structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct BookMissingIsbnValidatorV2;
+impl Default for BookMissingIsbnValidatorV2 { fn default() -> Self { Self::new() } }
+impl BookMissingIsbnValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for BookMissingIsbnValidatorV2 {
+    fn name(&self) -> &str { "book-missing-isbn-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Book" { continue; }
+            if sd.data.get("isbn").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "BOOKISBN-V2001".to_string(), title: "Book missing ISBN".to_string(), description: "Book schema is missing the isbn property.".to_string(), url: url.clone(), recommendation: "Add isbn to Book structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct BookMissingDatePublishedValidatorV2;
+impl Default for BookMissingDatePublishedValidatorV2 { fn default() -> Self { Self::new() } }
+impl BookMissingDatePublishedValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for BookMissingDatePublishedValidatorV2 {
+    fn name(&self) -> &str { "book-missing-date-published-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Book" { continue; }
+            if sd.data.get("datePublished").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "BOOKDATE-V2001".to_string(), title: "Book missing datePublished".to_string(), description: "Book schema is missing the datePublished property.".to_string(), url: url.clone(), recommendation: "Add datePublished to Book structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ServiceMissingProviderValidatorV2;
+impl Default for ServiceMissingProviderValidatorV2 { fn default() -> Self { Self::new() } }
+impl ServiceMissingProviderValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ServiceMissingProviderValidatorV2 {
+    fn name(&self) -> &str { "service-missing-provider-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Service" { continue; }
+            if sd.data.get("provider").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "SVCPRV-V2001".to_string(), title: "Service missing provider".to_string(), description: "Service schema is missing the provider property.".to_string(), url: url.clone(), recommendation: "Add provider to Service structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HealthPlanMissingProviderValidatorV2;
+impl Default for HealthPlanMissingProviderValidatorV2 { fn default() -> Self { Self::new() } }
+impl HealthPlanMissingProviderValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for HealthPlanMissingProviderValidatorV2 {
+    fn name(&self) -> &str { "health-plan-missing-provider-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HealthPlan" { continue; }
+            if sd.data.get("provider").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HPPRV-V2001".to_string(), title: "HealthPlan missing provider".to_string(), description: "HealthPlan schema is missing the provider property.".to_string(), url: url.clone(), recommendation: "Add provider to HealthPlan structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct InvoiceMissingAccountValidatorV2;
+impl Default for InvoiceMissingAccountValidatorV2 { fn default() -> Self { Self::new() } }
+impl InvoiceMissingAccountValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for InvoiceMissingAccountValidatorV2 {
+    fn name(&self) -> &str { "invoice-missing-account-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Invoice" { continue; }
+            if sd.data.get("accountId").is_none() && sd.data.get("account").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "INVACCT-V2001".to_string(), title: "Invoice missing account".to_string(), description: "Invoice schema has no accountId or account property.".to_string(), url: url.clone(), recommendation: "Add accountId or account to Invoice structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermitMissingPermitNumberValidatorV2;
+impl Default for PermitMissingPermitNumberValidatorV2 { fn default() -> Self { Self::new() } }
+impl PermitMissingPermitNumberValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for PermitMissingPermitNumberValidatorV2 {
+    fn name(&self) -> &str { "permit-missing-permit-number-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Permit" { continue; }
+            if sd.data.get("permitNumber").is_none() && sd.data.get("identifier").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PERMNUM-V2001".to_string(), title: "Permit missing permitNumber".to_string(), description: "Permit schema has no permitNumber or identifier property.".to_string(), url: url.clone(), recommendation: "Add permitNumber or identifier to Permit structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PlanMissingDescriptionValidatorV2;
+impl Default for PlanMissingDescriptionValidatorV2 { fn default() -> Self { Self::new() } }
+impl PlanMissingDescriptionValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for PlanMissingDescriptionValidatorV2 {
+    fn name(&self) -> &str { "plan-missing-description-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Plan" { continue; }
+            if sd.data.get("description").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "PLANDESC-V2001".to_string(), title: "Plan missing description".to_string(), description: "Plan schema is missing the description property.".to_string(), url: url.clone(), recommendation: "Add description to Plan structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ResearchProjectMissingAboutValidatorV2;
+impl Default for ResearchProjectMissingAboutValidatorV2 { fn default() -> Self { Self::new() } }
+impl ResearchProjectMissingAboutValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ResearchProjectMissingAboutValidatorV2 {
+    fn name(&self) -> &str { "research-project-missing-about-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "ResearchProject" { continue; }
+            if sd.data.get("about").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "RPABOUT-V2001".to_string(), title: "ResearchProject missing about".to_string(), description: "ResearchProject schema is missing the about property.".to_string(), url: url.clone(), recommendation: "Add about to ResearchProject structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ScheduleMissingTimezoneValidatorV2;
+impl Default for ScheduleMissingTimezoneValidatorV2 { fn default() -> Self { Self::new() } }
+impl ScheduleMissingTimezoneValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ScheduleMissingTimezoneValidatorV2 {
+    fn name(&self) -> &str { "schedule-missing-timezone-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Schedule" { continue; }
+            if sd.data.get("timezone").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "SCHEDTZ-V2001".to_string(), title: "Schedule missing timezone".to_string(), description: "Schedule schema is missing the timezone property.".to_string(), url: url.clone(), recommendation: "Add timezone to Schedule structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TripMissingItineraryValidatorV2;
+impl Default for TripMissingItineraryValidatorV2 { fn default() -> Self { Self::new() } }
+impl TripMissingItineraryValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for TripMissingItineraryValidatorV2 {
+    fn name(&self) -> &str { "trip-missing-itinerary-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Trip" { continue; }
+            if sd.data.get("itinerary").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "TRIPIT-V2001".to_string(), title: "Trip missing itinerary".to_string(), description: "Trip schema is missing the itinerary property.".to_string(), url: url.clone(), recommendation: "Add itinerary to Trip structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WorkersUnionMissingNameValidatorV2;
+impl Default for WorkersUnionMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl WorkersUnionMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for WorkersUnionMissingNameValidatorV2 {
+    fn name(&self) -> &str { "workers-union-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WorkersUnion" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "WUNAME-V2001".to_string(), title: "WorkersUnion missing name".to_string(), description: "WorkersUnion schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to WorkersUnion structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WebAPIMissingDocumentationValidatorV2;
+impl Default for WebAPIMissingDocumentationValidatorV2 { fn default() -> Self { Self::new() } }
+impl WebAPIMissingDocumentationValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for WebAPIMissingDocumentationValidatorV2 {
+    fn name(&self) -> &str { "webapi-missing-documentation-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WebAPI" { continue; }
+            if sd.data.get("documentation").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "WAPIDOC-V2001".to_string(), title: "WebAPI missing documentation".to_string(), description: "WebAPI schema is missing the documentation property.".to_string(), url: url.clone(), recommendation: "Add documentation to WebAPI structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WearableMissingDeviceTypeValidatorV2;
+impl Default for WearableMissingDeviceTypeValidatorV2 { fn default() -> Self { Self::new() } }
+impl WearableMissingDeviceTypeValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for WearableMissingDeviceTypeValidatorV2 {
+    fn name(&self) -> &str { "wearable-missing-device-type-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Wearable" { continue; }
+            if sd.data.get("deviceType").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "WEARDEV-V2001".to_string(), title: "Wearable missing deviceType".to_string(), description: "Wearable schema is missing the deviceType property.".to_string(), url: url.clone(), recommendation: "Add deviceType to Wearable structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WebPageElementMissingNameValidatorV2;
+impl Default for WebPageElementMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl WebPageElementMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for WebPageElementMissingNameValidatorV2 {
+    fn name(&self) -> &str { "webpage-element-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WebPageElement" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "WPELNAME-V2001".to_string(), title: "WebPageElement missing name".to_string(), description: "WebPageElement schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to WebPageElement structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WorkerMissingJobTitleValidatorV2;
+impl Default for WorkerMissingJobTitleValidatorV2 { fn default() -> Self { Self::new() } }
+impl WorkerMissingJobTitleValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for WorkerMissingJobTitleValidatorV2 {
+    fn name(&self) -> &str { "worker-missing-job-title-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Worker" { continue; }
+            if sd.data.get("jobTitle").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "WORKJOB-V2001".to_string(), title: "Worker missing jobTitle".to_string(), description: "Worker schema is missing the jobTitle property.".to_string(), url: url.clone(), recommendation: "Add jobTitle to Worker structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ArticleMissingHeadlineValidatorV2;
+impl Default for ArticleMissingHeadlineValidatorV2 { fn default() -> Self { Self::new() } }
+impl ArticleMissingHeadlineValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleMissingHeadlineValidatorV2 {
+    fn name(&self) -> &str { "article-missing-headline-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Article" { continue; }
+            if sd.data.get("headline").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ARTHL-V2001".to_string(), title: "Article missing headline".to_string(), description: "Article schema is missing or has empty headline.".to_string(), url: url.clone(), recommendation: "Add headline to Article structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ArticleMissingDatePublishedValidatorV2;
+impl Default for ArticleMissingDatePublishedValidatorV2 { fn default() -> Self { Self::new() } }
+impl ArticleMissingDatePublishedValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleMissingDatePublishedValidatorV2 {
+    fn name(&self) -> &str { "article-missing-date-published-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Article" { continue; }
+            if sd.data.get("datePublished").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ARTDT-V2001".to_string(), title: "Article missing datePublished".to_string(), description: "Article schema is missing the datePublished property.".to_string(), url: url.clone(), recommendation: "Add datePublished to Article structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ArticleMissingAuthorValidatorV2;
+impl Default for ArticleMissingAuthorValidatorV2 { fn default() -> Self { Self::new() } }
+impl ArticleMissingAuthorValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleMissingAuthorValidatorV2 {
+    fn name(&self) -> &str { "article-missing-author-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Article" { continue; }
+            if sd.data.get("author").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ARTAUTH-V2001".to_string(), title: "Article missing author".to_string(), description: "Article schema is missing the author property.".to_string(), url: url.clone(), recommendation: "Add author to Article structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct OrganizationMissingNameValidatorV2;
+impl Default for OrganizationMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl OrganizationMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for OrganizationMissingNameValidatorV2 {
+    fn name(&self) -> &str { "organization-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Organization" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ORGNAME-V2001".to_string(), title: "Organization missing name".to_string(), description: "Organization schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to Organization structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PersonMissingNameValidatorV2;
+impl Default for PersonMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl PersonMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for PersonMissingNameValidatorV2 {
+    fn name(&self) -> &str { "person-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Person" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PERSNAME-V2001".to_string(), title: "Person missing name".to_string(), description: "Person schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to Person structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct JobPostingMissingTitleValidatorV2;
+impl Default for JobPostingMissingTitleValidatorV2 { fn default() -> Self { Self::new() } }
+impl JobPostingMissingTitleValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for JobPostingMissingTitleValidatorV2 {
+    fn name(&self) -> &str { "job-posting-missing-title-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "JobPosting" { continue; }
+            if sd.data.get("title").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Schema, code: "JOBTITLE-V2001".to_string(), title: "JobPosting missing title".to_string(), description: "JobPosting schema is missing or has empty title.".to_string(), url: url.clone(), recommendation: "Add title to JobPosting structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CourseMissingNameValidatorV2;
+impl Default for CourseMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl CourseMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for CourseMissingNameValidatorV2 {
+    fn name(&self) -> &str { "course-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Course" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "COURSENAME-V2001".to_string(), title: "Course missing name".to_string(), description: "Course schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to Course structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct RecipeMissingNameValidatorV2;
+impl Default for RecipeMissingNameValidatorV2 { fn default() -> Self { Self::new() } }
+impl RecipeMissingNameValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for RecipeMissingNameValidatorV2 {
+    fn name(&self) -> &str { "recipe-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Recipe" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "RECIPENAME-V2001".to_string(), title: "Recipe missing name".to_string(), description: "Recipe schema is missing or has empty name.".to_string(), url: url.clone(), recommendation: "Add name to Recipe structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct LocalBusinessMissingNpiValidatorV2;
+impl Default for LocalBusinessMissingNpiValidatorV2 { fn default() -> Self { Self::new() } }
+impl LocalBusinessMissingNpiValidatorV2 { pub fn new() -> Self { Self } }
+impl Analyzer for LocalBusinessMissingNpiValidatorV2 {
+    fn name(&self) -> &str { "local-business-missing-npi-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "LocalBusiness" { continue; }
+            if sd.data.get("identifier").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "LBPI-V2001".to_string(), title: "LocalBusiness missing identifier (NPI)".to_string(), description: "LocalBusiness schema is missing the identifier property for NPI.".to_string(), url: url.clone(), recommendation: "Add identifier (NPI) to LocalBusiness structured data.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V8 Security Validators (25)
+// =========================================================================
+
+pub struct CspScriptSrcSelfDeepValidator;
+impl Default for CspScriptSrcSelfDeepValidator { fn default() -> Self { Self::new() } }
+impl CspScriptSrcSelfDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspScriptSrcSelfDeepValidator {
+    fn name(&self) -> &str { "csp-script-src-self-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("script-src") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSS-V2001".to_string(), title: "CSP script-src missing 'self' (deep)".to_string(), description: "script-src directive does not include 'self' in deep analysis.".to_string(), url: url.clone(), recommendation: "Add 'self' to script-src directive.".to_string() });
+                }
+                if d.contains("'unsafe-inline'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSS-V2002".to_string(), title: "CSP script-src allows unsafe-inline".to_string(), description: "script-src directive includes 'unsafe-inline'.".to_string(), url: url.clone(), recommendation: "Remove 'unsafe-inline' and use nonces or hashes.".to_string() });
+                }
+                if d.contains("'unsafe-eval'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSS-V2003".to_string(), title: "CSP script-src allows unsafe-eval".to_string(), description: "script-src directive includes 'unsafe-eval'.".to_string(), url: url.clone(), recommendation: "Remove 'unsafe-eval' from script-src directive.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSS-V2001".to_string(), title: "CSP missing script-src directive".to_string(), description: "No script-src directive found in CSP.".to_string(), url: url.clone(), recommendation: "Add script-src directive to Content-Security-Policy.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspStyleSrcSelfDeepValidator;
+impl Default for CspStyleSrcSelfDeepValidator { fn default() -> Self { Self::new() } }
+impl CspStyleSrcSelfDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspStyleSrcSelfDeepValidator {
+    fn name(&self) -> &str { "csp-style-src-self-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("style-src") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSTY-V2001".to_string(), title: "CSP style-src missing 'self' (deep)".to_string(), description: "style-src directive does not include 'self' in deep analysis.".to_string(), url: url.clone(), recommendation: "Add 'self' to style-src directive.".to_string() });
+                }
+                if d.contains("'unsafe-inline'") {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPSTY-V2002".to_string(), title: "CSP style-src allows unsafe-inline".to_string(), description: "style-src directive includes 'unsafe-inline'.".to_string(), url: url.clone(), recommendation: "Remove 'unsafe-inline' from style-src if possible.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPSTY-V2001".to_string(), title: "CSP missing style-src directive".to_string(), description: "No style-src directive found in CSP.".to_string(), url: url.clone(), recommendation: "Add style-src directive to Content-Security-Policy.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspConnectSrcDeepValidator;
+impl Default for CspConnectSrcDeepValidator { fn default() -> Self { Self::new() } }
+impl CspConnectSrcDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspConnectSrcDeepValidator {
+    fn name(&self) -> &str { "csp-connect-src-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("connect-src") {
+                if d.contains("*") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPCON-V2001".to_string(), title: "CSP connect-src allows wildcard (deep)".to_string(), description: "connect-src directive includes wildcard source in deep analysis.".to_string(), url: url.clone(), recommendation: "Replace '*' with specific origins in connect-src.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspFontSrcDeepValidator;
+impl Default for CspFontSrcDeepValidator { fn default() -> Self { Self::new() } }
+impl CspFontSrcDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspFontSrcDeepValidator {
+    fn name(&self) -> &str { "csp-font-src-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("font-src") {
+                if d.contains("*") {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPFNT-V2001".to_string(), title: "CSP font-src allows wildcard (deep)".to_string(), description: "font-src directive includes wildcard source in deep analysis.".to_string(), url: url.clone(), recommendation: "Replace '*' with specific origins in font-src.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspObjectSrcNoneDeepDeepValidator;
+impl Default for CspObjectSrcNoneDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CspObjectSrcNoneDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspObjectSrcNoneDeepDeepValidator {
+    fn name(&self) -> &str { "csp-object-src-none-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("object-src") {
+                found = true;
+                if !d.contains("'none'") {
+                    findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CSPOBJ-V2001".to_string(), title: "CSP object-src not set to 'none' (deep-deep)".to_string(), description: "object-src should be 'none' to block plugins in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Set object-src to 'none'.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPOBJ-V2001".to_string(), title: "CSP missing object-src directive".to_string(), description: "No object-src or default-src directive found.".to_string(), url: url.clone(), recommendation: "Add object-src 'none' to CSP.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspBaseUriSelfDeepDeepValidator;
+impl Default for CspBaseUriSelfDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CspBaseUriSelfDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspBaseUriSelfDeepDeepValidator {
+    fn name(&self) -> &str { "csp-base-uri-self-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("base-uri") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPBASE-V2001".to_string(), title: "CSP base-uri missing 'self' (deep-deep)".to_string(), description: "base-uri directive does not include 'self' in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Add 'self' to base-uri directive.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPBASE-V2001".to_string(), title: "CSP missing base-uri directive".to_string(), description: "No base-uri directive found. An attacker could inject a base tag.".to_string(), url: url.clone(), recommendation: "Add base-uri 'self' to CSP.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspFormActionSelfDeepDeepValidator;
+impl Default for CspFormActionSelfDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CspFormActionSelfDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspFormActionSelfDeepDeepValidator {
+    fn name(&self) -> &str { "csp-form-action-self-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("form-action") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPFORM-V2001".to_string(), title: "CSP form-action missing 'self' (deep-deep)".to_string(), description: "form-action directive does not include 'self' in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Add 'self' to form-action directive.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPFORM-V2001".to_string(), title: "CSP missing form-action directive".to_string(), description: "No form-action directive found.".to_string(), url: url.clone(), recommendation: "Add form-action 'self' to CSP.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HstsPreloadReadyDeepDeepValidator;
+impl Default for HstsPreloadReadyDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HstsPreloadReadyDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsPreloadReadyDeepDeepValidator {
+    fn name(&self) -> &str { "hsts-preload-ready-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            let has_isd = lower.contains("includesubdomains");
+            let has_preload = lower.contains("preload");
+            let max_age = lower.find("max-age=").map(|pos| {
+                let after = &lower[pos + 8..];
+                after.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u64>().unwrap_or(0)
+            }).unwrap_or(0);
+            if !has_isd || !has_preload || max_age < 31536000 {
+                let mut missing = Vec::new();
+                if !has_isd { missing.push("includeSubDomains"); }
+                if !has_preload { missing.push("preload"); }
+                if max_age < 31536000 { missing.push("max-age>=31536000"); }
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSPR-V2001".to_string(), title: "HSTS preload readiness incomplete (deep-deep)".to_string(), description: format!("Missing: {}.", missing.join(", ")), url: url.clone(), recommendation: "Add includeSubDomains; preload; max-age=31536000.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HstsMaxAgeDeepDeepValidator;
+impl Default for HstsMaxAgeDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HstsMaxAgeDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsMaxAgeDeepDeepValidator {
+    fn name(&self) -> &str { "hsts-max-age-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            if let Some(pos) = lower.find("max-age=") {
+                let after = &lower[pos + 8..];
+                if let Ok(age) = after.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u64>() {
+                    if age < 31536000 {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSMAX-V2001".to_string(), title: "HSTS max-age below 1 year (deep-deep)".to_string(), description: format!("max-age is {age}, recommended >= 31536000 (1 year)."), url: url.clone(), recommendation: "Set max-age to at least 31536000.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieSecureDeepDeepDeepValidator;
+impl Default for CookieSecureDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieSecureDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSecureDeepDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-secure-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            let is_session = lower.contains("session");
+            if !lower.contains("secure") && !is_session {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC-V2001".to_string(), title: format!("Cookie '{name}' missing Secure flag (deep-deep-deep)"), description: "Non-session cookie transmitted without Secure flag in deep analysis.".to_string(), url: url.clone(), recommendation: "Add Secure flag to cookie.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieHttpOnlyDeepDeepDeepValidator;
+impl Default for CookieHttpOnlyDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieHttpOnlyDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieHttpOnlyDeepDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-httponly-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            if !lower.contains("httponly") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIEHTTP-V2001".to_string(), title: format!("Cookie '{name}' missing HttpOnly flag (deep-deep-deep)"), description: "Cookie accessible to JavaScript without HttpOnly in deep analysis.".to_string(), url: url.clone(), recommendation: "Add HttpOnly flag to cookie.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieSameSiteDeepDeepDeepValidator;
+impl Default for CookieSameSiteDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieSameSiteDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSameSiteDeepDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-samesite-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            if !lower.contains("samesite") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESAME-V2001".to_string(), title: format!("Cookie '{name}' missing SameSite (deep-deep-deep)"), description: "Without SameSite, cookie is vulnerable to CSRF in deep analysis.".to_string(), url: url.clone(), recommendation: "Add SameSite=Strict or SameSite=Lax.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MixedContentIframeDeepDeepValidator;
+impl Default for MixedContentIframeDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl MixedContentIframeDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MixedContentIframeDeepDeepValidator {
+    fn name(&self) -> &str { "mixed-content-iframe-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let http_iframe_count = lower.matches("<iframe").count();
+            let http_in_iframes = lower.matches("http://").count();
+            if http_iframe_count > 0 && http_in_iframes > 0 {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "MIXIFRAME-V2001".to_string(), title: "Mixed content in iframes (deep-deep)".to_string(), description: format!("Found {http_iframe_count} iframe(s) with HTTP resources on HTTPS page in deep analysis."), url: url.clone(), recommendation: "Change all iframe sources to HTTPS.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CorsWildcardDeepDeepValidator;
+impl Default for CorsWildcardDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CorsWildcardDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CorsWildcardDeepDeepValidator {
+    fn name(&self) -> &str { "cors-wildcard-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin")).map(|(_, v)| v.as_str()) {
+            if val == "*" {
+                let has_credentials = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials") && v.eq_ignore_ascii_case("true"));
+                if has_credentials {
+                    findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CORSWILD-V2001".to_string(), title: "CORS wildcard with credentials (deep-deep)".to_string(), description: "Access-Control-Allow-Origin is '*' with credentials in deep analysis.".to_string(), url: url.clone(), recommendation: "Use a specific origin instead of '*' when credentials are allowed.".to_string() });
+                } else {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CORSWILD-V2001".to_string(), title: "CORS allows all origins (deep-deep)".to_string(), description: "Access-Control-Allow-Origin is set to '*' in deep analysis.".to_string(), url: url.clone(), recommendation: "Consider restricting CORS to specific origins.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct ReferrerPolicyStrictDeepDeepValidator;
+impl Default for ReferrerPolicyStrictDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl ReferrerPolicyStrictDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ReferrerPolicyStrictDeepDeepValidator {
+    fn name(&self) -> &str { "referrer-policy-strict-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            let is_strict = lower == "no-referrer" || lower == "same-origin" || lower == "strict-origin" || lower == "strict-origin-when-cross-origin" || lower == "no-referrer-when-downgrade";
+            if !is_strict {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "RPSTRICT-V2001".to_string(), title: "Referrer-Policy not using strict policy (deep-deep)".to_string(), description: format!("Current policy is '{val}'. Consider a stricter policy in deep analysis."), url: url.clone(), recommendation: "Use no-referrer, same-origin, or strict-origin-when-cross-origin.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct XFrameOptionsDeepDeepValidator;
+impl Default for XFrameOptionsDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl XFrameOptionsDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for XFrameOptionsDeepDeepValidator {
+    fn name(&self) -> &str { "x-frame-options-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_csp_frame = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("Content-Security-Policy") && v.contains("frame-ancestors"));
+        if has_csp_frame { return findings; }
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            if lower != "deny" && lower != "sameorigin" {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFODEEP-V2001".to_string(), title: "X-Frame-Options has invalid value (deep-deep)".to_string(), description: format!("Value is '{val}'. Must be DENY or SAMEORIGIN."), url: url.clone(), recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyDeepDeepValidator;
+impl Default for PermissionsPolicyDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyDeepDeepValidator {
+    fn name(&self) -> &str { "permissions-policy-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")) {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "PERMP-V2001".to_string(), title: "Missing Permissions-Policy header (deep-deep)".to_string(), description: "No Permissions-Policy or Feature-Policy header found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a Permissions-Policy header to restrict browser features.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CrossOriginIsolationDeepDeepValidator;
+impl Default for CrossOriginIsolationDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CrossOriginIsolationDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CrossOriginIsolationDeepDeepValidator {
+    fn name(&self) -> &str { "cross-origin-isolation-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_coep = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy"));
+        let has_coop = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy"));
+        if !has_coep {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISO-V2001".to_string(), title: "Missing Cross-Origin-Embedder-Policy (deep-deep)".to_string(), description: "No COEP header found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Embedder-Policy: require-corp.".to_string() });
+        }
+        if !has_coop {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISO-V2002".to_string(), title: "Missing Cross-Origin-Opener-Policy (deep-deep)".to_string(), description: "No COOP header found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Opener-Policy: same-origin.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct AriaLandmarksDeepValidator;
+impl Default for AriaLandmarksDeepValidator { fn default() -> Self { Self::new() } }
+impl AriaLandmarksDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for AriaLandmarksDeepValidator {
+    fn name(&self) -> &str { "aria-landmarks-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.landmarks.is_empty() {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "ARIALAND-V2001".to_string(), title: "No ARIA landmarks found (deep)".to_string(), description: "Page has no landmark regions in deep analysis.".to_string(), url: url.clone(), recommendation: "Add semantic HTML5 landmarks or ARIA roles.".to_string() });
+        } else {
+            let has_main = ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "main");
+            if !has_main {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "ARIALAND-V2002".to_string(), title: "Missing main landmark (deep)".to_string(), description: "No main landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add <main> or role='main' landmark.".to_string() });
+            }
+            let has_nav = ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "navigation");
+            if !has_nav {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "ARIALAND-V2003".to_string(), title: "Missing navigation landmark (deep)".to_string(), description: "No navigation landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add <nav> or role='navigation' landmark.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HeadingHierarchyDeepDeepValidator;
+impl Default for HeadingHierarchyDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HeadingHierarchyDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HeadingHierarchyDeepDeepValidator {
+    fn name(&self) -> &str { "heading-hierarchy-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2001".to_string(), title: "No headings found (deep-deep)".to_string(), description: "Page has no heading elements in deep analysis.".to_string(), url: url.clone(), recommendation: "Add at least one H1 heading.".to_string() });
+            return findings;
+        }
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2002".to_string(), title: "Missing H1 heading (deep-deep)".to_string(), description: "No H1 heading found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a single H1 heading.".to_string() });
+        } else if h1_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2003".to_string(), title: "Multiple H1 headings (deep-deep)".to_string(), description: format!("{h1_count} H1 headings found in deep analysis."), url: url.clone(), recommendation: "Use a single H1 heading per page.".to_string() });
+        }
+        let mut prev_level = 0u8;
+        for h in &ctx.page.headings {
+            if prev_level > 0 && h.level > prev_level + 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2004".to_string(), title: "Heading level skipped (deep-deep)".to_string(), description: format!("Heading jumps from H{} to H{} in deep analysis.", prev_level, h.level), url: url.clone(), recommendation: "Use heading levels sequentially.".to_string() });
+            }
+            prev_level = h.level;
+        }
+        findings
+    }
+}
+
+pub struct FormLabelsDeepDeepValidator;
+impl Default for FormLabelsDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl FormLabelsDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FormLabelsDeepDeepValidator {
+    fn name(&self) -> &str { "form-labels-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let unlabeled = ctx.page.forms.iter().flat_map(|f| &f.inputs).filter(|i| !i.has_label && i.aria_label.is_none() && i.id.is_none()).count();
+        if unlabeled > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLBL-V2001".to_string(), title: "Form inputs without labels (deep-deep)".to_string(), description: format!("{unlabeled} input(s) have no associated label in deep analysis."), url: url.clone(), recommendation: "Associate each input with a <label> element.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableAccessibilityDeepDeepValidator;
+impl Default for TableAccessibilityDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl TableAccessibilityDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TableAccessibilityDeepDeepValidator {
+    fn name(&self) -> &str { "table-accessibility-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_headers == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TABACC-V2001".to_string(), title: "Tables without headers (deep-deep)".to_string(), description: format!("{} table(s) found but none have header cells in deep analysis.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th> elements to tables for screen reader accessibility.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LinkTextQualityDeepValidator;
+impl Default for LinkTextQualityDeepValidator { fn default() -> Self { Self::new() } }
+impl LinkTextQualityDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LinkTextQualityDeepValidator {
+    fn name(&self) -> &str { "link-text-quality-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let empty_text = ctx.page.links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none() && l.img_alt.is_none()).count();
+        if empty_text > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LINKTQ-V2001".to_string(), title: "Links without text (deep)".to_string(), description: format!("{empty_text} link(s) have no text, aria-label, or alt text in deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all links.".to_string() });
+        }
+        let generic = ["click here", "read more", "learn more", "more", "here", "link"];
+        let generic_count = ctx.page.links.iter().filter(|l| generic.contains(&l.text.trim().to_lowercase().as_str())).count();
+        if generic_count > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LINKTQ-V2002".to_string(), title: "Generic link text (deep)".to_string(), description: format!("{generic_count} link(s) use generic anchor text in deep analysis."), url: url.clone(), recommendation: "Use descriptive, specific anchor text.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ImageAltTextDeepDeepValidator;
+impl Default for ImageAltTextDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl ImageAltTextDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ImageAltTextDeepDeepValidator {
+    fn name(&self) -> &str { "image-alt-text-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let no_alt = ctx.page.images.iter().filter(|i| !i.has_alt).count();
+        if no_alt > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "IMGALT-V2001".to_string(), title: "Images missing alt attribute (deep-deep)".to_string(), description: format!("{no_alt} image(s) lack an alt attribute in deep analysis."), url: url.clone(), recommendation: "Add descriptive alt text to all images.".to_string() });
+        }
+        let empty_alt = ctx.page.images.iter().filter(|i| i.has_alt && i.alt.trim().is_empty()).count();
+        if empty_alt > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "IMGALT-V2002".to_string(), title: "Images with empty alt text (deep-deep)".to_string(), description: format!("{empty_alt} image(s) have alt='' in deep analysis."), url: url.clone(), recommendation: "Ensure empty alt is intentional for decorative images.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FocusManagementDeepDeepValidator;
+impl Default for FocusManagementDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl FocusManagementDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FocusManagementDeepDeepValidator {
+    fn name(&self) -> &str { "focus-management-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FOCUS-V2001".to_string(), title: "Positive tabindex found (deep-deep)".to_string(), description: "Elements with positive tabindex disrupt natural tab order in deep analysis.".to_string(), url: url.clone(), recommendation: "Remove positive tabindex values and use DOM order.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V8 SEO Validators (25)
+// =========================================================================
+
+pub struct TitleMissingDeepDeepValidator;
+impl Default for TitleMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleMissingDeepDeepValidator {
+    fn name(&self) -> &str { "title-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match &ctx.page.meta.title {
+            None => {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "TITLEMISS-V2001".to_string(), title: "Missing title tag (deep-deep)".to_string(), description: "No title tag found on page in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a unique, descriptive title tag.".to_string() });
+            }
+            Some(title) if title.trim().is_empty() => {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "TITLEMISS-V2001".to_string(), title: "Empty title tag (deep-deep)".to_string(), description: "Title tag exists but is empty in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a unique, descriptive title tag.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct TitleKeywordDensityDeepDeepValidator;
+impl Default for TitleKeywordDensityDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleKeywordDensityDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleKeywordDensityDeepDeepValidator {
+    fn name(&self) -> &str { "title-keyword-density-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let (Some(title), Some(desc)) = (&ctx.page.meta.title, &ctx.page.meta.description) {
+            let title_words: Vec<&str> = title.split_whitespace().collect();
+            let desc_words: Vec<&str> = desc.split_whitespace().collect();
+            if !title_words.is_empty() && !desc_words.is_empty() {
+                let overlap = title_words.iter().filter(|tw| desc_words.iter().any(|dw| tw.eq_ignore_ascii_case(dw))).count();
+                let ratio = overlap as f64 / title_words.len() as f64;
+                if ratio < 0.2 && title_words.len() > 2 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEKDEN-V2001".to_string(), title: "Low title-description keyword overlap (deep-deep)".to_string(), description: format!("Only {overlap}/{} title words appear in description in deep analysis.", title_words.len()), url: url.clone(), recommendation: "Include key title words in meta description.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct TitleBrandPlacementDeepDeepValidator;
+impl Default for TitleBrandPlacementDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleBrandPlacementDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleBrandPlacementDeepDeepValidator {
+    fn name(&self) -> &str { "title-brand-placement-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            let title_lower = title.to_lowercase();
+            if title_lower.ends_with(" | ") || title_lower.ends_with(" - ") || title_lower.ends_with(" – ") || title_lower.ends_with(" — ") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEBRAND-V2001".to_string(), title: "Title ends with separator (deep-deep)".to_string(), description: "Title ends with a brand separator in deep analysis.".to_string(), url: url.clone(), recommendation: "Consider placing the brand name at the beginning of the title.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionMissingDeepDeepValidator;
+impl Default for MetaDescriptionMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionMissingDeepDeepValidator {
+    fn name(&self) -> &str { "meta-description-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match &ctx.page.meta.description {
+            None => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCMISS-V2001".to_string(), title: "Missing meta description (deep-deep)".to_string(), description: "No meta description tag found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a unique, compelling meta description.".to_string() });
+            }
+            Some(desc) if desc.trim().is_empty() => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCMISS-V2001".to_string(), title: "Empty meta description (deep-deep)".to_string(), description: "Meta description tag exists but is empty in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a unique, compelling meta description.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionTooShortDeepDeepValidator;
+impl Default for MetaDescriptionTooShortDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionTooShortDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionTooShortDeepDeepValidator {
+    fn name(&self) -> &str { "meta-description-too-short-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(desc) = &ctx.page.meta.description {
+            if !desc.is_empty() && desc.len() < 70 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADESSSHORT-V2001".to_string(), title: "Meta description too short (deep-deep)".to_string(), description: format!("Description is {} chars, recommended 120-160 in deep analysis.", desc.len()), url: url.clone(), recommendation: "Expand meta description to 120-160 characters.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionUniquenessDeepDeepValidator;
+impl Default for MetaDescriptionUniquenessDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionUniquenessDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionUniquenessDeepDeepValidator {
+    fn name(&self) -> &str { "meta-description-uniqueness-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let (Some(title), Some(desc)) = (&ctx.page.meta.title, &ctx.page.meta.description) {
+            if title == desc {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCUNIQ-V2001".to_string(), title: "Meta description identical to title (deep-deep)".to_string(), description: "Title and meta description are exactly the same in deep analysis.".to_string(), url: url.clone(), recommendation: "Write a unique meta description that complements the title.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalMissingDeepDeepValidator;
+impl Default for CanonicalMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalMissingDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.canonical.is_none() {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANMISS-V2001".to_string(), title: "Missing canonical URL (deep-deep)".to_string(), description: "No canonical link tag found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a self-referencing canonical URL.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CanonicalSelfReferenceDeepDeepDeepValidator;
+impl Default for CanonicalSelfReferenceDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalSelfReferenceDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalSelfReferenceDeepDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-self-reference-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.as_str();
+            if canonical_str != url {
+                let same_path = canonical.path() == url::Url::parse(url).map(|u| u.path().to_string()).unwrap_or_default();
+                if same_path {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANSELFRF-V2001".to_string(), title: "Canonical has different scheme/host (deep-deep-deep)".to_string(), description: format!("Canonical '{}' differs from page URL '{}' in scheme/host in deep analysis.", canonical_str, url), url: url.clone(), recommendation: "Ensure canonical uses the exact same URL as the page.".to_string() });
+                } else {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANSELFRF-V2001".to_string(), title: "Canonical does not self-reference (deep-deep-deep)".to_string(), description: format!("Canonical points to '{}', page is '{}' in deep analysis.", canonical_str, url), url: url.clone(), recommendation: "Set canonical to the current page URL.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalChainDeepDeepDeepValidator;
+impl Default for CanonicalChainDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalChainDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalChainDeepDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-chain-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let canonical_count = body.matches("rel=\"canonical\"").count() + body.matches("rel='canonical'").count();
+            if canonical_count > 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANCHAIN-V2001".to_string(), title: "Multiple canonical tags (deep-deep-deep)".to_string(), description: format!("{canonical_count} canonical tags found in HTML in deep analysis."), url: url.clone(), recommendation: "Use only one canonical tag per page.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangMissingDeepDeepValidator;
+impl Default for HreflangMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangMissingDeepDeepValidator {
+    fn name(&self) -> &str { "hreflang-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.hreflang.is_empty() {
+            let has_x_robots_tag = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("X-Robots-Tag") && v.to_lowercase().contains("hreflang"));
+            if !has_x_robots_tag {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFMISS-V2001".to_string(), title: "Missing hreflang tags (deep-deep)".to_string(), description: "No hreflang link tags found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add hreflang tags for multi-language sites.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangReciprocalDeepDeepDeepValidator;
+impl Default for HreflangReciprocalDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangReciprocalDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangReciprocalDeepDeepDeepValidator {
+    fn name(&self) -> &str { "hreflang-reciprocal-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.hreflang.len() >= 2 {
+            for h in &ctx.page.meta.hreflang {
+                let has_return = ctx.page.meta.hreflang.iter().any(|other| other.lang == h.lang && other.url != h.url);
+                if !has_return {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFRECIP-V2001".to_string(), title: "Missing reciprocal hreflang (deep-deep-deep)".to_string(), description: format!("No return hreflang found for '{}' in deep analysis.", h.lang), url: url.clone(), recommendation: "Ensure all hreflang tags have reciprocal links.".to_string() });
+                    break;
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangXDefaultMissingDeepDeepValidator;
+impl Default for HreflangXDefaultMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangXDefaultMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangXDefaultMissingDeepDeepValidator {
+    fn name(&self) -> &str { "hreflang-x-default-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.meta.hreflang.is_empty() {
+            let has_x_default = ctx.page.meta.hreflang.iter().any(|h| h.lang.to_lowercase().contains("x-default"));
+            if !has_x_default {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFXD-V2001".to_string(), title: "Missing hreflang x-default (deep-deep)".to_string(), description: "No x-default hreflang found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add an x-default hreflang tag for the fallback page.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapMissingDeepDeepValidator;
+impl Default for SitemapMissingDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl SitemapMissingDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapMissingDeepDeepValidator {
+    fn name(&self) -> &str { "sitemap-missing-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let has_sitemap_ref = lower.contains("sitemap.xml") || lower.contains("sitemap_index.xml");
+            if !has_sitemap_ref && ctx.page.meta.canonical.is_some() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPMISS-V2001".to_string(), title: "No sitemap reference (deep-deep)".to_string(), description: "Page does not reference a sitemap in deep analysis.".to_string(), url: url.clone(), recommendation: "Add sitemap reference or ensure sitemap.xml exists at root.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct RobotsTxtEmptyDeepDeepValidator;
+impl Default for RobotsTxtEmptyDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl RobotsTxtEmptyDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RobotsTxtEmptyDeepDeepValidator {
+    fn name(&self) -> &str { "robots-txt-empty-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            if robots.trim().is_empty() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "ROBOTSEMPTY-V2001".to_string(), title: "Empty robots.txt (deep-deep)".to_string(), description: "robots.txt is present but empty in deep analysis.".to_string(), url: url.clone(), recommendation: "Add basic rules to robots.txt.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct InternalLinksDiversityDeepDeepValidator;
+impl Default for InternalLinksDiversityDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl InternalLinksDiversityDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InternalLinksDiversityDeepDeepValidator {
+    fn name(&self) -> &str { "internal-links-diversity-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let internal: Vec<&str> = ctx.page.links.iter().filter(|l| !l.is_external).map(|l| l.href.as_str()).collect();
+        if internal.len() > 5 {
+            let unique: std::collections::HashSet<&str> = internal.iter().copied().collect();
+            let ratio = unique.len() as f64 / internal.len() as f64;
+            if ratio < 0.5 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTDIV-V2001".to_string(), title: "Low internal link diversity (deep-deep)".to_string(), description: format!("{}/{} ({:.0}%) internal links are unique in deep analysis.", unique.len(), internal.len(), ratio * 100.0), url: url.clone(), recommendation: "Increase the diversity of internal link targets.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ExternalLinksAuthorityScoreDeepDeepValidator;
+impl Default for ExternalLinksAuthorityScoreDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl ExternalLinksAuthorityScoreDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ExternalLinksAuthorityScoreDeepDeepValidator {
+    fn name(&self) -> &str { "external-links-authority-score-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let external: Vec<&str> = ctx.page.links.iter().filter(|l| l.is_external).map(|l| l.href.as_str()).collect();
+        if external.len() > 3 {
+            let high_authority = ["wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org", "w3.org", "schema.org", "google.com"];
+            let authority_count = external.iter().filter(|href| high_authority.iter().any(|dom| href.contains(dom))).count();
+            let ratio = authority_count as f64 / external.len() as f64;
+            if ratio < 0.1 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTAUTHDP-V2001".to_string(), title: "Low authority link ratio (deep-deep)".to_string(), description: format!("{}/{} ({:.0}%) external links are to authoritative sources in deep analysis.", authority_count, external.len(), ratio * 100.0), url: url.clone(), recommendation: "Increase links to authoritative domains.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct InternalLinksDepthDeepDeepValidator;
+impl Default for InternalLinksDepthDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl InternalLinksDepthDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InternalLinksDepthDeepDeepValidator {
+    fn name(&self) -> &str { "internal-links-depth-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let internal: Vec<&str> = ctx.page.links.iter().filter(|l| !l.is_external).map(|l| l.href.as_str()).collect();
+        if internal.len() > 5 {
+            let base = url::Url::parse(url).ok();
+            if let Some(base) = base {
+                let base_host = base.host_str().unwrap_or("");
+                let deep_count = internal.iter().filter_map(|href| {
+                    url::Url::parse(href).ok().and_then(|u| {
+                        if u.host_str() == Some(base_host) {
+                            let depth = u.path().trim_matches('/').split('/').filter(|s| !s.is_empty()).count();
+                            if depth > 4 { Some(depth) } else { None }
+                        } else { None }
+                    })
+                }).count();
+                if deep_count > internal.len() / 4 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTDEPTH-V2001".to_string(), title: "Many deeply nested internal links (deep-deep)".to_string(), description: format!("{}/{} internal links point to URLs with 4+ path segments in deep analysis.", deep_count, internal.len()), url: url.clone(), recommendation: "Flatten URL structure for important pages.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionLengthDeepValidator;
+impl Default for MetaDescriptionLengthDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionLengthDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionLengthDeepValidator {
+    fn name(&self) -> &str { "meta-description-length-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(desc) = &ctx.page.meta.description {
+            let len = desc.len();
+            if len > 160 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METALEN-V2001".to_string(), title: "Meta description too long (deep)".to_string(), description: format!("Description is {len} chars, recommended 120-160 in deep analysis."), url: url.clone(), recommendation: "Shorten meta description to 120-160 characters.".to_string() });
+            } else if len < 70 && len > 0 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METALEN-V2002".to_string(), title: "Meta description too short (deep)".to_string(), description: format!("Description is {len} chars, recommended 120-160 in deep analysis."), url: url.clone(), recommendation: "Expand meta description to 120-160 characters.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TitleLengthDeepValidator;
+impl Default for TitleLengthDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleLengthDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleLengthDeepValidator {
+    fn name(&self) -> &str { "title-length-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            let len = title.len();
+            if len > 60 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLELEN-V2001".to_string(), title: "Title too long (deep)".to_string(), description: format!("Title is {len} chars, recommended 30-60 in deep analysis."), url: url.clone(), recommendation: "Shorten title to 30-60 characters.".to_string() });
+            } else if len < 20 && len > 0 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLELEN-V2002".to_string(), title: "Title too short (deep)".to_string(), description: format!("Title is {len} chars, recommended 30-60 in deep analysis."), url: url.clone(), recommendation: "Expand title to 30-60 characters.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapCoverageDeepDeepValidator;
+impl Default for SitemapCoverageDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl SitemapCoverageDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapCoverageDeepDeepValidator {
+    fn name(&self) -> &str { "sitemap-coverage-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let lower = robots.to_lowercase();
+            let has_sitemap = lower.contains("sitemap:");
+            if !has_sitemap {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPDEEP-V2001".to_string(), title: "No sitemap in robots.txt (deep-deep)".to_string(), description: "robots.txt does not reference a sitemap in deep analysis.".to_string(), url: url.clone(), recommendation: "Add Sitemap: directive to robots.txt.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct RobotsTxtAnalysisDeepDeepValidator;
+impl Default for RobotsTxtAnalysisDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl RobotsTxtAnalysisDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RobotsTxtAnalysisDeepDeepValidator {
+    fn name(&self) -> &str { "robots-txt-analysis-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let lower = robots.to_lowercase();
+            if lower.contains("disallow: /") && !lower.contains("disallow: /") {
+                // Intentionally empty - just checking basic structure
+            }
+            if !lower.contains("user-agent:") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "ROBOTSDEEP-V2001".to_string(), title: "Missing User-agent in robots.txt (deep-deep)".to_string(), description: "robots.txt does not contain User-agent directive in deep analysis.".to_string(), url: url.clone(), recommendation: "Add User-agent directive to robots.txt.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct InternalLinkQualityDeepValidator;
+impl Default for InternalLinkQualityDeepValidator { fn default() -> Self { Self::new() } }
+impl InternalLinkQualityDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InternalLinkQualityDeepValidator {
+    fn name(&self) -> &str { "internal-link-quality-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let internal: Vec<&crate::parser::ExtractedLink> = ctx.page.links.iter().filter(|l| !l.is_external).collect();
+        if internal.len() > 3 {
+            let nofollow_count = internal.iter().filter(|l| l.rel.iter().any(|r| r == "nofollow")).count();
+            if nofollow_count as f64 / internal.len() as f64 > 0.5 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTLINKQ-V2001".to_string(), title: "High nofollow internal link ratio (deep)".to_string(), description: format!("{nofollow_count}/{} internal links are nofollowed in deep analysis.", internal.len()), url: url.clone(), recommendation: "Review nofollow usage on internal links.".to_string() });
+            }
+            let empty_text = internal.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+            if empty_text > 0 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ-V2002".to_string(), title: "Internal links without anchor text (deep)".to_string(), description: format!("{empty_text} internal link(s) have no text or aria-label in deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all internal links.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ExternalLinkAuthorityDeepDeepValidator;
+impl Default for ExternalLinkAuthorityDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl ExternalLinkAuthorityDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ExternalLinkAuthorityDeepDeepValidator {
+    fn name(&self) -> &str { "external-link-authority-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let external: Vec<&str> = ctx.page.links.iter().filter(|l| l.is_external).map(|l| l.href.as_str()).collect();
+        if external.len() > 5 {
+            let low_authority_tlds = [".ru", ".cn", ".tk", ".ml", ".xyz", ".top", ".buzz", ".click"];
+            let suspicious = external.iter().filter(|href| low_authority_tlds.iter().any(|tld| href.contains(tld))).count();
+            if suspicious > external.len() / 3 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "EXTLINKAUTH-V2001".to_string(), title: "Many low-authority external links (deep-deep)".to_string(), description: format!("{}/{} external links to low-authority TLDs in deep analysis.", suspicious, external.len()), url: url.clone(), recommendation: "Link to more authoritative external sources.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangLocaleFormatDeepDeepValidator;
+impl Default for HreflangLocaleFormatDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangLocaleFormatDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangLocaleFormatDeepDeepValidator {
+    fn name(&self) -> &str { "hreflang-locale-format-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for h in &ctx.page.meta.hreflang {
+            let locale = &h.lang;
+            if locale != "x-default" {
+                let lang_parts: Vec<&str> = locale.split('-').collect();
+                if lang_parts.is_empty() || lang_parts[0].len() < 2 || lang_parts[0].len() > 3 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFFMT-V2001".to_string(), title: "Invalid hreflang locale format (deep-deep)".to_string(), description: format!("Locale '{locale}' has unexpected format in deep analysis."), url: url.clone(), recommendation: "Use ISO 639-1 language codes (e.g., 'en', 'en-US').".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalDepthDeepDeepValidator;
+impl Default for CanonicalDepthDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalDepthDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalDepthDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-depth-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            if let Ok(parsed) = url::Url::parse(canonical.as_str()) {
+                let path_depth = parsed.path().trim_matches('/').split('/').filter(|s| !s.is_empty()).count();
+                if path_depth > 5 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANDEEP-V2001".to_string(), title: "Canonical URL very deep (deep-deep)".to_string(), description: format!("Canonical path has {path_depth} segments in deep analysis."), url: url.clone(), recommendation: "Consider using a shorter canonical URL.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V8 Accessibility Validators (20)
+// =========================================================================
+
+pub struct LandmarkMainDeepValidator;
+impl Default for LandmarkMainDeepValidator { fn default() -> Self { Self::new() } }
+impl LandmarkMainDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkMainDeepValidator {
+    fn name(&self) -> &str { "landmark-main-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.has_main_landmark {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANDMAIN-V2001".to_string(), title: "Missing main landmark (deep)".to_string(), description: "No main landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add <main> or role='main' landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkNavDeepValidator;
+impl Default for LandmarkNavDeepValidator { fn default() -> Self { Self::new() } }
+impl LandmarkNavDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkNavDeepValidator {
+    fn name(&self) -> &str { "landmark-nav-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.has_nav_landmark && !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "navigation") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANDNAV-V2001".to_string(), title: "Missing navigation landmark (deep)".to_string(), description: "No navigation landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add <nav> or role='navigation' landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkBannerDeepValidator;
+impl Default for LandmarkBannerDeepValidator { fn default() -> Self { Self::new() } }
+impl LandmarkBannerDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkBannerDeepValidator {
+    fn name(&self) -> &str { "landmark-banner-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "banner") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANDBAN-V2001".to_string(), title: "Missing banner landmark (deep)".to_string(), description: "No banner landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add <header> or role='banner' landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HeadingSkipLevelsDeepDeepValidator;
+impl Default for HeadingSkipLevelsDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HeadingSkipLevelsDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HeadingSkipLevelsDeepDeepValidator {
+    fn name(&self) -> &str { "heading-skip-levels-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.len() < 2 { return findings; }
+        let mut skip_count = 0;
+        let mut prev_level = 0u8;
+        for h in &ctx.page.headings {
+            if prev_level > 0 && h.level > prev_level + 1 {
+                skip_count += 1;
+            }
+            prev_level = h.level;
+        }
+        if skip_count > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HEADSKIP-V2001".to_string(), title: "Heading levels skipped (deep-deep)".to_string(), description: format!("{skip_count} heading level skip(s) detected in deep analysis."), url: url.clone(), recommendation: "Use heading levels sequentially.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FormLabelsDeepDeepDeepValidator;
+impl Default for FormLabelsDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl FormLabelsDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FormLabelsDeepDeepDeepValidator {
+    fn name(&self) -> &str { "form-labels-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let unlabeled = ctx.page.forms.iter().flat_map(|f| &f.inputs).filter(|i| !i.has_label && i.aria_label.is_none() && i.id.is_none() && i.input_type.as_deref() != Some("hidden")).count();
+        if unlabeled > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLBL-V2001".to_string(), title: "Form inputs without labels (deep-deep-deep)".to_string(), description: format!("{unlabeled} input(s) have no associated label in deep-deep analysis."), url: url.clone(), recommendation: "Associate each input with a <label> element.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableAccessibilityDeepDeepDeepValidator;
+impl Default for TableAccessibilityDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl TableAccessibilityDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TableAccessibilityDeepDeepDeepValidator {
+    fn name(&self) -> &str { "table-accessibility-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_headers == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TABACC-V2001".to_string(), title: "Tables without headers (deep-deep-deep)".to_string(), description: format!("{} table(s) but none have header cells in deep-deep analysis.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th> elements to tables.".to_string() });
+        }
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_captions == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TABACC-V2002".to_string(), title: "Tables without captions (deep-deep-deep)".to_string(), description: format!("{} table(s) but none have captions in deep-deep analysis.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <caption> elements to tables.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LinkTextQualityDeepDeepValidator;
+impl Default for LinkTextQualityDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl LinkTextQualityDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LinkTextQualityDeepDeepValidator {
+    fn name(&self) -> &str { "link-text-quality-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let empty_text = ctx.page.links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none() && l.img_alt.is_none()).count();
+        if empty_text > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LINKTQ-V2001".to_string(), title: "Links without text (deep-deep)".to_string(), description: format!("{empty_text} link(s) have no text or aria-label in deep-deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all links.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ImageAltTextDeepDeepDeepValidator;
+impl Default for ImageAltTextDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl ImageAltTextDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ImageAltTextDeepDeepDeepValidator {
+    fn name(&self) -> &str { "image-alt-text-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let no_alt = ctx.page.images.iter().filter(|i| !i.has_alt).count();
+        if no_alt > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "IMGALT-V2001".to_string(), title: "Images missing alt attribute (deep-deep-deep)".to_string(), description: format!("{no_alt} image(s) lack an alt attribute in deep-deep analysis."), url: url.clone(), recommendation: "Add descriptive alt text to all images.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FocusManagementDeepDeepDeepValidator;
+impl Default for FocusManagementDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl FocusManagementDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FocusManagementDeepDeepDeepValidator {
+    fn name(&self) -> &str { "focus-management-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FOCUS-V2001".to_string(), title: "Positive tabindex found (deep-deep-deep)".to_string(), description: "Elements with positive tabindex disrupt natural tab order in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Remove positive tabindex values and use DOM order.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LanguageAttributesDeepDeepValidator;
+impl Default for LanguageAttributesDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl LanguageAttributesDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LanguageAttributesDeepDeepValidator {
+    fn name(&self) -> &str { "language-attributes-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.has_lang_attribute {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANGATTR-V2001".to_string(), title: "Missing lang attribute (deep-deep)".to_string(), description: "HTML element has no lang attribute in deep analysis.".to_string(), url: url.clone(), recommendation: "Add lang attribute to <html> element.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ColorContrastTextDeepValidator;
+impl Default for ColorContrastTextDeepValidator { fn default() -> Self { Self::new() } }
+impl ColorContrastTextDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ColorContrastTextDeepValidator {
+    fn name(&self) -> &str { "color-contrast-text-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let light_on_light = lower.contains("color: #fff") && lower.contains("background-color: #fff")
+                || lower.contains("color: white") && lower.contains("background-color: white");
+            if light_on_light {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "COLRCT-V2001".to_string(), title: "Possible light-on-light contrast issue (deep)".to_string(), description: "Detected white text on white background in deep analysis.".to_string(), url: url.clone(), recommendation: "Ensure sufficient color contrast for text.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ColorContrastLinkDeepValidator;
+impl Default for ColorContrastLinkDeepValidator { fn default() -> Self { Self::new() } }
+impl ColorContrastLinkDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ColorContrastLinkDeepValidator {
+    fn name(&self) -> &str { "color-contrast-link-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let light_link = (lower.contains("a { color: #fff") || lower.contains("a {color: white"))
+                && (lower.contains("background-color: #fff") || lower.contains("background-color: white"));
+            if light_link {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "COLRCL-V2001".to_string(), title: "Possible link contrast issue (deep)".to_string(), description: "Detected white links on white background in deep analysis.".to_string(), url: url.clone(), recommendation: "Ensure link colors have sufficient contrast.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct AnchorTextGenericDeepValidator;
+impl Default for AnchorTextGenericDeepValidator { fn default() -> Self { Self::new() } }
+impl AnchorTextGenericDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for AnchorTextGenericDeepValidator {
+    fn name(&self) -> &str { "anchor-text-generic-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let generic = ["click here", "read more", "learn more", "more", "here", "link", "this page"];
+        let generic_count = ctx.page.links.iter().filter(|l| generic.contains(&l.text.trim().to_lowercase().as_str())).count();
+        if generic_count > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "ANCHGEN-V2001".to_string(), title: "Generic anchor text (deep)".to_string(), description: format!("{generic_count} link(s) use generic anchor text in deep analysis."), url: url.clone(), recommendation: "Use descriptive, specific anchor text.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableCaptionPresenceDeepValidator;
+impl Default for TableCaptionPresenceDeepValidator { fn default() -> Self { Self::new() } }
+impl TableCaptionPresenceDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TableCaptionPresenceDeepValidator {
+    fn name(&self) -> &str { "table-caption-presence-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_captions == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TBLCAP-V2001".to_string(), title: "Tables without captions (deep)".to_string(), description: format!("{} table(s) but none have captions in deep analysis.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <caption> elements to tables for screen readers.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableHeaderScopeDeepValidator;
+impl Default for TableHeaderScopeDeepValidator { fn default() -> Self { Self::new() } }
+impl TableHeaderScopeDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TableHeaderScopeDeepValidator {
+    fn name(&self) -> &str { "table-header-scope-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_headers == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TBLSCOP-V2001".to_string(), title: "Tables without proper headers (deep)".to_string(), description: format!("{} table(s) but none have properly scoped header cells in deep analysis.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th scope='col'> or <th scope='row'> elements.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FormLabelAssociationDeepValidator;
+impl Default for FormLabelAssociationDeepValidator { fn default() -> Self { Self::new() } }
+impl FormLabelAssociationDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FormLabelAssociationDeepValidator {
+    fn name(&self) -> &str { "form-label-association-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let unlabeled = ctx.page.forms.iter().flat_map(|f| &f.inputs).filter(|i| !i.has_label && i.aria_label.is_none() && i.input_type.as_deref() != Some("hidden")).count();
+        if unlabeled > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLAB-V2001".to_string(), title: "Form inputs without label association (deep)".to_string(), description: format!("{unlabeled} input(s) have no associated label in deep analysis."), url: url.clone(), recommendation: "Use <label for='id'> to associate labels with inputs.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct AriaRequiredAttributesDeepValidator;
+impl Default for AriaRequiredAttributesDeepValidator { fn default() -> Self { Self::new() } }
+impl AriaRequiredAttributesDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for AriaRequiredAttributesDeepValidator {
+    fn name(&self) -> &str { "aria-required-attributes-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "ARIAREQ-V2001".to_string(), title: "ARIA roles without labels (deep)".to_string(), description: "ARIA roles found but no aria-label attributes in deep analysis.".to_string(), url: url.clone(), recommendation: "Add aria-label or aria-labelledby to interactive ARIA roles.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HeadingHierarchyDeepDeepDeepValidator;
+impl Default for HeadingHierarchyDeepDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HeadingHierarchyDeepDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HeadingHierarchyDeepDeepDeepValidator {
+    fn name(&self) -> &str { "heading-hierarchy-deep-deep-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2001".to_string(), title: "No headings found (deep-deep-deep)".to_string(), description: "Page has no heading elements in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Add at least one H1 heading.".to_string() });
+            return findings;
+        }
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2002".to_string(), title: "Missing H1 heading (deep-deep-deep)".to_string(), description: "No H1 heading found in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Add a single H1 heading.".to_string() });
+        } else if h1_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIER-V2003".to_string(), title: "Multiple H1 headings (deep-deep-deep)".to_string(), description: format!("{h1_count} H1 headings found in deep-deep analysis."), url: url.clone(), recommendation: "Use a single H1 heading per page.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkContentinfoDeepValidator;
+impl Default for LandmarkContentinfoDeepValidator { fn default() -> Self { Self::new() } }
+impl LandmarkContentinfoDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkContentinfoDeepValidator {
+    fn name(&self) -> &str { "landmark-contentinfo-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "contentinfo") {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANDCINFO-V2001".to_string(), title: "Missing contentinfo landmark (deep)".to_string(), description: "No contentinfo (footer) landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Add a <footer> or role='contentinfo' landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkComplementaryDeepValidator;
+impl Default for LandmarkComplementaryDeepValidator { fn default() -> Self { Self::new() } }
+impl LandmarkComplementaryDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkComplementaryDeepValidator {
+    fn name(&self) -> &str { "landmark-complementary-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "complementary") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANDCOMP-V2001".to_string(), title: "No complementary landmark (deep)".to_string(), description: "No complementary (aside) landmark found in deep analysis.".to_string(), url: url.clone(), recommendation: "Consider adding <aside> or role='complementary'.".to_string() });
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod v2_analyzer_tests {
@@ -7590,4 +9582,516 @@ mod v2_analyzer_tests {
     fn test_ext_auth_mixed_suspicious() { let mut p = make_page("https://example.com"); p.links = (0..5).map(|i| crate::parser::ExtractedLink { href: format!("https://link{i}.xyz/page"), text: format!("Link {i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "EXTAUTHDP002")); }
     #[test]
     fn test_ext_auth_high_authority_domains() { let mut p = make_page("https://example.com"); let domains = ["wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org", "w3.org", "schema.org"]; p.links = domains.iter().map(|d| crate::parser::ExtractedLink { href: format!("https://{d}/page"), text: d.to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== V8 Content Validators (30) tests =====
+    #[test]
+    fn test_apt_room_v8_missing() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment"}) }]; let f = ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "APTROOM-V2001"); }
+    #[test]
+    fn test_apt_room_v8_present() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": 3}) }]; assert!(ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_empty() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": ""}) }]; assert!(!ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_null() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": null}) }]; assert!(!ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_non_apt() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Hotel".into()), data: serde_json::json!({"@type": "Hotel"}) }]; assert!(ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_no_sd() { let p = make_page("https://example.com"); assert!(ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_number() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": 2}) }]; assert!(ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_multiple() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment"}) }]; let f = ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_apt_room_v8_whitespace() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": "   "}) }]; assert!(!ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_apt_room_v8_zero() { let mut p = make_page("https://example.com/apt"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"@type": "Apartment", "numberOfRooms": 0}) }]; assert!(ApartmentMissingNumberOfRoomsValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_car_model_v8_missing() { let mut p = make_page("https://example.com/car"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({"@type": "Car"}) }]; let f = CarMissingModelValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CARMODEL-V2001"); }
+    #[test]
+    fn test_car_model_v8_present() { let mut p = make_page("https://example.com/car"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({"@type": "Car", "model": "Model 3"}) }]; assert!(CarMissingModelValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_car_model_v8_empty() { let mut p = make_page("https://example.com/car"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({"@type": "Car", "model": ""}) }]; assert!(!CarMissingModelValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_car_model_v8_non_car() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Product".into()), data: serde_json::json!({"@type": "Product"}) }]; assert!(CarMissingModelValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_car_model_v8_no_sd() { let p = make_page("https://example.com"); assert!(CarMissingModelValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_music_tracks_v8_missing() { let mut p = make_page("https://example.com/album"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("MusicAlbum".into()), data: serde_json::json!({"@type": "MusicAlbum"}) }]; let f = MusicAlbumMissingTracksValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "MUSCTRACKS-V2001"); }
+    #[test]
+    fn test_music_tracks_v8_with_track() { let mut p = make_page("https://example.com/album"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("MusicAlbum".into()), data: serde_json::json!({"@type": "MusicAlbum", "track": [{"@type": "MusicRecording"}]}) }]; assert!(MusicAlbumMissingTracksValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_music_tracks_v8_with_numtracks() { let mut p = make_page("https://example.com/album"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("MusicAlbum".into()), data: serde_json::json!({"@type": "MusicAlbum", "numTracks": 12}) }]; assert!(MusicAlbumMissingTracksValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_music_tracks_v8_no_sd() { let p = make_page("https://example.com"); assert!(MusicAlbumMissingTracksValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_tv_episodes_v8_missing() { let mut p = make_page("https://example.com/tv"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("TVSeries".into()), data: serde_json::json!({"@type": "TVSeries"}) }]; let f = TVSeriesMissingEpisodesValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TVEP-V2001"); }
+    #[test]
+    fn test_tv_episodes_v8_with_episode() { let mut p = make_page("https://example.com/tv"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("TVSeries".into()), data: serde_json::json!({"@type": "TVSeries", "episode": [{"@type": "TVEpisode"}]}) }]; assert!(TVSeriesMissingEpisodesValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tv_episodes_v8_with_count() { let mut p = make_page("https://example.com/tv"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("TVSeries".into()), data: serde_json::json!({"@type": "TVSeries", "numberOfEpisodes": 24}) }]; assert!(TVSeriesMissingEpisodesValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tv_episodes_v8_no_sd() { let p = make_page("https://example.com"); assert!(TVSeriesMissingEpisodesValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_movie_director_v8_missing() { let mut p = make_page("https://example.com/movie"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Movie".into()), data: serde_json::json!({"@type": "Movie"}) }]; let f = MovieMissingDirectorValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "MOVDIR-V2001"); }
+    #[test]
+    fn test_movie_director_v8_present() { let mut p = make_page("https://example.com/movie"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Movie".into()), data: serde_json::json!({"@type": "Movie", "director": {"@type": "Person", "name": "Spielberg"}}) }]; assert!(MovieMissingDirectorValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_movie_director_v8_no_sd() { let p = make_page("https://example.com"); assert!(MovieMissingDirectorValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_book_author_v8_missing() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book"}) }]; let f = BookMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "BOOKAUTH-V2001"); }
+    #[test]
+    fn test_book_author_v8_present() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book", "author": "Author"}) }]; assert!(BookMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_book_isbn_v8_missing() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book"}) }]; let f = BookMissingIsbnValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "BOOKISBN-V2001"); }
+    #[test]
+    fn test_book_isbn_v8_present() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book", "isbn": "978-3-16-148410-0"}) }]; assert!(BookMissingIsbnValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_book_date_v8_missing() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book"}) }]; let f = BookMissingDatePublishedValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "BOOKDATE-V2001"); }
+    #[test]
+    fn test_book_date_v8_present() { let mut p = make_page("https://example.com/book"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"@type": "Book", "datePublished": "2023-01-01"}) }]; assert!(BookMissingDatePublishedValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_service_provider_v8_missing() { let mut p = make_page("https://example.com/svc"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Service".into()), data: serde_json::json!({"@type": "Service"}) }]; let f = ServiceMissingProviderValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "SVCPRV-V2001"); }
+    #[test]
+    fn test_service_provider_v8_present() { let mut p = make_page("https://example.com/svc"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Service".into()), data: serde_json::json!({"@type": "Service", "provider": "ACME"}) }]; assert!(ServiceMissingProviderValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_healthplan_provider_v8_missing() { let mut p = make_page("https://example.com/hp"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HealthPlan".into()), data: serde_json::json!({"@type": "HealthPlan"}) }]; let f = HealthPlanMissingProviderValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HPPRV-V2001"); }
+    #[test]
+    fn test_healthplan_provider_v8_present() { let mut p = make_page("https://example.com/hp"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HealthPlan".into()), data: serde_json::json!({"@type": "HealthPlan", "provider": "Insurer"}) }]; assert!(HealthPlanMissingProviderValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_invoice_account_v8_missing() { let mut p = make_page("https://example.com/inv"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Invoice".into()), data: serde_json::json!({"@type": "Invoice"}) }]; let f = InvoiceMissingAccountValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "INVACCT-V2001"); }
+    #[test]
+    fn test_invoice_account_v8_present() { let mut p = make_page("https://example.com/inv"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Invoice".into()), data: serde_json::json!({"@type": "Invoice", "accountId": "123"}) }]; assert!(InvoiceMissingAccountValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_permit_number_v8_missing() { let mut p = make_page("https://example.com/perm"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Permit".into()), data: serde_json::json!({"@type": "Permit"}) }]; let f = PermitMissingPermitNumberValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PERMNUM-V2001"); }
+    #[test]
+    fn test_permit_number_v8_present() { let mut p = make_page("https://example.com/perm"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Permit".into()), data: serde_json::json!({"@type": "Permit", "permitNumber": "P-123"}) }]; assert!(PermitMissingPermitNumberValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_plan_desc_v8_missing() { let mut p = make_page("https://example.com/plan"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Plan".into()), data: serde_json::json!({"@type": "Plan"}) }]; let f = PlanMissingDescriptionValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PLANDESC-V2001"); }
+    #[test]
+    fn test_plan_desc_v8_present() { let mut p = make_page("https://example.com/plan"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Plan".into()), data: serde_json::json!({"@type": "Plan", "description": "A plan"}) }]; assert!(PlanMissingDescriptionValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_rp_about_v8_missing() { let mut p = make_page("https://example.com/rp"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("ResearchProject".into()), data: serde_json::json!({"@type": "ResearchProject"}) }]; let f = ResearchProjectMissingAboutValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "RPABOUT-V2001"); }
+    #[test]
+    fn test_rp_about_v8_present() { let mut p = make_page("https://example.com/rp"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("ResearchProject".into()), data: serde_json::json!({"@type": "ResearchProject", "about": "AI safety"}) }]; assert!(ResearchProjectMissingAboutValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_sched_tz_v8_missing() { let mut p = make_page("https://example.com/sched"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Schedule".into()), data: serde_json::json!({"@type": "Schedule"}) }]; let f = ScheduleMissingTimezoneValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "SCHEDTZ-V2001"); }
+    #[test]
+    fn test_sched_tz_v8_present() { let mut p = make_page("https://example.com/sched"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Schedule".into()), data: serde_json::json!({"@type": "Schedule", "timezone": "America/New_York"}) }]; assert!(ScheduleMissingTimezoneValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_trip_it_v8_missing() { let mut p = make_page("https://example.com/trip"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Trip".into()), data: serde_json::json!({"@type": "Trip"}) }]; let f = TripMissingItineraryValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TRIPIT-V2001"); }
+    #[test]
+    fn test_trip_it_v8_present() { let mut p = make_page("https://example.com/trip"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Trip".into()), data: serde_json::json!({"@type": "Trip", "itinerary": []}) }]; assert!(TripMissingItineraryValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_wu_name_v8_missing() { let mut p = make_page("https://example.com/wu"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WorkersUnion".into()), data: serde_json::json!({"@type": "WorkersUnion"}) }]; let f = WorkersUnionMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WUNAME-V2001"); }
+    #[test]
+    fn test_wu_name_v8_present() { let mut p = make_page("https://example.com/wu"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WorkersUnion".into()), data: serde_json::json!({"@type": "WorkersUnion", "name": "Local 123"}) }]; assert!(WorkersUnionMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_webapi_doc_v8_missing() { let mut p = make_page("https://example.com/api"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebAPI".into()), data: serde_json::json!({"@type": "WebAPI"}) }]; let f = WebAPIMissingDocumentationValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WAPIDOC-V2001"); }
+    #[test]
+    fn test_webapi_doc_v8_present() { let mut p = make_page("https://example.com/api"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebAPI".into()), data: serde_json::json!({"@type": "WebAPI", "documentation": "https://docs.example.com"}) }]; assert!(WebAPIMissingDocumentationValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_wearable_dev_v8_missing() { let mut p = make_page("https://example.com/w"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Wearable".into()), data: serde_json::json!({"@type": "Wearable"}) }]; let f = WearableMissingDeviceTypeValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WEARDEV-V2001"); }
+    #[test]
+    fn test_wearable_dev_v8_present() { let mut p = make_page("https://example.com/w"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Wearable".into()), data: serde_json::json!({"@type": "Wearable", "deviceType": "SmartWatch"}) }]; assert!(WearableMissingDeviceTypeValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_wpe_name_v8_missing() { let mut p = make_page("https://example.com/wpe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebPageElement".into()), data: serde_json::json!({"@type": "WebPageElement"}) }]; let f = WebPageElementMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WPELNAME-V2001"); }
+    #[test]
+    fn test_wpe_name_v8_present() { let mut p = make_page("https://example.com/wpe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebPageElement".into()), data: serde_json::json!({"@type": "WebPageElement", "name": "Header"}) }]; assert!(WebPageElementMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_worker_job_v8_missing() { let mut p = make_page("https://example.com/w"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Worker".into()), data: serde_json::json!({"@type": "Worker"}) }]; let f = WorkerMissingJobTitleValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WORKJOB-V2001"); }
+    #[test]
+    fn test_worker_job_v8_present() { let mut p = make_page("https://example.com/w"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Worker".into()), data: serde_json::json!({"@type": "Worker", "jobTitle": "Engineer"}) }]; assert!(WorkerMissingJobTitleValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_article_headline_v8_missing() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article"}) }]; let f = ArticleMissingHeadlineValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "ARTHL-V2001"); }
+    #[test]
+    fn test_article_headline_v8_present() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article", "headline": "News"}) }]; assert!(ArticleMissingHeadlineValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_article_date_v8_missing() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article"}) }]; let f = ArticleMissingDatePublishedValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "ARTDT-V2001"); }
+    #[test]
+    fn test_article_date_v8_present() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article", "datePublished": "2023-01-01"}) }]; assert!(ArticleMissingDatePublishedValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_article_author_v8_missing() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article"}) }]; let f = ArticleMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "ARTAUTH-V2001"); }
+    #[test]
+    fn test_article_author_v8_present() { let mut p = make_page("https://example.com/art"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article", "author": "Me"}) }]; assert!(ArticleMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_org_name_v8_missing() { let mut p = make_page("https://example.com/org"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"@type": "Organization"}) }]; let f = OrganizationMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "ORGNAME-V2001"); }
+    #[test]
+    fn test_org_name_v8_present() { let mut p = make_page("https://example.com/org"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"@type": "Organization", "name": "ACME"}) }]; assert!(OrganizationMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_person_name_v8_missing() { let mut p = make_page("https://example.com/p"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Person".into()), data: serde_json::json!({"@type": "Person"}) }]; let f = PersonMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PERSNAME-V2001"); }
+    #[test]
+    fn test_person_name_v8_present() { let mut p = make_page("https://example.com/p"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Person".into()), data: serde_json::json!({"@type": "Person", "name": "John"}) }]; assert!(PersonMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_job_title_v8_missing() { let mut p = make_page("https://example.com/job"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({"@type": "JobPosting"}) }]; let f = JobPostingMissingTitleValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "JOBTITLE-V2001"); }
+    #[test]
+    fn test_job_title_v8_present() { let mut p = make_page("https://example.com/job"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({"@type": "JobPosting", "title": "Engineer"}) }]; assert!(JobPostingMissingTitleValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_course_name_v8_missing() { let mut p = make_page("https://example.com/c"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Course".into()), data: serde_json::json!({"@type": "Course"}) }]; let f = CourseMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "COURSENAME-V2001"); }
+    #[test]
+    fn test_course_name_v8_present() { let mut p = make_page("https://example.com/c"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Course".into()), data: serde_json::json!({"@type": "Course", "name": "Rust 101"}) }]; assert!(CourseMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_recipe_name_v8_missing() { let mut p = make_page("https://example.com/r"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe"}) }]; let f = RecipeMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "RECIPENAME-V2001"); }
+    #[test]
+    fn test_recipe_name_v8_present() { let mut p = make_page("https://example.com/r"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "name": "Pasta"}) }]; assert!(RecipeMissingNameValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_lb_npi_v8_missing() { let mut p = make_page("https://example.com/lb"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("LocalBusiness".into()), data: serde_json::json!({"@type": "LocalBusiness"}) }]; let f = LocalBusinessMissingNpiValidatorV2::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LBPI-V2001"); }
+    #[test]
+    fn test_lb_npi_v8_present() { let mut p = make_page("https://example.com/lb"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("LocalBusiness".into()), data: serde_json::json!({"@type": "LocalBusiness", "identifier": "12345"}) }]; assert!(LocalBusinessMissingNpiValidatorV2::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== V8 Security Validators (25) tests =====
+    #[test]
+    fn test_csp_ss_deep_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_ss_deep_v8_missing_self() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "script-src 'unsafe-inline'".into())]; let f = CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPSS-V2001")); }
+    #[test]
+    fn test_csp_ss_deep_v8_has_self() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "script-src 'self'".into())]; assert!(CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_csp_ss_deep_v8_unsafe_inline() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "script-src 'self' 'unsafe-inline'".into())]; let f = CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPSS-V2002")); }
+    #[test]
+    fn test_csp_ss_deep_v8_unsafe_eval() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "script-src 'self' 'unsafe-eval'".into())]; let f = CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPSS-V2003")); }
+    #[test]
+    fn test_csp_ss_deep_v8_no_directive() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "default-src 'self'".into())]; let f = CspScriptSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_csp_sty_deep_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspStyleSrcSelfDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_sty_deep_v8_missing_self() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "style-src *".into())]; let f = CspStyleSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPSTY-V2001")); }
+    #[test]
+    fn test_csp_sty_deep_v8_has_self() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "style-src 'self'".into())]; assert!(CspStyleSrcSelfDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_csp_con_deep_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspConnectSrcDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_con_deep_v8_wildcard() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "connect-src *".into())]; let f = CspConnectSrcDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPCON-V2001")); }
+    #[test]
+    fn test_csp_con_deep_v8_no_directive() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "default-src 'self'".into())]; assert!(CspConnectSrcDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_csp_fnt_deep_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspFontSrcDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_fnt_deep_v8_wildcard() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "font-src *".into())]; let f = CspFontSrcDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "CSPFNT-V2001")); }
+
+    #[test]
+    fn test_csp_obj_dd_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspObjectSrcNoneDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_obj_dd_v8_not_none() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "object-src 'self'".into())]; let f = CspObjectSrcNoneDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_csp_obj_dd_v8_is_none() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "object-src 'none'".into())]; assert!(CspObjectSrcNoneDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_csp_base_dd_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspBaseUriSelfDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_base_dd_v8_missing() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "default-src 'self'".into())]; let f = CspBaseUriSelfDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_csp_base_dd_v8_has_self() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "base-uri 'self'".into())]; assert!(CspBaseUriSelfDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_csp_form_dd_v8_no_csp() { let p = make_page("https://example.com"); assert!(CspFormActionSelfDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_csp_form_dd_v8_missing() { let p = make_page("https://example.com"); let h = vec![("Content-Security-Policy".into(), "default-src 'self'".into())]; let f = CspFormActionSelfDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_hsts_pr_dd_v8_no_hsts() { let p = make_page("https://example.com"); assert!(HstsPreloadReadyDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_hsts_pr_dd_v8_complete() { let p = make_page("https://example.com"); let h = vec![("Strict-Transport-Security".into(), "max-age=31536000; includeSubDomains; preload".into())]; assert!(HstsPreloadReadyDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_hsts_pr_dd_v8_incomplete() { let p = make_page("https://example.com"); let h = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; let f = HstsPreloadReadyDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_hsts_max_dd_v8_no_hsts() { let p = make_page("https://example.com"); assert!(HstsMaxAgeDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_hsts_max_dd_v8_low() { let p = make_page("https://example.com"); let h = vec![("Strict-Transport-Security".into(), "max-age=3600".into())]; let f = HstsMaxAgeDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HSTSMAX-V2001"); }
+    #[test]
+    fn test_hsts_max_dd_v8_ok() { let p = make_page("https://example.com"); let h = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; assert!(HstsMaxAgeDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_cookie_sec_ddd_v8_no_cookies() { let p = make_page("https://example.com"); assert!(CookieSecureDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_cookie_sec_ddd_v8_missing() { let p = make_page("https://example.com"); let h = vec![("Set-Cookie".into(), "user=abc123".into())]; let f = CookieSecureDeepDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(f.iter().any(|x| x.code == "COOKIESEC-V2001")); }
+    #[test]
+    fn test_cookie_sec_ddd_v8_secure() { let p = make_page("https://example.com"); let h = vec![("Set-Cookie".into(), "session=abc123; Secure".into())]; assert!(CookieSecureDeepDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_cookie_http_ddd_v8_no_cookies() { let p = make_page("https://example.com"); assert!(CookieHttpOnlyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_cookie_http_ddd_v8_missing() { let p = make_page("https://example.com"); let h = vec![("Set-Cookie".into(), "session=abc123".into())]; let f = CookieHttpOnlyDeepDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_cookie_ss_ddd_v8_no_cookies() { let p = make_page("https://example.com"); assert!(CookieSameSiteDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_cookie_ss_ddd_v8_missing() { let p = make_page("https://example.com"); let h = vec![("Set-Cookie".into(), "session=abc123".into())]; let f = CookieSameSiteDeepDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_mixed_iframe_dd_v8_http() { let p = make_page("http://example.com"); assert!(MixedContentIframeDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_mixed_iframe_dd_v8_no_iframe() { let p = make_page("https://example.com"); let h = MixedContentIframeDeepDeepValidator::new().analyze(&make_ctx(&p, Some("<html><body>No iframes</body></html>"))); assert!(h.is_empty()); }
+    #[test]
+    fn test_mixed_iframe_dd_v8_with_iframe() { let p = make_page("https://example.com"); let f = MixedContentIframeDeepDeepValidator::new().analyze(&make_ctx(&p, Some("<html><body><iframe src=\"http://bad.com\"></iframe></body></html>"))); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_cors_wild_dd_v8_no_header() { let p = make_page("https://example.com"); assert!(CorsWildcardDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_cors_wild_dd_v8_wildcard() { let p = make_page("https://example.com"); let h = vec![("Access-Control-Allow-Origin".into(), "*".into())]; let f = CorsWildcardDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_cors_wild_dd_v8_specific() { let p = make_page("https://example.com"); let h = vec![("Access-Control-Allow-Origin".into(), "https://other.com".into())]; assert!(CorsWildcardDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_rp_strict_dd_v8_no_header() { let p = make_page("https://example.com"); assert!(ReferrerPolicyStrictDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_rp_strict_dd_v8_strict() { let p = make_page("https://example.com"); let h = vec![("Referrer-Policy".into(), "strict-origin-when-cross-origin".into())]; assert!(ReferrerPolicyStrictDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_rp_strict_dd_v8_not_strict() { let p = make_page("https://example.com"); let h = vec![("Referrer-Policy".into(), "unsafe-url".into())]; let f = ReferrerPolicyStrictDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_xfo_dd_v8_no_header_no_csp() { let p = make_page("https://example.com"); assert!(XFrameOptionsDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_xfo_dd_v8_valid() { let p = make_page("https://example.com"); let h = vec![("X-Frame-Options".into(), "DENY".into())]; assert!(XFrameOptionsDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_xfo_dd_v8_invalid() { let p = make_page("https://example.com"); let h = vec![("X-Frame-Options".into(), "ALLOW".into())]; let f = XFrameOptionsDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_pp_dd_v8_missing() { let p = make_page("https://example.com"); let f = PermissionsPolicyDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PERMP-V2001"); }
+    #[test]
+    fn test_pp_dd_v8_present() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=()".into())]; assert!(PermissionsPolicyDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    #[test]
+    fn test_coi_dd_v8_no_headers() { let p = make_page("https://example.com"); let f = CrossOriginIsolationDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_coi_dd_v8_both() { let p = make_page("https://example.com"); let h = vec![("Cross-Origin-Embedder-Policy".into(), "require-corp".into()), ("Cross-Origin-Opener-Policy".into(), "same-origin".into())]; assert!(CrossOriginIsolationDeepDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    // ===== V8 SEO Validators (25) tests =====
+    #[test]
+    fn test_title_miss_dd_v8_none() { let p = make_page("https://example.com"); let f = TitleMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TITLEMISS-V2001"); }
+    #[test]
+    fn test_title_miss_dd_v8_empty() { let mut p = make_page("https://example.com"); p.meta.title = Some("".to_string()); let f = TitleMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_title_miss_dd_v8_present() { let mut p = make_page("https://example.com"); p.meta.title = Some("My Title".to_string()); assert!(TitleMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_title_kden_dd_v8_no_overlap() { let mut p = make_page("https://example.com"); p.meta.title = Some("Amazing Super Widget".to_string()); p.meta.description = Some("Completely different text here".to_string()); let f = TitleKeywordDensityDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_title_kden_dd_v8_good_overlap() { let mut p = make_page("https://example.com"); p.meta.title = Some("Amazing Widget".to_string()); p.meta.description = Some("Buy the amazing widget".to_string()); assert!(TitleKeywordDensityDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_title_brand_dd_v8_ends_sep() { let mut p = make_page("https://example.com"); p.meta.title = Some("My Page | ".to_string()); let f = TitleBrandPlacementDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_title_brand_dd_v8_no_sep() { let mut p = make_page("https://example.com"); p.meta.title = Some("My Page Brand".to_string()); assert!(TitleBrandPlacementDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_meta_miss_dd_v8_none() { let p = make_page("https://example.com"); let f = MetaDescriptionMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "METADESCMISS-V2001"); }
+    #[test]
+    fn test_meta_miss_dd_v8_present() { let mut p = make_page("https://example.com"); p.meta.description = Some("A description".to_string()); assert!(MetaDescriptionMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_meta_short_dd_v8_short() { let mut p = make_page("https://example.com"); p.meta.description = Some("Short".to_string()); let f = MetaDescriptionTooShortDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_meta_short_dd_v8_ok() { let mut p = make_page("https://example.com"); p.meta.description = Some("A good length description that is between 120 and 160 characters long for testing purposes.".to_string()); assert!(MetaDescriptionTooShortDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_meta_uniq_dd_v8_same() { let mut p = make_page("https://example.com"); p.meta.title = Some("Same Title".to_string()); p.meta.description = Some("Same Title".to_string()); let f = MetaDescriptionUniquenessDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_meta_uniq_dd_v8_diff() { let mut p = make_page("https://example.com"); p.meta.title = Some("Title".to_string()); p.meta.description = Some("Different description".to_string()); assert!(MetaDescriptionUniquenessDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_can_miss_dd_v8_none() { let p = make_page("https://example.com"); let f = CanonicalMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CANMISS-V2001"); }
+    #[test]
+    fn test_can_miss_dd_v8_present() { let mut p = make_page("https://example.com"); p.meta.canonical = Some("https://example.com/".to_string().parse().unwrap()); assert!(CanonicalMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_can_selfref_ddd_v8_self() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some("https://example.com/page".parse().unwrap()); assert!(CanonicalSelfReferenceDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_can_selfref_ddd_v8_diff() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some("https://example.com/other".parse().unwrap()); let f = CanonicalSelfReferenceDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_can_chain_ddd_v8_one() { let p = make_page("https://example.com"); assert!(CanonicalChainDeepDeepDeepValidator::new().analyze(&make_ctx(&p, Some("<html><head><link rel='canonical' href='https://example.com'></head></html>"))).is_empty()); }
+    #[test]
+    fn test_can_chain_ddd_v8_multiple() { let p = make_page("https://example.com"); let f = CanonicalChainDeepDeepDeepValidator::new().analyze(&make_ctx(&p, Some("<html><head><link rel='canonical' href='https://a.com'><link rel='canonical' href='https://b.com'></head></html>"))); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_href_miss_dd_v8_empty() { let p = make_page("https://example.com"); let f = HreflangMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_href_miss_dd_v8_present() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: "https://example.com/en".parse().unwrap() }]; assert!(HreflangMissingDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_sitemap_miss_dd_v8_no_ref() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some("https://example.com/page".parse().unwrap()); let f = SitemapMissingDeepDeepValidator::new().analyze(&make_ctx(&p, Some("<html></html>"))); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_robots_empty_dd_v8_empty() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some(""); let f = RobotsTxtEmptyDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_robots_empty_dd_v8_content() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some("User-agent: *\nDisallow: /admin"); assert!(RobotsTxtEmptyDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_robots_empty_dd_v8_none() { let p = make_page("https://example.com"); assert!(RobotsTxtEmptyDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_int_div_dd_v8_few() { let mut p = make_page("https://example.com"); p.links = (0..3).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("L{i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(InternalLinksDiversityDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_div_dd_v8_low() { let mut p = make_page("https://example.com"); p.links = (0..10).map(|_| crate::parser::ExtractedLink { href: "https://example.com/same".into(), text: "Same".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); let f = InternalLinksDiversityDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_int_depth_dd_v8_few() { let mut p = make_page("https://example.com"); p.links = (0..3).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("L{i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(InternalLinksDepthDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_dd_v8_deep() { let mut p = make_page("https://example.com"); p.links = (0..12).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/a/b/c/d/e/f/page{i}"), text: format!("L{i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); let f = InternalLinksDepthDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_meta_len_deep_v8_long() { let mut p = make_page("https://example.com"); p.meta.description = Some("A".repeat(200)); let f = MetaDescriptionLengthDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "METALEN-V2001"); }
+    #[test]
+    fn test_meta_len_deep_v8_ok() { let mut p = make_page("https://example.com"); p.meta.description = Some("A good length meta description that falls within the recommended range of 120 to 160 characters.".to_string()); assert!(MetaDescriptionLengthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_title_len_deep_v8_long() { let mut p = make_page("https://example.com"); p.meta.title = Some("A".repeat(80)); let f = TitleLengthDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TITLELEN-V2001"); }
+    #[test]
+    fn test_title_len_deep_v8_ok() { let mut p = make_page("https://example.com"); p.meta.title = Some("A Good Title That Is Of Length".to_string()); assert!(TitleLengthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_sitemap_deep_dd_v8_no_robots() { let p = make_page("https://example.com"); assert!(SitemapCoverageDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_sitemap_deep_dd_v8_no_sitemap_in_robots() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some("User-agent: *\nDisallow: /admin"); let f = SitemapCoverageDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_sitemap_deep_dd_v8_sitemap_in_robots() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some("User-agent: *\nSitemap: https://example.com/sitemap.xml"); assert!(SitemapCoverageDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+
+    #[test]
+    fn test_robots_deep_dd_v8_no_ua() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some("Disallow: /admin"); let f = RobotsTxtAnalysisDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_robots_deep_dd_v8_has_ua() { let p = make_page("https://example.com"); let mut ctx = make_ctx(&p, None); ctx.robots_txt = Some("User-agent: *\nDisallow: /admin"); assert!(RobotsTxtAnalysisDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+
+    #[test]
+    fn test_int_lq_deep_v8_few() { let mut p = make_page("https://example.com"); p.links = (0..3).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("L{i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(InternalLinkQualityDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_lq_deep_v8_nofollow() { let mut p = make_page("https://example.com"); p.links = (0..6).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("L{i}"), rel: vec!["nofollow".into()], is_external: false, aria_label: None, img_alt: None }).collect(); let f = InternalLinkQualityDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_ext_auth_dd_v8_few() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://other.com/page".into(), text: "L".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }]; assert!(ExternalLinkAuthorityDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_dd_v8_suspicious() { let mut p = make_page("https://example.com"); p.links = (0..8).map(|i| crate::parser::ExtractedLink { href: format!("https://link{i}.ru/page"), text: format!("L{i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); let f = ExternalLinkAuthorityDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_href_fmt_dd_v8_valid() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: "https://example.com/en".parse().unwrap() }, crate::meta::HreflangTag { lang: "fr".into(), url: "https://example.com/fr".parse().unwrap() }]; assert!(HreflangLocaleFormatDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_href_fmt_dd_v8_invalid() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "english".into(), url: "https://example.com".parse().unwrap() }]; let f = HreflangLocaleFormatDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_can_depth_dd_v8_shallow() { let mut p = make_page("https://example.com"); p.meta.canonical = Some("https://example.com/page".parse().unwrap()); assert!(CanonicalDepthDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== V8 Accessibility Validators (20) tests =====
+    #[test]
+    fn test_land_main_deep_v8_missing() { let p = make_page("https://example.com"); let f = LandmarkMainDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANDMAIN-V2001"); }
+    #[test]
+    fn test_land_main_deep_v8_present() { let mut p = make_page("https://example.com"); p.has_main_landmark = true; assert!(LandmarkMainDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_land_nav_deep_v8_missing() { let p = make_page("https://example.com"); let f = LandmarkNavDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANDNAV-V2001"); }
+    #[test]
+    fn test_land_nav_deep_v8_present() { let mut p = make_page("https://example.com"); p.has_nav_landmark = true; assert!(LandmarkNavDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_land_ban_deep_v8_missing() { let p = make_page("https://example.com"); let f = LandmarkBannerDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANDBAN-V2001"); }
+    #[test]
+    fn test_land_ban_deep_v8_present() { let mut p = make_page("https://example.com"); p.landmarks = vec!["Banner".into()]; assert!(LandmarkBannerDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_head_skip_dd_v8_few() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }, Heading { level: 2, text: "H2".into(), length: 2 }]; assert!(HeadingSkipLevelsDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_head_skip_dd_v8_skip() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }, Heading { level: 3, text: "H3".into(), length: 2 }]; let f = HeadingSkipLevelsDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_form_lbl_dd_ddd_v8_ok() { let p = make_page("https://example.com"); assert!(FormLabelsDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_tbl_acc_dd_ddd_v8_no_tables() { let p = make_page("https://example.com"); assert!(TableAccessibilityDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tbl_acc_dd_ddd_v8_no_headers() { let mut p = make_page("https://example.com"); p.tables_total = 2; p.tables_with_headers = 0; let f = TableAccessibilityDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_tbl_acc_dd_ddd_v8_no_captions() { let mut p = make_page("https://example.com"); p.tables_total = 2; p.tables_with_headers = 2; p.tables_with_captions = 0; let f = TableAccessibilityDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_link_tq_dd_v8_few() { let mut p = make_page("https://example.com"); p.links = (0..3).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("L{i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(LinkTextQualityDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_link_tq_dd_v8_empty() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://example.com/page".into(), text: "".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }]; let f = LinkTextQualityDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_img_alt_ddd_v8_ok() { let mut p = make_page("https://example.com"); p.images = vec![crate::parser::ExtractedImage { src: "img.jpg".into(), alt: "Alt".into(), has_alt: true, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }]; assert!(ImageAltTextDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_img_alt_ddd_v8_missing() { let mut p = make_page("https://example.com"); p.images = vec![crate::parser::ExtractedImage { src: "img.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }]; let f = ImageAltTextDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_focus_ddd_v8_ok() { let p = make_page("https://example.com"); assert!(FocusManagementDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_focus_ddd_v8_positive() { let mut p = make_page("https://example.com"); p.has_positive_tabindex = true; let f = FocusManagementDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_lang_dd_v8_missing() { let p = make_page("https://example.com"); let f = LanguageAttributesDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANGATTR-V2001"); }
+    #[test]
+    fn test_lang_dd_v8_present() { let mut p = make_page("https://example.com"); p.has_lang_attribute = true; assert!(LanguageAttributesDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_colr_txt_deep_v8_ok() { let p = make_page("https://example.com"); assert!(ColorContrastTextDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_colr_link_deep_v8_ok() { let p = make_page("https://example.com"); assert!(ColorContrastLinkDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_anch_gen_deep_v8_ok() { let mut p = make_page("https://example.com"); p.links = (0..3).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("Descriptive link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(AnchorTextGenericDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_anch_gen_deep_v8_generic() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://example.com/page".into(), text: "click here".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }]; let f = AnchorTextGenericDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_tbl_cap_deep_v8_no_tables() { let p = make_page("https://example.com"); assert!(TableCaptionPresenceDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tbl_cap_deep_v8_no_captions() { let mut p = make_page("https://example.com"); p.tables_total = 1; p.tables_with_captions = 0; let f = TableCaptionPresenceDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_tbl_scop_deep_v8_no_tables() { let p = make_page("https://example.com"); assert!(TableHeaderScopeDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tbl_scop_deep_v8_no_headers() { let mut p = make_page("https://example.com"); p.tables_total = 1; p.tables_with_headers = 0; let f = TableHeaderScopeDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_form_lab_deep_v8_ok() { let p = make_page("https://example.com"); assert!(FormLabelAssociationDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_aria_req_deep_v8_no_roles() { let p = make_page("https://example.com"); assert!(AriaRequiredAttributesDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_aria_req_deep_v8_roles_no_labels() { let mut p = make_page("https://example.com"); p.aria_role_count = 3; p.aria_label_count = 0; let f = AriaRequiredAttributesDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    #[test]
+    fn test_head_hier_ddd_v8_no_headings() { let p = make_page("https://example.com"); let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HHIER-V2001"); }
+    #[test]
+    fn test_head_hier_ddd_v8_no_h1() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 2, text: "H2".into(), length: 2 }]; let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "HHIER-V2002")); }
+    #[test]
+    fn test_head_hier_ddd_v8_multi_h1() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1a".into(), length: 3 }, Heading { level: 1, text: "H1b".into(), length: 3 }]; let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "HHIER-V2003")); }
+    #[test]
+    fn test_head_hier_ddd_v8_good() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }]; assert!(HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_land_cinfo_deep_v8_missing() { let p = make_page("https://example.com"); let f = LandmarkContentinfoDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANDCINFO-V2001"); }
+    #[test]
+    fn test_land_cinfo_deep_v8_present() { let mut p = make_page("https://example.com"); p.landmarks = vec!["Contentinfo".into()]; assert!(LandmarkContentinfoDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    #[test]
+    fn test_land_comp_deep_v8_missing() { let p = make_page("https://example.com"); let f = LandmarkComplementaryDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "LANDCOMP-V2001"); }
+    #[test]
+    fn test_land_comp_deep_v8_present() { let mut p = make_page("https://example.com"); p.landmarks = vec!["Complementary".into()]; assert!(LandmarkComplementaryDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
 }

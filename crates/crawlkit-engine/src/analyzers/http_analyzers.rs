@@ -765,11 +765,33 @@ impl Analyzer for SslCertificateValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        // No certificate data was captured for this crawl; SSL validation is
-        // a silent no-op rather than a per-page informational finding.
+        // No certificate data was captured for this crawl. The production
+        // registry registers `SslCertificateValidator::empty()`, so TLS
+        // certificate metadata is not yet wired from the HTTP client into
+        // the analyzer. Emit a single informational finding per page so the
+        // limitation is visible in reports rather than silently absent.
+        // Tracked for closure in ROADMAP.md (Phase 1 security hardening).
         let info = match &self.cert_info {
             Some(i) => i,
-            None => return Vec::new(),
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "SSL000".to_string(),
+                    title: "SSL certificate not inspected".to_string(),
+                    description: "No TLS certificate metadata was captured for this \
+                                  page, so expiry, chain, and hostname checks were \
+                                  not performed. Certificate inspection is not yet \
+                                  wired into the default crawl path."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Until certificate inspection is wired in, \
+                                     verify TLS configuration with an external tool \
+                                     (e.g. sslscan, testssl.sh, or an online checker)."
+                        .to_string(),
+                });
+                return findings;
+            }
         };
 
         // --- Expired certificate ---

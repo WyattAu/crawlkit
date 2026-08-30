@@ -9,4 +9,5 @@ cargo test -p crawlkit-engine --test integration_tests -- --test-threads="$threa
 cargo test -p crawlkit-engine --test parallel_pipeline_tests -- --test-threads="$threads"
 cargo test -p crawlkit-engine --test property_tests -- --test-threads="$threads"
 cargo test -p crawlkit-engine --test determinism_tests -- --test-threads="$threads"
+cargo test -p crawlkit-engine --test ssrf_boundary_tests -- --test-threads="$threads"
 cargo test -p crawlkit --test cli_tests -- --test-threads="$threads"

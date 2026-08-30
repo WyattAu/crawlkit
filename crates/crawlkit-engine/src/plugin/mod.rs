@@ -912,6 +912,26 @@ impl Default for PluginRegistry {
 mod tests {
     use super::*;
 
+    // Security defaults contract: any change that weakens the sandbox
+    // defaults fails here. Mirrors docs/SECURITY_BOUNDARIES.md.
+    #[test]
+    fn wasmconfig_defaults_are_fail_closed() {
+        let cfg = WasmConfig::default();
+        // Fuel must be bounded (no zero / no unbounded compute).
+        assert!(cfg.max_fuel > 0, "max_fuel must be bounded");
+        // Memory must be bounded.
+        assert!(cfg.max_memory_bytes > 0, "max_memory_bytes must be bounded");
+        // Wall-clock timeout must be bounded.
+        assert!(
+            cfg.max_analysis_timeout_ms > 0,
+            "max_analysis_timeout_ms must be bounded"
+        );
+        // Trust verification is required by default (fail-closed).
+        assert_eq!(cfg.plugin_verification, PluginVerification::Required);
+        // Network is deny-by-default.
+        assert!(!cfg.allow_plugin_network, "network must be deny-by-default");
+    }
+
     #[test]
     fn test_plugin_registry_default() {
         let registry = PluginRegistry::new();

@@ -2099,8 +2099,12 @@ fn test_ssl_no_data() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200));
     let findings = SslCertificateValidator::empty().analyze(&ctx);
-    // Empty-data analyzers must not emit per-page noise findings.
-    assert!(findings.is_empty());
+    // With no certificate data captured, the analyzer emits a single
+    // informational finding (SSL000) making the limitation visible,
+    // rather than silently returning nothing.
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0].code, "SSL000");
+    assert_eq!(findings[0].severity, Severity::Info);
 }
 
 #[test]

@@ -10,6 +10,9 @@ known metadata destinations. URL validation is also applied to redirects by
 the API HTTP client. DNS rebinding and connection-level address pinning remain
 operational concerns and must be handled by the deployment network policy.
 
+The full reject-list is asserted by `tests/ssrf_boundary_tests.rs`; any change
+that permits a previously-rejected target fails the contract suite.
+
 ## WASM plugins
 
 WASM plugins are sandboxed by Wasmtime. Default configuration:
@@ -19,6 +22,9 @@ WASM plugins are sandboxed by Wasmtime. Default configuration:
 - filesystem and environment capabilities rejected;
 - fuel, memory, and epoch timeout limits enabled;
 - plugin failures are isolated from the crawl.
+
+These defaults are asserted by `wasmconfig_defaults_are_fail_closed` in
+`plugin/mod.rs`; weakening a default fails the unit suite.
 
 The network host function uses no redirects, a 10-second timeout, SSRF
 validation, and a 1 MiB response cap. Enabling plugin network access is an
@@ -30,6 +36,15 @@ Native plugins are not sandboxed. Loading one grants arbitrary process-level
 capability and therefore must be treated as trusted-code execution. The native
 ABI contains scoped unsafe FFI and is excluded from claims of zero unsafe code.
 Use WASM for untrusted extensions.
+
+## SSL certificate analysis
+
+The `SslCertificateValidator` operates on pre-fetched certificate metadata.
+In the default crawl path, no TLS certificate data is wired into the
+analyzer, so it emits a single informational finding (`SSL000`) stating that
+certificate inspection was not performed, rather than silently producing no
+output. Wiring live TLS metadata into the analyzer is tracked in
+`ROADMAP.md` (Phase 1).
 
 ## Verification
 

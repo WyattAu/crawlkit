@@ -67,7 +67,7 @@ jobs:
         with:
           key: integration
       - name: Integration tests (excluding playwright)
-        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests
+        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests --test ssrf_boundary_tests
 
   test-services:
     name: Service-backed Tests (PostgreSQL + Redis)

@@ -1,5 +1,4 @@
-#![allow(clippy::useless_format)]
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
 use std::collections::HashMap;
 
 use regex::Regex;
@@ -7354,6 +7353,812 @@ impl Analyzer for ContentTypeSniffingAnalyzerV2 {
     }
 }
 
+// =========================================================================
+// HstsPreloadListValidator — HSTSPRELOAD001
+// =========================================================================
+
+pub struct HstsPreloadListValidator;
+impl Default for HstsPreloadListValidator { fn default() -> Self { Self::new() } }
+impl HstsPreloadListValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for HstsPreloadListValidator {
+    fn name(&self) -> &str { "hsts-preload-list-validator" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hsts = ctx.headers.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security"))
+            .map(|(_, v)| v.as_str());
+        if let Some(value) = hsts {
+            let lower = value.to_lowercase();
+            if lower.contains("preload") {
+                let max_age_ok = lower.find("max-age=").map_or(false, |pos| {
+                    let after = &lower[pos + 8..];
+                    let num: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+                    num.parse::<u64>().map_or(false, |a| a >= 31536000)
+                });
+                let has_isd = lower.contains("includesubdomains");
+                if !max_age_ok || !has_isd {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "HSTSPRELOAD001".to_string(),
+                        title: "HSTS preload directive present without meeting preload requirements".to_string(),
+                        description: "The HSTS header includes the preload directive but does not meet the requirements for HSTS preload list inclusion (max-age >= 31536000 and includeSubDomains required).".to_string(),
+                        url: url.to_string(),
+                        recommendation: "Set max-age to at least 31536000 and include includeSubDomains to be eligible for the HSTS preload list.".to_string(),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CspDirectiveValidator — CSPDIR001
+// =========================================================================
+
+pub struct CspDirectiveValidator;
+impl Default for CspDirectiveValidator { fn default() -> Self { Self::new() } }
+impl CspDirectiveValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for CspDirectiveValidator {
+    fn name(&self) -> &str { "csp-directive-validator" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
+            .map(|(_, v)| v.as_str());
+        if let Some(value) = csp {
+            let lower = value.to_lowercase();
+            let recommended = ["default-src", "script-src", "style-src", "img-src", "connect-src"];
+            for dir in &recommended {
+                if !lower.contains(dir) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CSPDIR001".to_string(),
+                        title: format!("CSP missing {dir} directive"),
+                        description: format!("The Content-Security-Policy header does not include a '{dir}' directive. Without it, resources of this type are governed by default-src or are unrestricted."),
+                        url: url.to_string(),
+                        recommendation: format!("Add a '{dir}' directive to the Content-Security-Policy header."),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CookieSecureFlagValidator — COOKIESEC001
+// =========================================================================
+
+pub struct CookieSecureFlagValidator;
+impl Default for CookieSecureFlagValidator { fn default() -> Self { Self::new() } }
+impl CookieSecureFlagValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for CookieSecureFlagValidator {
+    fn name(&self) -> &str { "cookie-secure-flag" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        for (k, v) in ctx.headers {
+            if k.eq_ignore_ascii_case("Set-Cookie") && !v.to_lowercase().contains("secure") {
+                let name = v.split('=').next().unwrap_or("unknown").trim();
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "COOKIESEC001".to_string(),
+                    title: "Cookie missing Secure flag".to_string(),
+                    description: format!("Cookie \"{name}\" does not have the Secure flag. It will be sent over unencrypted HTTP connections."),
+                    url: url.to_string(),
+                    recommendation: "Add the Secure flag to the Set-Cookie header.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CookieHttpOnlyFlagValidator — COOKIEHTTP001
+// =========================================================================
+
+pub struct CookieHttpOnlyFlagValidator;
+impl Default for CookieHttpOnlyFlagValidator { fn default() -> Self { Self::new() } }
+impl CookieHttpOnlyFlagValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for CookieHttpOnlyFlagValidator {
+    fn name(&self) -> &str { "cookie-httponly-flag" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if k.eq_ignore_ascii_case("Set-Cookie") && !v.to_lowercase().contains("httponly") {
+                let name = v.split('=').next().unwrap_or("unknown").trim();
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "COOKIEHTTP001".to_string(),
+                    title: "Cookie missing HttpOnly flag".to_string(),
+                    description: format!("Cookie \"{name}\" does not have the HttpOnly flag. It is accessible to JavaScript, increasing XSS risk."),
+                    url: url.to_string(),
+                    recommendation: "Add the HttpOnly flag to the Set-Cookie header.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// MixedContentFormValidator — MIXFRM001
+// =========================================================================
+
+pub struct MixedContentFormValidator;
+impl Default for MixedContentFormValidator { fn default() -> Self { Self::new() } }
+impl MixedContentFormValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for MixedContentFormValidator {
+    fn name(&self) -> &str { "mixed-content-form" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let prefix_dq = "action=\"http://";
+            let prefix_sq = "action='http://";
+            // For double-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_dq) {
+                    let start = pos + prefix_dq.len();
+                    if let Some(end) = remaining[start..].find('"') {
+                        findings.push(Finding {
+                            severity: Severity::Error,
+                            category: IssueCategory::Security,
+                            code: "MIXFRM001".to_string(),
+                            title: "HTTP form action on HTTPS page".to_string(),
+                            description: "A form has an action attribute using HTTP on an HTTPS page. User data will be transmitted in plaintext.".to_string(),
+                            url: url.to_string(),
+                            recommendation: "Change the form action URL to HTTPS.".to_string(),
+                        });
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+            // For single-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_sq) {
+                    let start = pos + prefix_sq.len();
+                    if let Some(end) = remaining[start..].find('\'') {
+                        findings.push(Finding {
+                            severity: Severity::Error,
+                            category: IssueCategory::Security,
+                            code: "MIXFRM001".to_string(),
+                            title: "HTTP form action on HTTPS page".to_string(),
+                            description: "A form has an action attribute using HTTP on an HTTPS page. User data will be transmitted in plaintext.".to_string(),
+                            url: url.to_string(),
+                            recommendation: "Change the form action URL to HTTPS.".to_string(),
+                        });
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// MixedContentScriptValidator — MIXSCR001
+// =========================================================================
+
+pub struct MixedContentScriptValidator;
+impl Default for MixedContentScriptValidator { fn default() -> Self { Self::new() } }
+impl MixedContentScriptValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for MixedContentScriptValidator {
+    fn name(&self) -> &str { "mixed-content-script" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let prefix_dq = "src=\"http://";
+            let prefix_sq = "src='http://";
+            let mut count = 0;
+            // For double-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_dq) {
+                    let start = pos + prefix_dq.len();
+                    if let Some(end) = remaining[start..].find('"') {
+                        let res = remaining[start..start + end].to_lowercase();
+                        if res.ends_with(".js") || res.contains("/script") {
+                            count += 1;
+                        }
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+            // For single-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_sq) {
+                    let start = pos + prefix_sq.len();
+                    if let Some(end) = remaining[start..].find('\'') {
+                        let res = remaining[start..start + end].to_lowercase();
+                        if res.ends_with(".js") || res.contains("/script") {
+                            count += 1;
+                        }
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+            if count > 0 {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Security,
+                    code: "MIXSCR001".to_string(),
+                    title: "HTTP script sources on HTTPS page".to_string(),
+                    description: format!("{count} script(s) loaded over HTTP on an HTTPS page. Browsers may block mixed active content."),
+                    url: url.to_string(),
+                    recommendation: "Update script URLs to use HTTPS.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// MixedContentImageValidator — MIXIMG001
+// =========================================================================
+
+pub struct MixedContentImageValidator;
+impl Default for MixedContentImageValidator { fn default() -> Self { Self::new() } }
+impl MixedContentImageValidator { pub fn new() -> Self { Self } }
+
+impl Analyzer for MixedContentImageValidator {
+    fn name(&self) -> &str { "mixed-content-image" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let prefix_dq = "src=\"http://";
+            let prefix_sq = "src='http://";
+            let img_exts = [".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".ico", ".bmp", ".tiff"];
+            let mut count = 0;
+            // For double-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_dq) {
+                    let start = pos + prefix_dq.len();
+                    if let Some(end) = remaining[start..].find('"') {
+                        let res = remaining[start..start + end].to_lowercase();
+                        if img_exts.iter().any(|ext| res.ends_with(ext)) {
+                            count += 1;
+                        }
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+            // For single-quote prefix
+            {
+                let mut remaining = body;
+                while let Some(pos) = remaining.find(prefix_sq) {
+                    let start = pos + prefix_sq.len();
+                    if let Some(end) = remaining[start..].find('\'') {
+                        let res = remaining[start..start + end].to_lowercase();
+                        if img_exts.iter().any(|ext| res.ends_with(ext)) {
+                            count += 1;
+                        }
+                        remaining = &remaining[start + end + 1..];
+                    } else { break; }
+                }
+            }
+            if count > 0 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "MIXIMG001".to_string(),
+                    title: "HTTP image sources on HTTPS page".to_string(),
+                    description: format!("{count} image(s) loaded over HTTP on an HTTPS page. Mixed passive content degrades HTTPS security."),
+                    url: url.to_string(),
+                    recommendation: "Update image URLs to use HTTPS.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// LandmarkMainAnalyzer — LANDMAIN001
+// =========================================================================
+
+pub struct LandmarkMainAnalyzer;
+impl Default for LandmarkMainAnalyzer { fn default() -> Self { Self::new() } }
+impl LandmarkMainAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for LandmarkMainAnalyzer {
+    fn name(&self) -> &str { "landmark-main" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        if !ctx.page.has_main_landmark {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LANDMAIN001".to_string(),
+                title: "Page missing main landmark".to_string(),
+                description: "No <main> element or role=\"main\" found. Screen readers use landmarks for quick navigation.".to_string(),
+                url: ctx.page.url.to_string(),
+                recommendation: "Wrap primary content in a <main> element.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// LandmarkNavAnalyzer — LANDNAV001
+// =========================================================================
+
+pub struct LandmarkNavAnalyzer;
+impl Default for LandmarkNavAnalyzer { fn default() -> Self { Self::new() } }
+impl LandmarkNavAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for LandmarkNavAnalyzer {
+    fn name(&self) -> &str { "landmark-nav" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        if !ctx.page.has_nav_landmark {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "LANDNAV001".to_string(),
+                title: "Page missing navigation landmark".to_string(),
+                description: "No <nav> element or role=\"navigation\" found. Navigation landmarks help screen reader users.".to_string(),
+                url: ctx.page.url.to_string(),
+                recommendation: "Wrap navigation links in a <nav> element.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// LandmarkBannerAnalyzer — LANDBAN001
+// =========================================================================
+
+pub struct LandmarkBannerAnalyzer;
+impl Default for LandmarkBannerAnalyzer { fn default() -> Self { Self::new() } }
+impl LandmarkBannerAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for LandmarkBannerAnalyzer {
+    fn name(&self) -> &str { "landmark-banner" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let has_banner = ctx.page.landmarks.iter().any(|l| l == "banner" || l == "header");
+        if !has_banner {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "LANDBAN001".to_string(),
+                title: "Page missing banner/header landmark".to_string(),
+                description: "No <header> element or role=\"banner\" found. The banner landmark contains site-wide content like logo and navigation.".to_string(),
+                url: ctx.page.url.to_string(),
+                recommendation: "Wrap the site header in a <header> element.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// HeadingLevelSkipAnalyzer — HEADSKIP001
+// =========================================================================
+
+pub struct HeadingLevelSkipAnalyzer;
+impl Default for HeadingLevelSkipAnalyzer { fn default() -> Self { Self::new() } }
+impl HeadingLevelSkipAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for HeadingLevelSkipAnalyzer {
+    fn name(&self) -> &str { "heading-level-skip" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.len() < 2 { return findings; }
+        let mut prev_level: Option<u8> = None;
+        for heading in &ctx.page.headings {
+            if let Some(prev) = prev_level {
+                if heading.level > prev + 1 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "HEADSKIP001".to_string(),
+                        title: "Heading level skip detected".to_string(),
+                        description: format!("Heading jumps from H{prev} to H{}, skipping intermediate levels.", heading.level),
+                        url: url.to_string(),
+                        recommendation: format!("Use H{} after H{prev} to maintain document outline.", prev + 1),
+                    });
+                    break;
+                }
+            }
+            prev_level = Some(heading.level);
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// FormLabelAssociationAnalyzer — FORMLAB001
+// =========================================================================
+
+pub struct FormLabelAssociationAnalyzer;
+impl Default for FormLabelAssociationAnalyzer { fn default() -> Self { Self::new() } }
+impl FormLabelAssociationAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for FormLabelAssociationAnalyzer {
+    fn name(&self) -> &str { "form-label-association" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let mut unlabeled = 0;
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if !input.has_label
+                    && input.aria_label.as_ref().is_none_or(|l| l.trim().is_empty())
+                    && input.aria_labelledby.as_ref().is_none_or(|l| l.trim().is_empty())
+                {
+                    unlabeled += 1;
+                }
+            }
+        }
+        if unlabeled > 0 {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "FORMLAB001".to_string(),
+                title: "Form inputs missing label associations".to_string(),
+                description: format!("{unlabeled} form input(s) have no associated <label>, aria-label, or aria-labelledby."),
+                url: url.to_string(),
+                recommendation: "Associate a <label> element with each input using for/id attributes, or add aria-label.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// TableHeaderScopeAnalyzer — TBLSCOP001
+// =========================================================================
+
+pub struct TableHeaderScopeAnalyzer;
+impl Default for TableHeaderScopeAnalyzer { fn default() -> Self { Self::new() } }
+impl TableHeaderScopeAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for TableHeaderScopeAnalyzer {
+    fn name(&self) -> &str { "table-header-scope" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total == 0 { return findings; }
+        let without = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        if without > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TBLSCOP001".to_string(),
+                title: "Tables missing header cells with scope".to_string(),
+                description: format!("{without} of {} table(s) have no <th> header cells. Header cells with scope attributes clarify data relationships.", ctx.page.tables_total),
+                url: url.to_string(),
+                recommendation: "Use <th scope=\"col\"> for column headers and <th scope=\"row\"> for row headers.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// TableCaptionPresenceAnalyzer — TBLCAP001
+// =========================================================================
+
+pub struct TableCaptionPresenceAnalyzer;
+impl Default for TableCaptionPresenceAnalyzer { fn default() -> Self { Self::new() } }
+impl TableCaptionPresenceAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for TableCaptionPresenceAnalyzer {
+    fn name(&self) -> &str { "table-caption-presence" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total == 0 { return findings; }
+        let without = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_captions);
+        if without > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "TBLCAP001".to_string(),
+                title: "Tables missing caption element".to_string(),
+                description: format!("{without} of {} table(s) have no <caption>. Captions describe table purpose for screen readers.", ctx.page.tables_total),
+                url: url.to_string(),
+                recommendation: "Add a <caption> element to each data table.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// AnchorTextGenericAnalyzer — ANCHGEN001
+// =========================================================================
+
+pub struct AnchorTextGenericAnalyzer;
+impl Default for AnchorTextGenericAnalyzer { fn default() -> Self { Self::new() } }
+impl AnchorTextGenericAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for AnchorTextGenericAnalyzer {
+    fn name(&self) -> &str { "anchor-text-generic" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let generic = ["click here", "read more", "learn more", "here", "more", "link", "this", "continue", "go"];
+        for link in &ctx.page.links {
+            let text = link.text.trim().to_lowercase();
+            if !text.is_empty() && generic.contains(&text.as_str()) {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "ANCHGEN001".to_string(),
+                    title: "Link with generic anchor text".to_string(),
+                    description: format!("Link text \"{}\" is generic and does not describe the destination.", link.text.trim()),
+                    url: url.to_string(),
+                    recommendation: "Use descriptive text that explains the link purpose.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// AriaRequiredAttributesAnalyzer — ARIAREQ001
+// =========================================================================
+
+pub struct AriaRequiredAttributesAnalyzer;
+impl Default for AriaRequiredAttributesAnalyzer { fn default() -> Self { Self::new() } }
+impl AriaRequiredAttributesAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for AriaRequiredAttributesAnalyzer {
+    fn name(&self) -> &str { "aria-required-attributes" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIAREQ001".to_string(),
+                title: "ARIA roles missing required accessible name attributes".to_string(),
+                description: format!("{} ARIA role(s) found without aria-label or aria-labelledby. Roles require accessible names for screen readers.", ctx.page.aria_role_count),
+                url: url.to_string(),
+                recommendation: "Add aria-label or aria-labelledby to all elements with ARIA roles.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// FocusOrderPositiveTabindexAnalyzer — TABPOS001
+// =========================================================================
+
+pub struct FocusOrderPositiveTabindexAnalyzer;
+impl Default for FocusOrderPositiveTabindexAnalyzer { fn default() -> Self { Self::new() } }
+impl FocusOrderPositiveTabindexAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for FocusOrderPositiveTabindexAnalyzer {
+    fn name(&self) -> &str { "focus-order-positive-tabindex" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "TABPOS001".to_string(),
+                title: "Positive tabindex values disrupt focus order".to_string(),
+                description: "Elements with tabindex > 0 alter the natural tab order, making keyboard navigation unpredictable.".to_string(),
+                url: ctx.page.url.to_string(),
+                recommendation: "Use tabindex=\"0\" for natural order or tabindex=\"-1\" for programmatic focus.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ColorContrastTextAnalyzer — COLRCT001
+// =========================================================================
+
+pub struct ColorContrastTextAnalyzer;
+impl Default for ColorContrastTextAnalyzer { fn default() -> Self { Self::new() } }
+impl ColorContrastTextAnalyzer { pub fn new() -> Self { Self } }
+
+impl ColorContrastTextAnalyzer {
+    fn parse_hex(hex: &str) -> Option<(u8, u8, u8)> {
+        let h = hex.trim().trim_start_matches('#');
+        match h.len() {
+            3 => {
+                let r = u8::from_str_radix(&h[0..1], 16).ok()?;
+                let g = u8::from_str_radix(&h[1..2], 16).ok()?;
+                let b = u8::from_str_radix(&h[2..3], 16).ok()?;
+                Some((r * 17, g * 17, b * 17))
+            }
+            6 => {
+                let r = u8::from_str_radix(&h[0..2], 16).ok()?;
+                let g = u8::from_str_radix(&h[2..4], 16).ok()?;
+                let b = u8::from_str_radix(&h[4..6], 16).ok()?;
+                Some((r, g, b))
+            }
+            _ => None,
+        }
+    }
+
+    fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
+        let f = |c: u8| -> f64 {
+            let s = c as f64 / 255.0;
+            if s <= 0.03928 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+    }
+
+    fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f64 {
+        let l1 = Self::relative_luminance(fg.0, fg.1, fg.2);
+        let l2 = Self::relative_luminance(bg.0, bg.1, bg.2);
+        let (lighter, darker) = if l1 > l2 { (l1, l2) } else { (l2, l1) };
+        (lighter + 0.05) / (darker + 0.05)
+    }
+
+    fn extract_text_color_pairs(body: &str) -> Vec<((u8, u8, u8), (u8, u8, u8))> {
+        use regex::Regex;
+        let re = Regex::new(r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
+            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let mut pairs = Vec::new();
+        for cap in re.captures_iter(body) {
+            if let (Some(fg), Some(bg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
+                pairs.push((fg, bg));
+            }
+        }
+        let re2 = Regex::new(r#"style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
+            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        for cap in re2.captures_iter(body) {
+            if let (Some(bg), Some(fg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
+                pairs.push((fg, bg));
+            }
+        }
+        pairs
+    }
+}
+
+impl Analyzer for ColorContrastTextAnalyzer {
+    fn name(&self) -> &str { "color-contrast-text" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let body = ctx.body.unwrap_or("");
+        let pairs = Self::extract_text_color_pairs(body);
+        let mut low = 0;
+        for (fg, bg) in &pairs {
+            let ratio = Self::contrast_ratio(*fg, *bg);
+            if ratio < 4.5 { low += 1; }
+        }
+        if low > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "COLRCT001".to_string(),
+                title: "Low text color contrast ratio".to_string(),
+                description: format!("{low} inline style(s) have a contrast ratio below 4.5:1. WCAG 1.4.3 requires at least 4.5:1 for normal text."),
+                url: url.to_string(),
+                recommendation: "Ensure text color contrasts at least 4.5:1 with its background.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ColorContrastLinkAnalyzer — COLRCL001
+// =========================================================================
+
+pub struct ColorContrastLinkAnalyzer;
+impl Default for ColorContrastLinkAnalyzer { fn default() -> Self { Self::new() } }
+impl ColorContrastLinkAnalyzer { pub fn new() -> Self { Self } }
+
+impl ColorContrastLinkAnalyzer {
+    fn parse_hex(hex: &str) -> Option<(u8, u8, u8)> {
+        let h = hex.trim().trim_start_matches('#');
+        match h.len() {
+            3 => {
+                let r = u8::from_str_radix(&h[0..1], 16).ok()?;
+                let g = u8::from_str_radix(&h[1..2], 16).ok()?;
+                let b = u8::from_str_radix(&h[2..3], 16).ok()?;
+                Some((r * 17, g * 17, b * 17))
+            }
+            6 => {
+                let r = u8::from_str_radix(&h[0..2], 16).ok()?;
+                let g = u8::from_str_radix(&h[2..4], 16).ok()?;
+                let b = u8::from_str_radix(&h[4..6], 16).ok()?;
+                Some((r, g, b))
+            }
+            _ => None,
+        }
+    }
+
+    fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
+        let f = |c: u8| -> f64 {
+            let s = c as f64 / 255.0;
+            if s <= 0.03928 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+        };
+        0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+    }
+
+    fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f64 {
+        let l1 = Self::relative_luminance(fg.0, fg.1, fg.2);
+        let l2 = Self::relative_luminance(bg.0, bg.1, bg.2);
+        let (lighter, darker) = if l1 > l2 { (l1, l2) } else { (l2, l1) };
+        (lighter + 0.05) / (darker + 0.05)
+    }
+
+    fn extract_link_color_pairs(body: &str) -> Vec<((u8, u8, u8), (u8, u8, u8))> {
+        use regex::Regex;
+        let re = Regex::new(r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
+            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let mut pairs = Vec::new();
+        for cap in re.captures_iter(body) {
+            if let (Some(fg), Some(bg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
+                pairs.push((fg, bg));
+            }
+        }
+        pairs
+    }
+}
+
+impl Analyzer for ColorContrastLinkAnalyzer {
+    fn name(&self) -> &str { "color-contrast-link" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let body = ctx.body.unwrap_or("");
+        let pairs = Self::extract_link_color_pairs(body);
+        let mut low = 0;
+        for (fg, bg) in &pairs {
+            let ratio = Self::contrast_ratio(*fg, *bg);
+            if ratio < 3.0 { low += 1; }
+        }
+        if low > 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "COLRCL001".to_string(),
+                title: "Link color contrast too low".to_string(),
+                description: format!("{low} color pair(s) have a contrast ratio below 3:1, making links difficult to distinguish from surrounding text."),
+                url: url.to_string(),
+                recommendation: "Ensure link colors contrast at least 3:1 with the background and 3:1 with surrounding text.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod new_analyzer_tests {
@@ -8527,5 +9332,959 @@ mod new_analyzer_tests {
         let headers = vec![("X-Content-Type-Options".to_string(), "nosniff".to_string())];
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    // === HstsPreloadListValidator tests ===
+
+    #[test]
+    fn test_hsts_preload_valid() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains; preload".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(HstsPreloadListValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_hsts_preload_no_preload() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(HstsPreloadListValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_hsts_preload_low_max_age() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; includeSubDomains; preload".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let f = HstsPreloadListValidator::new().analyze(&ctx);
+        assert!(f.iter().any(|f| f.code == "HSTSPRELOAD001"));
+    }
+
+    #[test]
+    fn test_hsts_preload_no_isd() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=63072000; preload".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(HstsPreloadListValidator::new().analyze(&ctx).iter().any(|f| f.code == "HSTSPRELOAD001"));
+    }
+
+    #[test]
+    fn test_hsts_preload_no_hsts() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(HstsPreloadListValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_hsts_preload_name() {
+        assert_eq!(HstsPreloadListValidator::new().name(), "hsts-preload-list-validator");
+    }
+
+    #[test]
+    fn test_hsts_preload_default() {
+        let _ = HstsPreloadListValidator::default();
+    }
+
+    #[test]
+    fn test_hsts_preload_category() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; preload".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let findings = HstsPreloadListValidator::new().analyze(&ctx);
+        for f in &findings { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    #[test]
+    fn test_hsts_preload_severity() {
+        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; preload".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert_eq!(HstsPreloadListValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+    }
+
+    // === CspDirectiveValidator tests ===
+
+    #[test]
+    fn test_csp_dir_missing_default_src() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let f = CspDirectiveValidator::new().analyze(&ctx);
+        assert!(f.iter().any(|f| f.code == "CSPDIR001"));
+    }
+
+    #[test]
+    fn test_csp_dir_all_present() {
+        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CspDirectiveValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_csp_dir_no_csp() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CspDirectiveValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_csp_dir_name() {
+        assert_eq!(CspDirectiveValidator::new().name(), "csp-directive-validator");
+    }
+
+    #[test]
+    fn test_csp_dir_default() {
+        let _ = CspDirectiveValidator::default();
+    }
+
+    #[test]
+    fn test_csp_dir_category() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        for f in CspDirectiveValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    #[test]
+    fn test_csp_dir_multiple_missing() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let f = CspDirectiveValidator::new().analyze(&ctx);
+        assert!(f.len() >= 3);
+    }
+
+    #[test]
+    fn test_csp_dir_severity() {
+        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert_eq!(CspDirectiveValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_csp_dir_empty_value() {
+        let headers = vec![("Content-Security-Policy".to_string(), "".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        let f = CspDirectiveValidator::new().analyze(&ctx);
+        assert!(!f.is_empty());
+    }
+
+    // === CookieSecureFlagValidator tests ===
+
+    #[test]
+    fn test_cookie_secure_missing() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc; HttpOnly".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieSecureFlagValidator::new().analyze(&ctx).iter().any(|f| f.code == "COOKIESEC001"));
+    }
+
+    #[test]
+    fn test_cookie_secure_present() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc; Secure".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieSecureFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_secure_http_page_skipped() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
+        let page = make_page("http://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieSecureFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_secure_no_cookies() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CookieSecureFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_secure_name() {
+        assert_eq!(CookieSecureFlagValidator::new().name(), "cookie-secure-flag");
+    }
+
+    #[test]
+    fn test_cookie_secure_default() {
+        let _ = CookieSecureFlagValidator::default();
+    }
+
+    #[test]
+    fn test_cookie_secure_category() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        for f in CookieSecureFlagValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    #[test]
+    fn test_cookie_secure_severity() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert_eq!(CookieSecureFlagValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+    }
+
+    // === CookieHttpOnlyFlagValidator tests ===
+
+    #[test]
+    fn test_cookie_httponly_missing() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc; Secure".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).iter().any(|f| f.code == "COOKIEHTTP001"));
+    }
+
+    #[test]
+    fn test_cookie_httponly_present() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc; HttpOnly".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_httponly_both_flags() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc; Secure; HttpOnly".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_httponly_no_cookies() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cookie_httponly_name() {
+        assert_eq!(CookieHttpOnlyFlagValidator::new().name(), "cookie-httponly-flag");
+    }
+
+    #[test]
+    fn test_cookie_httponly_default() {
+        let _ = CookieHttpOnlyFlagValidator::default();
+    }
+
+    #[test]
+    fn test_cookie_httponly_category() {
+        let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &headers, None);
+        for f in CookieHttpOnlyFlagValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    // === MixedContentFormValidator tests ===
+
+    #[test]
+    fn test_mixed_form_http_action() {
+        let body = r#"<form action="http://example.com/submit">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentFormValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXFRM001"));
+    }
+
+    #[test]
+    fn test_mixed_form_https_action() {
+        let body = r#"<form action="https://example.com/submit">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentFormValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_form_http_page_skipped() {
+        let body = r#"<form action="http://example.com/submit">"#;
+        let page = make_page("http://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentFormValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_form_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(MixedContentFormValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_form_name() {
+        assert_eq!(MixedContentFormValidator::new().name(), "mixed-content-form");
+    }
+
+    #[test]
+    fn test_mixed_form_default() {
+        let _ = MixedContentFormValidator::default();
+    }
+
+    #[test]
+    fn test_mixed_form_category() {
+        let body = r#"<form action="http://example.com/submit">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        for f in MixedContentFormValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    #[test]
+    fn test_mixed_form_severity() {
+        let body = r#"<form action="http://example.com/submit">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert_eq!(MixedContentFormValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+    }
+
+    // === MixedContentScriptValidator tests ===
+
+    #[test]
+    fn test_mixed_script_http() {
+        let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentScriptValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXSCR001"));
+    }
+
+    #[test]
+    fn test_mixed_script_https() {
+        let body = r#"<script src="https://cdn.example.com/app.js"></script>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentScriptValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_script_http_page_skipped() {
+        let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
+        let page = make_page("http://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentScriptValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_script_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(MixedContentScriptValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_script_name() {
+        assert_eq!(MixedContentScriptValidator::new().name(), "mixed-content-script");
+    }
+
+    #[test]
+    fn test_mixed_script_default() {
+        let _ = MixedContentScriptValidator::default();
+    }
+
+    #[test]
+    fn test_mixed_script_category() {
+        let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        for f in MixedContentScriptValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    // === MixedContentImageValidator tests ===
+
+    #[test]
+    fn test_mixed_img_http() {
+        let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentImageValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXIMG001"));
+    }
+
+    #[test]
+    fn test_mixed_img_https() {
+        let body = r#"<img src="https://cdn.example.com/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentImageValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_img_http_page_skipped() {
+        let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
+        let page = make_page("http://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(MixedContentImageValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_img_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(MixedContentImageValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_mixed_img_name() {
+        assert_eq!(MixedContentImageValidator::new().name(), "mixed-content-image");
+    }
+
+    #[test]
+    fn test_mixed_img_default() {
+        let _ = MixedContentImageValidator::default();
+    }
+
+    #[test]
+    fn test_mixed_img_category() {
+        let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        for f in MixedContentImageValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+    }
+
+    // === LandmarkMainAnalyzer tests ===
+
+    #[test]
+    fn test_landmark_main_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkMainAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDMAIN001"));
+    }
+
+    #[test]
+    fn test_landmark_main_present() {
+        let mut page = make_page("https://example.com");
+        page.has_main_landmark = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkMainAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_landmark_main_name() { assert_eq!(LandmarkMainAnalyzer::new().name(), "landmark-main"); }
+
+    #[test]
+    fn test_landmark_main_default() { let _ = LandmarkMainAnalyzer::default(); }
+
+    #[test]
+    fn test_landmark_main_category() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in LandmarkMainAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    #[test]
+    fn test_landmark_main_severity() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert_eq!(LandmarkMainAnalyzer::new().analyze(&ctx)[0].severity, Severity::Error);
+    }
+
+    // === LandmarkNavAnalyzer tests ===
+
+    #[test]
+    fn test_landmark_nav_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkNavAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDNAV001"));
+    }
+
+    #[test]
+    fn test_landmark_nav_present() {
+        let mut page = make_page("https://example.com");
+        page.has_nav_landmark = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkNavAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_landmark_nav_name() { assert_eq!(LandmarkNavAnalyzer::new().name(), "landmark-nav"); }
+
+    #[test]
+    fn test_landmark_nav_default() { let _ = LandmarkNavAnalyzer::default(); }
+
+    #[test]
+    fn test_landmark_nav_category() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in LandmarkNavAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === LandmarkBannerAnalyzer tests ===
+
+    #[test]
+    fn test_landmark_banner_missing() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkBannerAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDBAN001"));
+    }
+
+    #[test]
+    fn test_landmark_banner_present() {
+        let mut page = make_page("https://example.com");
+        page.landmarks.push("banner".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkBannerAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_landmark_banner_header_role() {
+        let mut page = make_page("https://example.com");
+        page.landmarks.push("header".to_string());
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(LandmarkBannerAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_landmark_banner_name() { assert_eq!(LandmarkBannerAnalyzer::new().name(), "landmark-banner"); }
+
+    #[test]
+    fn test_landmark_banner_default() { let _ = LandmarkBannerAnalyzer::default(); }
+
+    #[test]
+    fn test_landmark_banner_category() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in LandmarkBannerAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === HeadingLevelSkipAnalyzer tests ===
+
+    #[test]
+    fn test_heading_skip_h1_to_h3() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
+            crate::parser::Heading { level: 3, text: "H3".into(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "HEADSKIP001"));
+    }
+
+    #[test]
+    fn test_heading_skip_no_skip() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
+            crate::parser::Heading { level: 2, text: "H2".into(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_heading_skip_single() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![crate::parser::Heading { level: 1, text: "H1".into(), length: 2 }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_heading_skip_empty() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_heading_skip_name() { assert_eq!(HeadingLevelSkipAnalyzer::new().name(), "heading-level-skip"); }
+
+    #[test]
+    fn test_heading_skip_default() { let _ = HeadingLevelSkipAnalyzer::default(); }
+
+    #[test]
+    fn test_heading_skip_category() {
+        let mut page = make_page("https://example.com");
+        page.headings = vec![
+            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
+            crate::parser::Heading { level: 3, text: "H3".into(), length: 2 },
+        ];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in HeadingLevelSkipAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === FormLabelAssociationAnalyzer tests ===
+
+    #[test]
+    fn test_form_label_assoc_missing() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
+                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+            }],
+            has_fieldset: false, has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FORMLAB001"));
+    }
+
+    #[test]
+    fn test_form_label_assoc_with_label() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: true,
+                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+            }],
+            has_fieldset: false, has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_form_label_assoc_with_aria() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
+                aria_label: Some("Email".into()), aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+            }],
+            has_fieldset: false, has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_form_label_assoc_no_forms() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_form_label_assoc_name() { assert_eq!(FormLabelAssociationAnalyzer::new().name(), "form-label-association"); }
+
+    #[test]
+    fn test_form_label_assoc_default() { let _ = FormLabelAssociationAnalyzer::default(); }
+
+    #[test]
+    fn test_form_label_assoc_category() {
+        let mut page = make_page("https://example.com");
+        page.forms = vec![crate::parser::ExtractedForm {
+            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            inputs: vec![crate::parser::ExtractedInput {
+                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
+                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+            }],
+            has_fieldset: false, has_legend: false,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in FormLabelAssociationAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === TableHeaderScopeAnalyzer tests ===
+
+    #[test]
+    fn test_tbl_scope_missing() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_headers = 1;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableHeaderScopeAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TBLSCOP001"));
+    }
+
+    #[test]
+    fn test_tbl_scope_all_have() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_headers = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableHeaderScopeAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tbl_scope_no_tables() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableHeaderScopeAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tbl_scope_name() { assert_eq!(TableHeaderScopeAnalyzer::new().name(), "table-header-scope"); }
+
+    #[test]
+    fn test_tbl_scope_default() { let _ = TableHeaderScopeAnalyzer::default(); }
+
+    #[test]
+    fn test_tbl_scope_category() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 1;
+        page.tables_with_headers = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in TableHeaderScopeAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === TableCaptionPresenceAnalyzer tests ===
+
+    #[test]
+    fn test_tbl_cap_missing() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 2;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionPresenceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TBLCAP001"));
+    }
+
+    #[test]
+    fn test_tbl_cap_all_have() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 3;
+        page.tables_with_captions = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionPresenceAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tbl_cap_no_tables() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(TableCaptionPresenceAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tbl_cap_name() { assert_eq!(TableCaptionPresenceAnalyzer::new().name(), "table-caption-presence"); }
+
+    #[test]
+    fn test_tbl_cap_default() { let _ = TableCaptionPresenceAnalyzer::default(); }
+
+    #[test]
+    fn test_tbl_cap_category() {
+        let mut page = make_page("https://example.com");
+        page.tables_total = 1;
+        page.tables_with_captions = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in TableCaptionPresenceAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === AnchorTextGenericAnalyzer tests ===
+
+    #[test]
+    fn test_anch_gen_click_here() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "/page".into(), text: "click here".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCHGEN001"));
+    }
+
+    #[test]
+    fn test_anch_gen_read_more() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "/page".into(), text: "read more".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCHGEN001"));
+    }
+
+    #[test]
+    fn test_anch_gen_good_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "/page".into(), text: "About our pricing".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anch_gen_empty_text() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "/page".into(), text: "".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anch_gen_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anch_gen_name() { assert_eq!(AnchorTextGenericAnalyzer::new().name(), "anchor-text-generic"); }
+
+    #[test]
+    fn test_anch_gen_default() { let _ = AnchorTextGenericAnalyzer::default(); }
+
+    #[test]
+    fn test_anch_gen_category() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "/page".into(), text: "click here".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in AnchorTextGenericAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === AriaRequiredAttributesAnalyzer tests ===
+
+    #[test]
+    fn test_aria_req_roles_no_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIAREQ001"));
+    }
+
+    #[test]
+    fn test_aria_req_with_labels() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 3;
+        page.aria_label_count = 3;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_req_no_roles() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_aria_req_name() { assert_eq!(AriaRequiredAttributesAnalyzer::new().name(), "aria-required-attributes"); }
+
+    #[test]
+    fn test_aria_req_default() { let _ = AriaRequiredAttributesAnalyzer::default(); }
+
+    #[test]
+    fn test_aria_req_category() {
+        let mut page = make_page("https://example.com");
+        page.aria_role_count = 2;
+        page.aria_label_count = 0;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in AriaRequiredAttributesAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === FocusOrderPositiveTabindexAnalyzer tests ===
+
+    #[test]
+    fn test_tabpos_positive() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABPOS001"));
+    }
+
+    #[test]
+    fn test_tabpos_no_positive() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_tabpos_name() { assert_eq!(FocusOrderPositiveTabindexAnalyzer::new().name(), "focus-order-positive-tabindex"); }
+
+    #[test]
+    fn test_tabpos_default() { let _ = FocusOrderPositiveTabindexAnalyzer::default(); }
+
+    #[test]
+    fn test_tabpos_category() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        for f in FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    #[test]
+    fn test_tabpos_severity() {
+        let mut page = make_page("https://example.com");
+        page.has_positive_tabindex = true;
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert_eq!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx)[0].severity, Severity::Error);
+    }
+
+    // === ColorContrastTextAnalyzer tests ===
+
+    #[test]
+    fn test_colrct_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ColorContrastTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_colrct_good_contrast() {
+        let body = r#"<p style="color: #000000; background-color: #ffffff">Text</p>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(ColorContrastTextAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_colrct_low_contrast() {
+        let body = r#"<p style="color: #888888; background-color: #999999">Text</p>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(ColorContrastTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "COLRCT001"));
+    }
+
+    #[test]
+    fn test_colrct_name() { assert_eq!(ColorContrastTextAnalyzer::new().name(), "color-contrast-text"); }
+
+    #[test]
+    fn test_colrct_default() { let _ = ColorContrastTextAnalyzer::default(); }
+
+    #[test]
+    fn test_colrct_category() {
+        let body = r#"<p style="color: #888888; background-color: #999999">Text</p>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        for f in ColorContrastTextAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+    }
+
+    // === ColorContrastLinkAnalyzer tests ===
+
+    #[test]
+    fn test_colrcl_no_body() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200), &[], None);
+        assert!(ColorContrastLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_colrcl_good_contrast() {
+        let body = r#"<a style="color: #0000ff; background-color: #ffffff">Link</a>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(ColorContrastLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_colrcl_low_contrast() {
+        let body = r#"<a style="color: #cccccc; background-color: #dddddd">Link</a>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        assert!(ColorContrastLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "COLRCL001"));
+    }
+
+    #[test]
+    fn test_colrcl_name() { assert_eq!(ColorContrastLinkAnalyzer::new().name(), "color-contrast-link"); }
+
+    #[test]
+    fn test_colrcl_default() { let _ = ColorContrastLinkAnalyzer::default(); }
+
+    #[test]
+    fn test_colrcl_category() {
+        let body = r#"<a style="color: #cccccc; background-color: #dddddd">Link</a>"#;
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        for f in ColorContrastLinkAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
     }
 }

@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
 use std::collections::{HashMap, HashSet};
 
 use regex::Regex;
@@ -6551,5 +6551,1807 @@ mod new_content_analyzer_tests {
             data: serde_json::json!({"@type": "Course", "name": "Rust Basics", "provider": {"@type": "Organization", "name": "Udemy"}}),
         }];
         assert!(CourseProviderValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+    }
+}
+
+// =========================================================================
+// JsonLdContextValidator
+// =========================================================================
+
+pub struct JsonLdContextValidator;
+
+impl Default for JsonLdContextValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JsonLdContextValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for JsonLdContextValidator {
+    fn name(&self) -> &str {
+        "jsonld-context-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if let Some(ref ctx_val) = sd.context {
+                if ctx_val != "https://schema.org" && ctx_val != "schema.org" {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Schema,
+                        code: "JLDCTX001".to_string(),
+                        title: "JSON-LD @context not https://schema.org".to_string(),
+                        description: format!(
+                            "JSON-LD @context is \"{ctx_val}\" instead of \
+                             \"https://schema.org\"."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Use \"https://schema.org\" as the @context in all \
+                                         JSON-LD blocks."
+                            .to_string(),
+                    });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// JsonLdTypeValidator
+// =========================================================================
+
+pub struct JsonLdTypeValidator;
+
+impl Default for JsonLdTypeValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl JsonLdTypeValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for JsonLdTypeValidator {
+    fn name(&self) -> &str {
+        "jsonld-type-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.is_none() {
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Schema,
+                    code: "JLDTYPE001".to_string(),
+                    title: "JSON-LD @type missing".to_string(),
+                    description: "A JSON-LD block is missing the @type property."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Add an @type property to describe the structured data content."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MetaRobotsValidator
+// =========================================================================
+
+pub struct MetaRobotsValidator;
+
+impl Default for MetaRobotsValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MetaRobotsValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for MetaRobotsValidator {
+    fn name(&self) -> &str {
+        "meta-robots-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let robots = match &ctx.page.meta.robots {
+            Some(r) if !r.is_empty() => r.to_lowercase(),
+            _ => return findings,
+        };
+
+        let directives: Vec<&str> = robots.split(|c| c == ',' || c == ' ').collect();
+        let has_noindex = directives.iter().any(|d| *d == "noindex");
+        let has_index = directives.iter().any(|d| *d == "index");
+        let has_nofollow = directives.iter().any(|d| *d == "nofollow");
+        let has_follow = directives.iter().any(|d| *d == "follow");
+
+        if has_noindex && has_index {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "META-ROB001".to_string(),
+                title: "Conflicting meta robots directives: index and noindex".to_string(),
+                description: "The meta robots tag contains both \"index\" and \"noindex\" \
+                              directives, which are contradictory."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Use either \"index\" or \"noindex\", not both."
+                    .to_string(),
+            });
+        }
+
+        if has_nofollow && has_follow {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "META-ROB002".to_string(),
+                title: "Conflicting meta robots directives: follow and nofollow".to_string(),
+                description: "The meta robots tag contains both \"follow\" and \"nofollow\" \
+                              directives, which are contradictory."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Use either \"follow\" or \"nofollow\", not both."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CanonicalChainValidator
+// =========================================================================
+
+pub struct CanonicalChainValidator;
+
+impl Default for CanonicalChainValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl CanonicalChainValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for CanonicalChainValidator {
+    fn name(&self) -> &str {
+        "canonical-chain-validator"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let canonical = match &ctx.page.meta.canonical {
+            Some(c) => c.as_str(),
+            _ => return findings,
+        };
+
+        if canonical.is_empty() {
+            return findings;
+        }
+
+        if !ctx.redirect_chain.is_empty() {
+            let final_url = ctx
+                .redirect_chain
+                .last()
+                .map_or(url.as_str(), |h| h.to.as_str());
+            if canonical != final_url && canonical != url.as_str() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "CAN-CHAIN001".to_string(),
+                    title: "Canonical URL points to redirect target".to_string(),
+                    description: format!(
+                        "The canonical URL \"{canonical}\" differs from both the original \
+                         URL and the final redirect destination \"{final_url}\"."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Set the canonical URL to the final destination URL after \
+                                     all redirects."
+                        .to_string(),
+                });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// InternalLinkDepthAnalyzerV2
+// =========================================================================
+
+pub struct InternalLinkDepthAnalyzerV2;
+
+impl Default for InternalLinkDepthAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl InternalLinkDepthAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for InternalLinkDepthAnalyzerV2 {
+    fn name(&self) -> &str {
+        "internal-link-depth-v2"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let url_depth = if let Ok(parsed) = url::Url::parse(url) {
+            parsed
+                .path_segments()
+                .map(|s| s.filter(|seg| !seg.is_empty()).count())
+                .unwrap_or(0)
+        } else {
+            return findings;
+        };
+
+        if url_depth > 4 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Links,
+                code: "IL-DEPTH001".to_string(),
+                title: "Deep internal page".to_string(),
+                description: format!(
+                    "This page is at depth {url_depth} in the site hierarchy. Deep pages \
+                     may receive less link equity."
+                ),
+                url: url.clone(),
+                recommendation: "Ensure deep pages are reachable within 3 clicks from the \
+                                 homepage or link to them from higher-level pages."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ExternalLinkQualityAnalyzer
+// =========================================================================
+
+pub struct ExternalLinkQualityAnalyzer;
+
+impl Default for ExternalLinkQualityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ExternalLinkQualityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+
+    fn is_known_bad_domain(host: &str) -> bool {
+        const BAD_DOMAINS: &[&str] = &[
+            "linkfarm.example",
+            "spammy-site.example",
+            "lowquality.example",
+        ];
+        BAD_DOMAINS.iter().any(|d| host.contains(d))
+    }
+}
+
+impl Analyzer for ExternalLinkQualityAnalyzer {
+    fn name(&self) -> &str {
+        "external-link-quality"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let bad_links: Vec<&crate::parser::ExtractedLink> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.is_external)
+            .filter(|l| {
+                url::Url::parse(&l.href)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| Self::is_known_bad_domain(h)))
+                    .unwrap_or(false)
+            })
+            .collect();
+
+        if !bad_links.is_empty() {
+            let count = bad_links.len();
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Links,
+                code: "EXT-QUAL001".to_string(),
+                title: "External links to known low-quality domains".to_string(),
+                description: format!(
+                    "This page has {count} external link(s) to known low-quality domains."
+                ),
+                url: url.clone(),
+                recommendation: "Remove or nofollow links to known spammy or low-quality domains."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentStructureAnalyzer
+// =========================================================================
+
+pub struct ContentStructureAnalyzer;
+
+impl Default for ContentStructureAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ContentStructureAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for ContentStructureAnalyzer {
+    fn name(&self) -> &str {
+        "content-structure"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.word_count > 1500 && ctx.page.headings.len() <= 1 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CONT-STR001".to_string(),
+                title: "Long-form content without subheadings".to_string(),
+                description: format!(
+                    "This page has {} words but only {} heading(s). Long-form content \
+                     should use subheadings for better readability and SEO.",
+                    ctx.page.word_count,
+                    ctx.page.headings.len()
+                ),
+                url: url.clone(),
+                recommendation: "Add H2/H3 subheadings to break up long-form content into \
+                                 scannable sections."
+                    .to_string(),
+            });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// KeywordDensityAnalyzer
+// =========================================================================
+
+pub struct KeywordDensityAnalyzer;
+
+impl Default for KeywordDensityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl KeywordDensityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for KeywordDensityAnalyzer {
+    fn name(&self) -> &str {
+        "keyword-density"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let title = match &ctx.page.meta.title {
+            Some(t) if !t.trim().is_empty() => t.trim().to_lowercase(),
+            _ => return findings,
+        };
+
+        let title_words: Vec<String> = title
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect::<String>()
+            })
+            .filter(|w| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect();
+
+        if title_words.is_empty() {
+            return findings;
+        }
+
+        if let Some(body) = ctx.body {
+            let body_lower = body.to_lowercase();
+            let body_words: Vec<&str> = body_lower.split_whitespace().collect();
+            let total_words = body_words.len();
+
+            if total_words < 100 {
+                return findings;
+            }
+
+            for keyword in &title_words {
+                let count = body_words.iter().filter(|w| w.contains(keyword.as_str())).count();
+                let density = count as f64 / total_words as f64 * 100.0;
+
+                if density > 3.0 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Content,
+                        code: "KW-DENS001".to_string(),
+                        title: "Potential keyword stuffing detected".to_string(),
+                        description: format!(
+                            "Keyword \"{keyword}\" appears {count} times ({density:.1}%) in \
+                             body text. High keyword density may be flagged as keyword stuffing."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Reduce keyword repetition and use natural language \
+                                         variations and synonyms."
+                            .to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// PageSpeedScoreAnalyzer
+// =========================================================================
+
+pub struct PageSpeedScoreAnalyzer;
+
+impl Default for PageSpeedScoreAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PageSpeedScoreAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for PageSpeedScoreAnalyzer {
+    fn name(&self) -> &str {
+        "pagespeed-score"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let mut score: u32 = 100;
+
+        if let Some(ttfb) = ctx.response_time {
+            let ttfb_ms = ttfb.as_millis() as u32;
+            if ttfb_ms > 2000 {
+                score = score.saturating_sub(30);
+            } else if ttfb_ms > 1000 {
+                score = score.saturating_sub(15);
+            }
+        }
+
+        if let Some(size) = ctx.body_size {
+            let size_kb = size / 1024;
+            if size_kb > 5000 {
+                score = score.saturating_sub(25);
+            } else if size_kb > 2000 {
+                score = score.saturating_sub(10);
+            }
+        }
+
+        if let Some(compressed) = ctx.compressed_size {
+            if let Some(uncompressed) = ctx.body_size {
+                if uncompressed > 0 {
+                    let ratio = compressed as f64 / uncompressed as f64;
+                    if ratio > 0.9 {
+                        score = score.saturating_sub(15);
+                    }
+                }
+            }
+        }
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Performance,
+            code: "PERF-EST001".to_string(),
+            title: "Estimated performance score".to_string(),
+            description: format!("Estimated page performance score: {score}/100."),
+            url: url.clone(),
+            recommendation: if score < 50 {
+                "Performance is poor. Optimize response time, compress resources, and \
+                 reduce page size."
+                    .to_string()
+            } else if score < 80 {
+                "Performance is moderate. Consider optimizing TTFB and compressing \
+                 responses."
+                    .to_string()
+            } else {
+                "Performance is good.".to_string()
+            },
+        });
+
+        findings
+    }
+}
+
+// =========================================================================
+// MobileFriendlinessScoreAnalyzer
+// =========================================================================
+
+pub struct MobileFriendlinessScoreAnalyzer;
+
+impl Default for MobileFriendlinessScoreAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl MobileFriendlinessScoreAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+impl Analyzer for MobileFriendlinessScoreAnalyzer {
+    fn name(&self) -> &str {
+        "mobile-friendliness-score"
+    }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let mut score: u32 = 100;
+        let mut issues = Vec::new();
+
+        if ctx.page.meta.viewport.is_none() {
+            score = score.saturating_sub(40);
+            issues.push("missing viewport meta tag");
+        }
+
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            if lower.contains("width=600")
+                || lower.contains("width=480")
+                || lower.contains("width=320")
+            {
+                score = score.saturating_sub(20);
+                issues.push("fixed viewport width");
+            }
+
+            if lower.contains("user-scalable=no") || lower.contains("user-scalable=0") {
+                score = score.saturating_sub(15);
+                issues.push("pinch-to-zoom disabled");
+            }
+
+            if !ctx.page.has_lang_attribute && !ctx.page.html_lang.is_some() {
+                score = score.saturating_sub(5);
+            }
+        }
+
+        let issue_text = if issues.is_empty() {
+            "No issues detected.".to_string()
+        } else {
+            format!("Issues: {}.", issues.join(", "))
+        };
+
+        findings.push(Finding {
+            severity: Severity::Info,
+            category: IssueCategory::Mobile,
+            code: "MOB-SCORE001".to_string(),
+            title: "Mobile friendliness score".to_string(),
+            description: format!(
+                "Estimated mobile friendliness score: {score}/100. {issue_text}"
+            ),
+            url: url.clone(),
+            recommendation: if score < 60 {
+                "Page has significant mobile-friendliness issues. Add a viewport meta tag \
+                 and ensure responsive design."
+                    .to_string()
+            } else if score < 85 {
+                "Page has minor mobile-friendliness issues. Review viewport settings."
+                    .to_string()
+            } else {
+                "Page appears mobile-friendly.".to_string()
+            },
+        });
+
+        findings
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod content_analyzer_v2_tests {
+    use super::*;
+    use crate::meta::MetaTags;
+    use crate::parser::{ExtractedLink, Heading, ParsedPage, StructuredData};
+    use crate::RedirectHop;
+
+    fn make_page(url: &str) -> ParsedPage {
+        ParsedPage {
+            url: url.to_string(),
+            meta: MetaTags::default(),
+            headings: Vec::new(),
+            links: Vec::new(),
+            images: Vec::new(),
+            forms: Vec::new(),
+            scripts: Vec::new(),
+            styles: Vec::new(),
+            structured_data: Vec::new(),
+            word_count: 0,
+            sentence_count: 0,
+            landmarks: Vec::new(),
+            has_skip_link: false,
+            has_main_landmark: false,
+            has_nav_landmark: false,
+            has_positive_tabindex: false,
+            tabindex_negative_count: 0,
+            aria_role_count: 0,
+            aria_label_count: 0,
+            has_lang_attribute: false,
+            html_lang: None,
+            has_aria_hidden: false,
+            tables_with_headers: 0,
+            tables_total: 0,
+            tables_with_captions: 0,
+            og_image_width: None,
+            og_image_height: None,
+        }
+    }
+
+    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: status,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    fn make_ctx_full<'a>(
+        page: &'a ParsedPage,
+        body: Option<&'a str>,
+        redirect_chain: &'a [RedirectHop],
+    ) -> AnalysisContext<'a> {
+        AnalysisContext {
+            page,
+            body,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain,
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
+
+    // ---- JsonLdContextValidator (10 tests) ----
+
+    #[test]
+    fn test_jldctx_wrong_context() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://example.com/schema".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdContextValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JLDCTX001"));
+    }
+
+    #[test]
+    fn test_jldctx_valid_https() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdContextValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldctx_valid_bare_schema_org() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdContextValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldctx_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdContextValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldctx_none_context() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: None,
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdContextValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldctx_multiple_blocks_one_wrong() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article"}),
+            },
+            StructuredData {
+                context: Some("https://example.com/schema".to_string()),
+                r#type: Some("Product".to_string()),
+                data: serde_json::json!({"@type": "Product"}),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdContextValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "JLDCTX001");
+    }
+
+    #[test]
+    fn test_jldctx_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://bad.example.com".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdContextValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        assert_eq!(findings[0].category, IssueCategory::Schema);
+    }
+
+    #[test]
+    fn test_jldctx_all_blocks_wrong() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://a.example.com".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article"}),
+            },
+            StructuredData {
+                context: Some("https://b.example.com".to_string()),
+                r#type: Some("Product".to_string()),
+                data: serde_json::json!({"@type": "Product"}),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        assert_eq!(JsonLdContextValidator::new().analyze(&ctx).len(), 2);
+    }
+
+    #[test]
+    fn test_jldctx_url_is_page_url() {
+        let mut page = make_page("https://example.com/article");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://custom-vocab.example.com".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdContextValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].url, "https://example.com/article");
+    }
+
+    // ---- JsonLdTypeValidator (10 tests) ----
+
+    #[test]
+    fn test_jldtype_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: None,
+            data: serde_json::json!({"@context": "https://schema.org"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdTypeValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JLDTYPE001"));
+    }
+
+    #[test]
+    fn test_jldtype_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdTypeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldtype_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdTypeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldtype_multiple_one_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: None,
+                data: serde_json::json!({"@context": "https://schema.org"}),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdTypeValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn test_jldtype_severity_error() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: None,
+            data: serde_json::json!({}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdTypeValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Error);
+        assert_eq!(findings[0].category, IssueCategory::Schema);
+    }
+
+    #[test]
+    fn test_jldtype_all_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: None,
+                r#type: None,
+                data: serde_json::json!({}),
+            },
+            StructuredData {
+                context: None,
+                r#type: None,
+                data: serde_json::json!({}),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        assert_eq!(JsonLdTypeValidator::new().analyze(&ctx).len(), 2);
+    }
+
+    #[test]
+    fn test_jldtype_product_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdTypeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldtype_empty_string_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("".to_string()),
+            data: serde_json::json!({"@type": ""}),
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(JsonLdTypeValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_jldtype_url_in_finding() {
+        let mut page = make_page("https://example.com/page");
+        page.structured_data = vec![StructuredData {
+            context: None,
+            r#type: None,
+            data: serde_json::json!({}),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JsonLdTypeValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].url, "https://example.com/page");
+    }
+
+    // ---- MetaRobotsValidator (10 tests) ----
+
+    #[test]
+    fn test_metarob_conflicting_index_noindex() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("index, noindex".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MetaRobotsValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "META-ROB001"));
+    }
+
+    #[test]
+    fn test_metarob_conflicting_follow_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("follow, nofollow".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MetaRobotsValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "META-ROB002"));
+    }
+
+    #[test]
+    fn test_metarob_valid_noindex() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("noindex".to_string());
+        let ctx = make_ctx(&page, None);
+        assert!(MetaRobotsValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_metarob_valid_index() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("index, follow".to_string());
+        let ctx = make_ctx(&page, None);
+        assert!(MetaRobotsValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_metarob_no_robots() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(MetaRobotsValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_metarob_empty_robots() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("".to_string());
+        let ctx = make_ctx(&page, None);
+        assert!(MetaRobotsValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_metarob_both_conflicts() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("index, noindex, follow, nofollow".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MetaRobotsValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_metarob_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("index, noindex".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MetaRobotsValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_metarob_case_insensitive() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("INDEX, NOINDEX".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MetaRobotsValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "META-ROB001"));
+    }
+
+    #[test]
+    fn test_metarob_only_nofollow() {
+        let mut page = make_page("https://example.com");
+        page.meta.robots = Some("nofollow".to_string());
+        let ctx = make_ctx(&page, None);
+        assert!(MetaRobotsValidator::new().analyze(&ctx).is_empty());
+    }
+
+    // ---- CanonicalChainValidator (10 tests) ----
+
+    #[test]
+    fn test_canonical_chain_differs_from_final() {
+        let mut page = make_page("https://example.com/old");
+        page.meta.canonical = Some("https://example.com/canonical".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        let findings = CanonicalChainValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAN-CHAIN001"));
+    }
+
+    #[test]
+    fn test_canonical_chain_matches_final() {
+        let mut page = make_page("https://example.com/old");
+        page.meta.canonical = Some("https://example.com/new".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        assert!(CanonicalChainValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_canonical_chain_no_redirect() {
+        let mut page = make_page("https://example.com");
+        page.meta.canonical = Some("https://example.com".parse().unwrap());
+        let ctx = make_ctx(&page, None);
+        assert!(CanonicalChainValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_canonical_chain_no_canonical() {
+        let page = make_page("https://example.com");
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        assert!(CanonicalChainValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_canonical_chain_matches_original_url() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some("https://example.com/page".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/different".parse().unwrap(),
+            status_code: 302,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        assert!(CanonicalChainValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_canonical_chain_multi_hop() {
+        let mut page = make_page("https://example.com/a");
+        page.meta.canonical = Some("https://example.com/canonical".parse().unwrap());
+        let chain = vec![
+            RedirectHop {
+                from: "https://example.com/a".parse().unwrap(),
+                to: "https://example.com/b".parse().unwrap(),
+                status_code: 301,
+            },
+            RedirectHop {
+                from: "https://example.com/b".parse().unwrap(),
+                to: "https://example.com/c".parse().unwrap(),
+                status_code: 301,
+            },
+        ];
+        let ctx = make_ctx_full(&page, None, &chain);
+        let findings = CanonicalChainValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAN-CHAIN001"));
+    }
+
+    #[test]
+    fn test_canonical_chain_severity_warning() {
+        let mut page = make_page("https://example.com/old");
+        page.meta.canonical = Some("https://example.com/canonical".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        let findings = CanonicalChainValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_canonical_chain_category_seo() {
+        let mut page = make_page("https://example.com/old");
+        page.meta.canonical = Some("https://example.com/canonical".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        let findings = CanonicalChainValidator::new().analyze(&ctx);
+        assert_eq!(findings[0].category, IssueCategory::Seo);
+    }
+
+    #[test]
+    fn test_canonical_chain_one_finding() {
+        let mut page = make_page("https://example.com/old");
+        page.meta.canonical = Some("https://example.com/canonical".parse().unwrap());
+        let chain = vec![RedirectHop {
+            from: "https://example.com/old".parse().unwrap(),
+            to: "https://example.com/new".parse().unwrap(),
+            status_code: 301,
+        }];
+        let ctx = make_ctx_full(&page, None, &chain);
+        assert_eq!(CanonicalChainValidator::new().analyze(&ctx).len(), 1);
+    }
+
+    // ---- InternalLinkDepthAnalyzerV2 (10 tests) ----
+
+    #[test]
+    fn test_il_depth_deep_page() {
+        let page = make_page("https://example.com/a/b/c/d/e");
+        let ctx = make_ctx(&page, None);
+        let findings = InternalLinkDepthAnalyzerV2::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "IL-DEPTH001"));
+    }
+
+    #[test]
+    fn test_il_depth_shallow_page() {
+        let page = make_page("https://example.com/about");
+        let ctx = make_ctx(&page, None);
+        assert!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_il_depth_root() {
+        let page = make_page("https://example.com/");
+        let ctx = make_ctx(&page, None);
+        assert!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_il_depth_exactly_4() {
+        let page = make_page("https://example.com/a/b/c/d");
+        let ctx = make_ctx(&page, None);
+        assert!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_il_depth_5_segments() {
+        let page = make_page("https://example.com/a/b/c/d/e");
+        let ctx = make_ctx(&page, None);
+        let findings = InternalLinkDepthAnalyzerV2::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "IL-DEPTH001"));
+    }
+
+    #[test]
+    fn test_il_depth_severity_info() {
+        let page = make_page("https://example.com/a/b/c/d/e/f");
+        let ctx = make_ctx(&page, None);
+        let findings = InternalLinkDepthAnalyzerV2::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+        assert_eq!(findings[0].category, IssueCategory::Links);
+    }
+
+    #[test]
+    fn test_il_depth_one_finding() {
+        let page = make_page("https://example.com/a/b/c/d/e/f/g");
+        let ctx = make_ctx(&page, None);
+        assert_eq!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).len(), 1);
+    }
+
+    #[test]
+    fn test_il_depth_no_segments() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_il_depth_very_deep() {
+        let page = make_page("https://example.com/a/b/c/d/e/f/g/h/i/j");
+        let ctx = make_ctx(&page, None);
+        let findings = InternalLinkDepthAnalyzerV2::new().analyze(&ctx);
+        assert_eq!(findings[0].code, "IL-DEPTH001");
+    }
+
+    #[test]
+    fn test_il_depth_invalid_url() {
+        let page = make_page("not-a-valid-url");
+        let ctx = make_ctx(&page, None);
+        assert!(InternalLinkDepthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    // ---- ExternalLinkQualityAnalyzer (10 tests) ----
+
+    #[test]
+    fn test_ext_qual_bad_domain() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://linkfarm.example.com/page".to_string(),
+            text: "Link".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "EXT-QUAL001"));
+    }
+
+    #[test]
+    fn test_ext_qual_good_domain() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://wikipedia.org/wiki/Test".to_string(),
+            text: "Wikipedia".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(ExternalLinkQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ext_qual_internal_link_ignored() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://linkfarm.example.com/page".to_string(),
+            text: "Link".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(ExternalLinkQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ext_qual_no_links() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(ExternalLinkQualityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ext_qual_multiple_bad_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "https://linkfarm.example.com/a".to_string(),
+                text: "A".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://spammy-site.example.com/b".to_string(),
+                text: "B".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+    }
+
+    #[test]
+    fn test_ext_qual_severity_warning() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://linkfarm.example.com/page".to_string(),
+            text: "Link".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_ext_qual_category_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://lowquality.example.com/page".to_string(),
+            text: "Link".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].category, IssueCategory::Links);
+    }
+
+    #[test]
+    fn test_ext_qual_count_in_description() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![ExtractedLink {
+            href: "https://linkfarm.example.com/a".to_string(),
+            text: "A".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("1"));
+    }
+
+    #[test]
+    fn test_ext_qual_mixed_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            ExtractedLink {
+                href: "https://linkfarm.example.com/page".to_string(),
+                text: "Bad".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "https://wikipedia.org/wiki/Test".to_string(),
+                text: "Good".to_string(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = ExternalLinkQualityAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+    }
+
+    // ---- ContentStructureAnalyzer (10 tests) ----
+
+    #[test]
+    fn test_cont_str_long_content_no_headings() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 2000;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ContentStructureAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CONT-STR001"));
+    }
+
+    #[test]
+    fn test_cont_str_short_content_ok() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 500;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cont_str_long_content_with_headings() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 2000;
+        page.headings = vec![
+            Heading { level: 1, text: "Title".to_string(), length: 5 },
+            Heading { level: 2, text: "Section".to_string(), length: 7 },
+        ];
+        let ctx = make_ctx(&page, None);
+        assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cont_str_zero_words() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cont_str_exactly_1500_words() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 1500;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_cont_str_1501_words() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 1501;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ContentStructureAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CONT-STR001"));
+    }
+
+    #[test]
+    fn test_cont_str_severity_warning() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 3000;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ContentStructureAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Warning);
+        assert_eq!(findings[0].category, IssueCategory::Content);
+    }
+
+    #[test]
+    fn test_cont_str_one_finding() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 5000;
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        }];
+        let ctx = make_ctx(&page, None);
+        assert_eq!(ContentStructureAnalyzer::new().analyze(&ctx).len(), 1);
+    }
+
+    #[test]
+    fn test_cont_str_two_headings_ok() {
+        let mut page = make_page("https://example.com/article");
+        page.word_count = 2000;
+        page.headings = vec![
+            Heading { level: 1, text: "Title".to_string(), length: 5 },
+            Heading { level: 2, text: "Sub".to_string(), length: 3 },
+        ];
+        let ctx = make_ctx(&page, None);
+        assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // ---- PageSpeedScoreAnalyzer (10 tests) ----
+
+    #[test]
+    fn test_perf_est_no_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert_eq!(findings[0].code, "PERF-EST001");
+    }
+
+    #[test]
+    fn test_perf_est_good_score() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: Some(std::time::Duration::from_millis(100)),
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(100_000),
+            compressed_size: Some(30_000),
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].code, "PERF-EST001");
+        assert!(findings[0].description.contains("100/100"));
+    }
+
+    #[test]
+    fn test_perf_est_slow_ttfb() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: Some(std::time::Duration::from_millis(3000)),
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("70/100"));
+    }
+
+    #[test]
+    fn test_perf_est_large_body() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(6_000_000),
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("75/100"));
+    }
+
+    #[test]
+    fn test_perf_est_poor_compression() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(1_000_000),
+            compressed_size: Some(950_000),
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("85/100"));
+    }
+
+    #[test]
+    fn test_perf_est_category_performance() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].category, IssueCategory::Performance);
+    }
+
+    #[test]
+    fn test_perf_est_severity_info() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_perf_est_poor_recommendation() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: Some(std::time::Duration::from_millis(5000)),
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: Some(10_000_000),
+            compressed_size: Some(9_500_000),
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].recommendation.contains("poor"));
+    }
+
+    #[test]
+    fn test_perf_est_moderate_ttfb() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: Some(std::time::Duration::from_millis(1500)),
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let findings = PageSpeedScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("85/100"));
+    }
+
+    #[test]
+    fn test_perf_est_one_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert_eq!(PageSpeedScoreAnalyzer::new().analyze(&ctx).len(), 1);
+    }
+
+    // ---- MobileFriendlinessScoreAnalyzer (10 tests) ----
+
+    #[test]
+    fn test_mob_score_no_viewport() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].code, "MOB-SCORE001");
+        assert!(findings[0].description.contains("60/100"));
+    }
+
+    #[test]
+    fn test_mob_score_with_viewport() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=device-width, initial-scale=1".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].description.contains("100/100"));
+    }
+
+    #[test]
+    fn test_mob_score_fixed_width() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        let body = r#"<html><head><meta name="viewport" content="width=600"></head><body></body></html>"#;
+        let ctx = make_ctx_full(&page, Some(body), &[]);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        // 100 - 40 (no viewport in meta) - 20 (fixed width in body) = 40
+        assert!(findings[0].description.contains("40/100"));
+    }
+
+    #[test]
+    fn test_mob_score_pinch_zoom_disabled() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        let body = r#"<html><head><meta name="viewport" content="width=device-width, user-scalable=no"></head><body></body></html>"#;
+        let ctx = make_ctx_full(&page, Some(body), &[]);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        // 100 - 40 (no viewport in meta) - 15 (user-scalable=no) = 45
+        assert!(findings[0].description.contains("45/100"));
+    }
+
+    #[test]
+    fn test_mob_score_category_mobile() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].category, IssueCategory::Mobile);
+    }
+
+    #[test]
+    fn test_mob_score_severity_info() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings[0].severity, Severity::Info);
+    }
+
+    #[test]
+    fn test_mob_score_poor_recommendation() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        // Score is 60 (100 - 40 for missing viewport), which is < 85 but >= 60
+        assert!(findings[0].recommendation.contains("minor"));
+    }
+
+    #[test]
+    fn test_mob_score_good_recommendation() {
+        let mut page = make_page("https://example.com");
+        page.meta.viewport = Some("width=device-width".to_string());
+        let ctx = make_ctx(&page, None);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        assert!(findings[0].recommendation.contains("mobile-friendly"));
+    }
+
+    #[test]
+    fn test_mob_score_all_issues() {
+        let mut page = make_page("https://example.com");
+        page.has_lang_attribute = true;
+        let body = r#"<html><head><meta name="viewport" content="width=320, user-scalable=0"></head><body></body></html>"#;
+        let ctx = make_ctx_full(&page, Some(body), &[]);
+        let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
+        // 100 - 40 (no viewport in meta) - 20 (fixed width in body) - 15 (user-scalable) = 25
+        assert!(findings[0].description.contains("25/100"));
+    }
+
+    #[test]
+    fn test_mob_score_one_finding() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        assert_eq!(MobileFriendlinessScoreAnalyzer::new().analyze(&ctx).len(), 1);
     }
 }

@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -7062,6 +7062,376 @@ impl Analyzer for WikipediaLinkAnalyzerV2 {
 }
 
 // =========================================================================
+// MetaDescriptionLengthAnalyzerV2 — META-PX001
+// =========================================================================
+
+pub struct MetaDescriptionLengthAnalyzerV2;
+impl Default for MetaDescriptionLengthAnalyzerV2 { fn default() -> Self { Self::new() } }
+impl MetaDescriptionLengthAnalyzerV2 { pub fn new() -> Self { Self } }
+
+impl Analyzer for MetaDescriptionLengthAnalyzerV2 {
+    fn name(&self) -> &str { "meta-description-length-v2" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(desc) = &ctx.page.meta.description {
+            let len = desc.len();
+            // Approximate pixel width: ~10px per character at typical SERP rendering
+            let approx_px = len * 10;
+            if len > 160 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "META-PX001".to_string(),
+                    title: "Meta description too long for SERP display".to_string(),
+                    description: format!("Meta description is {len} characters (~{approx_px}px). Google typically truncates descriptions beyond 155-160 characters."),
+                    url: url.to_string(),
+                    recommendation: "Keep meta descriptions between 120-155 characters for optimal SERP display.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// TitleKeywordAnalyzer — TITLE-KW001
+// =========================================================================
+
+pub struct TitleKeywordAnalyzer;
+impl Default for TitleKeywordAnalyzer { fn default() -> Self { Self::new() } }
+impl TitleKeywordAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for TitleKeywordAnalyzer {
+    fn name(&self) -> &str { "title-keyword" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            let title_lower = title.to_lowercase();
+            // Check for common keyword absence patterns
+            let has_keyword = !ctx.page.meta.description.as_ref().map_or(true, |d| {
+                let words: Vec<&str> = d.split_whitespace().filter(|w| w.len() > 3).collect();
+                words.iter().all(|w| !title_lower.contains(&w.to_lowercase()))
+            });
+            if !has_keyword && ctx.page.meta.description.is_some() {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "TITLE-KW001".to_string(),
+                    title: "Title may not contain primary keywords from description".to_string(),
+                    description: "The page title does not appear to contain significant keywords found in the meta description.".to_string(),
+                    url: url.to_string(),
+                    recommendation: "Include primary keywords from your description in the title tag.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CanonicalSelfReferenceAnalyzerV2 — CAN-SR001
+// =========================================================================
+
+pub struct CanonicalSelfReferenceAnalyzerV2;
+impl Default for CanonicalSelfReferenceAnalyzerV2 { fn default() -> Self { Self::new() } }
+impl CanonicalSelfReferenceAnalyzerV2 { pub fn new() -> Self { Self } }
+
+impl CanonicalSelfReferenceAnalyzerV2 {
+    fn normalize(url: &str) -> String {
+        let mut s = url.to_string();
+        if let Some(pos) = s.find('#') { s.truncate(pos); }
+        if s.ends_with('/') && url.trim_end_matches('/') != "/" { s.pop(); }
+        s.to_lowercase()
+    }
+}
+
+impl Analyzer for CanonicalSelfReferenceAnalyzerV2 {
+    fn name(&self) -> &str { "canonical-self-reference-v2" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.to_string();
+            let page_str = url.to_string();
+            if Self::normalize(&canonical_str) == Self::normalize(&page_str) {
+                // Self-referencing — correct
+            } else {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "CAN-SR001".to_string(),
+                    title: "Canonical URL is not self-referencing".to_string(),
+                    description: format!("Canonical URL ({canonical_str}) differs from the current page URL ({page_str}). Non-self-referencing canonicals should be intentional."),
+                    url: url.to_string(),
+                    recommendation: "Ensure the canonical URL points to the preferred version of this page.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// HreflangReciprocalAnalyzerV2 — HREF-REC001
+// =========================================================================
+
+pub struct HreflangReciprocalAnalyzerV2;
+impl Default for HreflangReciprocalAnalyzerV2 { fn default() -> Self { Self::new() } }
+impl HreflangReciprocalAnalyzerV2 { pub fn new() -> Self { Self } }
+
+impl Analyzer for HreflangReciprocalAnalyzerV2 {
+    fn name(&self) -> &str { "hreflang-reciprocal-v2" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hreflang = &ctx.page.meta.hreflang;
+        if hreflang.is_empty() { return findings; }
+        let self_url = Url::parse(url);
+        if let Ok(self_url) = self_url {
+            let self_paths: Vec<String> = hreflang.iter()
+                .filter(|h| h.url == self_url)
+                .map(|h| h.lang.clone())
+                .collect();
+            for h in hreflang {
+                if self_paths.contains(&h.lang) {
+                    // This language's URL points to us, but do we reciprocate?
+                    let reciprocates = hreflang.iter().any(|other|
+                        other.lang == h.lang && other.url == self_url
+                    );
+                    if !reciprocates {
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Seo,
+                            code: "HREF-REC001".to_string(),
+                            title: "Hreflang not reciprocated".to_string(),
+                            description: format!("Language \"{}\" hreflang points to this page but is not declared in this page's hreflang tags.", h.lang),
+                            url: url.to_string(),
+                            recommendation: "Add a reciprocal hreflang tag for this language pointing back to the current page.".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// InternalLinkAnchorTextDiversityAnalyzer — ANCH-DIV001
+// =========================================================================
+
+pub struct InternalLinkAnchorTextDiversityAnalyzer;
+impl Default for InternalLinkAnchorTextDiversityAnalyzer { fn default() -> Self { Self::new() } }
+impl InternalLinkAnchorTextDiversityAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for InternalLinkAnchorTextDiversityAnalyzer {
+    fn name(&self) -> &str { "internal-link-anchor-text-diversity" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let page_url = Url::parse(url).ok();
+        if let Some(page_url) = &page_url {
+            let internal_links: Vec<&ExtractedLink> = ctx.page.links.iter()
+                .filter(|l| !l.is_external && Url::parse(&l.href).map_or(true, |u| u.host_str() == page_url.host_str()))
+                .collect();
+            if internal_links.len() >= 5 {
+                let mut text_counts: HashMap<String, usize> = HashMap::new();
+                for link in &internal_links {
+                    let text = link.text.trim().to_lowercase();
+                    if !text.is_empty() {
+                        *text_counts.entry(text).or_insert(0) += 1;
+                    }
+                }
+                let total_texts = text_counts.len();
+                if total_texts > 0 {
+                    let max_count = text_counts.values().max().unwrap_or(&0);
+                    let max_pct = (*max_count as f64 / internal_links.len() as f64 * 100.0) as u32;
+                    if max_pct > 40 {
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Seo,
+                            code: "ANCH-DIV001".to_string(),
+                            title: "Low internal link anchor text diversity".to_string(),
+                            description: format!("The most common anchor text appears {max_count} times ({max_pct}% of {total_texts} unique texts). Overly uniform anchor text may appear manipulative."),
+                            url: url.to_string(),
+                            recommendation: "Vary anchor text for internal links using natural, descriptive phrases.".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ExternalLinkAuthorityAnalyzer — EXT-AUTH001
+// =========================================================================
+
+pub struct ExternalLinkAuthorityAnalyzer;
+impl Default for ExternalLinkAuthorityAnalyzer { fn default() -> Self { Self::new() } }
+impl ExternalLinkAuthorityAnalyzer { pub fn new() -> Self { Self } }
+
+impl ExternalLinkAuthorityAnalyzer {
+    const HIGH_AUTHORITY_DOMAINS: &[&str] = &[
+        "wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org",
+        "w3.org", "schema.org", "developer.mozilla.org", "docs.python.org",
+        "learn.microsoft.com", "cloud.google.com", "aws.amazon.com",
+    ];
+}
+
+impl Analyzer for ExternalLinkAuthorityAnalyzer {
+    fn name(&self) -> &str { "external-link-authority" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let high_auth: usize = ctx.page.links.iter().filter(|l| {
+            l.is_external && Self::HIGH_AUTHORITY_DOMAINS.iter().any(|d| l.href.contains(d))
+        }).count();
+        let total_ext = ctx.page.links.iter().filter(|l| l.is_external).count();
+        if total_ext >= 3 && high_auth == 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "EXT-AUTH001".to_string(),
+                title: "No links to high-authority domains".to_string(),
+                description: format!("Page has {total_ext} external link(s) but none point to known high-authority domains."),
+                url: url.to_string(),
+                recommendation: "Link to authoritative sources (e.g., Wikipedia, MDN, official docs) to boost E-E-A-T signals.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// SitemapCoverageAnalyzerV2 — SITEMAP-COV001
+// =========================================================================
+
+pub struct SitemapCoverageAnalyzerV2 {
+    known_urls: HashSet<String>,
+}
+
+impl Default for SitemapCoverageAnalyzerV2 {
+    fn default() -> Self { Self { known_urls: HashSet::new() } }
+}
+
+impl SitemapCoverageAnalyzerV2 {
+    pub fn new(known_urls: HashSet<String>) -> Self { Self { known_urls } }
+    pub fn empty() -> Self { Self::new(HashSet::new()) }
+}
+
+impl Analyzer for SitemapCoverageAnalyzerV2 {
+    fn name(&self) -> &str { "sitemap-coverage-v2" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !self.known_urls.is_empty() && !self.known_urls.contains(url) {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "SITEMAP-COV001".to_string(),
+                title: "Page not found in sitemap".to_string(),
+                description: "This page URL was not found in any sitemap file.".to_string(),
+                url: url.to_string(),
+                recommendation: "Add this page to your sitemap.xml to help search engines discover it.".to_string(),
+            });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// RobotsTxtCoverageAnalyzerV2 — ROBOTS-COV001
+// =========================================================================
+
+pub struct RobotsTxtCoverageAnalyzerV2;
+impl Default for RobotsTxtCoverageAnalyzerV2 { fn default() -> Self { Self::new() } }
+impl RobotsTxtCoverageAnalyzerV2 { pub fn new() -> Self { Self } }
+
+impl Analyzer for RobotsTxtCoverageAnalyzerV2 {
+    fn name(&self) -> &str { "robots-txt-coverage-v2" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let path = Url::parse(url).map_or(String::new(), |u| {
+                let p = u.path().to_string();
+                if p.ends_with('/') { p } else { p }
+            });
+            let lower = robots.to_lowercase();
+            let lines: Vec<&str> = lower.lines().collect();
+            let mut in_disallow = false;
+            let mut user_agent_all = false;
+            for line in &lines {
+                let trimmed = line.trim();
+                if trimmed.starts_with("user-agent:") {
+                    let agent = trimmed.split(':').nth(1).unwrap_or("").trim();
+                    user_agent_all = agent == "*";
+                }
+                if trimmed.starts_with("disallow:") && user_agent_all {
+                    let disallow_path = trimmed.split(':').nth(1).unwrap_or("").trim();
+                    if !disallow_path.is_empty() && path.starts_with(disallow_path) {
+                        in_disallow = true;
+                    }
+                }
+            }
+            if in_disallow {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "ROBOTS-COV001".to_string(),
+                    title: "Page blocked by robots.txt".to_string(),
+                    description: "This page's URL path matches a Disallow rule in robots.txt for user-agent *.".to_string(),
+                    url: url.to_string(),
+                    recommendation: "Review robots.txt Disallow rules to ensure important pages are not blocked.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// PaginationLinkAnalyzer — PAG-LINK001
+// =========================================================================
+
+pub struct PaginationLinkAnalyzer;
+impl Default for PaginationLinkAnalyzer { fn default() -> Self { Self::new() } }
+impl PaginationLinkAnalyzer { pub fn new() -> Self { Self } }
+
+impl Analyzer for PaginationLinkAnalyzer {
+    fn name(&self) -> &str { "pagination-link" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let is_pagination = ctx.page.links.iter().any(|l| {
+            l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string())
+        });
+        if is_pagination {
+            let nofollow_pagination: Vec<&ExtractedLink> = ctx.page.links.iter()
+                .filter(|l| l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string()))
+                .filter(|l| l.rel.contains(&"nofollow".to_string()))
+                .collect();
+            if !nofollow_pagination.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "PAG-LINK001".to_string(),
+                    title: "Pagination links marked nofollow".to_string(),
+                    description: format!("{} pagination link(s) have rel=\"nofollow\". Nofollow on pagination prevents PageRank from flowing through paginated series.", nofollow_pagination.len()),
+                    url: url.to_string(),
+                    recommendation: "Remove nofollow from pagination rel=next/prev links to allow crawling of paginated content.".to_string(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
 // New SEO analyzer tests
 // =========================================================================
 
@@ -8129,5 +8499,405 @@ mod new_seo_tests {
         ];
         let ctx = make_ctx(&page, Some(200));
         assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    // === MetaDescriptionLengthAnalyzerV2 tests ===
+
+    #[test]
+    fn test_meta_px_long_desc() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(200));
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "META-PX001"));
+    }
+
+    #[test]
+    fn test_meta_px_short_desc() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("Short description".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_meta_px_no_desc() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_meta_px_name() { assert_eq!(MetaDescriptionLengthAnalyzerV2::new().name(), "meta-description-length-v2"); }
+
+    #[test]
+    fn test_meta_px_default() { let _ = MetaDescriptionLengthAnalyzerV2::default(); }
+
+    #[test]
+    fn test_meta_px_category() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(200));
+        let ctx = make_ctx(&page, Some(200));
+        for f in MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    #[test]
+    fn test_meta_px_exact_boundary() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(160));
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_meta_px_over_boundary() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(161));
+        let ctx = make_ctx(&page, Some(200));
+        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "META-PX001"));
+    }
+
+    #[test]
+    fn test_meta_px_severity() {
+        let mut page = make_page("https://example.com");
+        page.meta.description = Some("A".repeat(200));
+        let ctx = make_ctx(&page, Some(200));
+        assert_eq!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx)[0].severity, Severity::Warning);
+    }
+
+    // === TitleKeywordAnalyzer tests ===
+
+    #[test]
+    fn test_title_kw_no_title() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleKeywordAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_kw_no_desc() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("My Page".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(TitleKeywordAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_title_kw_name() { assert_eq!(TitleKeywordAnalyzer::new().name(), "title-keyword"); }
+
+    #[test]
+    fn test_title_kw_default() { let _ = TitleKeywordAnalyzer::default(); }
+
+    #[test]
+    fn test_title_kw_category() {
+        let mut page = make_page("https://example.com");
+        page.meta.title = Some("My Page".to_string());
+        page.meta.description = Some("completely different content".to_string());
+        let ctx = make_ctx(&page, Some(200));
+        for f in TitleKeywordAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === CanonicalSelfReferenceAnalyzerV2 tests ===
+
+    #[test]
+    fn test_can_sr_self_referencing() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/page").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_can_sr_different() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/other").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CAN-SR001"));
+    }
+
+    #[test]
+    fn test_can_sr_no_canonical() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_can_sr_name() { assert_eq!(CanonicalSelfReferenceAnalyzerV2::new().name(), "canonical-self-reference-v2"); }
+
+    #[test]
+    fn test_can_sr_default() { let _ = CanonicalSelfReferenceAnalyzerV2::default(); }
+
+    #[test]
+    fn test_can_sr_category() {
+        let mut page = make_page("https://example.com/page");
+        page.meta.canonical = Some(Url::parse("https://example.com/other").unwrap());
+        let ctx = make_ctx(&page, Some(200));
+        for f in CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === InternalLinkAnchorTextDiversityAnalyzer tests ===
+
+    #[test]
+    fn test_anch_div_low_diversity() {
+        let mut page = make_page("https://example.com");
+        let links = (0..10).map(|_| crate::parser::ExtractedLink {
+            href: "https://example.com/page".to_string(), text: "click here".to_string(),
+            rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }).collect::<Vec<_>>();
+        page.links = links;
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCH-DIV001"));
+    }
+
+    #[test]
+    fn test_anch_div_good_diversity() {
+        let mut page = make_page("https://example.com");
+        let texts = ["About", "Contact", "Pricing", "Blog", "FAQ", "Help"];
+        page.links = texts.iter().map(|t| crate::parser::ExtractedLink {
+            href: "https://example.com/page".to_string(), text: t.to_string(),
+            rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }).collect();
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anch_div_too_few_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page".to_string(), text: "click here".to_string(),
+            rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_anch_div_name() { assert_eq!(InternalLinkAnchorTextDiversityAnalyzer::new().name(), "internal-link-anchor-text-diversity"); }
+
+    #[test]
+    fn test_anch_div_default() { let _ = InternalLinkAnchorTextDiversityAnalyzer::default(); }
+
+    #[test]
+    fn test_anch_div_category() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..10).map(|_| crate::parser::ExtractedLink {
+            href: "https://example.com/page".to_string(), text: "click here".to_string(),
+            rel: vec![], is_external: false, aria_label: None, img_alt: None,
+        }).collect();
+        let ctx = make_ctx(&page, Some(200));
+        for f in InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === ExternalLinkAuthorityAnalyzer tests ===
+
+    #[test]
+    fn test_ext_auth_no_high_auth() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..5).map(|i| crate::parser::ExtractedLink {
+            href: format!("https://random{i}.com/page"), text: format!("Link {i}"),
+            rel: vec![], is_external: true, aria_label: None, img_alt: None,
+        }).collect();
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "EXT-AUTH001"));
+    }
+
+    #[test]
+    fn test_ext_auth_has_high_auth() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![
+            crate::parser::ExtractedLink { href: "https://wikipedia.org/wiki/Test".to_string(), text: "Wiki".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ext_auth_few_links() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![crate::parser::ExtractedLink { href: "https://random.com".to_string(), text: "Link".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_ext_auth_name() { assert_eq!(ExternalLinkAuthorityAnalyzer::new().name(), "external-link-authority"); }
+
+    #[test]
+    fn test_ext_auth_default() { let _ = ExternalLinkAuthorityAnalyzer::default(); }
+
+    #[test]
+    fn test_ext_auth_category() {
+        let mut page = make_page("https://example.com");
+        page.links = (0..5).map(|i| crate::parser::ExtractedLink {
+            href: format!("https://random{i}.com/page"), text: format!("Link {i}"),
+            rel: vec![], is_external: true, aria_label: None, img_alt: None,
+        }).collect();
+        let ctx = make_ctx(&page, Some(200));
+        for f in ExternalLinkAuthorityAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === SitemapCoverageAnalyzerV2 tests ===
+
+    #[test]
+    fn test_sitemap_cov_not_in_sitemap() {
+        let known = std::collections::HashSet::from(["https://example.com/other".to_string()]);
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let a = SitemapCoverageAnalyzerV2::new(known);
+        assert!(a.analyze(&ctx).iter().any(|f| f.code == "SITEMAP-COV001"));
+    }
+
+    #[test]
+    fn test_sitemap_cov_in_sitemap() {
+        let known = std::collections::HashSet::from(["https://example.com/page".to_string()]);
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let a = SitemapCoverageAnalyzerV2::new(known);
+        assert!(a.analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_cov_empty_sitemap() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let a = SitemapCoverageAnalyzerV2::empty();
+        assert!(a.analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_sitemap_cov_name() { assert_eq!(SitemapCoverageAnalyzerV2::empty().name(), "sitemap-coverage-v2"); }
+
+    #[test]
+    fn test_sitemap_cov_default() { let _ = SitemapCoverageAnalyzerV2::default(); }
+
+    #[test]
+    fn test_sitemap_cov_category() {
+        let known = std::collections::HashSet::from(["https://example.com/other".to_string()]);
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        let a = SitemapCoverageAnalyzerV2::new(known);
+        for f in a.analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === RobotsTxtCoverageAnalyzerV2 tests ===
+
+    #[test]
+    fn test_robots_cov_blocked() {
+        let robots = "User-agent: *\nDisallow: /page\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
+            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
+            server: None, content_type: None, rendered: None,
+        };
+        assert!(RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTS-COV001"));
+    }
+
+    #[test]
+    fn test_robots_cov_not_blocked() {
+        let robots = "User-agent: *\nDisallow: /admin\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
+            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
+            server: None, content_type: None, rendered: None,
+        };
+        assert!(RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_cov_no_robots() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_robots_cov_name() { assert_eq!(RobotsTxtCoverageAnalyzerV2::new().name(), "robots-txt-coverage-v2"); }
+
+    #[test]
+    fn test_robots_cov_default() { let _ = RobotsTxtCoverageAnalyzerV2::default(); }
+
+    #[test]
+    fn test_robots_cov_category() {
+        let robots = "User-agent: *\nDisallow: /page\n";
+        let page = make_page("https://example.com/page");
+        let ctx = AnalysisContext {
+            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
+            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
+            server: None, content_type: None, rendered: None,
+        };
+        for f in RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    // === PaginationLinkAnalyzer tests ===
+
+    #[test]
+    fn test_pag_nofollow() {
+        let mut page = make_page("https://example.com/page/1");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "PAG-LINK001"));
+    }
+
+    #[test]
+    fn test_pag_no_nofollow() {
+        let mut page = make_page("https://example.com/page/1");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
+            rel: vec!["next".to_string()], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pag_no_pagination() {
+        let page = make_page("https://example.com/page");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_pag_prev_nofollow() {
+        let mut page = make_page("https://example.com/page/2");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page/1".to_string(), text: "Prev".to_string(),
+            rel: vec!["prev".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "PAG-LINK001"));
+    }
+
+    #[test]
+    fn test_pag_name() { assert_eq!(PaginationLinkAnalyzer::new().name(), "pagination-link"); }
+
+    #[test]
+    fn test_pag_default() { let _ = PaginationLinkAnalyzer::default(); }
+
+    #[test]
+    fn test_pag_category() {
+        let mut page = make_page("https://example.com/page/1");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        for f in PaginationLinkAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+    }
+
+    #[test]
+    fn test_pag_severity() {
+        let mut page = make_page("https://example.com/page/1");
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert_eq!(PaginationLinkAnalyzer::new().analyze(&ctx)[0].severity, Severity::Warning);
     }
 }

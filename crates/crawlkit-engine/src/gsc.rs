@@ -118,10 +118,7 @@ impl GscClient {
             .await
             .map_err(|e| GscError::ParseError(e.to_string()))?;
 
-        let rows = data["rows"]
-            .as_array()
-            .cloned()
-            .unwrap_or_default();
+        let rows = data["rows"].as_array().cloned().unwrap_or_default();
 
         let mut queries = Vec::new();
         let mut pages = Vec::new();
@@ -132,10 +129,7 @@ impl GscClient {
         let mut row_count: u64 = 0;
 
         for row in &rows {
-            let keys = row["keys"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
+            let keys = row["keys"].as_array().cloned().unwrap_or_default();
 
             let key_str = keys
                 .first()
@@ -273,9 +267,7 @@ impl GscClient {
             .await
             .map_err(|e| GscError::ParseError(e.to_string()))?;
 
-        let row = data["rows"]
-            .as_array()
-            .and_then(|arr| arr.first());
+        let row = data["rows"].as_array().and_then(|arr| arr.first());
 
         match row {
             Some(row) => {

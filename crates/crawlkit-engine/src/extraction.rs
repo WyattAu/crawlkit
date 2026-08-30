@@ -161,7 +161,8 @@ mod tests {
 
     #[test]
     fn test_extract_attribute_value() {
-        let html = r#"<html><body><time datetime="2025-01-15T10:30:00Z">Jan 15</time></body></html>"#;
+        let html =
+            r#"<html><body><time datetime="2025-01-15T10:30:00Z">Jan 15</time></body></html>"#;
         let rules = vec![ExtractionRule {
             name: "article_date".to_string(),
             selector: "time[datetime]".to_string(),

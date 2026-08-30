@@ -65,7 +65,8 @@ impl Analyzer for BreadcrumbsValidator {
                     // BREAD002: Breadcrumb URLs don't match page hierarchy
                     if let Some(last_item) = items.last() {
                         if let Some(item_url) = last_item.get("item").and_then(|i| i.as_str()) {
-                            let page_path = url.trim_start_matches("https://")
+                            let page_path = url
+                                .trim_start_matches("https://")
                                 .trim_start_matches("http://")
                                 .trim_start_matches(|c: char| c.is_alphanumeric());
                             if !item_url.contains(page_path) && !page_path.is_empty() {
@@ -80,9 +81,10 @@ impl Analyzer for BreadcrumbsValidator {
                                         item_url, url
                                     ),
                                     url: url.clone(),
-                                    recommendation: "Ensure the last breadcrumb item's URL matches \
+                                    recommendation:
+                                        "Ensure the last breadcrumb item's URL matches \
                                                      the current page URL."
-                                        .to_string(),
+                                            .to_string(),
                                 });
                             }
                         }
@@ -92,11 +94,15 @@ impl Analyzer for BreadcrumbsValidator {
         }
 
         // BREAD003: No BreadcrumbList on deep pages (depth > 2)
-        let path_segments: Vec<&str> = url.split('/').filter(|s| !s.is_empty() && !s.contains(':')).collect();
+        let path_segments: Vec<&str> = url
+            .split('/')
+            .filter(|s| !s.is_empty() && !s.contains(':'))
+            .collect();
         if path_segments.len() > 2 {
-            let has_breadcrumb = ctx.page.structured_data.iter().any(|sd| {
-                sd.data.get("@type").and_then(|t| t.as_str()) == Some("BreadcrumbList")
-            });
+            let has_breadcrumb =
+                ctx.page.structured_data.iter().any(|sd| {
+                    sd.data.get("@type").and_then(|t| t.as_str()) == Some("BreadcrumbList")
+                });
             if !has_breadcrumb {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -119,7 +125,6 @@ impl Analyzer for BreadcrumbsValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -181,63 +186,69 @@ mod tests {
     }
 
     #[test]
-fn test_breadcrumbs_empty_list() {
-    let mut page = make_page("https://example.com/products");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("BreadcrumbList".to_string()),
-        data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": []}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(BreadcrumbsValidator::new().analyze(&ctx).iter().any(|f| f.code == "BREAD001"));
-}
-
-
-    #[test]
-fn test_breadcrumbs_single_item() {
-    let mut page = make_page("https://example.com/products");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("BreadcrumbList".to_string()),
-        data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "item": "https://example.com"}]}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(BreadcrumbsValidator::new().analyze(&ctx).iter().any(|f| f.code == "BREAD001"));
-}
-
+    fn test_breadcrumbs_empty_list() {
+        let mut page = make_page("https://example.com/products");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": []}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(BreadcrumbsValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BREAD001"));
+    }
 
     #[test]
-fn test_breadcrumbs_valid() {
-    let mut page = make_page("https://example.com/products/widget");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("BreadcrumbList".to_string()),
-        data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [
-            {"@type": "ListItem", "position": 1, "item": "https://example.com"},
-            {"@type": "ListItem", "position": 2, "item": "https://example.com/products"},
-            {"@type": "ListItem", "position": 3, "item": "https://example.com/products/widget"}
-        ]}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = BreadcrumbsValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "BREAD001"));
-}
-
+    fn test_breadcrumbs_single_item() {
+        let mut page = make_page("https://example.com/products");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [{"@type": "ListItem", "position": 1, "item": "https://example.com"}]}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(BreadcrumbsValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BREAD001"));
+    }
 
     #[test]
-fn test_breadcrumbs_missing_on_deep_page() {
-    let page = make_page("https://example.com/products/widget");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(BreadcrumbsValidator::new().analyze(&ctx).iter().any(|f| f.code == "BREAD003"));
-}
-
+    fn test_breadcrumbs_valid() {
+        let mut page = make_page("https://example.com/products/widget");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": [
+                {"@type": "ListItem", "position": 1, "item": "https://example.com"},
+                {"@type": "ListItem", "position": 2, "item": "https://example.com/products"},
+                {"@type": "ListItem", "position": 3, "item": "https://example.com/products/widget"}
+            ]}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = BreadcrumbsValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "BREAD001"));
+    }
 
     #[test]
-fn test_breadcrumbs_no_bread003_on_shallow_page() {
-    let page = make_page("https://example.com/products");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!BreadcrumbsValidator::new().analyze(&ctx).iter().any(|f| f.code == "BREAD003"));
-}
+    fn test_breadcrumbs_missing_on_deep_page() {
+        let page = make_page("https://example.com/products/widget");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(BreadcrumbsValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BREAD003"));
+    }
 
-
+    #[test]
+    fn test_breadcrumbs_no_bread003_on_shallow_page() {
+        let page = make_page("https://example.com/products");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!BreadcrumbsValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BREAD003"));
+    }
 }

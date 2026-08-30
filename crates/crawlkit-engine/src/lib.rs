@@ -43,6 +43,13 @@ use std::time::Duration;
 use thiserror::Error;
 use url::Url;
 
+/// API access logging for SOC 2 compliance.
+///
+/// Records every API access with user identity, timestamp, action,
+/// resource, and outcome. Supports querying by user, action prefix,
+/// time range, and success/failure status.
+#[cfg(feature = "full")]
+pub mod access_log;
 /// Advanced canonical URL analysis and validation.
 ///
 /// Detects canonical conflicts, duplicate content, and
@@ -68,12 +75,6 @@ pub mod ai_bots;
 /// covering HTTP status, redirects, canonical URLs, meta tags, headings, links,
 /// images, structured data, security, accessibility, and more.
 pub mod analyzers;
-/// SSRF (Server-Side Request Forgery) validation for URLs.
-///
-/// Shared validation used by both the plugin network guard and the API
-/// crawl-submission endpoint to ensure URLs point to public, routable
-/// HTTP(S) targets.
-pub mod ssrf;
 /// Article content generation from crawled page data.
 ///
 /// Extracts and formats article content from web pages for
@@ -86,13 +87,6 @@ pub mod article_generator;
 /// compliance and security auditing.
 #[cfg(feature = "full")]
 pub mod audit;
-/// API access logging for SOC 2 compliance.
-///
-/// Records every API access with user identity, timestamp, action,
-/// resource, and outcome. Supports querying by user, action prefix,
-/// time range, and success/failure status.
-#[cfg(feature = "full")]
-pub mod access_log;
 /// Adapters for third-party backlink data sources (Ahrefs, GSC, Majestic).
 ///
 /// Defines the BacklinkAdapter trait for
@@ -136,15 +130,15 @@ pub mod content_gap;
 /// for hash-based or range-based partitioning.
 #[cfg(feature = "full")]
 pub mod coordination;
+/// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
+#[cfg(feature = "full")]
+pub mod crawl_engine;
 /// CrUX (Chrome User Experience Report) field data client.
 ///
 /// Fetches real-world Core Web Vitals (LCP, CLS, INP, FCP, TTFB) from the
 /// CrUX API for origin-level performance data.
 #[cfg(feature = "full")]
 pub mod crux;
-/// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.
-#[cfg(feature = "full")]
-pub mod crawl_engine;
 /// Deterministic replay controller for reproducible crawl runs.
 ///
 /// Seed-based PRNG ensures that given the same input and configuration,
@@ -197,12 +191,6 @@ pub mod http;
 /// and URL patterns to decide when to invoke Playwright.
 #[cfg(feature = "full")]
 pub mod js_render_decision;
-/// Post-crawl analysis for cross-page SEO checks.
-///
-/// Runs after a crawl completes to detect site-wide issues like
-/// canonical conflicts, redirect chains, and orphan pages.
-#[cfg(feature = "full")]
-pub mod post_crawl;
 /// Monitoring: delta analysis for scheduled crawl comparison.
 ///
 /// Compares two crawl results and determines whether significant changes
@@ -210,12 +198,24 @@ pub mod post_crawl;
 /// that can drive alerting and webhook delivery.
 #[cfg(feature = "full")]
 pub mod monitoring;
+/// Post-crawl analysis for cross-page SEO checks.
+///
+/// Runs after a crawl completes to detect site-wide issues like
+/// canonical conflicts, redirect chains, and orphan pages.
+#[cfg(feature = "full")]
+pub mod post_crawl;
 /// Search query tracking and SERP analysis.
 ///
 /// Tracks search engine result pages (SERPs) for target keywords
 /// and analyzes ranking positions and changes.
 #[cfg(feature = "full")]
 pub mod query_tracker;
+/// SSRF (Server-Side Request Forgery) validation for URLs.
+///
+/// Shared validation used by both the plugin network guard and the API
+/// crawl-submission endpoint to ensure URLs point to public, routable
+/// HTTP(S) targets.
+pub mod ssrf;
 
 /// Native plugin loading via dynamic linking (libloading).
 ///
@@ -244,17 +244,36 @@ pub mod plugin;
 pub mod plugin_index;
 pub mod plugin_runtime;
 
+#[cfg(all(feature = "full", feature = "wasi-preview2"))]
+pub use plugin::WasiPlugin;
 #[cfg(feature = "full")]
 pub use plugin::{
     ManifestError, PluginError, PluginInstance, PluginKind, PluginManifest, PluginMetadata,
     PluginRegistry, WasmConfig, WasmPlugin,
 };
-#[cfg(all(feature = "full", feature = "wasi-preview2"))]
-pub use plugin::WasiPlugin;
 pub use plugin_index::{
     install_plugin, list_installed_plugins, parse_plugin_index, PluginChangelog, PluginIndexEntry,
     PluginIndexError, PluginStats, PluginVerification,
 };
+/// Google Search Console API client.
+///
+/// Full integration with GSC Search Analytics, URL Inspection,
+/// and site management APIs.
+#[cfg(feature = "full")]
+pub mod gsc;
+/// Prioritized insights engine that ranks post-crawl findings by impact and effort.
+///
+/// Aggregates findings across all crawled pages, computes impact scores
+/// based on severity and prevalence, estimates fix effort, and produces
+/// a ranked list of actionable insights — the key differentiator that
+/// tools like Sitebulb and Lumar offer.
+pub mod insights;
+/// LLM-powered post-crawl analysis plugin (user-brings-own-key).
+///
+/// Configurable with provider, model, and prompt templates. Supports
+/// OpenAI and Anthropic APIs via [`LlmConfig`](llm_analyzer::LlmConfig).
+#[cfg(feature = "full")]
+pub mod llm_analyzer;
 /// PostgreSQL-backed storage for crawl data.
 ///
 /// Uses sqlx with connection pooling for async database access.
@@ -310,6 +329,12 @@ pub mod storage;
 /// storage implementations (SQLite, in-memory, distributed, etc.).
 #[cfg(feature = "full")]
 pub mod storage_trait;
+/// Historical trend analysis across multiple crawl snapshots.
+///
+/// Computes time-series trends for pages crawled, issues found,
+/// and health scores, with linear regression for trend direction.
+#[cfg(feature = "full")]
+pub mod trends;
 /// Common types re-exported for backward compatibility.
 pub mod types;
 /// WASM-based analyzers for advanced code and performance analysis.
@@ -324,32 +349,9 @@ pub mod wasm_analyzers;
 /// into Playwright-rendered pages to capture LCP, CLS, INP, FCP, and TTFB.
 #[cfg(feature = "full")]
 pub mod web_vitals;
-/// LLM-powered post-crawl analysis plugin (user-brings-own-key).
-///
-/// Configurable with provider, model, and prompt templates. Supports
-/// OpenAI and Anthropic APIs via [`LlmConfig`](llm_analyzer::LlmConfig).
-#[cfg(feature = "full")]
-pub mod llm_analyzer;
-/// Google Search Console API client.
-///
-/// Full integration with GSC Search Analytics, URL Inspection,
-/// and site management APIs.
-#[cfg(feature = "full")]
-pub mod gsc;
-/// Historical trend analysis across multiple crawl snapshots.
-///
-/// Computes time-series trends for pages crawled, issues found,
-/// and health scores, with linear regression for trend direction.
-#[cfg(feature = "full")]
-pub mod trends;
-/// Prioritized insights engine that ranks post-crawl findings by impact and effort.
-///
-/// Aggregates findings across all crawled pages, computes impact scores
-/// based on severity and prevalence, estimates fix effort, and produces
-/// a ranked list of actionable insights — the key differentiator that
-/// tools like Sitebulb and Lumar offer.
-pub mod insights;
 
+#[cfg(feature = "full")]
+pub use access_log::{AccessLogEntry, AccessLogFilter, AccessLogger};
 pub use ai_analyzers::{
     AiAnswerBoxAnalyzer, AiCitationEligibilityAnalyzer, AiContentStructureAnalyzer,
     AiCrawlerAccessibilityAnalyzer,
@@ -369,18 +371,9 @@ pub use analyzers::{
 #[cfg(feature = "full")]
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
 #[cfg(feature = "full")]
-pub use access_log::{AccessLogEntry, AccessLogFilter, AccessLogger};
-#[cfg(feature = "full")]
 pub use backlink_adapters::{
     AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
     GscAdapter, MajesticAdapter,
-};
-#[cfg(feature = "full")]
-pub use gsc::{GscAnalytics, GscClient, GscError, GscRow, UrlInspection};
-#[cfg(feature = "full")]
-pub use trends::{
-    analyze_trends, compute_health_score, trend_to_json, trend_to_markdown, CrawlSnapshot,
-    TrendAnalysis, TrendDirection, TrendError, TrendPoint, TrendSummary,
 };
 #[cfg(feature = "full")]
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
@@ -401,14 +394,23 @@ pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
 #[cfg(feature = "full")]
+pub use gsc::{GscAnalytics, GscClient, GscError, GscRow, UrlInspection};
+#[cfg(feature = "full")]
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
 #[cfg(feature = "full")]
 pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndicators};
+#[cfg(feature = "full")]
+pub use trends::{
+    analyze_trends, compute_health_score, trend_to_json, trend_to_markdown, CrawlSnapshot,
+    TrendAnalysis, TrendDirection, TrendError, TrendPoint, TrendSummary,
+};
 
 #[cfg(feature = "full")]
-pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
+pub use crux::{CruxClient, CruxError, CruxFieldData};
 #[cfg(all(feature = "full", feature = "observability"))]
 pub use observability::otel;
+#[cfg(feature = "full")]
+pub use observability::{Metrics, MetricsSnapshot, SharedMetrics};
 #[cfg(feature = "postgres")]
 pub use pg_storage::PgStorage;
 #[cfg(feature = "full")]
@@ -421,8 +423,6 @@ pub use playwright::{
 pub use resource_monitor::{ResourceLimits, ResourceMonitor, ResourceUsage};
 #[cfg(feature = "full")]
 pub use robots::RobotsTxtCache;
-#[cfg(feature = "full")]
-pub use crux::{CruxClient, CruxError, CruxFieldData};
 #[cfg(feature = "full")]
 pub use rum::{
     CruxAdapter, CruxData, FieldMetrics, GoogleAnalyticsAdapter, LabMetrics, MergedMetrics,
@@ -452,6 +452,10 @@ pub mod crawl_map;
 /// extracting structured fields for storage and export. Configuration
 /// is driven by `[[extraction.rules]]` entries in `crawlkit.toml`.
 pub mod extraction;
+/// Log analysis: crawler breakdown, status codes, top URLs, and error reporting.
+pub mod log_analyzer;
+/// Web server access log parsing for Nginx/Apache combined and JSON formats.
+pub mod log_parser;
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 ///
 /// Provides MetaTags with helper methods for checking
@@ -462,10 +466,6 @@ pub mod meta;
 /// [`HtmlParser::parse`] produces a [`ParsedPage`] with all SEO-relevant data
 /// extracted from raw HTML, including accessibility landmarks and social metadata.
 pub mod parser;
-/// Web server access log parsing for Nginx/Apache combined and JSON formats.
-pub mod log_parser;
-/// Log analysis: crawler breakdown, status codes, top URLs, and error reporting.
-pub mod log_analyzer;
 
 pub use meta::{HreflangTag, MetaTags, OpenGraphTags, TwitterTags};
 pub use parser::{

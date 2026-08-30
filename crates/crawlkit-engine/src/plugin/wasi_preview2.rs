@@ -128,12 +128,10 @@ impl WasiPlugin {
         super::manifest::validate_manifest(&manifest.plugin)
             .map_err(|e| PluginError::InvalidManifest(e.to_string()))?;
 
-        let wasm_file = manifest
-            .plugin
-            .entry
-            .wasm
-            .as_ref()
-            .ok_or_else(|| PluginError::LoadFailed("No WASM entry point specified".to_string()))?;
+        let wasm_file =
+            manifest.plugin.entry.wasm.as_ref().ok_or_else(|| {
+                PluginError::LoadFailed("No WASM entry point specified".to_string())
+            })?;
         let wasm_path = plugin_dir.join(wasm_file);
 
         // Trust chain verification before handing bytes to the compiler.
@@ -157,9 +155,10 @@ impl WasiPlugin {
             .map_err(|e| PluginError::LoadFailed(format!("Failed to create engine: {e}")))?;
 
         // Load as a component (not a core module).
-        let component = wasmtime::component::Component::from_file(&engine, &wasm_path).map_err(
-            |e| PluginError::LoadFailed(format!("Failed to compile WASI component: {e}")),
-        )?;
+        let component =
+            wasmtime::component::Component::from_file(&engine, &wasm_path).map_err(|e| {
+                PluginError::LoadFailed(format!("Failed to compile WASI component: {e}"))
+            })?;
 
         Ok(Self {
             manifest: manifest.plugin,
@@ -317,11 +316,11 @@ impl WasiPlugin {
 fn link_crawlkit_plugin(
     linker: &mut wasmtime::component::Linker<WasiPluginState>,
 ) -> Result<(), PluginError> {
-    let mut ctx_instance = linker
-        .instance("crawlkit:plugin/context")
-        .map_err(|e| {
-            PluginError::LoadFailed(format!("Failed to get crawlkit:plugin/context instance: {e}"))
-        })?;
+    let mut ctx_instance = linker.instance("crawlkit:plugin/context").map_err(|e| {
+        PluginError::LoadFailed(format!(
+            "Failed to get crawlkit:plugin/context instance: {e}"
+        ))
+    })?;
 
     // get-context: returns Option<String> (the context JSON blob).
     // WIT signature: get-context: func() -> option<string>;

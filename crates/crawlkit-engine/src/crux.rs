@@ -127,10 +127,7 @@ impl CruxClient {
         };
 
         let extract_p75 = |metric_name: &str| -> Option<f64> {
-            metrics
-                .get(metric_name)?
-                .get("percentile")?
-                .as_f64()
+            metrics.get(metric_name)?.get("percentile")?.as_f64()
         };
 
         let field_data = CruxFieldData {

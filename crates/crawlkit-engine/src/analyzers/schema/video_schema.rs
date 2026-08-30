@@ -74,8 +74,9 @@ impl Analyzer for VideoSchemaValidator {
                                  \"duration\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"duration\" with an ISO 8601 duration value (e.g., PT1H30M)."
-                        .to_string(),
+                    recommendation:
+                        "Add \"duration\" with an ISO 8601 duration value (e.g., PT1H30M)."
+                            .to_string(),
                 });
             }
         }
@@ -83,7 +84,6 @@ impl Analyzer for VideoSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -145,43 +145,45 @@ mod tests {
     }
 
     #[test]
-fn test_video_missing_embed_url() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("VideoObject".to_string()),
-        data: serde_json::json!({"@type": "VideoObject", "name": "Demo"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(VideoSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "VID001"));
-}
-
-
-    #[test]
-fn test_video_missing_thumbnail() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("VideoObject".to_string()),
-        data: serde_json::json!({"@type": "VideoObject", "name": "Demo", "embedUrl": "https://youtube.com/embed/123"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(VideoSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "VID002"));
-}
-
+    fn test_video_missing_embed_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("VideoObject".to_string()),
+            data: serde_json::json!({"@type": "VideoObject", "name": "Demo"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(VideoSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "VID001"));
+    }
 
     #[test]
-fn test_video_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("VideoObject".to_string()),
-        data: serde_json::json!({"@type": "VideoObject", "name": "Demo", "embedUrl": "https://youtube.com/embed/123", "thumbnailUrl": "https://example.com/thumb.jpg", "duration": "PT10M"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = VideoSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_video_missing_thumbnail() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("VideoObject".to_string()),
+            data: serde_json::json!({"@type": "VideoObject", "name": "Demo", "embedUrl": "https://youtube.com/embed/123"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(VideoSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "VID002"));
+    }
 
-
+    #[test]
+    fn test_video_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("VideoObject".to_string()),
+            data: serde_json::json!({"@type": "VideoObject", "name": "Demo", "embedUrl": "https://youtube.com/embed/123", "thumbnailUrl": "https://example.com/thumb.jpg", "duration": "PT10M"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = VideoSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

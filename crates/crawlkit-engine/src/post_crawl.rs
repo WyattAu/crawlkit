@@ -26,10 +26,7 @@ pub struct PostCrawlStats {
     pub sitemap_issues: usize,
 }
 
-pub fn run_post_crawl_analysis(
-    storage: &dyn StorageBackend,
-    crawl_id: &str,
-) -> PostCrawlAnalysis {
+pub fn run_post_crawl_analysis(storage: &dyn StorageBackend, crawl_id: &str) -> PostCrawlAnalysis {
     let mut findings = Vec::new();
     let mut stats = PostCrawlStats::default();
 

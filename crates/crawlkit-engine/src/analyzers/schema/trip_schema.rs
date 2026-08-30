@@ -31,7 +31,12 @@ impl Analyzer for TripSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,8 +45,7 @@ impl Analyzer for TripSchemaValidator {
                     description: "A Trip structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the trip name or title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the trip name or title.".to_string(),
                 });
             }
 
@@ -64,7 +68,6 @@ impl Analyzer for TripSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -126,148 +129,139 @@ mod tests {
     }
 
     #[test]
-fn test_trip_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Trip".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Trip"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "TRIP001"));
-}
-
-
-    #[test]
-fn test_trip_missing_itinerary() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Trip".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Trip",
-            "name": "Italy Vacation"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "TRIP002"));
-}
-
-
-    #[test]
-fn test_trip_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Trip".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Trip",
-            "name": "Italy Vacation",
-            "itinerary": {"@type": "ItemList", "numberOfItems": 5}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_trip_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_trip_non_trip_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_trip_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Trip".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Trip"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_trip_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Trip".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Trip",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "TRIP001"));
-}
-
-
-    #[test]
-fn test_trip_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Trip".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Trip",
-                "name": "Good Trip",
-                "itinerary": {"@type": "ItemList"}
-            }),
-        },
-        StructuredData {
+    fn test_trip_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Trip".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Trip"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = TripSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "TRIP001"));
-    assert!(findings.iter().any(|f| f.code == "TRIP002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TRIP001"));
+    }
 
+    #[test]
+    fn test_trip_missing_itinerary() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Trip".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Trip",
+                "name": "Italy Vacation"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TRIP002"));
+    }
 
+    #[test]
+    fn test_trip_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Trip".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Trip",
+                "name": "Italy Vacation",
+                "itinerary": {"@type": "ItemList", "numberOfItems": 5}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_trip_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_trip_non_trip_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_trip_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Trip".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Trip"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_trip_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Trip".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Trip",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TRIP001"));
+    }
+
+    #[test]
+    fn test_trip_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Trip".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Trip",
+                    "name": "Good Trip",
+                    "itinerary": {"@type": "ItemList"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Trip".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Trip"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = TripSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "TRIP001"));
+        assert!(findings.iter().any(|f| f.code == "TRIP002"));
+    }
 }

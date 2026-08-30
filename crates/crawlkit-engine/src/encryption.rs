@@ -277,9 +277,9 @@ impl EncryptionManager {
             .map_err(|e| EncryptionError::InvalidKeyFormat(format!("Invalid key: {}", e)))?;
 
         let nonce = Nonce::from_slice(nonce_bytes);
-        cipher.decrypt(nonce, actual_ciphertext).map_err(|e| {
-            EncryptionError::InitializationFailed(format!("Decryption failed: {}", e))
-        })
+        cipher
+            .decrypt(nonce, actual_ciphertext)
+            .map_err(|e| EncryptionError::InitializationFailed(format!("Decryption failed: {}", e)))
     }
 
     /// Rotate to a new encryption key.

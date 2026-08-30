@@ -69,7 +69,6 @@ impl Analyzer for DatasetSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -130,128 +129,128 @@ mod tests {
     }
 
     #[test]
-fn test_dataset_missing_name() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Dataset".to_string()),
-        data: serde_json::json!({
-            "@type": "Dataset",
-            "description": "A dataset about weather"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "DATA001"));
-}
-
-
-    #[test]
-fn test_dataset_missing_description() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Dataset".to_string()),
-        data: serde_json::json!({
-            "@type": "Dataset",
-            "name": "Weather Data"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "DATA002"));
-}
-
+    fn test_dataset_missing_name() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Dataset".to_string()),
+            data: serde_json::json!({
+                "@type": "Dataset",
+                "description": "A dataset about weather"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DATA001"));
+    }
 
     #[test]
-fn test_dataset_missing_distribution() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Dataset".to_string()),
-        data: serde_json::json!({
-            "@type": "Dataset",
-            "name": "Weather Data",
-            "description": "Daily weather data"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "DATA002"));
-}
-
-
-    #[test]
-fn test_dataset_valid() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Dataset".to_string()),
-        data: serde_json::json!({
-            "@type": "Dataset",
-            "name": "Weather Data",
-            "description": "Daily weather data",
-            "distribution": {"@type": "DataDownload", "contentUrl": "https://example.com/data.csv"}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_dataset_missing_description() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Dataset".to_string()),
+            data: serde_json::json!({
+                "@type": "Dataset",
+                "name": "Weather Data"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DATA002"));
+    }
 
     #[test]
-fn test_dataset_non_dataset_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({"@type": "Article", "headline": "News"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_dataset_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_dataset_missing_distribution() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Dataset".to_string()),
+            data: serde_json::json!({
+                "@type": "Dataset",
+                "name": "Weather Data",
+                "description": "Daily weather data"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DATA002"));
+    }
 
     #[test]
-fn test_dataset_missing_all_fields() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Dataset".to_string()),
-        data: serde_json::json!({"@type": "Dataset"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = DatasetSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "DATA001"));
-    assert!(findings.iter().any(|f| f.code == "DATA002"));
-}
-
+    fn test_dataset_valid() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Dataset".to_string()),
+            data: serde_json::json!({
+                "@type": "Dataset",
+                "name": "Weather Data",
+                "description": "Daily weather data",
+                "distribution": {"@type": "DataDownload", "contentUrl": "https://example.com/data.csv"}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_dataset_multiple_datasets() {
-    let mut page = make_page("https://example.com/data");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_dataset_non_dataset_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "News"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_dataset_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(DatasetSchemaValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_dataset_missing_all_fields() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Dataset".to_string()),
             data: serde_json::json!({"@type": "Dataset"}),
-        },
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Dataset".to_string()),
-            data: serde_json::json!({"@type": "Dataset"}),
-        },
-    ];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = DatasetSchemaValidator::new().analyze(&ctx);
-    let data001_count = findings.iter().filter(|f| f.code == "DATA001").count();
-    assert_eq!(data001_count, 2);
-}
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = DatasetSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "DATA001"));
+        assert!(findings.iter().any(|f| f.code == "DATA002"));
+    }
 
-
+    #[test]
+    fn test_dataset_multiple_datasets() {
+        let mut page = make_page("https://example.com/data");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Dataset".to_string()),
+                data: serde_json::json!({"@type": "Dataset"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Dataset".to_string()),
+                data: serde_json::json!({"@type": "Dataset"}),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = DatasetSchemaValidator::new().analyze(&ctx);
+        let data001_count = findings.iter().filter(|f| f.code == "DATA001").count();
+        assert_eq!(data001_count, 2);
+    }
 }

@@ -31,7 +31,12 @@ impl Analyzer for BookSchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("isbn").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("isbn")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,8 +45,7 @@ impl Analyzer for BookSchemaValidatorV2 {
                     description: "A Book structured data block is missing the \"isbn\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"isbn\" with the book's ISBN-10 or ISBN-13."
-                        .to_string(),
+                    recommendation: "Add \"isbn\" with the book's ISBN-10 or ISBN-13.".to_string(),
                 });
             }
         }

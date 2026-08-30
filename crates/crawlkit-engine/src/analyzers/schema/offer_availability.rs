@@ -138,7 +138,6 @@ impl Analyzer for OfferAvailabilityAnalyzer {
 // Coupon Schema Validator
 // ---------------------------------------------------------------------------
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -219,150 +218,189 @@ mod tests {
         }
     }
     #[test]
-fn test_availability_no_product() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Hello</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_availability_in_stock_schema_out_of_stock_page() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>This product is out of stock</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "AVAIL001"));
-}
-
+    fn test_availability_no_product() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Hello</body></html>");
+        assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_availability_out_of_stock_schema_in_stock_page() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Add to cart now!</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "AVAIL002"));
-}
-
-
-    #[test]
-fn test_availability_consistent_in_stock() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>In stock, add to cart</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_availability_consistent_out_of_stock() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Sorry, this is out of stock</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_availability_no_availability_in_schema() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>This product is out of stock</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_availability_sold_out_indicator() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Sold out! Check back later.</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "AVAIL001"));
-}
-
-
-    #[test]
-fn test_availability_buy_now_indicator() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>Buy now! Free shipping.</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "AVAIL002"));
-}
-
-
-    #[test]
-fn test_availability_offers_array_first_item() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": [{"@type": "Offer", "availability": "https://schema.org/InStock"}]}),
-    }];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>This product is out of stock</body></html>");
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "AVAIL001"));
-}
-
-
-    #[test]
-fn test_availability_no_body() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_availability_multiple_products() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_availability_in_stock_schema_out_of_stock_page() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Product".to_string()),
-            data: serde_json::json!({"@type": "Product", "name": "A", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
-        },
-        StructuredData {
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>This product is out of stock</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "AVAIL001"));
+    }
+
+    #[test]
+    fn test_availability_out_of_stock_schema_in_stock_page() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Product".to_string()),
-            data: serde_json::json!({"@type": "Product", "name": "B", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
-        },
-    ];
-    let ctx = make_ctx_with_body(&page, Some(200), "<html><body>This product is out of stock but also buy now</body></html>");
-    let f = OfferAvailabilityAnalyzer::new().analyze(&ctx);
-    assert!(f.iter().any(|f| f.code == "AVAIL001"));
-    assert!(f.iter().any(|f| f.code == "AVAIL002"));
-}
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>Add to cart now!</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "AVAIL002"));
+    }
 
+    #[test]
+    fn test_availability_consistent_in_stock() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>In stock, add to cart</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_availability_consistent_out_of_stock() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>Sorry, this is out of stock</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_availability_no_availability_in_schema() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>This product is out of stock</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_availability_sold_out_indicator() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>Sold out! Check back later.</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "AVAIL001"));
+    }
+
+    #[test]
+    fn test_availability_buy_now_indicator() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>Buy now! Free shipping.</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "AVAIL002"));
+    }
+
+    #[test]
+    fn test_availability_offers_array_first_item() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": [{"@type": "Offer", "availability": "https://schema.org/InStock"}]}),
+        }];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>This product is out of stock</body></html>",
+        );
+        assert!(OfferAvailabilityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "AVAIL001"));
+    }
+
+    #[test]
+    fn test_availability_no_body() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(OfferAvailabilityAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_availability_multiple_products() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Product".to_string()),
+                data: serde_json::json!({"@type": "Product", "name": "A", "offers": {"@type": "Offer", "availability": "https://schema.org/InStock"}}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Product".to_string()),
+                data: serde_json::json!({"@type": "Product", "name": "B", "offers": {"@type": "Offer", "availability": "https://schema.org/OutOfStock"}}),
+            },
+        ];
+        let ctx = make_ctx_with_body(
+            &page,
+            Some(200),
+            "<html><body>This product is out of stock but also buy now</body></html>",
+        );
+        let f = OfferAvailabilityAnalyzer::new().analyze(&ctx);
+        assert!(f.iter().any(|f| f.code == "AVAIL001"));
+        assert!(f.iter().any(|f| f.code == "AVAIL002"));
+    }
 }

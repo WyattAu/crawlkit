@@ -1,4 +1,18 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::manual_range_contains,
+    clippy::redundant_closure,
+    clippy::collapsible_if,
+    clippy::unnecessary_map_or,
+    clippy::default_constructed_unit_structs,
+    clippy::needless_return,
+    clippy::needless_range_loop,
+    clippy::useless_format,
+    clippy::if_same_then_else,
+    clippy::derivable_impls,
+    clippy::manual_pattern_char_comparison,
+    clippy::manual_contains
+)]
 use std::collections::{HashMap, HashSet};
 
 use regex::Regex;
@@ -1069,7 +1083,7 @@ pub struct RdfaValidator;
 
 impl RdfaValidator {
     pub fn new() -> Self {
-    #[allow(clippy::unwrap_used)]
+        #[allow(clippy::unwrap_used)]
         Self
     }
 
@@ -1247,7 +1261,7 @@ pub struct MicrodataValidator;
 
 impl MicrodataValidator {
     pub fn new() -> Self {
-    #[allow(clippy::unwrap_used)]
+        #[allow(clippy::unwrap_used)]
         Self
     }
 
@@ -1729,11 +1743,12 @@ impl Analyzer for TableOfContentsAnalyzer {
             // Check for anchor links (links starting with #)
             let has_toc = ctx.page.links.iter().any(|l| l.href.starts_with('#'));
             // Also check for nav/ol elements with anchor refs in HTML
-            let has_toc_html = ctx.body.is_some_and(|body| {
-                body.contains("<nav") && body.contains("href=\"#")
-            }) || ctx.body.is_some_and(|body| {
-                body.contains("<ol") && body.contains("href=\"#")
-            });
+            let has_toc_html = ctx
+                .body
+                .is_some_and(|body| body.contains("<nav") && body.contains("href=\"#"))
+                || ctx
+                    .body
+                    .is_some_and(|body| body.contains("<ol") && body.contains("href=\"#"));
 
             if !has_toc && !has_toc_html {
                 findings.push(Finding {
@@ -1916,10 +1931,11 @@ impl Analyzer for ContentFreshnessScorer {
                 category: IssueCategory::Content,
                 code: "FRESH001".to_string(),
                 title: "No date metadata on time-sensitive content".to_string(),
-                description: "This page appears to be time-sensitive content (blog, news, article) \
+                description:
+                    "This page appears to be time-sensitive content (blog, news, article) \
                               but has no date metadata (datePublished, dateModified) in structured \
                               data."
-                    .to_string(),
+                        .to_string(),
                 url: url.clone(),
                 recommendation: "Add datePublished and dateModified to the Article schema to \
                                  signal content freshness to search engines."
@@ -1956,9 +1972,7 @@ impl Analyzer for ContentFreshnessScorer {
                         if let Some(pos) = lower.find(indicator) {
                             // Look for a 4-digit year within 100 chars after the indicator
                             let window = &body[pos..(pos + 100).min(body.len())];
-                            for candidate_year_str in
-                                window.split(|c: char| !c.is_ascii_digit())
-                            {
+                            for candidate_year_str in window.split(|c: char| !c.is_ascii_digit()) {
                                 if candidate_year_str.len() == 4 {
                                     if let Ok(candidate_year) = candidate_year_str.parse::<i32>() {
                                         if let Ok(schema_year) = year.parse::<i32>() {
@@ -2054,7 +2068,10 @@ impl Analyzer for BreadcrumbListDepthAnalyzer {
                 .map_or(0, |arr| arr.len());
 
             // BDEPTH001: Breadcrumb depth inconsistent with URL depth
-            if url_depth > 2 && breadcrumb_depth > 0 && (breadcrumb_depth as isize - url_depth as isize).abs() > 1 {
+            if url_depth > 2
+                && breadcrumb_depth > 0
+                && (breadcrumb_depth as isize - url_depth as isize).abs() > 1
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Content,
@@ -2243,7 +2260,6 @@ mod tests {
         }
     }
 
-
     #[test]
     fn test_rdfa_no_rdfa_attributes() {
         let page = make_page("https://example.com");
@@ -2254,7 +2270,9 @@ mod tests {
     #[test]
     fn test_rdfa_no_body() {
         let page = make_page("https://example.com");
-        assert!(RdfaValidator::new().analyze(&make_ctx(&page, Some(200))).is_empty());
+        assert!(RdfaValidator::new()
+            .analyze(&make_ctx(&page, Some(200)))
+            .is_empty());
     }
 
     #[test]
@@ -2262,7 +2280,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div typeof="Person"><span property="name">John</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(RdfaValidator::new().analyze(&ctx).iter().any(|f| f.code == "RDFA001"));
+        assert!(RdfaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RDFA001"));
     }
 
     #[test]
@@ -2270,7 +2291,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div vocab="https://schema.org/"><span property="name">John</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(RdfaValidator::new().analyze(&ctx).iter().any(|f| f.code == "RDFA002"));
+        assert!(RdfaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RDFA002"));
     }
 
     #[test]
@@ -2278,7 +2302,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div vocab="http://data-vocabulary.org/Review" typeof="Review"></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(RdfaValidator::new().analyze(&ctx).iter().any(|f| f.code == "RDFA003"));
+        assert!(RdfaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RDFA003"));
     }
 
     #[test]
@@ -2305,9 +2332,13 @@ mod tests {
     #[test]
     fn test_rdfa_only_about_attribute() {
         let page = make_page("https://example.com");
-        let body = r#"<div about="http://example.com/page"><span property="name">Page</span></div>"#;
+        let body =
+            r#"<div about="http://example.com/page"><span property="name">Page</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(RdfaValidator::new().analyze(&ctx).iter().any(|f| f.code == "RDFA002"));
+        assert!(RdfaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RDFA002"));
     }
 
     #[test]
@@ -2325,7 +2356,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div vocab="http://creativecommons.org/ns#" typeof="License"></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(!RdfaValidator::new().analyze(&ctx).iter().any(|f| f.code == "RDFA003"));
+        assert!(!RdfaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RDFA003"));
     }
 
     #[test]
@@ -2346,7 +2380,6 @@ mod tests {
         assert!(f.iter().any(|f| f.code == "RDFA002"));
     }
 
-
     #[test]
     fn test_microdata_no_microdata() {
         let page = make_page("https://example.com");
@@ -2357,7 +2390,9 @@ mod tests {
     #[test]
     fn test_microdata_no_body() {
         let page = make_page("https://example.com");
-        assert!(MicrodataValidator::new().analyze(&make_ctx(&page, Some(200))).is_empty());
+        assert!(MicrodataValidator::new()
+            .analyze(&make_ctx(&page, Some(200)))
+            .is_empty());
     }
 
     #[test]
@@ -2365,7 +2400,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Product"></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD001"));
+        assert!(MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD001"));
     }
 
     #[test]
@@ -2373,7 +2411,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://example.com/Custom"><span itemprop="name">X</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD003"));
+        assert!(MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD003"));
     }
 
     #[test]
@@ -2391,7 +2432,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Article"><span itemprop="headline">Title</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD002"));
+        assert!(MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD002"));
     }
 
     #[test]
@@ -2399,7 +2443,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Article"><span itemprop="headline">Title</span><span itemprop="author">Author</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(!MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD002"));
+        assert!(!MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD002"));
     }
 
     #[test]
@@ -2415,7 +2462,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Product"><span itemprop="description">A widget</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD002"));
+        assert!(MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD002"));
     }
 
     #[test]
@@ -2433,7 +2483,10 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Event"><span itemprop="name">Concert</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(!MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD003"));
+        assert!(!MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD003"));
     }
 
     #[test]
@@ -2441,14 +2494,18 @@ mod tests {
         let page = make_page("https://example.com");
         let body = r#"<div itemscope itemtype="http://schema.org/Product"><span itemprop="name">Widget</span></div>"#;
         let ctx = make_ctx_with_body(&page, Some(200), body);
-        assert!(!MicrodataValidator::new().analyze(&ctx).iter().any(|f| f.code == "MD003"));
+        assert!(!MicrodataValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MD003"));
     }
-
 
     #[test]
     fn test_entity_linking_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(EntityLinkingAnalyzer::new().analyze(&make_ctx(&page, Some(200))).is_empty());
+        assert!(EntityLinkingAnalyzer::new()
+            .analyze(&make_ctx(&page, Some(200)))
+            .is_empty());
     }
 
     #[test]
@@ -2460,7 +2517,10 @@ mod tests {
             data: serde_json::json!({"@type": "Person", "name": "John Doe"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK001"));
+        assert!(EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK001"));
     }
 
     #[test]
@@ -2480,7 +2540,10 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK001"));
+        assert!(!EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK001"));
     }
 
     #[test]
@@ -2500,7 +2563,10 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK001"));
+        assert!(!EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK001"));
     }
 
     #[test]
@@ -2519,7 +2585,10 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK002"));
+        assert!(EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK002"));
     }
 
     #[test]
@@ -2531,7 +2600,10 @@ mod tests {
             data: serde_json::json!({"@type": "Product", "name": "Widget A"}),
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK002"));
+        assert!(!EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK002"));
     }
 
     #[test]
@@ -2563,7 +2635,10 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK001"));
+        assert!(EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK001"));
     }
 
     #[test]
@@ -2583,7 +2658,10 @@ mod tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK001"));
+        assert!(!EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK001"));
     }
 
     #[test]
@@ -2602,7 +2680,10 @@ mod tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!EntityLinkingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ELINK002"));
+        assert!(!EntityLinkingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ELINK002"));
     }
 
     #[test]
@@ -2617,33 +2698,44 @@ mod tests {
         assert!(EntityLinkingAnalyzer::new().analyze(&ctx).is_empty());
     }
 
-
     #[test]
     fn test_duplicate_title_description_high_overlap() {
         let mut page = make_page("https://example.com");
         // Title and description share 6 out of 7 unique words (>90% overlap)
         page.meta.title = Some("Premium Quality Widgets Available Here Purchase".to_string());
-        page.meta.description = Some("Premium Quality Widgets Available Here Purchase Today".to_string());
+        page.meta.description =
+            Some("Premium Quality Widgets Available Here Purchase Today".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(DuplicateContentDetector::new().analyze(&ctx).iter().any(|f| f.code == "DUP001"));
+        assert!(DuplicateContentDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DUP001"));
     }
 
     #[test]
     fn test_duplicate_title_description_different() {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("Best Widgets for Sale".to_string());
-        page.meta.description = Some("Premium quality widgets with free shipping and 30-day returns".to_string());
+        page.meta.description =
+            Some("Premium quality widgets with free shipping and 30-day returns".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(!DuplicateContentDetector::new().analyze(&ctx).iter().any(|f| f.code == "DUP001"));
+        assert!(!DuplicateContentDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DUP001"));
     }
 
     #[test]
     fn test_duplicate_description_starts_with_title() {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("Widget Product Page".to_string());
-        page.meta.description = Some("Widget Product Page - Learn more about our amazing widgets".to_string());
+        page.meta.description =
+            Some("Widget Product Page - Learn more about our amazing widgets".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(DuplicateContentDetector::new().analyze(&ctx).iter().any(|f| f.code == "DUP002"));
+        assert!(DuplicateContentDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DUP002"));
     }
 
     #[test]
@@ -2664,38 +2756,75 @@ mod tests {
         let body_text = "The quick brown fox jumps over the lazy dog. A journey of a thousand miles begins with a single step. Knowledge is power but enthusiasm pulls the switch. Actions speak louder than words. The pen is mightier than the sword.";
         page.word_count = body_text.split_whitespace().count();
         let ctx = make_ctx_with_body(&page, Some(200), body_text);
-        assert!(!DuplicateContentDetector::new().analyze(&ctx).iter().any(|f| f.code == "DUP003"));
+        assert!(!DuplicateContentDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DUP003"));
     }
-
 
     #[test]
     fn test_toc_missing_on_long_page() {
         let mut page = make_page("https://example.com/guide");
         page.word_count = 3000;
         page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Intro".to_string(), length: "Intro".len() },
-            crate::parser::Heading { level: 2, text: "Section 1".to_string(), length: "Section 1".len() },
-            crate::parser::Heading { level: 2, text: "Section 2".to_string(), length: "Section 2".len() },
-            crate::parser::Heading { level: 2, text: "Section 3".to_string(), length: "Section 3".len() },
-            crate::parser::Heading { level: 2, text: "Section 4".to_string(), length: "Section 4".len() },
-            crate::parser::Heading { level: 2, text: "Section 5".to_string(), length: "Section 5".len() },
-            crate::parser::Heading { level: 2, text: "Section 6".to_string(), length: "Section 6".len() },
+            crate::parser::Heading {
+                level: 1,
+                text: "Intro".to_string(),
+                length: "Intro".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 1".to_string(),
+                length: "Section 1".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 2".to_string(),
+                length: "Section 2".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 3".to_string(),
+                length: "Section 3".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 4".to_string(),
+                length: "Section 4".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 5".to_string(),
+                length: "Section 5".len(),
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Section 6".to_string(),
+                length: "Section 6".len(),
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(TableOfContentsAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TOC001"));
+        assert!(TableOfContentsAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TOC001"));
     }
 
     #[test]
     fn test_toc_not_flagged_on_short_page() {
         let mut page = make_page("https://example.com/about");
         page.word_count = 500;
-        page.headings = vec![crate::parser::Heading { level: 1, text: "About".to_string(), length: "About".len() }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "About".to_string(),
+            length: "About".len(),
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(!TableOfContentsAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TOC001"));
+        assert!(!TableOfContentsAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TOC001"));
     }
-
-
-
 
     // ---- ContentTopicCoverageAnalyzer tests ----
 
@@ -2709,7 +2838,11 @@ mod tests {
     #[test]
     fn test_topcov_no_body() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.word_count = 100;
         let ctx = make_ctx(&page, Some(200));
         assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
@@ -2718,7 +2851,11 @@ mod tests {
     #[test]
     fn test_topcov_empty_body() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.word_count = 0;
         let ctx = make_ctx_with_body(&page, Some(200), "");
         assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
@@ -2727,7 +2864,11 @@ mod tests {
     #[test]
     fn test_topcov_zero_word_count() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.word_count = 0;
         let ctx = make_ctx_with_body(&page, Some(200), "Some content");
         assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
@@ -2736,7 +2877,11 @@ mod tests {
     #[test]
     fn test_topcov_good_coverage() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming Guide".to_string(), length: 22 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming Guide".to_string(),
+            length: 22,
+        }];
         page.word_count = 100;
         let body = "Rust is a systems programming language. Programming in Rust is safe and fast. This guide covers all the basics of Rust programming.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
@@ -2747,7 +2892,11 @@ mod tests {
     #[test]
     fn test_topcov_poor_coverage() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust Programming Guide".to_string(), length: 22 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming Guide".to_string(),
+            length: 22,
+        }];
         page.word_count = 100;
         let body = "The quick brown fox jumps over the lazy dog. A journey of a thousand miles begins with a single step. Knowledge is power.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
@@ -2758,9 +2907,11 @@ mod tests {
     #[test]
     fn test_topcov_strictly_below_threshold() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Advanced Rust Programming Guide".to_string(), length: 30 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Advanced Rust Programming Guide".to_string(),
+            length: 30,
+        }];
         page.word_count = 100;
         let body = "This guide covers everything you need to know about getting started with technology. The guide is comprehensive and detailed with many examples.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
@@ -2771,7 +2922,11 @@ mod tests {
     #[test]
     fn test_topcov_stop_words_excluded() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "The Best Rust Guide".to_string(), length: 19 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "The Best Rust Guide".to_string(),
+            length: 19,
+        }];
         page.word_count = 100;
         let body = "Rust is great. This guide will help you learn. The guide is comprehensive.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
@@ -2782,7 +2937,11 @@ mod tests {
     #[test]
     fn test_topcov_case_insensitive() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "RUST Programming".to_string(), length: 16 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "RUST Programming".to_string(),
+            length: 16,
+        }];
         page.word_count = 100;
         let body = "rust is a language. Programming in rust is fun.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
@@ -2793,7 +2952,11 @@ mod tests {
     #[test]
     fn test_topcov_empty_heading_text() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "".to_string(), length: 0 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "".to_string(),
+            length: 0,
+        }];
         page.word_count = 100;
         let ctx = make_ctx_with_body(&page, Some(200), "Some content here.");
         let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
@@ -2804,8 +2967,16 @@ mod tests {
     fn test_topcov_multiple_headings() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-            crate::parser::Heading { level: 2, text: "Getting Started".to_string(), length: 15 },
+            crate::parser::Heading {
+                level: 1,
+                text: "Rust Programming".to_string(),
+                length: 16,
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "Getting Started".to_string(),
+                length: 15,
+            },
         ];
         page.word_count = 100;
         let body = "Rust is a systems programming language. Programming in Rust is safe and fast.";
@@ -2817,9 +2988,14 @@ mod tests {
     #[test]
     fn test_topcov_severity_warning() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Advanced Rust Programming Guide".to_string(), length: 30 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Advanced Rust Programming Guide".to_string(),
+            length: 30,
+        }];
         page.word_count = 100;
-        let body = "This guide covers everything you need to know about getting started with technology.";
+        let body =
+            "This guide covers everything you need to know about getting started with technology.";
         let ctx = make_ctx_with_body(&page, Some(200), body);
         let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
         if let Some(f) = findings.iter().find(|f| f.code == "TOPCOV001") {
@@ -2830,13 +3006,20 @@ mod tests {
 
     #[test]
     fn test_topcov_name() {
-        assert_eq!(ContentTopicCoverageAnalyzer::new().name(), "content-topic-coverage");
+        assert_eq!(
+            ContentTopicCoverageAnalyzer::new().name(),
+            "content-topic-coverage"
+        );
     }
 
     #[test]
     fn test_topcov_no_body_text_no_findings() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Rust".to_string(), length: 4 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust".to_string(),
+            length: 4,
+        }];
         page.word_count = 100;
         let ctx = make_ctx(&page, Some(200));
         assert!(ContentTopicCoverageAnalyzer::new().analyze(&ctx).is_empty());
@@ -2845,7 +3028,11 @@ mod tests {
     #[test]
     fn test_topcov_short_heading_keywords() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "Is It OK".to_string(), length: 8 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Is It OK".to_string(),
+            length: 8,
+        }];
         page.word_count = 100;
         let ctx = make_ctx_with_body(&page, Some(200), "Some content here.");
         let findings = ContentTopicCoverageAnalyzer::new().analyze(&ctx);
@@ -2874,8 +3061,7 @@ impl OpenGraphVideoUrlValidator {
         if url.is_empty() {
             return false;
         }
-        url::Url::parse(url).is_ok()
-            && (url.starts_with("http://") || url.starts_with("https://"))
+        url::Url::parse(url).is_ok() && (url.starts_with("http://") || url.starts_with("https://"))
     }
 }
 
@@ -2901,8 +3087,7 @@ impl Analyzer for OpenGraphVideoUrlValidator {
                 title: "Empty og:video URL".to_string(),
                 description: "The og:video meta tag has an empty value.".to_string(),
                 url: url.clone(),
-                recommendation: "Provide a valid video URL in the og:video meta tag."
-                    .to_string(),
+                recommendation: "Provide a valid video URL in the og:video meta tag.".to_string(),
             });
             return findings;
         }
@@ -2917,8 +3102,7 @@ impl Analyzer for OpenGraphVideoUrlValidator {
                     "The og:video URL \"{video_url}\" is not a valid HTTP/HTTPS URL."
                 ),
                 url: url.clone(),
-                recommendation: "Ensure og:video points to a valid HTTP or HTTPS URL."
-                    .to_string(),
+                recommendation: "Ensure og:video points to a valid HTTP or HTTPS URL.".to_string(),
             });
         }
 
@@ -2947,8 +3131,7 @@ impl TwitterPlayerStreamValidator {
         if url.is_empty() {
             return false;
         }
-        url::Url::parse(url).is_ok()
-            && (url.starts_with("http://") || url.starts_with("https://"))
+        url::Url::parse(url).is_ok() && (url.starts_with("http://") || url.starts_with("https://"))
     }
 }
 
@@ -3026,12 +3209,11 @@ impl SchemaNestingDepthValidator {
                     .unwrap_or(depth);
                 child_max.max(depth)
             }
-            serde_json::Value::Array(arr) => {
-                arr.iter()
-                    .map(|v| Self::max_nesting_depth(v, depth))
-                    .max()
-                    .unwrap_or(depth)
-            }
+            serde_json::Value::Array(arr) => arr
+                .iter()
+                .map(|v| Self::max_nesting_depth(v, depth))
+                .max()
+                .unwrap_or(depth),
             _ => depth,
         }
     }
@@ -3106,9 +3288,7 @@ impl SchemaIdReferenceValidator {
             serde_json::Value::Object(map) => {
                 for (key, val) in map {
                     // Collect @id references from any property (including nested objects)
-                    if (key == "@id" || key.ends_with("/@id") || key == "id")
-                        && val.is_string()
-                    {
+                    if (key == "@id" || key.ends_with("/@id") || key == "id") && val.is_string() {
                         if let Some(s) = val.as_str() {
                             if s.starts_with('#') {
                                 refs.push(s.to_string());
@@ -3472,8 +3652,7 @@ impl Analyzer for JsonLdValidator {
             // Check for empty JSON-LD (context and type both missing suggests empty/invalid)
             let is_empty = sd.context.is_none()
                 && sd.r#type.is_none()
-                && (sd.data.is_object()
-                    && sd.data.as_object().map_or(false, |m| m.is_empty()));
+                && (sd.data.is_object() && sd.data.as_object().map_or(false, |m| m.is_empty()));
 
             if is_empty {
                 findings.push(Finding {
@@ -3917,8 +4096,15 @@ impl ContentFreshnessDateAnalyzer {
     fn is_time_sensitive_url(url: &str) -> bool {
         let lower = url.to_lowercase();
         [
-            "/blog/", "/news/", "/article/", "/post/", "/press/",
-            "/release/", "/update/", "/announcement/", "/changelog/",
+            "/blog/",
+            "/news/",
+            "/article/",
+            "/post/",
+            "/press/",
+            "/release/",
+            "/update/",
+            "/announcement/",
+            "/changelog/",
         ]
         .iter()
         .any(|p| lower.contains(p))
@@ -4009,8 +4195,7 @@ impl Analyzer for StructuredDataNestingValidator {
                                       property containing an Offer object."
                             .to_string(),
                         url: url.clone(),
-                        recommendation: "Add \"offers\" with an Offer object."
-                            .to_string(),
+                        recommendation: "Add \"offers\" with an Offer object.".to_string(),
                     });
                 }
                 Some(offers) => {
@@ -4025,11 +4210,11 @@ impl Analyzer for StructuredDataNestingValidator {
                                 category: IssueCategory::Schema,
                                 code: "SDNEST002".to_string(),
                                 title: "Product Offer missing price".to_string(),
-                                description: "A Product Offer object is missing the \"price\" property."
-                                    .to_string(),
+                                description:
+                                    "A Product Offer object is missing the \"price\" property."
+                                        .to_string(),
                                 url: url.clone(),
-                                recommendation: "Add \"price\" with the product price."
-                                    .to_string(),
+                                recommendation: "Add \"price\" with the product price.".to_string(),
                             });
                         }
                         if offer.get("availability").is_none() {
@@ -4102,8 +4287,7 @@ impl Analyzer for LocalBusinessNapAnalyzerUtil {
                                   \"telephone\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"telephone\" with the business phone number."
-                        .to_string(),
+                    recommendation: "Add \"telephone\" with the business phone number.".to_string(),
                 });
             }
 
@@ -4117,8 +4301,7 @@ impl Analyzer for LocalBusinessNapAnalyzerUtil {
                                   \"address\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"address\" with a PostalAddress object."
-                        .to_string(),
+                    recommendation: "Add \"address\" with a PostalAddress object.".to_string(),
                 });
             }
 
@@ -4128,11 +4311,11 @@ impl Analyzer for LocalBusinessNapAnalyzerUtil {
                     category: IssueCategory::Schema,
                     code: "NAP-UTIL003".to_string(),
                     title: "LocalBusiness missing name".to_string(),
-                    description: "A LocalBusiness structured data block is missing the \"name\" property."
-                        .to_string(),
+                    description:
+                        "A LocalBusiness structured data block is missing the \"name\" property."
+                            .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the full business name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the full business name.".to_string(),
                 });
             }
         }
@@ -4181,11 +4364,13 @@ impl Analyzer for EventLocationValidatorV2 {
                         category: IssueCategory::Schema,
                         code: "ELOC-V2001".to_string(),
                         title: "Event missing location".to_string(),
-                        description: "An Event structured data block is missing the \"location\" property."
-                            .to_string(),
+                        description:
+                            "An Event structured data block is missing the \"location\" property."
+                                .to_string(),
                         url: url.clone(),
-                        recommendation: "Add \"location\" with a Place, VirtualLocation, or PostalAddress."
-                            .to_string(),
+                        recommendation:
+                            "Add \"location\" with a Place, VirtualLocation, or PostalAddress."
+                                .to_string(),
                     });
                 }
                 Some(location) => {
@@ -4202,8 +4387,7 @@ impl Analyzer for EventLocationValidatorV2 {
                                           \"url\", or \"address\" sub-property."
                                 .to_string(),
                             url: url.clone(),
-                            recommendation: "Add \"name\" to the location object."
-                                .to_string(),
+                            recommendation: "Add \"name\" to the location object.".to_string(),
                         });
                     }
                 }
@@ -4258,8 +4442,7 @@ impl Analyzer for OrganizationLogoValidatorV2 {
                                       \"logo\" property."
                             .to_string(),
                         url: url.clone(),
-                        recommendation: "Add \"logo\" with an ImageObject or URL."
-                            .to_string(),
+                        recommendation: "Add \"logo\" with an ImageObject or URL.".to_string(),
                     });
                 }
                 Some(logo) => {
@@ -4270,8 +4453,7 @@ impl Analyzer for OrganizationLogoValidatorV2 {
                                 category: IssueCategory::Schema,
                                 code: "OLOGO-V2001".to_string(),
                                 title: "Organization empty logo".to_string(),
-                                description: "The Organization logo property is empty."
-                                    .to_string(),
+                                description: "The Organization logo property is empty.".to_string(),
                                 url: url.clone(),
                                 recommendation: "Provide a valid URL to the organization logo."
                                     .to_string(),
@@ -4325,8 +4507,9 @@ impl Analyzer for PersonJobTitleValidatorV2 {
                     category: IssueCategory::Schema,
                     code: "PJOB-V2001".to_string(),
                     title: "Person missing jobTitle".to_string(),
-                    description: "A Person structured data block is missing the \"jobTitle\" property."
-                        .to_string(),
+                    description:
+                        "A Person structured data block is missing the \"jobTitle\" property."
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"jobTitle\" with the person's current job title."
                         .to_string(),
@@ -4343,8 +4526,7 @@ impl Analyzer for PersonJobTitleValidatorV2 {
                                   \"affiliation\" properties."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"worksFor\" with an Organization object."
-                        .to_string(),
+                    recommendation: "Add \"worksFor\" with an Organization object.".to_string(),
                 });
             }
         }
@@ -4392,8 +4574,9 @@ impl Analyzer for RecipeNutritionValidatorV2 {
                     category: IssueCategory::Schema,
                     code: "RNUT-V2001".to_string(),
                     title: "Recipe missing nutrition information".to_string(),
-                    description: "A Recipe structured data block is missing the \"nutrition\" property."
-                        .to_string(),
+                    description:
+                        "A Recipe structured data block is missing the \"nutrition\" property."
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"nutrition\" with a NutritionInformation object."
                         .to_string(),
@@ -4444,8 +4627,9 @@ impl Analyzer for CourseProviderValidatorV2 {
                     category: IssueCategory::Schema,
                     code: "CPROV-V2001".to_string(),
                     title: "Course missing provider".to_string(),
-                    description: "A Course structured data block is missing the \"provider\" property."
-                        .to_string(),
+                    description:
+                        "A Course structured data block is missing the \"provider\" property."
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"provider\" with an Organization or Person object."
                         .to_string(),
@@ -4464,26 +4648,40 @@ impl Analyzer for CourseProviderValidatorV2 {
 pub struct ArticleQualityAnalyzer;
 
 impl Default for ArticleQualityAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ArticleQualityAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ArticleQualityAnalyzer {
-    fn name(&self) -> &str { "article-quality" }
+    fn name(&self) -> &str {
+        "article-quality"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         for sd in &ctx.page.structured_data {
             let type_str = sd.r#type.as_deref().unwrap_or("");
-            if !matches!(type_str, "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle") {
+            if !matches!(
+                type_str,
+                "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle"
+            ) {
                 continue;
             }
             let data = &sd.data;
-            if data.get("headline").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("headline")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding { severity: Severity::Error, category: IssueCategory::Schema, code: "ARTQUAL001".to_string(), title: "Article schema missing headline".to_string(), description: "An Article structured data block is missing the required \"headline\" property.".to_string(), url: url.clone(), recommendation: "Add \"headline\" with a concise article title.".to_string() });
             }
             if data.get("author").is_none() {
@@ -4507,15 +4705,21 @@ impl Analyzer for ArticleQualityAnalyzer {
 pub struct ContentDepthAnalyzer;
 
 impl Default for ContentDepthAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContentDepthAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ContentDepthAnalyzer {
-    fn name(&self) -> &str { "content-depth" }
+    fn name(&self) -> &str {
+        "content-depth"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4533,10 +4737,29 @@ impl Analyzer for ContentDepthAnalyzer {
 
         let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
         if h1_count == 0 && word_count > 50 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CDEPTH002".to_string(), title: "Missing H1 heading".to_string(), description: "Page has no H1 heading. The H1 should describe the main topic.".to_string(), url: url.clone(), recommendation: "Add exactly one H1 heading with the main topic.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CDEPTH002".to_string(),
+                title: "Missing H1 heading".to_string(),
+                description: "Page has no H1 heading. The H1 should describe the main topic."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add exactly one H1 heading with the main topic.".to_string(),
+            });
         }
         if h1_count > 1 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CDEPTH003".to_string(), title: "Multiple H1 headings".to_string(), description: format!("Page has {h1_count} H1 headings. Best practice is to have exactly one H1."), url: url.clone(), recommendation: "Use exactly one H1 heading per page.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CDEPTH003".to_string(),
+                title: "Multiple H1 headings".to_string(),
+                description: format!(
+                    "Page has {h1_count} H1 headings. Best practice is to have exactly one H1."
+                ),
+                url: url.clone(),
+                recommendation: "Use exactly one H1 heading per page.".to_string(),
+            });
         }
 
         if word_count > 50 && heading_count > 0 {
@@ -4557,15 +4780,21 @@ impl Analyzer for ContentDepthAnalyzer {
 pub struct HeadingCoverageAnalyzer;
 
 impl Default for HeadingCoverageAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HeadingCoverageAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HeadingCoverageAnalyzer {
-    fn name(&self) -> &str { "heading-coverage" }
+    fn name(&self) -> &str {
+        "heading-coverage"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4579,14 +4808,38 @@ impl Analyzer for HeadingCoverageAnalyzer {
         if max_level > 0 {
             let has_h1 = levels.contains(&1);
             if !has_h1 {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "HCOV001".to_string(), title: "Heading hierarchy missing H1".to_string(), description: "Headings exist but no H1 is present.".to_string(), url: url.clone(), recommendation: "Add an H1 heading as the first heading on the page.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "HCOV001".to_string(),
+                    title: "Heading hierarchy missing H1".to_string(),
+                    description: "Headings exist but no H1 is present.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Add an H1 heading as the first heading on the page."
+                        .to_string(),
+                });
             }
         }
 
         let mut prev_level: u8 = 0;
         for h in &ctx.page.headings {
             if prev_level > 0 && h.level > prev_level + 1 {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "HCOV002".to_string(), title: "Heading level skipped".to_string(), description: format!("Heading level jumped from H{prev_level} to H{}.", h.level), url: url.clone(), recommendation: format!("Use H{} after H{} for proper hierarchy.", prev_level + 1, prev_level) });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "HCOV002".to_string(),
+                    title: "Heading level skipped".to_string(),
+                    description: format!(
+                        "Heading level jumped from H{prev_level} to H{}.",
+                        h.level
+                    ),
+                    url: url.clone(),
+                    recommendation: format!(
+                        "Use H{} after H{} for proper hierarchy.",
+                        prev_level + 1,
+                        prev_level
+                    ),
+                });
             }
             prev_level = h.level;
         }
@@ -4602,15 +4855,21 @@ impl Analyzer for HeadingCoverageAnalyzer {
 pub struct KeywordProminenceAnalyzer;
 
 impl Default for KeywordProminenceAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl KeywordProminenceAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for KeywordProminenceAnalyzer {
-    fn name(&self) -> &str { "keyword-prominence" }
+    fn name(&self) -> &str {
+        "keyword-prominence"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4620,25 +4879,76 @@ impl Analyzer for KeywordProminenceAnalyzer {
             return findings;
         }
 
-        let title_words: Vec<String> = ctx.page.meta.title.as_deref().unwrap_or("").split_whitespace().map(|w| w.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()).filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str())).collect();
+        let title_words: Vec<String> = ctx
+            .page
+            .meta
+            .title
+            .as_deref()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect()
+            })
+            .filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect();
 
-        let desc_words: Vec<String> = ctx.page.meta.description.as_deref().unwrap_or("").split_whitespace().map(|w| w.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()).filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str())).collect();
+        let desc_words: Vec<String> = ctx
+            .page
+            .meta
+            .description
+            .as_deref()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(|w| {
+                w.to_lowercase()
+                    .chars()
+                    .filter(|c| c.is_alphanumeric())
+                    .collect()
+            })
+            .filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str()))
+            .collect();
 
         if !title_words.is_empty() && !desc_words.is_empty() {
-            let overlap: usize = title_words.iter().filter(|w| desc_words.contains(w)).count();
+            let overlap: usize = title_words
+                .iter()
+                .filter(|w| desc_words.contains(w))
+                .count();
             let overlap_ratio = overlap as f64 / title_words.len() as f64;
             if overlap_ratio < 0.3 && title_words.len() >= 3 {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "KWPRO001".to_string(), title: "Low keyword overlap between title and description".to_string(), description: format!("Only {overlap}/{} title keywords appear in the meta description.", title_words.len()), url: url.clone(), recommendation: "Include important keywords in both title and meta description.".to_string() });
             }
         }
 
-        let h1_text: String = ctx.page.headings.iter().filter(|h| h.level == 1).map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+        let h1_text: String = ctx
+            .page
+            .headings
+            .iter()
+            .filter(|h| h.level == 1)
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         if !h1_text.is_empty() && !title_words.is_empty() {
             let h1_lower = h1_text.to_lowercase();
-            let title_in_h1: usize = title_words.iter().filter(|w| h1_lower.contains(w.as_str())).count();
+            let title_in_h1: usize = title_words
+                .iter()
+                .filter(|w| h1_lower.contains(w.as_str()))
+                .count();
             let ratio = title_in_h1 as f64 / title_words.len() as f64;
             if ratio < 0.2 && title_words.len() >= 2 {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "KWPRO002".to_string(), title: "Title keywords missing from H1".to_string(), description: "Most title keywords are not reflected in the H1 heading.".to_string(), url: url.clone(), recommendation: "Ensure the H1 and title share core keywords for consistency.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "KWPRO002".to_string(),
+                    title: "Title keywords missing from H1".to_string(),
+                    description: "Most title keywords are not reflected in the H1 heading."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Ensure the H1 and title share core keywords for consistency."
+                        .to_string(),
+                });
             }
         }
 
@@ -4653,25 +4963,43 @@ impl Analyzer for KeywordProminenceAnalyzer {
 pub struct ContentFreshnessSignalAnalyzer;
 
 impl Default for ContentFreshnessSignalAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContentFreshnessSignalAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ContentFreshnessSignalAnalyzer {
-    fn name(&self) -> &str { "content-freshness-signal" }
+    fn name(&self) -> &str {
+        "content-freshness-signal"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has_date_published = ctx.page.structured_data.iter().any(|sd| sd.data.get("datePublished").is_some());
-        let has_date_modified = ctx.page.structured_data.iter().any(|sd| sd.data.get("dateModified").is_some());
+        let has_date_published = ctx
+            .page
+            .structured_data
+            .iter()
+            .any(|sd| sd.data.get("datePublished").is_some());
+        let has_date_modified = ctx
+            .page
+            .structured_data
+            .iter()
+            .any(|sd| sd.data.get("dateModified").is_some());
 
         if !has_date_published && !has_date_modified {
             let lower_url = url.to_lowercase();
-            if lower_url.contains("/blog/") || lower_url.contains("/news/") || lower_url.contains("/article/") || lower_url.contains("/post/") {
+            if lower_url.contains("/blog/")
+                || lower_url.contains("/news/")
+                || lower_url.contains("/article/")
+                || lower_url.contains("/post/")
+            {
                 findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FRESHSIG001".to_string(), title: "Blog/news content missing date signals".to_string(), description: "Blog or news URL pattern detected but no datePublished or dateModified in structured data.".to_string(), url: url.clone(), recommendation: "Add datePublished and dateModified to Article schema for freshness signals.".to_string() });
             }
         }
@@ -4691,15 +5019,21 @@ impl Analyzer for ContentFreshnessSignalAnalyzer {
 pub struct MetaRobotsValidationAnalyzer;
 
 impl Default for MetaRobotsValidationAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetaRobotsValidationAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for MetaRobotsValidationAnalyzer {
-    fn name(&self) -> &str { "meta-robots-validation" }
+    fn name(&self) -> &str {
+        "meta-robots-validation"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4711,15 +5045,40 @@ impl Analyzer for MetaRobotsValidationAnalyzer {
 
         let directives: Vec<String> = robots.split(',').map(|s| s.trim().to_lowercase()).collect();
 
-        if directives.contains(&"noindex".to_string()) && directives.contains(&"index".to_string()) {
-            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "MRVAL001".to_string(), title: "Conflicting noindex and index directives".to_string(), description: "Meta robots contains both noindex and index. Behavior is browser-dependent.".to_string(), url: url.clone(), recommendation: "Use either noindex or index, not both.".to_string() });
+        if directives.contains(&"noindex".to_string()) && directives.contains(&"index".to_string())
+        {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Seo,
+                code: "MRVAL001".to_string(),
+                title: "Conflicting noindex and index directives".to_string(),
+                description:
+                    "Meta robots contains both noindex and index. Behavior is browser-dependent."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Use either noindex or index, not both.".to_string(),
+            });
         }
 
-        if directives.contains(&"nofollow".to_string()) && directives.contains(&"follow".to_string()) {
-            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "MRVAL002".to_string(), title: "Conflicting nofollow and follow directives".to_string(), description: "Meta robots contains both nofollow and follow. Behavior is browser-dependent.".to_string(), url: url.clone(), recommendation: "Use either nofollow or follow, not both.".to_string() });
+        if directives.contains(&"nofollow".to_string())
+            && directives.contains(&"follow".to_string())
+        {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Seo,
+                code: "MRVAL002".to_string(),
+                title: "Conflicting nofollow and follow directives".to_string(),
+                description:
+                    "Meta robots contains both nofollow and follow. Behavior is browser-dependent."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Use either nofollow or follow, not both.".to_string(),
+            });
         }
 
-        if directives.contains(&"noarchive".to_string()) || directives.contains(&"nosnippet".to_string()) {
+        if directives.contains(&"noarchive".to_string())
+            || directives.contains(&"nosnippet".to_string())
+        {
             findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "MRVAL003".to_string(), title: "Search snippet restriction detected".to_string(), description: format!("Meta robots contains directives that limit search snippet display: {robots}."), url: url.clone(), recommendation: "Remove noarchive/nosnippet unless intentionally hiding content from search results.".to_string() });
         }
 
@@ -4734,15 +5093,21 @@ impl Analyzer for MetaRobotsValidationAnalyzer {
 pub struct CanonicalConsistencyAnalyzer;
 
 impl Default for CanonicalConsistencyAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CanonicalConsistencyAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CanonicalConsistencyAnalyzer {
-    fn name(&self) -> &str { "canonical-consistency" }
+    fn name(&self) -> &str {
+        "canonical-consistency"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4750,14 +5115,49 @@ impl Analyzer for CanonicalConsistencyAnalyzer {
         if let Some(canonical) = &ctx.page.meta.canonical {
             let canonical_str = canonical.as_str();
             if canonical_str.is_empty() {
-                findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "CANCON001".to_string(), title: "Empty canonical URL".to_string(), description: "A canonical tag is present but has an empty href value.".to_string(), url: url.clone(), recommendation: "Remove the canonical tag or provide a valid URL.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Seo,
+                    code: "CANCON001".to_string(),
+                    title: "Empty canonical URL".to_string(),
+                    description: "A canonical tag is present but has an empty href value."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Remove the canonical tag or provide a valid URL.".to_string(),
+                });
             } else {
                 if let Ok(page_url) = url::Url::parse(url) {
                     if canonical.scheme() != page_url.scheme() {
-                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANCON002".to_string(), title: "Canonical URL scheme mismatch".to_string(), description: format!("Canonical uses {} but page uses {}.", canonical.scheme(), page_url.scheme()), url: url.clone(), recommendation: "Canonical URL should use the same scheme as the page.".to_string() });
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Seo,
+                            code: "CANCON002".to_string(),
+                            title: "Canonical URL scheme mismatch".to_string(),
+                            description: format!(
+                                "Canonical uses {} but page uses {}.",
+                                canonical.scheme(),
+                                page_url.scheme()
+                            ),
+                            url: url.clone(),
+                            recommendation: "Canonical URL should use the same scheme as the page."
+                                .to_string(),
+                        });
                     }
                     if canonical.host_str() != page_url.host_str() {
-                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANCON003".to_string(), title: "Canonical URL points to different domain".to_string(), description: format!("Canonical host {} differs from page host {}.", canonical.host_str().unwrap_or(""), page_url.host_str().unwrap_or("")), url: url.clone(), recommendation: "Verify cross-domain canonical is intentional.".to_string() });
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Seo,
+                            code: "CANCON003".to_string(),
+                            title: "Canonical URL points to different domain".to_string(),
+                            description: format!(
+                                "Canonical host {} differs from page host {}.",
+                                canonical.host_str().unwrap_or(""),
+                                page_url.host_str().unwrap_or("")
+                            ),
+                            url: url.clone(),
+                            recommendation: "Verify cross-domain canonical is intentional."
+                                .to_string(),
+                        });
                     }
                 }
             }
@@ -4773,15 +5173,21 @@ impl Analyzer for CanonicalConsistencyAnalyzer {
 pub struct HreflangNetworkValidator;
 
 impl Default for HreflangNetworkValidator {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HreflangNetworkValidator {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HreflangNetworkValidator {
-    fn name(&self) -> &str { "hreflang-network" }
+    fn name(&self) -> &str {
+        "hreflang-network"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4796,13 +5202,33 @@ impl Analyzer for HreflangNetworkValidator {
         let mut seen = std::collections::HashSet::new();
         for lang in &langs {
             if !seen.insert(*lang) {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFNET001".to_string(), title: "Duplicate hreflang language".to_string(), description: format!("Hreflang language \"{lang}\" appears multiple times."), url: url.clone(), recommendation: "Each hreflang language should appear exactly once per page.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "HREFNET001".to_string(),
+                    title: "Duplicate hreflang language".to_string(),
+                    description: format!("Hreflang language \"{lang}\" appears multiple times."),
+                    url: url.clone(),
+                    recommendation: "Each hreflang language should appear exactly once per page."
+                        .to_string(),
+                });
             }
         }
 
         let has_x_default = langs.contains(&"x-default");
         if !has_x_default && hreflang_tags.len() > 2 {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFNET002".to_string(), title: "Missing x-default in hreflang network".to_string(), description: "Multiple hreflang tags exist but no x-default fallback is defined.".to_string(), url: url.clone(), recommendation: "Add an x-default hreflang tag for users whose language doesn't match.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "HREFNET002".to_string(),
+                title: "Missing x-default in hreflang network".to_string(),
+                description: "Multiple hreflang tags exist but no x-default fallback is defined."
+                    .to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Add an x-default hreflang tag for users whose language doesn't match."
+                        .to_string(),
+            });
         }
 
         findings
@@ -4816,15 +5242,21 @@ impl Analyzer for HreflangNetworkValidator {
 pub struct ContentReadabilityScorer;
 
 impl Default for ContentReadabilityScorer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContentReadabilityScorer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ContentReadabilityScorer {
-    fn name(&self) -> &str { "content-readability-scorer" }
+    fn name(&self) -> &str {
+        "content-readability-scorer"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4833,7 +5265,13 @@ impl Analyzer for ContentReadabilityScorer {
             return findings;
         }
 
-        let text: String = ctx.page.headings.iter().map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+        let text: String = ctx
+            .page
+            .headings
+            .iter()
+            .map(|h| h.text.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         if text.trim().is_empty() {
             return findings;
         }
@@ -4845,9 +5283,28 @@ impl Analyzer for ContentReadabilityScorer {
         let fre = flesch_reading_ease(word_count, sentence_count.max(1), syllable_count);
 
         if fre < 30.0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CREAD001".to_string(), title: "Very difficult readability".to_string(), description: format!("Flesch Reading Ease score is {fre:.1}/100. Content is very difficult to read."), url: url.clone(), recommendation: "Simplify language, shorten sentences, and use common words.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Content,
+                code: "CREAD001".to_string(),
+                title: "Very difficult readability".to_string(),
+                description: format!(
+                    "Flesch Reading Ease score is {fre:.1}/100. Content is very difficult to read."
+                ),
+                url: url.clone(),
+                recommendation: "Simplify language, shorten sentences, and use common words."
+                    .to_string(),
+            });
         } else if fre < 50.0 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Content, code: "CREAD002".to_string(), title: "Fairly difficult readability".to_string(), description: format!("Flesch Reading Ease score is {fre:.1}/100."), url: url.clone(), recommendation: "Consider simplifying for a broader audience.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Content,
+                code: "CREAD002".to_string(),
+                title: "Fairly difficult readability".to_string(),
+                description: format!("Flesch Reading Ease score is {fre:.1}/100."),
+                url: url.clone(),
+                recommendation: "Consider simplifying for a broader audience.".to_string(),
+            });
         }
 
         let avg_words_per_sentence = word_count as f64 / sentence_count.max(1) as f64;
@@ -4866,15 +5323,21 @@ impl Analyzer for ContentReadabilityScorer {
 pub struct PageImportanceAnalyzer;
 
 impl Default for PageImportanceAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PageImportanceAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for PageImportanceAnalyzer {
-    fn name(&self) -> &str { "page-importance" }
+    fn name(&self) -> &str {
+        "page-importance"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -5033,7 +5496,8 @@ mod meta_desc_length_tests {
     fn test_meta_desc_different_from_title() {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("My Page Title".to_string());
-        page.meta.description = Some("A completely different description for the page content".to_string());
+        page.meta.description =
+            Some("A completely different description for the page content".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = MetaDescriptionLengthAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "METADESC003"));
@@ -6359,7 +6823,6 @@ mod new_validator_tests {
 
     // =========================================================================
     // JobPostingSalaryValidator tests
-
 }
 
 #[cfg(test)]
@@ -6423,40 +6886,64 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_og_video_no_video() {
         let page = make_page("https://example.com");
-        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OpenGraphVideoUrlValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_og_video_valid_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).is_empty());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        assert!(OpenGraphVideoUrlValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_og_video_invalid_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "not-a-url".to_string());
-        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+        page.meta
+            .og
+            .insert("video".to_string(), "not-a-url".to_string());
+        assert!(OpenGraphVideoUrlValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "OGVIDURL001"));
     }
 
     #[test]
     fn test_og_video_empty() {
         let mut page = make_page("https://example.com");
         page.meta.og.insert("video".to_string(), "".to_string());
-        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+        assert!(OpenGraphVideoUrlValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "OGVIDURL001"));
     }
 
     #[test]
     fn test_og_video_ftp_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "ftp://example.com/video.mp4".to_string());
-        assert!(OpenGraphVideoUrlValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OGVIDURL001"));
+        page.meta.og.insert(
+            "video".to_string(),
+            "ftp://example.com/video.mp4".to_string(),
+        );
+        assert!(OpenGraphVideoUrlValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "OGVIDURL001"));
     }
 
     #[test]
     fn test_og_video_name() {
-        assert_eq!(OpenGraphVideoUrlValidator::new().name(), "og-video-url-validator");
+        assert_eq!(
+            OpenGraphVideoUrlValidator::new().name(),
+            "og-video-url-validator"
+        );
     }
 
     #[test]
@@ -6469,40 +6956,56 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_twitter_stream_no_stream() {
         let page = make_page("https://example.com");
-        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(TwitterPlayerStreamValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_twitter_stream_valid_url() {
         let mut page = make_page("https://example.com");
         page.meta.twitter.player_stream = Some("https://example.com/stream.mp4".to_string());
-        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(TwitterPlayerStreamValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_twitter_stream_invalid_url() {
         let mut page = make_page("https://example.com");
         page.meta.twitter.player_stream = Some("not-a-url".to_string());
-        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+        assert!(TwitterPlayerStreamValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "TWSTREAM001"));
     }
 
     #[test]
     fn test_twitter_stream_empty() {
         let mut page = make_page("https://example.com");
         page.meta.twitter.player_stream = Some("".to_string());
-        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+        assert!(TwitterPlayerStreamValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "TWSTREAM001"));
     }
 
     #[test]
     fn test_twitter_stream_ftp() {
         let mut page = make_page("https://example.com");
         page.meta.twitter.player_stream = Some("ftp://example.com/stream.mp4".to_string());
-        assert!(TwitterPlayerStreamValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "TWSTREAM001"));
+        assert!(TwitterPlayerStreamValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "TWSTREAM001"));
     }
 
     #[test]
     fn test_twitter_stream_name() {
-        assert_eq!(TwitterPlayerStreamValidator::new().name(), "twitter-player-stream-validator");
+        assert_eq!(
+            TwitterPlayerStreamValidator::new().name(),
+            "twitter-player-stream-validator"
+        );
     }
 
     #[test]
@@ -6515,7 +7018,9 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_nesting_no_schemas() {
         let page = make_page("https://example.com");
-        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaNestingDepthValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6526,7 +7031,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "name": "Test"}),
         }];
-        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaNestingDepthValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6537,7 +7044,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "a": {"b": {"c": {"d": "deep"}}}}),
         }];
-        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SCNEST001"));
+        assert!(SchemaNestingDepthValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "SCNEST001"));
     }
 
     #[test]
@@ -6548,12 +7058,17 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "a": {"b": {"c": "ok"}}}),
         }];
-        assert!(SchemaNestingDepthValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaNestingDepthValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_nesting_name() {
-        assert_eq!(SchemaNestingDepthValidator::new().name(), "schema-nesting-depth");
+        assert_eq!(
+            SchemaNestingDepthValidator::new().name(),
+            "schema-nesting-depth"
+        );
     }
 
     #[test]
@@ -6566,7 +7081,9 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_id_ref_no_schemas() {
         let page = make_page("https://example.com");
-        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaIdReferenceValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6577,7 +7094,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "@id": "#article1"}),
         }];
-        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaIdReferenceValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6588,7 +7107,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "author": {"@id": "#missing"}}),
         }];
-        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SCREF001"));
+        assert!(SchemaIdReferenceValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "SCREF001"));
     }
 
     #[test]
@@ -6606,12 +7128,17 @@ mod new_content_analyzer_tests {
                 data: serde_json::json!({"@type": "Article", "author": {"@id": "#org"}}),
             },
         ];
-        assert!(SchemaIdReferenceValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(SchemaIdReferenceValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_id_ref_name() {
-        assert_eq!(SchemaIdReferenceValidator::new().name(), "schema-id-reference");
+        assert_eq!(
+            SchemaIdReferenceValidator::new().name(),
+            "schema-id-reference"
+        );
     }
 
     #[test]
@@ -6624,7 +7151,9 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_breadcrumb_active_no_breadcrumb() {
         let page = make_page("https://example.com/page");
-        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(BreadcrumbActivePageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6638,7 +7167,9 @@ mod new_content_analyzer_tests {
                 {"@type": "ListItem", "position": 2, "item": {"@id": "https://example.com/page"}}
             ]}),
         }];
-        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(BreadcrumbActivePageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6652,7 +7183,10 @@ mod new_content_analyzer_tests {
                 {"@type": "ListItem", "position": 2, "item": {"@id": "https://example.com/other"}}
             ]}),
         }];
-        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "BREADACT001"));
+        assert!(BreadcrumbActivePageValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "BREADACT001"));
     }
 
     #[test]
@@ -6663,12 +7197,17 @@ mod new_content_analyzer_tests {
             r#type: Some("BreadcrumbList".to_string()),
             data: serde_json::json!({"@type": "BreadcrumbList", "itemListElement": []}),
         }];
-        assert!(BreadcrumbActivePageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(BreadcrumbActivePageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_breadcrumb_active_name() {
-        assert_eq!(BreadcrumbActivePageValidator::new().name(), "breadcrumb-active-page");
+        assert_eq!(
+            BreadcrumbActivePageValidator::new().name(),
+            "breadcrumb-active-page"
+        );
     }
 
     #[test]
@@ -6681,7 +7220,9 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_content_lang_no_html_lang() {
         let page = make_page("https://example.com");
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6689,7 +7230,9 @@ mod new_content_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.html_lang = Some("en".to_string());
         page.meta.language = Some("en".to_string());
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6697,14 +7240,19 @@ mod new_content_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.html_lang = Some("en".to_string());
         page.meta.language = Some("fr".to_string());
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CLANG001"));
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CLANG001"));
     }
 
     #[test]
     fn test_content_lang_no_meta_lang() {
         let mut page = make_page("https://example.com");
         page.html_lang = Some("en".to_string());
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6715,7 +7263,9 @@ mod new_content_analyzer_tests {
             lang: "en".to_string(),
             url: url::Url::parse("https://example.com/en").unwrap(),
         }];
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6726,7 +7276,10 @@ mod new_content_analyzer_tests {
             lang: "fr".to_string(),
             url: url::Url::parse("https://example.com/fr").unwrap(),
         }];
-        assert!(ContentLanguageValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CLANG001"));
+        assert!(ContentLanguageValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CLANG001"));
     }
 
     #[test]
@@ -6744,28 +7297,40 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_meta_desc_uniq_no_description() {
         let page = make_page("https://example.com");
-        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(MetaDescriptionUniquenessAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_meta_desc_uniq_very_short() {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("Hi".to_string());
-        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "METADESC-UNI001"));
+        assert!(MetaDescriptionUniquenessAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "METADESC-UNI001"));
     }
 
     #[test]
     fn test_meta_desc_uniq_generic_text() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("Welcome to our website, click here to learn more about our services.".to_string());
-        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "METADESC-UNI002"));
+        page.meta.description = Some(
+            "Welcome to our website, click here to learn more about our services.".to_string(),
+        );
+        assert!(MetaDescriptionUniquenessAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "METADESC-UNI002"));
     }
 
     #[test]
     fn test_meta_desc_uniq_good_description() {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A comprehensive guide to Rust programming language covering ownership, borrowing, and lifetime concepts.".to_string());
-        assert!(MetaDescriptionUniquenessAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(MetaDescriptionUniquenessAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // ContentFreshnessDateAnalyzer tests
@@ -6773,7 +7338,10 @@ mod new_content_analyzer_tests {
     #[test]
     fn test_fresh_date_no_date_on_blog() {
         let page = make_page("https://example.com/blog/my-post");
-        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FRESH-DATE001"));
+        assert!(ContentFreshnessDateAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FRESH-DATE001"));
     }
 
     #[test]
@@ -6784,13 +7352,17 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "datePublished": "2024-01-01"}),
         }];
-        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentFreshnessDateAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_fresh_date_non_blog_ignored() {
         let page = make_page("https://example.com/about");
-        assert!(ContentFreshnessDateAnalyzer::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ContentFreshnessDateAnalyzer::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // StructuredDataNestingValidator tests
@@ -6803,7 +7375,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget"}),
         }];
-        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SDNEST001"));
+        assert!(StructuredDataNestingValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "SDNEST001"));
     }
 
     #[test]
@@ -6814,7 +7389,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer"}}),
         }];
-        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "SDNEST002"));
+        assert!(StructuredDataNestingValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "SDNEST002"));
     }
 
     #[test]
@@ -6825,7 +7403,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "availability": "https://schema.org/InStock"}}),
         }];
-        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(StructuredDataNestingValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6836,7 +7416,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "headline": "Test"}),
         }];
-        assert!(StructuredDataNestingValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(StructuredDataNestingValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // LocalBusinessNapAnalyzerUtil tests
@@ -6849,7 +7431,10 @@ mod new_content_analyzer_tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Acme Store"}),
         }];
-        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "NAP-UTIL001"));
+        assert!(LocalBusinessNapAnalyzerUtil::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "NAP-UTIL001"));
     }
 
     #[test]
@@ -6860,7 +7445,9 @@ mod new_content_analyzer_tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Acme Store", "telephone": "+1-555-555-5555", "address": {"@type": "PostalAddress", "streetAddress": "123 Main St"}}),
         }];
-        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNapAnalyzerUtil::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -6871,7 +7458,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget"}),
         }];
-        assert!(LocalBusinessNapAnalyzerUtil::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNapAnalyzerUtil::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // EventLocationValidatorV2 tests
@@ -6884,7 +7473,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Conference", "startDate": "2024-06-15"}),
         }];
-        assert!(EventLocationValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "ELOC-V2001"));
+        assert!(EventLocationValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "ELOC-V2001"));
     }
 
     #[test]
@@ -6895,7 +7487,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Conference", "startDate": "2024-06-15", "location": {"@type": "Place", "name": "Convention Center"}}),
         }];
-        assert!(EventLocationValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventLocationValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // OrganizationLogoValidatorV2 tests
@@ -6908,7 +7502,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Acme Corp"}),
         }];
-        assert!(OrganizationLogoValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "OLOGO-V2001"));
+        assert!(OrganizationLogoValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "OLOGO-V2001"));
     }
 
     #[test]
@@ -6919,7 +7516,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Acme Corp", "logo": "https://example.com/logo.png"}),
         }];
-        assert!(OrganizationLogoValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationLogoValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // PersonJobTitleValidatorV2 tests
@@ -6944,7 +7543,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Person".to_string()),
             data: serde_json::json!({"@type": "Person", "name": "John Doe", "jobTitle": "Engineer", "worksFor": {"@type": "Organization", "name": "Acme"}}),
         }];
-        assert!(PersonJobTitleValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PersonJobTitleValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // RecipeNutritionValidatorV2 tests
@@ -6957,7 +7558,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Recipe".to_string()),
             data: serde_json::json!({"@type": "Recipe", "name": "Pasta"}),
         }];
-        assert!(RecipeNutritionValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "RNUT-V2001"));
+        assert!(RecipeNutritionValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "RNUT-V2001"));
     }
 
     #[test]
@@ -6968,7 +7572,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Recipe".to_string()),
             data: serde_json::json!({"@type": "Recipe", "name": "Pasta", "nutrition": {"@type": "NutritionInformation", "calories": "400 calories"}}),
         }];
-        assert!(RecipeNutritionValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(RecipeNutritionValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     // CourseProviderValidatorV2 tests
@@ -6981,7 +7587,10 @@ mod new_content_analyzer_tests {
             r#type: Some("Course".to_string()),
             data: serde_json::json!({"@type": "Course", "name": "Rust Basics"}),
         }];
-        assert!(CourseProviderValidatorV2::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CPROV-V2001"));
+        assert!(CourseProviderValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CPROV-V2001"));
     }
 
     #[test]
@@ -6992,7 +7601,9 @@ mod new_content_analyzer_tests {
             r#type: Some("Course".to_string()),
             data: serde_json::json!({"@type": "Course", "name": "Rust Basics", "provider": {"@type": "Organization", "name": "Udemy"}}),
         }];
-        assert!(CourseProviderValidatorV2::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(CourseProviderValidatorV2::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 }
 
@@ -7143,8 +7754,7 @@ impl Analyzer for MetaRobotsValidator {
                               directives, which are contradictory."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Use either \"index\" or \"noindex\", not both."
-                    .to_string(),
+                recommendation: "Use either \"index\" or \"noindex\", not both.".to_string(),
             });
         }
 
@@ -7158,8 +7768,7 @@ impl Analyzer for MetaRobotsValidator {
                               directives, which are contradictory."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Use either \"follow\" or \"nofollow\", not both."
-                    .to_string(),
+                recommendation: "Use either \"follow\" or \"nofollow\", not both.".to_string(),
             });
         }
 
@@ -7463,7 +8072,10 @@ impl Analyzer for KeywordDensityAnalyzer {
             }
 
             for keyword in &title_words {
-                let count = body_words.iter().filter(|w| w.contains(keyword.as_str())).count();
+                let count = body_words
+                    .iter()
+                    .filter(|w| w.contains(keyword.as_str()))
+                    .count();
                 let density = count as f64 / total_words as f64 * 100.0;
 
                 if density > 3.0 {
@@ -7638,17 +8250,14 @@ impl Analyzer for MobileFriendlinessScoreAnalyzer {
             category: IssueCategory::Mobile,
             code: "MOB-SCORE001".to_string(),
             title: "Mobile friendliness score".to_string(),
-            description: format!(
-                "Estimated mobile friendliness score: {score}/100. {issue_text}"
-            ),
+            description: format!("Estimated mobile friendliness score: {score}/100. {issue_text}"),
             url: url.clone(),
             recommendation: if score < 60 {
                 "Page has significant mobile-friendliness issues. Add a viewport meta tag \
                  and ensure responsive design."
                     .to_string()
             } else if score < 85 {
-                "Page has minor mobile-friendliness issues. Review viewport settings."
-                    .to_string()
+                "Page has minor mobile-friendliness issues. Review viewport settings.".to_string()
             } else {
                 "Page appears mobile-friendly.".to_string()
             },
@@ -7686,11 +8295,7 @@ impl Analyzer for ArticleAuthorValidator {
         let url = &ctx.page.url;
 
         for sd in &ctx.page.structured_data {
-            let schema_type = sd
-                .data
-                .get("@type")
-                .and_then(|t| t.as_str())
-                .unwrap_or("");
+            let schema_type = sd.data.get("@type").and_then(|t| t.as_str()).unwrap_or("");
             if !matches!(
                 schema_type,
                 "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle"
@@ -7745,11 +8350,7 @@ impl Analyzer for ArticleDatePublishedValidator {
         let url = &ctx.page.url;
 
         for sd in &ctx.page.structured_data {
-            let schema_type = sd
-                .data
-                .get("@type")
-                .and_then(|t| t.as_str())
-                .unwrap_or("");
+            let schema_type = sd.data.get("@type").and_then(|t| t.as_str()).unwrap_or("");
             if !matches!(
                 schema_type,
                 "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle"
@@ -7805,11 +8406,7 @@ impl Analyzer for ArticleHeadlineValidator {
         let url = &ctx.page.url;
 
         for sd in &ctx.page.structured_data {
-            let schema_type = sd
-                .data
-                .get("@type")
-                .and_then(|t| t.as_str())
-                .unwrap_or("");
+            let schema_type = sd.data.get("@type").and_then(|t| t.as_str()).unwrap_or("");
             if !matches!(
                 schema_type,
                 "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle"
@@ -7867,7 +8464,12 @@ impl Analyzer for OrganizationNameValidator {
                 continue;
             }
             let data = &sd.data;
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Content,
@@ -7917,7 +8519,12 @@ impl Analyzer for PersonNameValidator {
                 continue;
             }
             let data = &sd.data;
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Content,
@@ -8016,7 +8623,12 @@ impl Analyzer for CourseNameValidator {
                 continue;
             }
             let data = &sd.data;
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Content,
@@ -8065,7 +8677,12 @@ impl Analyzer for RecipeNameValidator {
                 continue;
             }
             let data = &sd.data;
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Content,
@@ -8885,8 +9502,16 @@ mod content_analyzer_v2_tests {
         let mut page = make_page("https://example.com/article");
         page.word_count = 2000;
         page.headings = vec![
-            Heading { level: 1, text: "Title".to_string(), length: 5 },
-            Heading { level: 2, text: "Section".to_string(), length: 7 },
+            Heading {
+                level: 1,
+                text: "Title".to_string(),
+                length: 5,
+            },
+            Heading {
+                level: 2,
+                text: "Section".to_string(),
+                length: 7,
+            },
         ];
         let ctx = make_ctx(&page, None);
         assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
@@ -8959,8 +9584,16 @@ mod content_analyzer_v2_tests {
         let mut page = make_page("https://example.com/article");
         page.word_count = 2000;
         page.headings = vec![
-            Heading { level: 1, text: "Title".to_string(), length: 5 },
-            Heading { level: 2, text: "Sub".to_string(), length: 3 },
+            Heading {
+                level: 1,
+                text: "Title".to_string(),
+                length: 5,
+            },
+            Heading {
+                level: 2,
+                text: "Sub".to_string(),
+                length: 3,
+            },
         ];
         let ctx = make_ctx(&page, None);
         assert!(ContentStructureAnalyzer::new().analyze(&ctx).is_empty());
@@ -9151,7 +9784,8 @@ mod content_analyzer_v2_tests {
     fn test_mob_score_fixed_width() {
         let mut page = make_page("https://example.com");
         page.has_lang_attribute = true;
-        let body = r#"<html><head><meta name="viewport" content="width=600"></head><body></body></html>"#;
+        let body =
+            r#"<html><head><meta name="viewport" content="width=600"></head><body></body></html>"#;
         let ctx = make_ctx_full(&page, Some(body), &[]);
         let findings = MobileFriendlinessScoreAnalyzer::new().analyze(&ctx);
         // 100 - 40 (no viewport in meta) - 20 (fixed width in body) = 40
@@ -9218,22 +9852,36 @@ mod content_analyzer_v2_tests {
     fn test_mob_score_one_finding() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert_eq!(MobileFriendlinessScoreAnalyzer::new().analyze(&ctx).len(), 1);
+        assert_eq!(
+            MobileFriendlinessScoreAnalyzer::new().analyze(&ctx).len(),
+            1
+        );
     }
 
     // --- ArticleAuthorValidator tests ---
     #[test]
     fn test_content_article_author_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "headline": "Test"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "Test"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleAuthorValidator::new().analyze(&ctx).iter().any(|f| f.code == "ART-AUTH001"));
+        assert!(ArticleAuthorValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ART-AUTH001"));
     }
 
     #[test]
     fn test_content_article_author_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "author": "Joe"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "author": "Joe"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(ArticleAuthorValidator::new().analyze(&ctx).is_empty());
     }
@@ -9241,9 +9889,16 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_article_author_news() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("NewsArticle".to_string()), data: serde_json::json!({"@type": "NewsArticle"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("NewsArticle".to_string()),
+            data: serde_json::json!({"@type": "NewsArticle"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleAuthorValidator::new().analyze(&ctx).iter().any(|f| f.code == "ART-AUTH001"));
+        assert!(ArticleAuthorValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ART-AUTH001"));
     }
 
     #[test]
@@ -9256,39 +9911,68 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_article_author_non_article() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(ArticleAuthorValidator::new().analyze(&ctx).is_empty());
     }
 
     #[test]
-    fn test_content_article_author_default() { let _ = ArticleAuthorValidator::default(); }
+    fn test_content_article_author_default() {
+        let _ = ArticleAuthorValidator::default();
+    }
 
     #[test]
-    fn test_content_article_author_name() { assert_eq!(ArticleAuthorValidator::new().name(), "article-author"); }
+    fn test_content_article_author_name() {
+        assert_eq!(ArticleAuthorValidator::new().name(), "article-author");
+    }
 
     #[test]
     fn test_content_article_author_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in ArticleAuthorValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in ArticleAuthorValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_article_author_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(ArticleAuthorValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            ArticleAuthorValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_article_author_multiple() {
         let mut page = make_page("https://example.com");
         page.structured_data = vec![
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "author": "A"}) },
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article", "author": "A"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article"}),
+            },
         ];
         let ctx = make_ctx(&page, None);
         assert!(!ArticleAuthorValidator::new().analyze(&ctx).is_empty());
@@ -9298,77 +9982,136 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_article_date_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleDatePublishedValidator::new().analyze(&ctx).iter().any(|f| f.code == "ART-DT001"));
+        assert!(ArticleDatePublishedValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ART-DT001"));
     }
 
     #[test]
     fn test_content_article_date_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "datePublished": "2024-01-01"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "datePublished": "2024-01-01"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleDatePublishedValidator::new().analyze(&ctx).is_empty());
+        assert!(ArticleDatePublishedValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_content_article_date_no_sd() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert!(ArticleDatePublishedValidator::new().analyze(&ctx).is_empty());
+        assert!(ArticleDatePublishedValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_content_article_date_default() { let _ = ArticleDatePublishedValidator::default(); }
+    fn test_content_article_date_default() {
+        let _ = ArticleDatePublishedValidator::default();
+    }
 
     #[test]
-    fn test_content_article_date_name() { assert_eq!(ArticleDatePublishedValidator::new().name(), "article-date-published"); }
+    fn test_content_article_date_name() {
+        assert_eq!(
+            ArticleDatePublishedValidator::new().name(),
+            "article-date-published"
+        );
+    }
 
     #[test]
     fn test_content_article_date_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in ArticleDatePublishedValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in ArticleDatePublishedValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_article_date_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(ArticleDatePublishedValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            ArticleDatePublishedValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_article_date_blog() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("BlogPosting".to_string()), data: serde_json::json!({"@type": "BlogPosting"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BlogPosting".to_string()),
+            data: serde_json::json!({"@type": "BlogPosting"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleDatePublishedValidator::new().analyze(&ctx).iter().any(|f| f.code == "ART-DT001"));
+        assert!(ArticleDatePublishedValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ART-DT001"));
     }
 
     #[test]
     fn test_content_article_date_non_article() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleDatePublishedValidator::new().analyze(&ctx).is_empty());
+        assert!(ArticleDatePublishedValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // --- ArticleHeadlineValidator tests ---
     #[test]
     fn test_content_article_headline_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(ArticleHeadlineValidator::new().analyze(&ctx).iter().any(|f| f.code == "ART-HL001"));
+        assert!(ArticleHeadlineValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ART-HL001"));
     }
 
     #[test]
     fn test_content_article_headline_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "headline": "Test"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "Test"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(ArticleHeadlineValidator::new().analyze(&ctx).is_empty());
     }
@@ -9381,31 +10124,52 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_article_headline_default() { let _ = ArticleHeadlineValidator::default(); }
+    fn test_content_article_headline_default() {
+        let _ = ArticleHeadlineValidator::default();
+    }
 
     #[test]
-    fn test_content_article_headline_name() { assert_eq!(ArticleHeadlineValidator::new().name(), "article-headline"); }
+    fn test_content_article_headline_name() {
+        assert_eq!(ArticleHeadlineValidator::new().name(), "article-headline");
+    }
 
     #[test]
     fn test_content_article_headline_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in ArticleHeadlineValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in ArticleHeadlineValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_article_headline_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(ArticleHeadlineValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            ArticleHeadlineValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_article_headline_non_article() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(ArticleHeadlineValidator::new().analyze(&ctx).is_empty());
     }
@@ -9414,8 +10178,16 @@ mod content_analyzer_v2_tests {
     fn test_content_article_headline_multiple() {
         let mut page = make_page("https://example.com");
         page.structured_data = vec![
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article", "headline": "OK"}) },
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Article".to_string()), data: serde_json::json!({"@type": "Article"}) },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article", "headline": "OK"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Article".to_string()),
+                data: serde_json::json!({"@type": "Article"}),
+            },
         ];
         let ctx = make_ctx(&page, None);
         assert!(!ArticleHeadlineValidator::new().analyze(&ctx).is_empty());
@@ -9425,15 +10197,26 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_org_name_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Organization".to_string()), data: serde_json::json!({"@type": "Organization"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(OrganizationNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "ORG-NAME001"));
+        assert!(OrganizationNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ORG-NAME001"));
     }
 
     #[test]
     fn test_content_org_name_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Organization".to_string()), data: serde_json::json!({"@type": "Organization", "name": "Acme"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization", "name": "Acme"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(OrganizationNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9446,39 +10229,67 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_org_name_default() { let _ = OrganizationNameValidator::default(); }
+    fn test_content_org_name_default() {
+        let _ = OrganizationNameValidator::default();
+    }
 
     #[test]
-    fn test_content_org_name_name() { assert_eq!(OrganizationNameValidator::new().name(), "organization-name"); }
+    fn test_content_org_name_name() {
+        assert_eq!(OrganizationNameValidator::new().name(), "organization-name");
+    }
 
     #[test]
     fn test_content_org_name_empty() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Organization".to_string()), data: serde_json::json!({"@type": "Organization", "name": ""}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization", "name": ""}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(OrganizationNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "ORG-NAME001"));
+        assert!(OrganizationNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ORG-NAME001"));
     }
 
     #[test]
     fn test_content_org_name_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Organization".to_string()), data: serde_json::json!({"@type": "Organization"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in OrganizationNameValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in OrganizationNameValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_org_name_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Organization".to_string()), data: serde_json::json!({"@type": "Organization"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({"@type": "Organization"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(OrganizationNameValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            OrganizationNameValidator::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     #[test]
     fn test_content_org_name_non_org() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(OrganizationNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9487,15 +10298,26 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_person_name_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Person".to_string()), data: serde_json::json!({"@type": "Person"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(PersonNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "PERS-NAME001"));
+        assert!(PersonNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PERS-NAME001"));
     }
 
     #[test]
     fn test_content_person_name_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Person".to_string()), data: serde_json::json!({"@type": "Person", "name": "Jane"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person", "name": "Jane"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(PersonNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9508,39 +10330,67 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_person_name_default() { let _ = PersonNameValidator::default(); }
+    fn test_content_person_name_default() {
+        let _ = PersonNameValidator::default();
+    }
 
     #[test]
-    fn test_content_person_name_name() { assert_eq!(PersonNameValidator::new().name(), "person-name"); }
+    fn test_content_person_name_name() {
+        assert_eq!(PersonNameValidator::new().name(), "person-name");
+    }
 
     #[test]
     fn test_content_person_name_empty() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Person".to_string()), data: serde_json::json!({"@type": "Person", "name": ""}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person", "name": ""}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(PersonNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "PERS-NAME001"));
+        assert!(PersonNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PERS-NAME001"));
     }
 
     #[test]
     fn test_content_person_name_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Person".to_string()), data: serde_json::json!({"@type": "Person"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in PersonNameValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in PersonNameValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_person_name_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Person".to_string()), data: serde_json::json!({"@type": "Person"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({"@type": "Person"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(PersonNameValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            PersonNameValidator::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     #[test]
     fn test_content_person_name_non_person() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(PersonNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9549,15 +10399,26 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_job_title_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("JobPosting".to_string()), data: serde_json::json!({"@type": "JobPosting"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({"@type": "JobPosting"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(JobPostingTitleValidator::new().analyze(&ctx).iter().any(|f| f.code == "JOB-TITLE001"));
+        assert!(JobPostingTitleValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "JOB-TITLE001"));
     }
 
     #[test]
     fn test_content_job_title_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("JobPosting".to_string()), data: serde_json::json!({"@type": "JobPosting", "title": "Engineer"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({"@type": "JobPosting", "title": "Engineer"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(JobPostingTitleValidator::new().analyze(&ctx).is_empty());
     }
@@ -9570,31 +10431,52 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_job_title_default() { let _ = JobPostingTitleValidator::default(); }
+    fn test_content_job_title_default() {
+        let _ = JobPostingTitleValidator::default();
+    }
 
     #[test]
-    fn test_content_job_title_name() { assert_eq!(JobPostingTitleValidator::new().name(), "job-posting-title"); }
+    fn test_content_job_title_name() {
+        assert_eq!(JobPostingTitleValidator::new().name(), "job-posting-title");
+    }
 
     #[test]
     fn test_content_job_title_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("JobPosting".to_string()), data: serde_json::json!({"@type": "JobPosting"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({"@type": "JobPosting"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in JobPostingTitleValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in JobPostingTitleValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_job_title_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("JobPosting".to_string()), data: serde_json::json!({"@type": "JobPosting"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({"@type": "JobPosting"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(JobPostingTitleValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            JobPostingTitleValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_job_title_non_job() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(JobPostingTitleValidator::new().analyze(&ctx).is_empty());
     }
@@ -9603,15 +10485,26 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_course_name_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Course".to_string()), data: serde_json::json!({"@type": "Course"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(CourseNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "COURSE-NAME001"));
+        assert!(CourseNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COURSE-NAME001"));
     }
 
     #[test]
     fn test_content_course_name_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Course".to_string()), data: serde_json::json!({"@type": "Course", "name": "Rust 101"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course", "name": "Rust 101"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(CourseNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9624,39 +10517,67 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_course_name_default() { let _ = CourseNameValidator::default(); }
+    fn test_content_course_name_default() {
+        let _ = CourseNameValidator::default();
+    }
 
     #[test]
-    fn test_content_course_name_name() { assert_eq!(CourseNameValidator::new().name(), "course-name"); }
+    fn test_content_course_name_name() {
+        assert_eq!(CourseNameValidator::new().name(), "course-name");
+    }
 
     #[test]
     fn test_content_course_name_empty() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Course".to_string()), data: serde_json::json!({"@type": "Course", "name": ""}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course", "name": ""}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(CourseNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "COURSE-NAME001"));
+        assert!(CourseNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COURSE-NAME001"));
     }
 
     #[test]
     fn test_content_course_name_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Course".to_string()), data: serde_json::json!({"@type": "Course"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in CourseNameValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in CourseNameValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_course_name_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Course".to_string()), data: serde_json::json!({"@type": "Course"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({"@type": "Course"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(CourseNameValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            CourseNameValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_course_name_non_course() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(CourseNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9665,15 +10586,26 @@ mod content_analyzer_v2_tests {
     #[test]
     fn test_content_recipe_name_missing() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Recipe".to_string()), data: serde_json::json!({"@type": "Recipe"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(RecipeNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "RECIPE-NAME001"));
+        assert!(RecipeNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RECIPE-NAME001"));
     }
 
     #[test]
     fn test_content_recipe_name_present() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Recipe".to_string()), data: serde_json::json!({"@type": "Recipe", "name": "Cake"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe", "name": "Cake"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(RecipeNameValidator::new().analyze(&ctx).is_empty());
     }
@@ -9686,39 +10618,67 @@ mod content_analyzer_v2_tests {
     }
 
     #[test]
-    fn test_content_recipe_name_default() { let _ = RecipeNameValidator::default(); }
+    fn test_content_recipe_name_default() {
+        let _ = RecipeNameValidator::default();
+    }
 
     #[test]
-    fn test_content_recipe_name_name() { assert_eq!(RecipeNameValidator::new().name(), "recipe-name"); }
+    fn test_content_recipe_name_name() {
+        assert_eq!(RecipeNameValidator::new().name(), "recipe-name");
+    }
 
     #[test]
     fn test_content_recipe_name_empty() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Recipe".to_string()), data: serde_json::json!({"@type": "Recipe", "name": ""}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe", "name": ""}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert!(RecipeNameValidator::new().analyze(&ctx).iter().any(|f| f.code == "RECIPE-NAME001"));
+        assert!(RecipeNameValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "RECIPE-NAME001"));
     }
 
     #[test]
     fn test_content_recipe_name_category() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Recipe".to_string()), data: serde_json::json!({"@type": "Recipe"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe"}),
+        }];
         let ctx = make_ctx(&page, None);
-        for f in RecipeNameValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Content); }
+        for f in RecipeNameValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Content);
+        }
     }
 
     #[test]
     fn test_content_recipe_name_severity() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Recipe".to_string()), data: serde_json::json!({"@type": "Recipe"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({"@type": "Recipe"}),
+        }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(RecipeNameValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            RecipeNameValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     #[test]
     fn test_content_recipe_name_non_recipe() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
         let ctx = make_ctx(&page, None);
         assert!(RecipeNameValidator::new().analyze(&ctx).is_empty());
     }

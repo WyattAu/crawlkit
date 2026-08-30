@@ -118,10 +118,7 @@ mod tests {
 
     #[test]
     fn test_classify_other_bot() {
-        assert_eq!(
-            classify_user_agent("SomeCustomCrawler/1.0"),
-            "Other Bot"
-        );
+        assert_eq!(classify_user_agent("SomeCustomCrawler/1.0"), "Other Bot");
     }
 
     #[test]

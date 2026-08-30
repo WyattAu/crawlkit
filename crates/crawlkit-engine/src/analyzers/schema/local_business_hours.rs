@@ -81,20 +81,17 @@ impl Analyzer for LocalBusinessHoursValidator {
 
             if let Some(hours) = data.get("openingHours") {
                 if let Some(s) = hours.as_str() {
-                    let valid_format = s
-                        .split(',')
-                        .all(|entry| {
-                            let entry = entry.trim();
-                            if entry.is_empty() {
-                                return true;
-                            }
-                            let days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
-                            let has_day = days.iter().any(|d| entry.contains(d));
-                            let has_dash_range = entry.contains('-')
-                                && entry.matches('-').count() <= 2;
-                            let has_time = entry.contains(':');
-                            has_day || has_dash_range || has_time
-                        });
+                    let valid_format = s.split(',').all(|entry| {
+                        let entry = entry.trim();
+                        if entry.is_empty() {
+                            return true;
+                        }
+                        let days = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+                        let has_day = days.iter().any(|d| entry.contains(d));
+                        let has_dash_range = entry.contains('-') && entry.matches('-').count() <= 2;
+                        let has_time = entry.contains(':');
+                        has_day || has_dash_range || has_time
+                    });
                     if !valid_format {
                         findings.push(Finding {
                             severity: Severity::Warning,
@@ -118,7 +115,6 @@ impl Analyzer for LocalBusinessHoursValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -180,146 +176,137 @@ mod tests {
     }
 
     #[test]
-fn test_lbh_missing_opening_hours() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "My Shop"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "LBH001"));
-}
-
-
-    #[test]
-fn test_lbh_with_opening_hours_no_findings() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "My Shop",
-            "openingHours": "Mo-Fr 09:00-17:00"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_lbh_missing_opening_hours() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": "My Shop"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LBH001"));
+    }
 
     #[test]
-fn test_lbh_invalid_format() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "My Shop",
-            "openingHours": "open all day!!!"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "LBH002"));
-}
-
-
-    #[test]
-fn test_lbh_store_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Store".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Store",
-            "name": "My Store"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "LBH001"));
-}
-
+    fn test_lbh_with_opening_hours_no_findings() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": "My Shop",
+                "openingHours": "Mo-Fr 09:00-17:00"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_lbh_restaurant_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Restaurant".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Restaurant",
-            "name": "My Restaurant"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "LBH001"));
-}
-
-
-    #[test]
-fn test_lbh_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_lbh_invalid_format() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": "My Shop",
+                "openingHours": "open all day!!!"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LBH002"));
+    }
 
     #[test]
-fn test_lbh_non_local_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": "Test"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_lbh_store_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Store".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Store",
+                "name": "My Store"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LBH001"));
+    }
 
     #[test]
-fn test_lbh_opening_hours_specification_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "My Shop",
-            "openingHoursSpecification": {
-                "@type": "OpeningHoursSpecification",
-                "dayOfWeek": "Monday",
-                "opens": "09:00",
-                "closes": "17:00"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_lbh_restaurant_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Restaurant",
+                "name": "My Restaurant"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LBH001"));
+    }
 
+    #[test]
+    fn test_lbh_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_lbh_non_local_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_lbh_opening_hours_specification_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": "My Shop",
+                "openingHoursSpecification": {
+                    "@type": "OpeningHoursSpecification",
+                    "dayOfWeek": "Monday",
+                    "opens": "09:00",
+                    "closes": "17:00"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = LocalBusinessHoursValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

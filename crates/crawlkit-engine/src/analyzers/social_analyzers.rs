@@ -1,4 +1,8 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::manual_range_contains,
+    clippy::redundant_closure
+)]
 use crate::types::{IssueCategory, Severity};
 
 use super::{AnalysisContext, Analyzer, Finding};
@@ -368,8 +372,7 @@ impl Analyzer for OpenGraphImageValidator {
                         category: IssueCategory::Social,
                         code: "OGIMG002".to_string(),
                         title: "OG image width is zero".to_string(),
-                        description: "og:image:width is set to 0, which is invalid."
-                            .to_string(),
+                        description: "og:image:width is set to 0, which is invalid.".to_string(),
                         url: url.clone(),
                         recommendation: "Set og:image:width to the actual image width in pixels."
                             .to_string(),
@@ -399,8 +402,7 @@ impl Analyzer for OpenGraphImageValidator {
                         category: IssueCategory::Social,
                         code: "OGIMG002".to_string(),
                         title: "OG image height is zero".to_string(),
-                        description: "og:image:height is set to 0, which is invalid."
-                            .to_string(),
+                        description: "og:image:height is set to 0, which is invalid.".to_string(),
                         url: url.clone(),
                         recommendation: "Set og:image:height to the actual image height in pixels."
                             .to_string(),
@@ -572,9 +574,10 @@ impl Analyzer for TwitterPlayerValidator {
                               to render the video content."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Add <meta name=\"twitter:player:stream\" content=\"URL_TO_VIDEO\"> \
+                recommendation:
+                    "Add <meta name=\"twitter:player:stream\" content=\"URL_TO_VIDEO\"> \
                                  with a direct URL to the video file (MP4 recommended)."
-                    .to_string(),
+                        .to_string(),
             });
         }
 
@@ -818,26 +821,20 @@ impl Analyzer for TwitterCardTypeAnalyzer {
                                   a rich preview without a valid card type."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add <meta name=\"twitter:card\" content=\"summary_large_image\">."
-                        .to_string(),
+                    recommendation:
+                        "Add <meta name=\"twitter:card\" content=\"summary_large_image\">."
+                            .to_string(),
                 });
             }
             Some(card_type) => {
                 // TW002: summary when summary_large_image might be better
                 if card_type == "summary" {
                     // Check if there's a large image that suggests summary_large_image
-                    let has_image = ctx.page.meta.twitter.image.is_some()
-                        || ctx.page.meta.og.image.is_some();
-                    let has_large_dimensions = ctx
-                        .page
-                        .og_image_width
-                        .map(|w| w > 300)
-                        .unwrap_or(false)
-                        || ctx
-                            .page
-                            .og_image_height
-                            .map(|h| h > 300)
-                            .unwrap_or(false);
+                    let has_image =
+                        ctx.page.meta.twitter.image.is_some() || ctx.page.meta.og.image.is_some();
+                    let has_large_dimensions =
+                        ctx.page.og_image_width.map(|w| w > 300).unwrap_or(false)
+                            || ctx.page.og_image_height.map(|h| h > 300).unwrap_or(false);
 
                     if has_image && has_large_dimensions {
                         findings.push(Finding {
@@ -1012,18 +1009,36 @@ impl Analyzer for TwitterSiteAnalyzer {
 // =========================================================================
 
 pub struct OpenGraphUrlValidator;
-impl Default for OpenGraphUrlValidator { fn default() -> Self { Self } }
-impl OpenGraphUrlValidator { pub fn new() -> Self { Self } }
+impl Default for OpenGraphUrlValidator {
+    fn default() -> Self {
+        Self
+    }
+}
+impl OpenGraphUrlValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for OpenGraphUrlValidator {
-    fn name(&self) -> &str { "og-url-validator" }
+    fn name(&self) -> &str {
+        "og-url-validator"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         // Check if og:url matches the page URL
         if let Some(og_url) = &ctx.page.meta.og.url {
             if og_url != url && !og_url.is_empty() {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Social, code: "OGURL001".to_string(), title: "og:url doesn't match page URL".to_string(), description: format!("og:url is \"{}\" but page URL is \"{}\".", og_url, url), url: url.clone(), recommendation: "Set og:url to the canonical page URL.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Social,
+                    code: "OGURL001".to_string(),
+                    title: "og:url doesn't match page URL".to_string(),
+                    description: format!("og:url is \"{}\" but page URL is \"{}\".", og_url, url),
+                    url: url.clone(),
+                    recommendation: "Set og:url to the canonical page URL.".to_string(),
+                });
             }
         }
         findings
@@ -1035,25 +1050,50 @@ impl Analyzer for OpenGraphUrlValidator {
 // =========================================================================
 
 pub struct OpenGraphSiteNameValidator;
-impl Default for OpenGraphSiteNameValidator { fn default() -> Self { Self } }
-impl OpenGraphSiteNameValidator { pub fn new() -> Self { Self } }
+impl Default for OpenGraphSiteNameValidator {
+    fn default() -> Self {
+        Self
+    }
+}
+impl OpenGraphSiteNameValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for OpenGraphSiteNameValidator {
-    fn name(&self) -> &str { "og-sitename-validator" }
+    fn name(&self) -> &str {
+        "og-sitename-validator"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(site_name) = &ctx.page.meta.og.site_name {
             if site_name.is_empty() {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Social, code: "OGSITE001".to_string(), title: "Empty og:site_name".to_string(), description: "og:site_name is present but empty.".to_string(), url: url.clone(), recommendation: "Set og:site_name to the site name.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Social,
+                    code: "OGSITE001".to_string(),
+                    title: "Empty og:site_name".to_string(),
+                    description: "og:site_name is present but empty.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Set og:site_name to the site name.".to_string(),
+                });
             }
         } else {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Social, code: "OGSITE002".to_string(), title: "Missing og:site_name".to_string(), description: "og:site_name tag is missing.".to_string(), url: url.clone(), recommendation: "Add og:site_name with the site name.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Social,
+                code: "OGSITE002".to_string(),
+                title: "Missing og:site_name".to_string(),
+                description: "og:site_name tag is missing.".to_string(),
+                url: url.clone(),
+                recommendation: "Add og:site_name with the site name.".to_string(),
+            });
         }
         findings
     }
 }
-
 
 #[cfg(test)]
 mod tests_social_preview {
@@ -1202,12 +1242,20 @@ mod tests_social_preview {
 
     #[test]
     fn test_is_valid_image_url_cases() {
-        assert!(SocialPreviewOptimizer::is_valid_image_url("https://example.com/img.png"));
-        assert!(SocialPreviewOptimizer::is_valid_image_url("http://example.com/img.jpg"));
-        assert!(SocialPreviewOptimizer::is_valid_image_url("data:image/png;base64,abc"));
+        assert!(SocialPreviewOptimizer::is_valid_image_url(
+            "https://example.com/img.png"
+        ));
+        assert!(SocialPreviewOptimizer::is_valid_image_url(
+            "http://example.com/img.jpg"
+        ));
+        assert!(SocialPreviewOptimizer::is_valid_image_url(
+            "data:image/png;base64,abc"
+        ));
         assert!(!SocialPreviewOptimizer::is_valid_image_url(""));
         assert!(!SocialPreviewOptimizer::is_valid_image_url("not-a-url"));
-        assert!(!SocialPreviewOptimizer::is_valid_image_url("ftp://example.com/img.png"));
+        assert!(!SocialPreviewOptimizer::is_valid_image_url(
+            "ftp://example.com/img.png"
+        ));
     }
 
     // ===== OpenGraphVideoAnalyzer tests =====
@@ -1222,7 +1270,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_missing_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGVID001"));
@@ -1231,7 +1282,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_missing_type() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGVID002"));
@@ -1240,9 +1294,17 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_valid() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta.og.insert(
+            "video:url".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta
+            .og
+            .insert("video:type".to_string(), "video/mp4".to_string());
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
@@ -1251,7 +1313,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_both_missing() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGVID001"));
@@ -1269,8 +1334,14 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_only_url_missing_type() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta.og.insert(
+            "video:url".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "OGVID001"));
@@ -1280,8 +1351,13 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_only_type_missing_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta
+            .og
+            .insert("video:type".to_string(), "video/mp4".to_string());
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGVID001"));
@@ -1291,8 +1367,14 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_url_only_no_findings() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta.og.insert(
+            "video:url".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "OGVID001"));
@@ -1301,8 +1383,13 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_type_only_no_findings() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/video.mp4".to_string());
-        page.meta.og.insert("video:type".to_string(), "video/mp4".to_string());
+        page.meta.og.insert(
+            "video".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
+        page.meta
+            .og
+            .insert("video:type".to_string(), "video/mp4".to_string());
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "OGVID002"));
@@ -1318,8 +1405,13 @@ mod tests_social_preview {
     #[test]
     fn test_og_video_embed_url_not_checked() {
         let mut page = make_page("https://example.com");
-        page.meta.og.insert("video".to_string(), "https://example.com/embed".to_string());
-        page.meta.og.insert("video:url".to_string(), "https://example.com/video.mp4".to_string());
+        page.meta
+            .og
+            .insert("video".to_string(), "https://example.com/embed".to_string());
+        page.meta.og.insert(
+            "video:url".to_string(),
+            "https://example.com/video.mp4".to_string(),
+        );
         // No video:type, but that's still a finding
         let ctx = make_ctx(&page);
         let findings = OpenGraphVideoAnalyzer::new().analyze(&ctx);
@@ -1463,7 +1555,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_missing_url() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert(
+            "audio".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGAUDIO001"));
@@ -1472,8 +1567,14 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_missing_type() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
-        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert(
+            "audio".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
+        page.meta.og.extra.insert(
+            "audio:url".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "OGAUDIO002"));
@@ -1482,9 +1583,18 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_valid() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
-        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
-        page.meta.og.extra.insert("audio:type".to_string(), "audio/mpeg".to_string());
+        page.meta.og.extra.insert(
+            "audio".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
+        page.meta.og.extra.insert(
+            "audio:url".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
+        page.meta
+            .og
+            .extra
+            .insert("audio:type".to_string(), "audio/mpeg".to_string());
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
@@ -1501,7 +1611,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_empty_audio() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "".to_string());
+        page.meta
+            .og
+            .extra
+            .insert("audio".to_string(), "".to_string());
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
@@ -1510,7 +1623,10 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_both_missing() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert(
+            "audio".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert_eq!(findings.len(), 2);
@@ -1521,8 +1637,14 @@ mod tests_social_preview {
     #[test]
     fn test_og_audio_url_only() {
         let mut page = make_page("https://example.com");
-        page.meta.og.extra.insert("audio".to_string(), "https://example.com/audio.mp3".to_string());
-        page.meta.og.extra.insert("audio:url".to_string(), "https://example.com/audio.mp3".to_string());
+        page.meta.og.extra.insert(
+            "audio".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
+        page.meta.og.extra.insert(
+            "audio:url".to_string(),
+            "https://example.com/audio.mp3".to_string(),
+        );
         let ctx = make_ctx(&page);
         let findings = OpenGraphAudioAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "OGAUDIO001"));

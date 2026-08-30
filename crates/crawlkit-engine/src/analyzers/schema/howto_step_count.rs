@@ -43,8 +43,7 @@ impl Analyzer for HowToStepCountValidator {
                                       \"step\" property."
                             .to_string(),
                         url: url.clone(),
-                        recommendation: "Add a \"step\" array with HowToStep objects."
-                            .to_string(),
+                        recommendation: "Add a \"step\" array with HowToStep objects.".to_string(),
                     });
                     continue;
                 }
@@ -158,7 +157,10 @@ mod tests {
             r#type: Some("HowTo".to_string()),
             data: serde_json::json!({"@type": "HowTo", "name": "How to cook"}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "HOWTOSTEP001"));
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "HOWTOSTEP001"));
     }
 
     #[test]
@@ -171,7 +173,10 @@ mod tests {
                 {"@type": "HowToStep", "text": "Step 1"}
             ]}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "HOWTOSTEP001"));
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "HOWTOSTEP001"));
     }
 
     #[test]
@@ -185,7 +190,9 @@ mod tests {
                 {"@type": "HowToStep", "text": "Step 2"}
             ]}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -196,7 +203,10 @@ mod tests {
             r#type: Some("HowTo".to_string()),
             data: serde_json::json!({"@type": "HowTo", "name": "How to cook", "step": {"@type": "HowToStep", "text": "Step 1"}}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "HOWTOSTEP001"));
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "HOWTOSTEP001"));
     }
 
     #[test]
@@ -207,13 +217,17 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article"}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -229,7 +243,10 @@ mod tests {
             r#type: Some("HowTo".to_string()),
             data: serde_json::json!({"@type": "HowTo", "name": "How to cook", "step": []}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "HOWTOSTEP001"));
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "HOWTOSTEP001"));
     }
 
     #[test]
@@ -240,7 +257,10 @@ mod tests {
             r#type: Some("HowTo".to_string()),
             data: serde_json::json!({"@type": "HowTo", "name": "How to cook", "step": "just a string"}),
         }];
-        assert!(HowToStepCountValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "HOWTOSTEP001"));
+        assert!(HowToStepCountValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "HOWTOSTEP001"));
     }
 
     #[test]

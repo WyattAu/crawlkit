@@ -42,9 +42,7 @@ impl ShippingSchemaValidator {
             return true;
         }
         if let Some(offers) = data.get("offers").and_then(|v| v.as_array()) {
-            return offers
-                .iter()
-                .any(|o| o.get("hasShippingDetails").is_some());
+            return offers.iter().any(|o| o.get("hasShippingDetails").is_some());
         }
         if let Some(offers) = data.get("offers") {
             if let Some(obj) = offers.as_object() {
@@ -96,7 +94,6 @@ impl Analyzer for ShippingSchemaValidator {
 // ---------------------------------------------------------------------------
 // Offer Availability Analyzer
 // ---------------------------------------------------------------------------
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -158,115 +155,119 @@ mod tests {
     }
 
     #[test]
-fn test_shipping_no_product_schema() {
-    let page = make_page("https://example.com");
-    assert!(ShippingSchemaValidator::new().analyze(&make_ctx(&page, Some(200))).is_empty());
-}
-
-
-    #[test]
-fn test_shipping_product_with_offers_no_shipping() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "priceCurrency": "USD"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ShippingSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SHIP001"));
-}
-
+    fn test_shipping_no_product_schema() {
+        let page = make_page("https://example.com");
+        assert!(ShippingSchemaValidator::new()
+            .analyze(&make_ctx(&page, Some(200)))
+            .is_empty());
+    }
 
     #[test]
-fn test_shipping_product_with_shipping_details() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "hasShippingDetails": {"@type": "ShippingDetails"}}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!ShippingSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SHIP001"));
-}
-
-
-    #[test]
-fn test_shipping_product_no_offers() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_shipping_product_with_offers_no_shipping() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "priceCurrency": "USD"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ShippingSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SHIP001"));
+    }
 
     #[test]
-fn test_shipping_product_empty_offers() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": []}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_shipping_offers_array_with_shipping() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": [{"@type": "Offer", "price": "9.99", "hasShippingDetails": {"@type": "ShippingDetails"}}]}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!ShippingSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SHIP001"));
-}
-
+    fn test_shipping_product_with_shipping_details() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "hasShippingDetails": {"@type": "ShippingDetails"}}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!ShippingSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SHIP001"));
+    }
 
     #[test]
-fn test_shipping_top_level_shipping() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99"}, "hasShippingDetails": {"@type": "ShippingDetails"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!ShippingSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SHIP001"));
-}
-
-
-    #[test]
-fn test_shipping_non_product_schema() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({"@type": "Article", "headline": "News"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_shipping_product_no_offers() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_shipping_product_url_reference() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "priceCurrency": "USD"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = ShippingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SHIP001"));
-}
+    fn test_shipping_product_empty_offers() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": []}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_shipping_offers_array_with_shipping() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": [{"@type": "Offer", "price": "9.99", "hasShippingDetails": {"@type": "ShippingDetails"}}]}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!ShippingSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SHIP001"));
+    }
 
+    #[test]
+    fn test_shipping_top_level_shipping() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99"}, "hasShippingDetails": {"@type": "ShippingDetails"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!ShippingSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SHIP001"));
+    }
+
+    #[test]
+    fn test_shipping_non_product_schema() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "News"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ShippingSchemaValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_shipping_product_url_reference() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "9.99", "priceCurrency": "USD"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ShippingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SHIP001"));
+    }
 }

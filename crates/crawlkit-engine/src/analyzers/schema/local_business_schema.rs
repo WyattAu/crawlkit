@@ -16,20 +16,59 @@ impl LocalBusinessSchemaValidator {
     }
 
     const LOCAL_BUSINESS_TYPES: &[&str] = &[
-        "LocalBusiness", "Store", "Restaurant", "MedicalBusiness",
-        "FinancialService", "TravelAgency", "AutoBodyShop", "AutoDealer",
-        "AutoPartsStore", "AutoRental", "AutoRepair", "Bakery", "BarOrPub",
-        "BeautySalon", "Brewery", "CafeOrCoffeeShop", "Cemetery",
-        "ChildCare", "Dentist", "EmploymentAgency", "EntertainmentBusiness",
-        "FinancialService", "FoodEstablishment", "GardenStore",
-        "GovernmentOffice", "HealthAndBeautyBusiness", "HomeAndConstructionBusiness",
-        "InsuranceAgency", "InternetCafe", "LegalService", "Library",
-        "LodgingBusiness", "ManisBusiness", "MovieRentalStore", "MovingCompany",
-        "MusicStore", "OfficeEquipmentStore", "OutletStore", "PawnShop",
-        "PetStore", "Physician", "Plumber", "RealEstateAgent",
-        "RecyclingCenter", "SelfStorage", "ShoeStore", "ShoppingCenter",
-        "SportingGoodsStore", "TattooParlor", "TelevisionStation",
-        "ToyStore", "TravelAgency", "WholesaleStore",
+        "LocalBusiness",
+        "Store",
+        "Restaurant",
+        "MedicalBusiness",
+        "FinancialService",
+        "TravelAgency",
+        "AutoBodyShop",
+        "AutoDealer",
+        "AutoPartsStore",
+        "AutoRental",
+        "AutoRepair",
+        "Bakery",
+        "BarOrPub",
+        "BeautySalon",
+        "Brewery",
+        "CafeOrCoffeeShop",
+        "Cemetery",
+        "ChildCare",
+        "Dentist",
+        "EmploymentAgency",
+        "EntertainmentBusiness",
+        "FinancialService",
+        "FoodEstablishment",
+        "GardenStore",
+        "GovernmentOffice",
+        "HealthAndBeautyBusiness",
+        "HomeAndConstructionBusiness",
+        "InsuranceAgency",
+        "InternetCafe",
+        "LegalService",
+        "Library",
+        "LodgingBusiness",
+        "ManisBusiness",
+        "MovieRentalStore",
+        "MovingCompany",
+        "MusicStore",
+        "OfficeEquipmentStore",
+        "OutletStore",
+        "PawnShop",
+        "PetStore",
+        "Physician",
+        "Plumber",
+        "RealEstateAgent",
+        "RecyclingCenter",
+        "SelfStorage",
+        "ShoeStore",
+        "ShoppingCenter",
+        "SportingGoodsStore",
+        "TattooParlor",
+        "TelevisionStation",
+        "ToyStore",
+        "TravelAgency",
+        "WholesaleStore",
     ];
 }
 
@@ -60,8 +99,7 @@ impl Analyzer for LocalBusinessSchemaValidator {
                         schema_type
                     ),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the business name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the business name.".to_string(),
                 });
             }
 
@@ -77,8 +115,7 @@ impl Analyzer for LocalBusinessSchemaValidator {
                         schema_type
                     ),
                     url: url.clone(),
-                    recommendation: "Add \"address\" with a PostalAddress object."
-                        .to_string(),
+                    recommendation: "Add \"address\" with a PostalAddress object.".to_string(),
                 });
             }
         }
@@ -86,7 +123,6 @@ impl Analyzer for LocalBusinessSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -148,57 +184,58 @@ mod tests {
     }
 
     #[test]
-fn test_local_business_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "address": {"@type": "PostalAddress"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "LBIZ001"));
-}
-
-
-    #[test]
-fn test_local_business_missing_address() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "LBIZ002"));
-}
-
+    fn test_local_business_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "address": {"@type": "PostalAddress"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LBIZ001"));
+    }
 
     #[test]
-fn test_local_business_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "address": {"@type": "PostalAddress", "streetAddress": "123 Main St"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_local_business_missing_address() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LBIZ002"));
+    }
 
     #[test]
-fn test_local_business_subtypes_checked() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Restaurant".to_string()),
-        data: serde_json::json!({"@type": "Restaurant"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "LBIZ001"));
-}
+    fn test_local_business_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "address": {"@type": "PostalAddress", "streetAddress": "123 Main St"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
-
+    #[test]
+    fn test_local_business_subtypes_checked() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({"@type": "Restaurant"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "LBIZ001"));
+    }
 }

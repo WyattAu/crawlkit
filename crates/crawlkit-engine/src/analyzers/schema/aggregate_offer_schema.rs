@@ -46,7 +46,12 @@ impl Analyzer for AggregateOfferSchemaValidator {
                 });
             }
 
-            if data.get("priceCurrency").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("priceCurrency")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Error,
                     category: IssueCategory::Schema,
@@ -65,7 +70,6 @@ impl Analyzer for AggregateOfferSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -127,192 +131,181 @@ mod tests {
     }
 
     #[test]
-fn test_aggregate_offer_missing_low_price() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "priceCurrency": "USD"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
-}
-
-
-    #[test]
-fn test_aggregate_offer_missing_price_currency() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "lowPrice": 9.99
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
-}
-
-
-    #[test]
-fn test_aggregate_offer_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "lowPrice": 9.99,
-            "priceCurrency": "USD"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_aggregate_offer_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_aggregate_offer_non_aggregate_offer_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Offer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Offer",
-            "price": 10
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_aggregate_offer_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
-}
-
-
-    #[test]
-fn test_aggregate_offer_low_price_zero() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "lowPrice": 0,
-            "priceCurrency": "USD"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_aggregate_offer_with_high_price() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "lowPrice": 9.99,
-            "highPrice": 99.99,
-            "priceCurrency": "EUR"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_aggregate_offer_multiple_aggregate_offers() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_aggregate_offer_missing_low_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("AggregateOffer".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "AggregateOffer",
-                "lowPrice": 5,
                 "priceCurrency": "USD"
             }),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_missing_price_currency() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99,
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_non_aggregate_offer_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Offer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Offer",
+                "price": 10
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_aggregate_offer_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("AggregateOffer".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "AggregateOffer"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
-    assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
 
     #[test]
-fn test_aggregate_offer_string_low_price() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateOffer".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "AggregateOffer",
-            "lowPrice": "9.99",
-            "priceCurrency": "USD"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_aggregate_offer_low_price_zero() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 0,
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_aggregate_offer_with_high_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": 9.99,
+                "highPrice": 99.99,
+                "priceCurrency": "EUR"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_aggregate_offer_multiple_aggregate_offers() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("AggregateOffer".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "AggregateOffer",
+                    "lowPrice": 5,
+                    "priceCurrency": "USD"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("AggregateOffer".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "AggregateOffer"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER001"));
+        assert!(findings.iter().any(|f| f.code == "AGGOFFER002"));
+    }
+
+    #[test]
+    fn test_aggregate_offer_string_low_price() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateOffer".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "AggregateOffer",
+                "lowPrice": "9.99",
+                "priceCurrency": "USD"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = AggregateOfferSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

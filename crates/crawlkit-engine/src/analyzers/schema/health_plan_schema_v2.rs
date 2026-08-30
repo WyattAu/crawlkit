@@ -41,8 +41,7 @@ impl Analyzer for HealthPlanSchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"provider\" with the insurance provider."
-                        .to_string(),
+                    recommendation: "Add \"provider\" with the insurance provider.".to_string(),
                 });
             }
         }

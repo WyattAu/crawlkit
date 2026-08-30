@@ -1,4 +1,18 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::manual_range_contains,
+    clippy::redundant_closure,
+    clippy::collapsible_if,
+    clippy::unnecessary_map_or,
+    clippy::default_constructed_unit_structs,
+    clippy::needless_return,
+    clippy::needless_range_loop,
+    clippy::useless_format,
+    clippy::if_same_then_else,
+    clippy::derivable_impls,
+    clippy::manual_pattern_char_comparison,
+    clippy::manual_contains
+)]
 use std::collections::HashMap;
 
 use regex::Regex;
@@ -835,8 +849,8 @@ impl FontSizeAnalyzer {
     }
 
     fn extract_style_block_font_sizes(html: &str) -> Vec<f64> {
-        let re = Regex::new(r#"font-size\s*:\s*([^;}]+)"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let re =
+            Regex::new(r#"font-size\s*:\s*([^;}]+)"#).unwrap_or_else(|_| Regex::new("x^").unwrap());
         let mut sizes = Vec::new();
         for cap in re.captures_iter(html) {
             if let Some(px) = Self::parse_font_size_px(&cap[1]) {
@@ -874,7 +888,10 @@ impl FontSizeAnalyzer {
         let body = ctx.body.unwrap_or("");
         let mut all_sizes: Vec<f64> = Self::extract_inline_font_sizes(body);
         all_sizes.extend(Self::extract_style_block_font_sizes(body));
-        let small: Vec<f64> = all_sizes.into_iter().filter(|&s| s > 0.0 && s < 12.0).collect();
+        let small: Vec<f64> = all_sizes
+            .into_iter()
+            .filter(|&s| s > 0.0 && s < 12.0)
+            .collect();
         if !small.is_empty() {
             let examples: Vec<String> = small.iter().take(5).map(|s| format!("{s:.0}px")).collect();
             f.push(Finding {
@@ -1005,10 +1022,8 @@ impl ColorContrastAnalyzer {
     }
 
     fn parse_rgb_function(val: &str) -> Option<(u8, u8, u8)> {
-        let re =
-            Regex::new(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)").unwrap_or_else(|_| {
-                Regex::new("x^").unwrap()
-            });
+        let re = Regex::new(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
+            .unwrap_or_else(|_| Regex::new("x^").unwrap());
         let caps = re.captures(val)?;
         let r: u8 = caps[1].parse().ok()?;
         let g: u8 = caps[2].parse().ok()?;
@@ -1039,10 +1054,7 @@ impl ColorContrastAnalyzer {
         0.2126 * fn_channel(r) + 0.7152 * fn_channel(g) + 0.0722 * fn_channel(b)
     }
 
-    pub(crate) fn contrast_ratio(
-        fg: (u8, u8, u8),
-        bg: (u8, u8, u8),
-    ) -> f64 {
+    pub(crate) fn contrast_ratio(fg: (u8, u8, u8), bg: (u8, u8, u8)) -> f64 {
         let l1 = Self::relative_luminance(fg.0, fg.1, fg.2);
         let l2 = Self::relative_luminance(bg.0, bg.1, bg.2);
         let lighter = l1.max(l2);
@@ -1519,9 +1531,7 @@ impl Analyzer for PermissionPolicyAnalyzer {
                             severity: Severity::Warning,
                             category: IssueCategory::Security,
                             code: "PERM002".to_string(),
-                            title: format!(
-                                "Permissions-Policy: {feature} not restricted"
-                            ),
+                            title: format!("Permissions-Policy: {feature} not restricted"),
                             description: format!(
                                 "The {feature} feature in Permissions-Policy is not explicitly \
                                  restricted. Allowing {feature} access increases the attack \
@@ -1659,7 +1669,12 @@ impl Analyzer for ContentSecurityPolicyAnalyzer {
         let lower = csp.to_lowercase();
         if let Some(script_src_pos) = lower.find("script-src") {
             let after = &csp[script_src_pos..];
-            if after.split(';').next().unwrap_or("").contains("'unsafe-inline'") {
+            if after
+                .split(';')
+                .next()
+                .unwrap_or("")
+                .contains("'unsafe-inline'")
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Security,
@@ -2139,8 +2154,7 @@ impl Analyzer for XContentTypeOptionsAnalyzer {
                                   declared content type."
                         .to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-Content-Type-Options: nosniff."
-                        .to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                 });
             }
             Some(value) => {
@@ -2155,8 +2169,7 @@ impl Analyzer for XContentTypeOptionsAnalyzer {
                              Other values are not recognized by browsers."
                         ),
                         url: url.to_string(),
-                        recommendation: "Set X-Content-Type-Options: nosniff."
-                            .to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                     });
                 }
             }
@@ -2354,7 +2367,11 @@ impl Analyzer for LandmarkRegionsAnalyzer {
             });
         }
 
-        let has_banner = ctx.page.landmarks.iter().any(|l| l == "banner" || l == "header");
+        let has_banner = ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l == "banner" || l == "header");
         if !has_banner {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -2485,8 +2502,14 @@ impl Analyzer for FormLabelAnalyzer {
         for form in &ctx.page.forms {
             for input in &form.inputs {
                 if !input.has_label {
-                    let aria_has_name = input.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
-                        || input.aria_labelledby.as_ref().is_some_and(|l| !l.trim().is_empty());
+                    let aria_has_name = input
+                        .aria_label
+                        .as_ref()
+                        .is_some_and(|l| !l.trim().is_empty())
+                        || input
+                            .aria_labelledby
+                            .as_ref()
+                            .is_some_and(|l| !l.trim().is_empty());
                     if !aria_has_name {
                         let desc = match (&input.name, &input.input_type) {
                             (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
@@ -2510,10 +2533,7 @@ impl Analyzer for FormLabelAnalyzer {
                     }
                 } else if let Some(placeholder) = &input.placeholder {
                     if !placeholder.trim().is_empty() && input.aria_label.is_none() {
-                        let label_text = input
-                            .name
-                            .as_deref()
-                            .unwrap_or("input");
+                        let label_text = input.name.as_deref().unwrap_or("input");
                         if label_text.trim().is_empty() {
                             findings.push(Finding {
                                 severity: Severity::Info,
@@ -2570,7 +2590,10 @@ impl Analyzer for TableAccessibilityAnalyzer {
             return findings;
         }
 
-        let without_headers = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        let without_headers = ctx
+            .page
+            .tables_total
+            .saturating_sub(ctx.page.tables_with_headers);
         if without_headers > 0 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -2588,7 +2611,10 @@ impl Analyzer for TableAccessibilityAnalyzer {
             });
         }
 
-        let without_captions = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_captions);
+        let without_captions = ctx
+            .page
+            .tables_total
+            .saturating_sub(ctx.page.tables_with_captions);
         if without_captions > 0 {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -2606,7 +2632,10 @@ impl Analyzer for TableAccessibilityAnalyzer {
             });
         }
 
-        let tables_needing_scope = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        let tables_needing_scope = ctx
+            .page
+            .tables_total
+            .saturating_sub(ctx.page.tables_with_headers);
         if tables_needing_scope > 10 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -2670,7 +2699,10 @@ impl Analyzer for LinkAccessibilityAnalyzer {
         for link in &ctx.page.links {
             let text_lower = link.text.trim().to_lowercase();
             let has_accessible_name = !text_lower.is_empty()
-                || link.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
+                || link
+                    .aria_label
+                    .as_ref()
+                    .is_some_and(|l| !l.trim().is_empty())
                 || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
 
             if !has_accessible_name {
@@ -2863,15 +2895,20 @@ impl Analyzer for AriaRolesAnalyzer {
                     ctx.page.aria_role_count
                 ),
                 url: url.to_string(),
-                recommendation: "Add aria-label or aria-labelledby to all elements with custom ARIA roles."
-                    .to_string(),
+                recommendation:
+                    "Add aria-label or aria-labelledby to all elements with custom ARIA roles."
+                        .to_string(),
             });
         }
 
-        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count > 0
+        if ctx.page.aria_role_count > 0
+            && ctx.page.aria_label_count > 0
             && ctx.page.aria_role_count > ctx.page.aria_label_count
         {
-            let unlabeled = ctx.page.aria_role_count.saturating_sub(ctx.page.aria_label_count);
+            let unlabeled = ctx
+                .page
+                .aria_role_count
+                .saturating_sub(ctx.page.aria_label_count);
             if unlabeled > 0 {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -3032,16 +3069,16 @@ impl Analyzer for LanguageAttributeAnalyzer {
                 });
             }
 
-            let has_hreflang = ctx
-                .page
-                .meta
-                .hreflang
-                .iter()
-                .any(|h| h.lang == *lang);
+            let has_hreflang = ctx.page.meta.hreflang.iter().any(|h| h.lang == *lang);
             let has_content = ctx.page.word_count > 0;
             if has_content && !has_hreflang && !ctx.page.meta.hreflang.is_empty() {
-                let hreflang_langs: Vec<&str> =
-                    ctx.page.meta.hreflang.iter().map(|h| h.lang.as_str()).collect();
+                let hreflang_langs: Vec<&str> = ctx
+                    .page
+                    .meta
+                    .hreflang
+                    .iter()
+                    .map(|h| h.lang.as_str())
+                    .collect();
                 if !hreflang_langs.contains(&lang.as_str()) {
                     findings.push(Finding {
                         severity: Severity::Warning,
@@ -3278,8 +3315,7 @@ impl Analyzer for ContentTypeSniffingAnalyzer {
                                   the declared content type."
                         .to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-Content-Type-Options: nosniff."
-                        .to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                 });
             }
             Some(value) => {
@@ -3294,8 +3330,7 @@ impl Analyzer for ContentTypeSniffingAnalyzer {
                              Only the nosniff value is recognized by browsers."
                         ),
                         url: url.to_string(),
-                        recommendation: "Set X-Content-Type-Options: nosniff."
-                            .to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                     });
                 }
             }
@@ -3358,7 +3393,8 @@ impl Analyzer for PermissionsPolicyAnalyzerNew {
             }
             Some(policy) => {
                 let lower = policy.to_lowercase();
-                if lower.contains("camera") && !lower.contains("camera=()")
+                if lower.contains("camera")
+                    && !lower.contains("camera=()")
                     && !lower.contains("camera=(self)")
                 {
                     findings.push(Finding {
@@ -3524,9 +3560,10 @@ impl Analyzer for CrossOriginOpenerPolicyAnalyzer {
                              The same-origin value provides the strictest isolation."
                         ),
                         url: url.to_string(),
-                        recommendation: "Set Cross-Origin-Opener-Policy: same-origin for strictest \
+                        recommendation:
+                            "Set Cross-Origin-Opener-Policy: same-origin for strictest \
                                          cross-origin isolation."
-                            .into(),
+                                .into(),
                     });
                 }
             }
@@ -3541,18 +3578,44 @@ impl Analyzer for CrossOriginOpenerPolicyAnalyzer {
 // =========================================================================
 
 pub struct FeaturePolicyAnalyzer;
-impl Default for FeaturePolicyAnalyzer { fn default() -> Self { Self } }
-impl FeaturePolicyAnalyzer { pub fn new() -> Self { Self } }
+impl Default for FeaturePolicyAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl FeaturePolicyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for FeaturePolicyAnalyzer {
-    fn name(&self) -> &str { "feature-policy" }
+    fn name(&self) -> &str {
+        "feature-policy"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has_feature_policy = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("feature-policy"));
-        let has_permissions_policy = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("permissions-policy"));
+        let has_feature_policy = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("feature-policy"));
+        let has_permissions_policy = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("permissions-policy"));
         if !has_feature_policy && !has_permissions_policy {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "FP001".to_string(), title: "No Feature-Policy or Permissions-Policy header".to_string(), description: "Neither Feature-Policy nor Permissions-Policy header is set.".to_string(), url: url.clone(), recommendation: "Add a Permissions-Policy header to control browser features.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "FP001".to_string(),
+                title: "No Feature-Policy or Permissions-Policy header".to_string(),
+                description: "Neither Feature-Policy nor Permissions-Policy header is set."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add a Permissions-Policy header to control browser features."
+                    .to_string(),
+            });
         }
         findings
     }
@@ -3563,15 +3626,28 @@ impl Analyzer for FeaturePolicyAnalyzer {
 // =========================================================================
 
 pub struct ExpectCTAnalyzer;
-impl Default for ExpectCTAnalyzer { fn default() -> Self { Self } }
-impl ExpectCTAnalyzer { pub fn new() -> Self { Self } }
+impl Default for ExpectCTAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl ExpectCTAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for ExpectCTAnalyzer {
-    fn name(&self) -> &str { "expect-ct" }
+    fn name(&self) -> &str {
+        "expect-ct"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has_expect_ct = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("expect-ct"));
+        let has_expect_ct = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("expect-ct"));
         if !has_expect_ct && ctx.status_code == Some(200) {
             findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "ECT001".to_string(), title: "No Expect-CT header".to_string(), description: "Expect-CT header is not set. Consider adding for Certificate Transparency enforcement.".to_string(), url: url.clone(), recommendation: "Add Expect-CT header with enforce and max-age directives.".to_string() });
         }
@@ -3584,17 +3660,39 @@ impl Analyzer for ExpectCTAnalyzer {
 // =========================================================================
 
 pub struct CertificateTransparencyAnalyzer;
-impl Default for CertificateTransparencyAnalyzer { fn default() -> Self { Self } }
-impl CertificateTransparencyAnalyzer { pub fn new() -> Self { Self } }
+impl Default for CertificateTransparencyAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl CertificateTransparencyAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for CertificateTransparencyAnalyzer {
-    fn name(&self) -> &str { "certificate-transparency" }
+    fn name(&self) -> &str {
+        "certificate-transparency"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has_sct = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("expect-ct") && v.contains("enforce"));
+        let has_sct = ctx
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("expect-ct") && v.contains("enforce"));
         if !has_sct && ctx.status_code == Some(200) {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CT001".to_string(), title: "No Certificate Transparency enforcement".to_string(), description: "Expect-CT header with enforce directive is not set.".to_string(), url: url.clone(), recommendation: "Add Expect-CT: enforce, max-age=31536000 for CT compliance.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "CT001".to_string(),
+                title: "No Certificate Transparency enforcement".to_string(),
+                description: "Expect-CT header with enforce directive is not set.".to_string(),
+                url: url.clone(),
+                recommendation: "Add Expect-CT: enforce, max-age=31536000 for CT compliance."
+                    .to_string(),
+            });
         }
         findings
     }
@@ -3607,40 +3705,88 @@ impl Analyzer for CertificateTransparencyAnalyzer {
 pub struct CspDirectiveAnalyzer;
 
 impl Default for CspDirectiveAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CspDirectiveAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CspDirectiveAnalyzer {
-    fn name(&self) -> &str { "csp-directive-analyzer" }
+    fn name(&self) -> &str {
+        "csp-directive-analyzer"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str());
+        let csp = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
+            .map(|(_, v)| v.as_str());
         let csp = match csp {
             Some(v) if !v.is_empty() => v,
             _ => return findings,
         };
 
-        let directives: Vec<&str> = csp.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
-        let directive_names: Vec<&str> = directives.iter().map(|d| d.split_whitespace().next().unwrap_or("")).collect();
+        let directives: Vec<&str> = csp
+            .split(';')
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
+            .collect();
+        let directive_names: Vec<&str> = directives
+            .iter()
+            .map(|d| d.split_whitespace().next().unwrap_or(""))
+            .collect();
 
         if !directive_names.contains(&"default-src") {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPDIR001".to_string(), title: "CSP missing default-src".to_string(), description: "Content-Security-Policy lacks a default-src directive as fallback.".to_string(), url: url.clone(), recommendation: "Add default-src 'self' as a baseline CSP directive.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "CSPDIR001".to_string(),
+                title: "CSP missing default-src".to_string(),
+                description: "Content-Security-Policy lacks a default-src directive as fallback."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Add default-src 'self' as a baseline CSP directive.".to_string(),
+            });
         }
 
         for &dir in &["script-src", "style-src", "img-src"] {
             if directive_names.contains(&dir) {
                 let directive = directives.iter().find(|d| d.starts_with(dir)).unwrap();
                 if directive.contains("'unsafe-inline'") {
-                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPDIR002".to_string(), title: format!("CSP {dir} allows unsafe-inline"), description: format!("{dir} includes 'unsafe-inline', weakening XSS protection."), url: url.clone(), recommendation: format!("Remove 'unsafe-inline' from {dir} and use nonces or hashes.") });
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CSPDIR002".to_string(),
+                        title: format!("CSP {dir} allows unsafe-inline"),
+                        description: format!(
+                            "{dir} includes 'unsafe-inline', weakening XSS protection."
+                        ),
+                        url: url.clone(),
+                        recommendation: format!(
+                            "Remove 'unsafe-inline' from {dir} and use nonces or hashes."
+                        ),
+                    });
                 }
                 if directive.contains("'unsafe-eval'") {
-                    findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CSPDIR003".to_string(), title: format!("CSP {dir} allows unsafe-eval"), description: format!("{dir} includes 'unsafe-eval', allowing arbitrary code execution."), url: url.clone(), recommendation: format!("Remove 'unsafe-eval' from {dir}.") });
+                    findings.push(Finding {
+                        severity: Severity::Critical,
+                        category: IssueCategory::Security,
+                        code: "CSPDIR003".to_string(),
+                        title: format!("CSP {dir} allows unsafe-eval"),
+                        description: format!(
+                            "{dir} includes 'unsafe-eval', allowing arbitrary code execution."
+                        ),
+                        url: url.clone(),
+                        recommendation: format!("Remove 'unsafe-eval' from {dir}."),
+                    });
                 }
             }
         }
@@ -3656,28 +3802,58 @@ impl Analyzer for CspDirectiveAnalyzer {
 pub struct CorsPolicyAnalyzer;
 
 impl Default for CorsPolicyAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CorsPolicyAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CorsPolicyAnalyzer {
-    fn name(&self) -> &str { "cors-policy-analyzer" }
+    fn name(&self) -> &str {
+        "cors-policy-analyzer"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let acao = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin")).map(|(_, v)| v.as_str());
-        let acac = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials")).map(|(_, v)| v.as_str());
+        let acao = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin"))
+            .map(|(_, v)| v.as_str());
+        let acac = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials"))
+            .map(|(_, v)| v.as_str());
 
         if let Some(origin) = acao {
-            if origin == "*" && acac.map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+            if origin == "*"
+                && acac
+                    .map(|v| v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false)
+            {
                 findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CORS001".to_string(), title: "CORS wildcard with credentials".to_string(), description: "Access-Control-Allow-Origin is '*' with Allow-Credentials: true, which browsers reject but indicates misconfiguration.".to_string(), url: url.clone(), recommendation: "Use a specific origin instead of '*' when credentials are allowed.".to_string() });
             }
             if origin == "*" {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CORS002".to_string(), title: "CORS allows all origins".to_string(), description: "Access-Control-Allow-Origin is '*', allowing any website to make requests.".to_string(), url: url.clone(), recommendation: "Restrict to specific trusted origins if the resource is sensitive.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "CORS002".to_string(),
+                    title: "CORS allows all origins".to_string(),
+                    description:
+                        "Access-Control-Allow-Origin is '*', allowing any website to make requests."
+                            .to_string(),
+                    url: url.clone(),
+                    recommendation:
+                        "Restrict to specific trusted origins if the resource is sensitive."
+                            .to_string(),
+                });
             }
         }
 
@@ -3692,15 +3868,21 @@ impl Analyzer for CorsPolicyAnalyzer {
 pub struct CookieSecurityFlagAnalyzer;
 
 impl Default for CookieSecurityFlagAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CookieSecurityFlagAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CookieSecurityFlagAnalyzer {
-    fn name(&self) -> &str { "cookie-security-flag-analyzer" }
+    fn name(&self) -> &str {
+        "cookie-security-flag-analyzer"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3719,7 +3901,15 @@ impl Analyzer for CookieSecurityFlagAnalyzer {
                 findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC002".to_string(), title: format!("Cookie '{cookie_name}' missing HttpOnly flag"), description: "A Set-Cookie header lacks the HttpOnly flag, making it accessible to JavaScript.".to_string(), url: url.clone(), recommendation: "Add the HttpOnly flag to prevent XSS cookie theft.".to_string() });
             }
             if !lower.contains("samesite") {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COOKIESEC003".to_string(), title: format!("Cookie '{cookie_name}' missing SameSite attribute"), description: "A Set-Cookie header lacks the SameSite attribute.".to_string(), url: url.clone(), recommendation: "Add SameSite=Strict or SameSite=Lax.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "COOKIESEC003".to_string(),
+                    title: format!("Cookie '{cookie_name}' missing SameSite attribute"),
+                    description: "A Set-Cookie header lacks the SameSite attribute.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Add SameSite=Strict or SameSite=Lax.".to_string(),
+                });
             }
         }
         findings
@@ -3733,15 +3923,21 @@ impl Analyzer for CookieSecurityFlagAnalyzer {
 pub struct MixedContentDetectionAnalyzer;
 
 impl Default for MixedContentDetectionAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MixedContentDetectionAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for MixedContentDetectionAnalyzer {
-    fn name(&self) -> &str { "mixed-content-detection" }
+    fn name(&self) -> &str {
+        "mixed-content-detection"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3752,17 +3948,45 @@ impl Analyzer for MixedContentDetectionAnalyzer {
         if let Some(body) = ctx.body {
             let lower = body.to_lowercase();
             let http_script = lower.contains("src=\"http://") && lower.contains("<script");
-            let http_img = lower.contains("src=\"http://") && (lower.contains("<img") || lower.contains("background-image"));
+            let http_img = lower.contains("src=\"http://")
+                && (lower.contains("<img") || lower.contains("background-image"));
             let http_link = lower.contains("href=\"http://") && lower.contains("<link");
 
             if http_script {
-                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "MIXCONT001".to_string(), title: "Mixed content: active script".to_string(), description: "HTTPS page loads scripts over HTTP, which can be intercepted and modified.".to_string(), url: url.clone(), recommendation: "Change all script src attributes to use HTTPS.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Critical,
+                    category: IssueCategory::Security,
+                    code: "MIXCONT001".to_string(),
+                    title: "Mixed content: active script".to_string(),
+                    description:
+                        "HTTPS page loads scripts over HTTP, which can be intercepted and modified."
+                            .to_string(),
+                    url: url.clone(),
+                    recommendation: "Change all script src attributes to use HTTPS.".to_string(),
+                });
             }
             if http_img {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXCONT002".to_string(), title: "Mixed content: passive image".to_string(), description: "HTTPS page loads images over HTTP.".to_string(), url: url.clone(), recommendation: "Change image sources to use HTTPS.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "MIXCONT002".to_string(),
+                    title: "Mixed content: passive image".to_string(),
+                    description: "HTTPS page loads images over HTTP.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Change image sources to use HTTPS.".to_string(),
+                });
             }
             if http_link {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXCONT003".to_string(), title: "Mixed content: stylesheet/resource".to_string(), description: "HTTPS page loads stylesheets or other resources over HTTP.".to_string(), url: url.clone(), recommendation: "Change resource URLs to use HTTPS.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "MIXCONT003".to_string(),
+                    title: "Mixed content: stylesheet/resource".to_string(),
+                    description: "HTTPS page loads stylesheets or other resources over HTTP."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Change resource URLs to use HTTPS.".to_string(),
+                });
             }
         }
         findings
@@ -3776,20 +4000,30 @@ impl Analyzer for MixedContentDetectionAnalyzer {
 pub struct HstsPreloadReadinessAnalyzer;
 
 impl Default for HstsPreloadReadinessAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HstsPreloadReadinessAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HstsPreloadReadinessAnalyzer {
-    fn name(&self) -> &str { "hsts-preload-readiness" }
+    fn name(&self) -> &str {
+        "hsts-preload-readiness"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let hsts = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str());
+        let hsts = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security"))
+            .map(|(_, v)| v.as_str());
         let hsts = match hsts {
             Some(v) => v,
             None => return findings,
@@ -3797,17 +4031,47 @@ impl Analyzer for HstsPreloadReadinessAnalyzer {
 
         let lower = hsts.to_lowercase();
         if !lower.contains("includesubdomains") {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSPR001".to_string(), title: "HSTS missing includeSubDomains for preload".to_string(), description: "HSTS header lacks includeSubDomains, required for preload list submission.".to_string(), url: url.clone(), recommendation: "Add includeSubDomains to the HSTS header.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "HSTSPR001".to_string(),
+                title: "HSTS missing includeSubDomains for preload".to_string(),
+                description:
+                    "HSTS header lacks includeSubDomains, required for preload list submission."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Add includeSubDomains to the HSTS header.".to_string(),
+            });
         }
         if !lower.contains("preload") {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSPR002".to_string(), title: "HSTS missing preload directive".to_string(), description: "HSTS header lacks the preload directive for browser preload list inclusion.".to_string(), url: url.clone(), recommendation: "Add preload to the HSTS header.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "HSTSPR002".to_string(),
+                title: "HSTS missing preload directive".to_string(),
+                description:
+                    "HSTS header lacks the preload directive for browser preload list inclusion."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Add preload to the HSTS header.".to_string(),
+            });
         }
         if let Some(ma_pos) = lower.find("max-age=") {
             let after = &lower[ma_pos + 8..];
             let num_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
             if let Ok(age) = num_str.parse::<u64>() {
                 if age < 31536000 {
-                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSPR003".to_string(), title: "HSTS max-age too low for preload".to_string(), description: format!("max-age is {age}, preload requires at least 31536000 (1 year)."), url: url.clone(), recommendation: "Set max-age to at least 31536000.".to_string() });
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "HSTSPR003".to_string(),
+                        title: "HSTS max-age too low for preload".to_string(),
+                        description: format!(
+                            "max-age is {age}, preload requires at least 31536000 (1 year)."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Set max-age to at least 31536000.".to_string(),
+                    });
                 }
             }
         }
@@ -3822,26 +4086,46 @@ impl Analyzer for HstsPreloadReadinessAnalyzer {
 pub struct XContentTypeOptionsDeepAnalyzer;
 
 impl Default for XContentTypeOptionsDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl XContentTypeOptionsDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for XContentTypeOptionsDeepAnalyzer {
-    fn name(&self) -> &str { "x-content-type-options-deep" }
+    fn name(&self) -> &str {
+        "x-content-type-options-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let xcto = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options")).map(|(_, v)| v.as_str());
+        let xcto = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options"))
+            .map(|(_, v)| v.as_str());
         match xcto {
             None => {
                 findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTODEEP001".to_string(), title: "Missing X-Content-Type-Options header".to_string(), description: "No X-Content-Type-Options header found. Without nosniff, browsers may MIME-sniff responses.".to_string(), url: url.clone(), recommendation: "Add X-Content-Type-Options: nosniff.".to_string() });
             }
             Some(val) if !val.eq_ignore_ascii_case("nosniff") => {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTODEEP002".to_string(), title: "Invalid X-Content-Type-Options value".to_string(), description: format!("X-Content-Type-Options is \"{val}\" but should be \"nosniff\"."), url: url.clone(), recommendation: "Set X-Content-Type-Options to nosniff.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "XCTODEEP002".to_string(),
+                    title: "Invalid X-Content-Type-Options value".to_string(),
+                    description: format!(
+                        "X-Content-Type-Options is \"{val}\" but should be \"nosniff\"."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Set X-Content-Type-Options to nosniff.".to_string(),
+                });
             }
             _ => {}
         }
@@ -3856,20 +4140,30 @@ impl Analyzer for XContentTypeOptionsDeepAnalyzer {
 pub struct ReferrerPolicyDeepAnalyzer;
 
 impl Default for ReferrerPolicyDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReferrerPolicyDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ReferrerPolicyDeepAnalyzer {
-    fn name(&self) -> &str { "referrer-policy-deep" }
+    fn name(&self) -> &str {
+        "referrer-policy-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let rp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy")).map(|(_, v)| v.as_str());
+        let rp = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy"))
+            .map(|(_, v)| v.as_str());
         match rp {
             None => {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "RPDEEP001".to_string(), title: "Missing Referrer-Policy header".to_string(), description: "No Referrer-Policy header found. Browser default may leak referrer information.".to_string(), url: url.clone(), recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin.".to_string() });
@@ -3890,32 +4184,69 @@ impl Analyzer for ReferrerPolicyDeepAnalyzer {
 pub struct XFrameOptionsDeepAnalyzer;
 
 impl Default for XFrameOptionsDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl XFrameOptionsDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for XFrameOptionsDeepAnalyzer {
-    fn name(&self) -> &str { "x-frame-options-deep" }
+    fn name(&self) -> &str {
+        "x-frame-options-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let xfo = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options")).map(|(_, v)| v.as_str());
-        let csp_frame = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("").contains("frame-ancestors");
+        let xfo = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options"))
+            .map(|(_, v)| v.as_str());
+        let csp_frame = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
+            .map(|(_, v)| v.as_str())
+            .unwrap_or("")
+            .contains("frame-ancestors");
 
         match xfo {
             None => {
                 if !csp_frame {
-                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFODEEP001".to_string(), title: "No clickjacking protection".to_string(), description: "Neither X-Frame-Options nor CSP frame-ancestors is set.".to_string(), url: url.clone(), recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors directive.".to_string() });
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "XFODEEP001".to_string(),
+                        title: "No clickjacking protection".to_string(),
+                        description: "Neither X-Frame-Options nor CSP frame-ancestors is set."
+                            .to_string(),
+                        url: url.clone(),
+                        recommendation:
+                            "Add X-Frame-Options: DENY or CSP frame-ancestors directive."
+                                .to_string(),
+                    });
                 }
             }
             Some(val) => {
                 let upper = val.to_uppercase().trim().to_string();
                 if upper != "DENY" && upper != "SAMEORIGIN" {
-                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFODEEP002".to_string(), title: "Invalid X-Frame-Options value".to_string(), description: format!("X-Frame-Options is \"{val}\", must be DENY or SAMEORIGIN."), url: url.clone(), recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string() });
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "XFODEEP002".to_string(),
+                        title: "Invalid X-Frame-Options value".to_string(),
+                        description: format!(
+                            "X-Frame-Options is \"{val}\", must be DENY or SAMEORIGIN."
+                        ),
+                        url: url.clone(),
+                        recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string(),
+                    });
                 }
             }
         }
@@ -3930,20 +4261,33 @@ impl Analyzer for XFrameOptionsDeepAnalyzer {
 pub struct PermissionsPolicyDeepAnalyzer;
 
 impl Default for PermissionsPolicyDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PermissionsPolicyDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for PermissionsPolicyDeepAnalyzer {
-    fn name(&self) -> &str { "permissions-policy-deep" }
+    fn name(&self) -> &str {
+        "permissions-policy-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        let pp = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| {
+                k.eq_ignore_ascii_case("Permissions-Policy")
+                    || k.eq_ignore_ascii_case("Feature-Policy")
+            })
+            .map(|(_, v)| v.as_str());
         match pp {
             None => {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PERMPDEEP001".to_string(), title: "Missing Permissions-Policy header".to_string(), description: "No Permissions-Policy header found. Browsers may allow access to sensitive APIs.".to_string(), url: url.clone(), recommendation: "Add Permissions-Policy to restrict sensitive browser features.".to_string() });
@@ -3968,31 +4312,68 @@ impl Analyzer for PermissionsPolicyDeepAnalyzer {
 pub struct CrossOriginIsolationDeepAnalyzer;
 
 impl Default for CrossOriginIsolationDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CrossOriginIsolationDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CrossOriginIsolationDeepAnalyzer {
-    fn name(&self) -> &str { "cross-origin-isolation-deep" }
+    fn name(&self) -> &str {
+        "cross-origin-isolation-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let coep = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy")).map(|(_, v)| v.as_str());
-        let coop = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy")).map(|(_, v)| v.as_str());
+        let coep = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy"))
+            .map(|(_, v)| v.as_str());
+        let coop = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy"))
+            .map(|(_, v)| v.as_str());
 
         if coep.is_none() {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP001".to_string(), title: "Missing Cross-Origin-Embedder-Policy".to_string(), description: "COEP header is not set, preventing cross-origin isolation.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Embedder-Policy: require-corp for cross-origin isolation.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "COISODEEP001".to_string(),
+                title: "Missing Cross-Origin-Embedder-Policy".to_string(),
+                description: "COEP header is not set, preventing cross-origin isolation."
+                    .to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Add Cross-Origin-Embedder-Policy: require-corp for cross-origin isolation."
+                        .to_string(),
+            });
         }
         if coop.is_none() {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP002".to_string(), title: "Missing Cross-Origin-Opener-Policy".to_string(), description: "COOP header is not set.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Opener-Policy: same-origin for cross-origin isolation.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "COISODEEP002".to_string(),
+                title: "Missing Cross-Origin-Opener-Policy".to_string(),
+                description: "COOP header is not set.".to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Add Cross-Origin-Opener-Policy: same-origin for cross-origin isolation."
+                        .to_string(),
+            });
         }
 
         if let (Some(coep_val), Some(coop_val)) = (coep, coop) {
-            if coep_val.eq_ignore_ascii_case("require-corp") && coop_val.eq_ignore_ascii_case("same-origin") {
+            if coep_val.eq_ignore_ascii_case("require-corp")
+                && coop_val.eq_ignore_ascii_case("same-origin")
+            {
                 // Full cross-origin isolation achieved
             } else {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP003".to_string(), title: "Partial cross-origin isolation".to_string(), description: format!("COEP={coep_val}, COOP={coop_val}. Full isolation requires COEP=require-corp and COOP=same-origin."), url: url.clone(), recommendation: "Set COEP=require-corp and COOP=same-origin for full cross-origin isolation.".to_string() });
@@ -4010,30 +4391,53 @@ impl Analyzer for CrossOriginIsolationDeepAnalyzer {
 pub struct AriaLandmarksAnalyzer;
 
 impl Default for AriaLandmarksAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AriaLandmarksAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for AriaLandmarksAnalyzer {
-    fn name(&self) -> &str { "aria-landmarks" }
+    fn name(&self) -> &str {
+        "aria-landmarks"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
         if !ctx.page.has_main_landmark {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "ARIALAND001".to_string(), title: "Missing main landmark".to_string(), description: "No <main> or role=\"main\" landmark found.".to_string(), url: url.clone(), recommendation: "Add a main landmark to identify the primary content.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND001".to_string(),
+                title: "Missing main landmark".to_string(),
+                description: "No <main> or role=\"main\" landmark found.".to_string(),
+                url: url.clone(),
+                recommendation: "Add a main landmark to identify the primary content.".to_string(),
+            });
         }
         if !ctx.page.has_nav_landmark && ctx.page.links.len() > 3 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "ARIALAND002".to_string(), title: "Missing navigation landmark".to_string(), description: "Multiple links found but no nav landmark.".to_string(), url: url.clone(), recommendation: "Wrap navigation links in <nav> or role=\"nav\".".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND002".to_string(),
+                title: "Missing navigation landmark".to_string(),
+                description: "Multiple links found but no nav landmark.".to_string(),
+                url: url.clone(),
+                recommendation: "Wrap navigation links in <nav> or role=\"nav\".".to_string(),
+            });
         }
 
         let landmark_count = ctx.page.landmarks.len();
         if landmark_count > 0 {
-            let mut landmark_types: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            let mut landmark_types: std::collections::HashMap<String, usize> =
+                std::collections::HashMap::new();
             for lm in &ctx.page.landmarks {
                 *landmark_types.entry(lm.clone()).or_default() += 1;
             }
@@ -4055,15 +4459,21 @@ impl Analyzer for AriaLandmarksAnalyzer {
 pub struct HeadingHierarchyDeepAnalyzer;
 
 impl Default for HeadingHierarchyDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HeadingHierarchyDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HeadingHierarchyDeepAnalyzer {
-    fn name(&self) -> &str { "heading-hierarchy-deep" }
+    fn name(&self) -> &str {
+        "heading-hierarchy-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4075,19 +4485,52 @@ impl Analyzer for HeadingHierarchyDeepAnalyzer {
         let mut prev_level: u8 = 0;
         for h in &ctx.page.headings {
             if prev_level > 0 && h.level > prev_level + 1 {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP001".to_string(), title: "Heading hierarchy skip".to_string(), description: format!("Heading jumped from H{prev_level} to H{}.", h.level), url: url.clone(), recommendation: format!("Use H{} after H{} for proper heading hierarchy.", prev_level + 1, prev_level) });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "HHIERDEEP001".to_string(),
+                    title: "Heading hierarchy skip".to_string(),
+                    description: format!("Heading jumped from H{prev_level} to H{}.", h.level),
+                    url: url.clone(),
+                    recommendation: format!(
+                        "Use H{} after H{} for proper heading hierarchy.",
+                        prev_level + 1,
+                        prev_level
+                    ),
+                });
             }
             prev_level = h.level;
         }
 
         let first_level = ctx.page.headings[0].level;
         if first_level != 1 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP002".to_string(), title: "First heading is not H1".to_string(), description: format!("First heading is H{}, but should be H1 for accessibility.", first_level), url: url.clone(), recommendation: "Start the heading hierarchy with H1.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "HHIERDEEP002".to_string(),
+                title: "First heading is not H1".to_string(),
+                description: format!(
+                    "First heading is H{}, but should be H1 for accessibility.",
+                    first_level
+                ),
+                url: url.clone(),
+                recommendation: "Start the heading hierarchy with H1.".to_string(),
+            });
         }
 
         let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
         if h1_count > 1 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP003".to_string(), title: "Multiple H1 headings".to_string(), description: format!("Page has {h1_count} H1 headings. Screen readers expect a single H1."), url: url.clone(), recommendation: "Use exactly one H1 per page.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "HHIERDEEP003".to_string(),
+                title: "Multiple H1 headings".to_string(),
+                description: format!(
+                    "Page has {h1_count} H1 headings. Screen readers expect a single H1."
+                ),
+                url: url.clone(),
+                recommendation: "Use exactly one H1 per page.".to_string(),
+            });
         }
 
         findings
@@ -4101,15 +4544,21 @@ impl Analyzer for HeadingHierarchyDeepAnalyzer {
 pub struct FormLabelsDeepAnalyzer;
 
 impl Default for FormLabelsDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FormLabelsDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for FormLabelsDeepAnalyzer {
-    fn name(&self) -> &str { "form-labels-deep" }
+    fn name(&self) -> &str {
+        "form-labels-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4119,11 +4568,32 @@ impl Analyzer for FormLabelsDeepAnalyzer {
         let aria_label_count = ctx.page.aria_label_count;
 
         if form_count > 0 && aria_label_count == 0 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "FORMLBLDEEP001".to_string(), title: "Forms present but no ARIA labels".to_string(), description: format!("Page has {form_count} form(s) but no ARIA labels detected."), url: url.clone(), recommendation: "Add aria-label or aria-labelledby to form elements for screen readers.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "FORMLBLDEEP001".to_string(),
+                title: "Forms present but no ARIA labels".to_string(),
+                description: format!("Page has {form_count} form(s) but no ARIA labels detected."),
+                url: url.clone(),
+                recommendation:
+                    "Add aria-label or aria-labelledby to form elements for screen readers."
+                        .to_string(),
+            });
         }
 
         if form_count > 3 && aria_label_count < form_count {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLBLDEEP002".to_string(), title: "Insufficient ARIA labels for forms".to_string(), description: format!("Page has {form_count} forms but only {aria_label_count} ARIA labels."), url: url.clone(), recommendation: "Each form should have an aria-label or aria-labelledby attribute.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "FORMLBLDEEP002".to_string(),
+                title: "Insufficient ARIA labels for forms".to_string(),
+                description: format!(
+                    "Page has {form_count} forms but only {aria_label_count} ARIA labels."
+                ),
+                url: url.clone(),
+                recommendation: "Each form should have an aria-label or aria-labelledby attribute."
+                    .to_string(),
+            });
         }
 
         findings
@@ -4137,15 +4607,21 @@ impl Analyzer for FormLabelsDeepAnalyzer {
 pub struct TableAccessibilityDeepAnalyzer;
 
 impl Default for TableAccessibilityDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TableAccessibilityDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for TableAccessibilityDeepAnalyzer {
-    fn name(&self) -> &str { "table-accessibility-deep" }
+    fn name(&self) -> &str {
+        "table-accessibility-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4157,12 +4633,37 @@ impl Analyzer for TableAccessibilityDeepAnalyzer {
 
         let tables_without_headers = ctx.page.tables_total - ctx.page.tables_with_headers;
         if tables_without_headers > 0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TABACCDEEP001".to_string(), title: "Tables without headers".to_string(), description: format!("{tables_without_headers}/{} table(s) lack header cells (th).", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th> elements to identify column/row headers in data tables.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TABACCDEEP001".to_string(),
+                title: "Tables without headers".to_string(),
+                description: format!(
+                    "{tables_without_headers}/{} table(s) lack header cells (th).",
+                    ctx.page.tables_total
+                ),
+                url: url.clone(),
+                recommendation: "Add <th> elements to identify column/row headers in data tables."
+                    .to_string(),
+            });
         }
 
         let tables_without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
         if tables_without_captions > 0 && ctx.page.tables_total > 1 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TABACCDEEP002".to_string(), title: "Tables missing captions".to_string(), description: format!("{tables_without_captions}/{} table(s) lack <caption> elements.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <caption> elements to describe table purpose for screen readers.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "TABACCDEEP002".to_string(),
+                title: "Tables missing captions".to_string(),
+                description: format!(
+                    "{tables_without_captions}/{} table(s) lack <caption> elements.",
+                    ctx.page.tables_total
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Add <caption> elements to describe table purpose for screen readers."
+                        .to_string(),
+            });
         }
 
         findings
@@ -4176,33 +4677,77 @@ impl Analyzer for TableAccessibilityDeepAnalyzer {
 pub struct LinkTextQualityAnalyzer;
 
 impl Default for LinkTextQualityAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LinkTextQualityAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for LinkTextQualityAnalyzer {
-    fn name(&self) -> &str { "link-text-quality" }
+    fn name(&self) -> &str {
+        "link-text-quality"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let generic_texts = ["click here", "here", "read more", "learn more", "more", "link", "this"];
+        let generic_texts = [
+            "click here",
+            "here",
+            "read more",
+            "learn more",
+            "more",
+            "link",
+            "this",
+        ];
 
-        let generic_count: usize = ctx.page.links.iter().filter(|l| {
-            let text_lower = l.text.to_lowercase();
-            generic_texts.iter().any(|g| text_lower == *g)
-        }).count();
+        let generic_count: usize = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| {
+                let text_lower = l.text.to_lowercase();
+                generic_texts.iter().any(|g| text_lower == *g)
+            })
+            .count();
 
         if generic_count > 0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LINKTQ001".to_string(), title: "Generic link text detected".to_string(), description: format!("{generic_count} link(s) use generic text like 'click here' or 'read more'."), url: url.clone(), recommendation: "Use descriptive link text that indicates the link destination.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "LINKTQ001".to_string(),
+                title: "Generic link text detected".to_string(),
+                description: format!(
+                    "{generic_count} link(s) use generic text like 'click here' or 'read more'."
+                ),
+                url: url.clone(),
+                recommendation: "Use descriptive link text that indicates the link destination."
+                    .to_string(),
+            });
         }
 
-        let empty_text_count = ctx.page.links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        let empty_text_count = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+            .count();
         if empty_text_count > 0 {
-            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Accessibility, code: "LINKTQ002".to_string(), title: "Links without accessible text".to_string(), description: format!("{empty_text_count} link(s) have no text or aria-label."), url: url.clone(), recommendation: "Add visible text or aria-label to all links for screen readers.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LINKTQ002".to_string(),
+                title: "Links without accessible text".to_string(),
+                description: format!("{empty_text_count} link(s) have no text or aria-label."),
+                url: url.clone(),
+                recommendation: "Add visible text or aria-label to all links for screen readers."
+                    .to_string(),
+            });
         }
 
         findings
@@ -4216,15 +4761,21 @@ impl Analyzer for LinkTextQualityAnalyzer {
 pub struct ImageAltTextDeepAnalyzer;
 
 impl Default for ImageAltTextDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ImageAltTextDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ImageAltTextDeepAnalyzer {
-    fn name(&self) -> &str { "image-alt-text-deep" }
+    fn name(&self) -> &str {
+        "image-alt-text-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4235,14 +4786,48 @@ impl Analyzer for ImageAltTextDeepAnalyzer {
             return findings;
         }
 
-        let missing_alt: usize = ctx.page.images.iter().filter(|img| !img.has_alt || img.alt.trim().is_empty()).count();
+        let missing_alt: usize = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
+            .count();
         if missing_alt > 0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "IMGALTDEEP001".to_string(), title: "Images missing alt text".to_string(), description: format!("{missing_alt}/{total_images} image(s) have missing or empty alt text."), url: url.clone(), recommendation: "Add descriptive alt text to all images. Use alt=\"\" for decorative images.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "IMGALTDEEP001".to_string(),
+                title: "Images missing alt text".to_string(),
+                description: format!(
+                    "{missing_alt}/{total_images} image(s) have missing or empty alt text."
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Add descriptive alt text to all images. Use alt=\"\" for decorative images."
+                        .to_string(),
+            });
         }
 
-        let alt_too_long: usize = ctx.page.images.iter().filter(|img| img.alt.len() > 125).count();
+        let alt_too_long: usize = ctx
+            .page
+            .images
+            .iter()
+            .filter(|img| img.alt.len() > 125)
+            .count();
         if alt_too_long > 0 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "IMGALTDEEP002".to_string(), title: "Alt text too long".to_string(), description: format!("{alt_too_long} image(s) have alt text exceeding 125 characters."), url: url.clone(), recommendation: "Keep alt text concise (under 125 characters). Use longdesc for complex images.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "IMGALTDEEP002".to_string(),
+                title: "Alt text too long".to_string(),
+                description: format!(
+                    "{alt_too_long} image(s) have alt text exceeding 125 characters."
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Keep alt text concise (under 125 characters). Use longdesc for complex images."
+                        .to_string(),
+            });
         }
 
         findings
@@ -4256,26 +4841,54 @@ impl Analyzer for ImageAltTextDeepAnalyzer {
 pub struct FocusManagementDeepAnalyzer;
 
 impl Default for FocusManagementDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FocusManagementDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for FocusManagementDeepAnalyzer {
-    fn name(&self) -> &str { "focus-management-deep" }
+    fn name(&self) -> &str {
+        "focus-management-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
         if ctx.page.has_positive_tabindex {
-            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Accessibility, code: "FOCUSDEEP001".to_string(), title: "Positive tabindex detected".to_string(), description: "A positive tabindex value disrupts natural tab order.".to_string(), url: url.clone(), recommendation: "Use tabindex=\"0\" or tabindex=\"-1\" instead of positive values.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "FOCUSDEEP001".to_string(),
+                title: "Positive tabindex detected".to_string(),
+                description: "A positive tabindex value disrupts natural tab order.".to_string(),
+                url: url.clone(),
+                recommendation: "Use tabindex=\"0\" or tabindex=\"-1\" instead of positive values."
+                    .to_string(),
+            });
         }
 
         if ctx.page.tabindex_negative_count > 3 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "FOCUSDEEP002".to_string(), title: "Many elements with tabindex=-1".to_string(), description: format!("{} elements have tabindex=\"-1\", removing them from tab order.", ctx.page.tabindex_negative_count), url: url.clone(), recommendation: "Ensure elements with tabindex=-1 are intentionally removed from tab order.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "FOCUSDEEP002".to_string(),
+                title: "Many elements with tabindex=-1".to_string(),
+                description: format!(
+                    "{} elements have tabindex=\"-1\", removing them from tab order.",
+                    ctx.page.tabindex_negative_count
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Ensure elements with tabindex=-1 are intentionally removed from tab order."
+                        .to_string(),
+            });
         }
 
         findings
@@ -4289,15 +4902,21 @@ impl Analyzer for FocusManagementDeepAnalyzer {
 pub struct LanguageAttributesDeepAnalyzer;
 
 impl Default for LanguageAttributesDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LanguageAttributesDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for LanguageAttributesDeepAnalyzer {
-    fn name(&self) -> &str { "language-attributes-deep" }
+    fn name(&self) -> &str {
+        "language-attributes-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -4319,7 +4938,18 @@ impl Analyzer for LanguageAttributesDeepAnalyzer {
             let html_base = html_lang.split('-').next().unwrap_or("");
             let meta_base = meta_lang.split('-').next().unwrap_or("");
             if !html_base.is_empty() && !meta_base.is_empty() && html_base != meta_base {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANGATTRDEEP003".to_string(), title: "Language mismatch between HTML and meta".to_string(), description: format!("HTML lang is \"{html_lang}\" but meta language is \"{meta_lang}\"."), url: url.clone(), recommendation: "Ensure html lang and meta language are consistent.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Accessibility,
+                    code: "LANGATTRDEEP003".to_string(),
+                    title: "Language mismatch between HTML and meta".to_string(),
+                    description: format!(
+                        "HTML lang is \"{html_lang}\" but meta language is \"{meta_lang}\"."
+                    ),
+                    url: url.clone(),
+                    recommendation: "Ensure html lang and meta language are consistent."
+                        .to_string(),
+                });
             }
         }
 
@@ -4327,12 +4957,11 @@ impl Analyzer for LanguageAttributesDeepAnalyzer {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::{ParsedPage, Heading, ExtractedLink, ExtractedImage};
     use crate::meta::MetaTags;
+    use crate::parser::{ExtractedImage, ExtractedLink, Heading, ParsedPage};
     use url::Url;
 
     fn make_page(url: &str) -> ParsedPage {
@@ -4367,7 +4996,12 @@ mod tests {
         }
     }
 
-    fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>, headers: &'a [(String, String)], content_type: Option<&'a str>) -> AnalysisContext<'a> {
+    fn make_ctx<'a>(
+        page: &'a ParsedPage,
+        status: Option<u16>,
+        headers: &'a [(String, String)],
+        content_type: Option<&'a str>,
+    ) -> AnalysisContext<'a> {
         AnalysisContext {
             page,
             body: None,
@@ -4390,12 +5024,17 @@ mod tests {
     fn test_csp_no_header() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(ContentSecurityPolicyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ContentSecurityPolicyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_csp_unsafe_inline() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'unsafe-inline'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self' 'unsafe-inline'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4404,7 +5043,10 @@ mod tests {
 
     #[test]
     fn test_csp_no_frame_ancestors() {
-        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "default-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4413,7 +5055,10 @@ mod tests {
 
     #[test]
     fn test_csp_valid() {
-        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self'; frame-ancestors 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "default-src 'self'; script-src 'self'; frame-ancestors 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4422,7 +5067,10 @@ mod tests {
 
     #[test]
     fn test_csp_both_issues() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'unsafe-inline'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self' 'unsafe-inline'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4432,7 +5080,10 @@ mod tests {
 
     #[test]
     fn test_csp_frame_ancestors_none() {
-        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; frame-ancestors 'none'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "default-src 'self'; frame-ancestors 'none'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4441,7 +5092,10 @@ mod tests {
 
     #[test]
     fn test_csp_case_insensitive_header_lookup() {
-        let headers = vec![("content-security-policy".to_string(), "default-src 'self'; frame-ancestors 'none'".to_string())];
+        let headers = vec![(
+            "content-security-policy".to_string(),
+            "default-src 'self'; frame-ancestors 'none'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4450,7 +5104,10 @@ mod tests {
 
     #[test]
     fn test_csp_script_src_in_other_directive_not_flagged() {
-        let headers = vec![("Content-Security-Policy".to_string(), "style-src 'self' 'unsafe-inline'; frame-ancestors 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "style-src 'self' 'unsafe-inline'; frame-ancestors 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4459,7 +5116,10 @@ mod tests {
 
     #[test]
     fn test_csp_empty_script_src_value() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src; frame-ancestors 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src; frame-ancestors 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4468,7 +5128,11 @@ mod tests {
 
     #[test]
     fn test_csp_multiple_script_src_directives() {
-        let headers = vec![("Content-Security-Policy".to_string(), "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "default-src 'self'; script-src 'self' 'unsafe-inline'; script-src-elem 'self'"
+                .to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4477,7 +5141,10 @@ mod tests {
 
     #[test]
     fn test_csp_nonce_instead_of_unsafe_inline() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self' 'nonce-abc123'; frame-ancestors 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self' 'nonce-abc123'; frame-ancestors 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentSecurityPolicyAnalyzer::new().analyze(&ctx);
@@ -4514,7 +5181,10 @@ mod tests {
 
     #[test]
     fn test_referrer_valid() {
-        let headers = vec![("Referrer-Policy".to_string(), "strict-origin-when-cross-origin".to_string())];
+        let headers = vec![(
+            "Referrer-Policy".to_string(),
+            "strict-origin-when-cross-origin".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
@@ -4568,7 +5238,10 @@ mod tests {
 
     #[test]
     fn test_referrer_no_referrer_when_downgrade() {
-        let headers = vec![("Referrer-Policy".to_string(), "no-referrer-when-downgrade".to_string())];
+        let headers = vec![(
+            "Referrer-Policy".to_string(),
+            "no-referrer-when-downgrade".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ReferrerPolicyAnalyzer::new().analyze(&ctx);
@@ -5068,10 +5741,7 @@ mod tests {
                 "Set-Cookie".to_string(),
                 "session=abc123; Path=/".to_string(),
             ),
-            (
-                "Set-Cookie".to_string(),
-                "token=xyz789; Path=/".to_string(),
-            ),
+            ("Set-Cookie".to_string(), "token=xyz789; Path=/".to_string()),
         ];
         let page = make_page("https://example.com");
         let ctx = AnalysisContext {
@@ -5183,7 +5853,10 @@ mod tests {
 
     #[test]
     fn test_xcto_whitespace_around_nosniff() {
-        let headers = vec![("X-Content-Type-Options".to_string(), "  nosniff  ".to_string())];
+        let headers = vec![(
+            "X-Content-Type-Options".to_string(),
+            "  nosniff  ".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XContentTypeOptionsAnalyzer::new().analyze(&ctx);
@@ -5202,7 +5875,10 @@ mod tests {
 
     #[test]
     fn test_xpcdp_none() {
-        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "none".to_string())];
+        let headers = vec![(
+            "X-Permitted-Cross-Domain-Policies".to_string(),
+            "none".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
@@ -5211,7 +5887,10 @@ mod tests {
 
     #[test]
     fn test_xpcdp_all() {
-        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "all".to_string())];
+        let headers = vec![(
+            "X-Permitted-Cross-Domain-Policies".to_string(),
+            "all".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
@@ -5220,7 +5899,10 @@ mod tests {
 
     #[test]
     fn test_xpcdp_case_insensitive() {
-        let headers = vec![("x-permitted-cross-domain-policies".to_string(), "ALL".to_string())];
+        let headers = vec![(
+            "x-permitted-cross-domain-policies".to_string(),
+            "ALL".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
@@ -5229,7 +5911,10 @@ mod tests {
 
     #[test]
     fn test_xpcdp_master_only() {
-        let headers = vec![("X-Permitted-Cross-Domain-Policies".to_string(), "master-only".to_string())];
+        let headers = vec![(
+            "X-Permitted-Cross-Domain-Policies".to_string(),
+            "master-only".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
@@ -5250,7 +5935,10 @@ mod tests {
 
     #[test]
     fn test_corp_same_origin() {
-        let headers = vec![("Cross-Origin-Resource-Policy".to_string(), "same-origin".to_string())];
+        let headers = vec![(
+            "Cross-Origin-Resource-Policy".to_string(),
+            "same-origin".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
@@ -5259,7 +5947,10 @@ mod tests {
 
     #[test]
     fn test_corp_cross_origin() {
-        let headers = vec![("Cross-Origin-Resource-Policy".to_string(), "cross-origin".to_string())];
+        let headers = vec![(
+            "Cross-Origin-Resource-Policy".to_string(),
+            "cross-origin".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
@@ -5268,7 +5959,10 @@ mod tests {
 
     #[test]
     fn test_corp_case_insensitive() {
-        let headers = vec![("cross-origin-resource-policy".to_string(), "same-origin".to_string())];
+        let headers = vec![(
+            "cross-origin-resource-policy".to_string(),
+            "same-origin".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginResourcePolicyAnalyzer::new().analyze(&ctx);
@@ -5380,8 +6074,16 @@ mod tests {
     fn test_heading_order_skip_level() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "H1".to_string(), length: 2 },
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5392,11 +6094,31 @@ mod tests {
     fn test_heading_order_non_sequential() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "H1".to_string(), length: 2 },
-            Heading { level: 2, text: "H2".to_string(), length: 2 },
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
-            Heading { level: 2, text: "H2b".to_string(), length: 3 },
-            Heading { level: 4, text: "H4".to_string(), length: 2 },
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2b".to_string(),
+                length: 3,
+            },
+            Heading {
+                level: 4,
+                text: "H4".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5407,9 +6129,21 @@ mod tests {
     fn test_heading_order_valid_sequence() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "H1".to_string(), length: 2 },
-            Heading { level: 2, text: "H2".to_string(), length: 2 },
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5420,9 +6154,21 @@ mod tests {
     fn test_heading_order_same_level_repeated() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 2, text: "H2a".to_string(), length: 3 },
-            Heading { level: 2, text: "H2b".to_string(), length: 3 },
-            Heading { level: 2, text: "H2c".to_string(), length: 3 },
+            Heading {
+                level: 2,
+                text: "H2a".to_string(),
+                length: 3,
+            },
+            Heading {
+                level: 2,
+                text: "H2b".to_string(),
+                length: 3,
+            },
+            Heading {
+                level: 2,
+                text: "H2c".to_string(),
+                length: 3,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5432,7 +6178,11 @@ mod tests {
     #[test]
     fn test_heading_order_single_heading() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![Heading { level: 1, text: "Only".to_string(), length: 4 }];
+        page.headings = vec![Heading {
+            level: 1,
+            text: "Only".to_string(),
+            length: 4,
+        }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
         assert!(findings.is_empty());
@@ -5450,8 +6200,16 @@ mod tests {
     fn test_heading_order_skip_from_h2_to_h4() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 2, text: "H2".to_string(), length: 2 },
-            Heading { level: 4, text: "H4".to_string(), length: 2 },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 4,
+                text: "H4".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5462,8 +6220,16 @@ mod tests {
     fn test_heading_order_use_accessibility_category() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 1, text: "H1".to_string(), length: 2 },
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
+            Heading {
+                level: 1,
+                text: "H1".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5481,9 +6247,21 @@ mod tests {
     fn test_heading_order_descend_then_ascent() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            Heading { level: 3, text: "H3".to_string(), length: 2 },
-            Heading { level: 2, text: "H2".to_string(), length: 2 },
-            Heading { level: 3, text: "H3b".to_string(), length: 3 },
+            Heading {
+                level: 3,
+                text: "H3".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 2,
+                text: "H2".to_string(),
+                length: 2,
+            },
+            Heading {
+                level: 3,
+                text: "H3b".to_string(),
+                length: 3,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         let findings = HeadingOrderAnalyzer::new().analyze(&ctx);
@@ -5802,7 +6580,10 @@ mod tests {
 
     #[test]
     fn test_table_acc_analyzer_name() {
-        assert_eq!(TableAccessibilityAnalyzer::new().name(), "table-accessibility");
+        assert_eq!(
+            TableAccessibilityAnalyzer::new().name(),
+            "table-accessibility"
+        );
     }
 
     #[test]
@@ -5973,7 +6754,10 @@ mod tests {
 
     #[test]
     fn test_link_acc_analyzer_name() {
-        assert_eq!(LinkAccessibilityAnalyzer::new().name(), "link-accessibility");
+        assert_eq!(
+            LinkAccessibilityAnalyzer::new().name(),
+            "link-accessibility"
+        );
     }
 
     #[test]
@@ -6108,7 +6892,10 @@ mod tests {
 
     #[test]
     fn test_img_acc_analyzer_name() {
-        assert_eq!(ImageAccessibilityAnalyzer::new().name(), "image-accessibility");
+        assert_eq!(
+            ImageAccessibilityAnalyzer::new().name(),
+            "image-accessibility"
+        );
     }
 
     #[test]
@@ -6491,7 +7278,10 @@ mod tests {
 
     #[test]
     fn test_lang_acc_analyzer_name() {
-        assert_eq!(LanguageAttributeAnalyzer::new().name(), "language-attribute");
+        assert_eq!(
+            LanguageAttributeAnalyzer::new().name(),
+            "language-attribute"
+        );
     }
 
     #[test]
@@ -6630,10 +7420,7 @@ mod tests {
 
     #[test]
     fn test_xss_mode_block() {
-        let headers = vec![(
-            "X-XSS-Protection".to_string(),
-            "1; mode=block".to_string(),
-        )];
+        let headers = vec![("X-XSS-Protection".to_string(), "1; mode=block".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
@@ -6652,10 +7439,7 @@ mod tests {
 
     #[test]
     fn test_xss_case_insensitive() {
-        let headers = vec![(
-            "x-xss-protection".to_string(),
-            "1; mode=block".to_string(),
-        )];
+        let headers = vec![("x-xss-protection".to_string(), "1; mode=block".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
@@ -6744,7 +7528,10 @@ mod tests {
 
     #[test]
     fn test_ctsniff_whitespace_around_nosniff() {
-        let headers = vec![("X-Content-Type-Options".to_string(), "  nosniff  ".to_string())];
+        let headers = vec![(
+            "X-Content-Type-Options".to_string(),
+            "  nosniff  ".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = ContentTypeSniffingAnalyzer::new().analyze(&ctx);
@@ -6793,10 +7580,7 @@ mod tests {
 
     #[test]
     fn test_pperm_camera_not_restricted() {
-        let headers = vec![(
-            "Permissions-Policy".to_string(),
-            "camera=self".to_string(),
-        )];
+        let headers = vec![("Permissions-Policy".to_string(), "camera=self".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
@@ -6805,10 +7589,7 @@ mod tests {
 
     #[test]
     fn test_pperm_camera_restricted() {
-        let headers = vec![(
-            "Permissions-Policy".to_string(),
-            "camera=()".to_string(),
-        )];
+        let headers = vec![("Permissions-Policy".to_string(), "camera=()".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
@@ -6853,10 +7634,7 @@ mod tests {
 
     #[test]
     fn test_pperm_empty_header_value() {
-        let headers = vec![(
-            "Permissions-Policy".to_string(),
-            "".to_string(),
-        )];
+        let headers = vec![("Permissions-Policy".to_string(), "".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
@@ -6866,10 +7644,7 @@ mod tests {
 
     #[test]
     fn test_pperm_case_insensitive_camera() {
-        let headers = vec![(
-            "Permissions-Policy".to_string(),
-            "Camera=self".to_string(),
-        )];
+        let headers = vec![("Permissions-Policy".to_string(), "Camera=self".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = PermissionsPolicyAnalyzerNew::new().analyze(&ctx);
@@ -6938,10 +7713,7 @@ mod tests {
 
     #[test]
     fn test_coep_empty_value() {
-        let headers = vec![(
-            "Cross-Origin-Embedder-Policy".to_string(),
-            "".to_string(),
-        )];
+        let headers = vec![("Cross-Origin-Embedder-Policy".to_string(), "".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
@@ -7032,10 +7804,7 @@ mod tests {
 
     #[test]
     fn test_coop_empty_value() {
-        let headers = vec![(
-            "Cross-Origin-Opener-Policy".to_string(),
-            "".to_string(),
-        )];
+        let headers = vec![("Cross-Origin-Opener-Policy".to_string(), "".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
@@ -7093,9 +7862,10 @@ impl Analyzer for DnsRebindingAnalyzer {
         let url = &ctx.page.url;
 
         // Check for CORS headers that could enable DNS rebinding
-        let has_cors_wildcard = ctx.headers.iter().any(|(k, v)| {
-            k.eq_ignore_ascii_case("Access-Control-Allow-Origin") && v.trim() == "*"
-        });
+        let has_cors_wildcard = ctx
+            .headers
+            .iter()
+            .any(|(k, v)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin") && v.trim() == "*");
 
         if has_cors_wildcard {
             // Check if the page also sets credentials
@@ -7133,9 +7903,7 @@ impl Analyzer for DnsRebindingAnalyzer {
                     "10.0.",
                     "172.16.",
                 ];
-                let has_local_ref = local_patterns
-                    .iter()
-                    .any(|p| body.contains(p));
+                let has_local_ref = local_patterns.iter().any(|p| body.contains(p));
                 if has_local_ref {
                     findings.push(Finding {
                         severity: Severity::Warning,
@@ -7201,9 +7969,8 @@ impl Analyzer for SubresourceIntegrityAnalyzer {
                     let is_external = src.starts_with("http://")
                         || src.starts_with("https://")
                         || src.starts_with("//");
-                    let has_integrity = body.contains(&format!(
-                        "integrity=\""
-                    )) && body.contains(src);
+                    let has_integrity =
+                        body.contains(&format!("integrity=\"")) && body.contains(src);
                     is_external && !has_integrity
                 })
             })
@@ -7513,24 +8280,24 @@ impl Analyzer for TabindexAnalyzer {
             });
         }
 
-            if ctx.page.tabindex_negative_count > 0 {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Accessibility,
-                    code: "TABINDEX002".to_string(),
-                    title: "Elements removed from tab order with tabindex=-1".to_string(),
-                    description: format!(
-                        "{} element(s) use tabindex=-1, removing them from the tab \
+        if ctx.page.tabindex_negative_count > 0 {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Accessibility,
+                code: "TABINDEX002".to_string(),
+                title: "Elements removed from tab order with tabindex=-1".to_string(),
+                description: format!(
+                    "{} element(s) use tabindex=-1, removing them from the tab \
                          order. This is acceptable for programmatically focused elements \
                          but should not be used to hide interactive content.",
-                        ctx.page.tabindex_negative_count
-                    ),
-                    url: url.clone(),
-                    recommendation: "Ensure elements with tabindex=-1 are not interactive \
+                    ctx.page.tabindex_negative_count
+                ),
+                url: url.clone(),
+                recommendation: "Ensure elements with tabindex=-1 are not interactive \
                                      elements that users need to reach."
-                        .to_string(),
-                });
-            }
+                    .to_string(),
+            });
+        }
 
         findings
     }
@@ -7577,11 +8344,9 @@ impl Analyzer for PermissionsPolicyAnalyzerV2 {
                     category: IssueCategory::Security,
                     code: "PERM-V2001".to_string(),
                     title: "Permissions-Policy header missing".to_string(),
-                    description: "No Permissions-Policy header was found."
-                        .to_string(),
+                    description: "No Permissions-Policy header was found.".to_string(),
                     url: url.to_string(),
-                    recommendation: "Set a Permissions-Policy header."
-                        .into(),
+                    recommendation: "Set a Permissions-Policy header.".into(),
                 });
             }
             Some(policy) => {
@@ -7600,9 +8365,7 @@ impl Analyzer for PermissionsPolicyAnalyzerV2 {
                                  {feature} access."
                             ),
                             url: url.to_string(),
-                            recommendation: format!(
-                                "Add {feature}=() to Permissions-Policy."
-                            ),
+                            recommendation: format!("Add {feature}=() to Permissions-Policy."),
                         });
                     }
                 }
@@ -7643,8 +8406,14 @@ impl Analyzer for FormInputLabelAnalyzer {
         for form in &ctx.page.forms {
             for input in &form.inputs {
                 if !input.has_label {
-                    let aria_has_name = input.aria_label.as_ref().is_some_and(|l| !l.trim().is_empty())
-                        || input.aria_labelledby.as_ref().is_some_and(|l| !l.trim().is_empty());
+                    let aria_has_name = input
+                        .aria_label
+                        .as_ref()
+                        .is_some_and(|l| !l.trim().is_empty())
+                        || input
+                            .aria_labelledby
+                            .as_ref()
+                            .is_some_and(|l| !l.trim().is_empty());
                     if !aria_has_name {
                         let desc = match (&input.name, &input.input_type) {
                             (Some(n), Some(t)) => format!("input (name=\"{n}\", type=\"{t}\")"),
@@ -7714,15 +8483,21 @@ impl Analyzer for LinkTextAnalyzer {
                         link.href
                     ),
                     url: url.to_string(),
-                    recommendation: "Add descriptive text content inside the <a> tag."
-                        .to_string(),
+                    recommendation: "Add descriptive text content inside the <a> tag.".to_string(),
                 });
                 continue;
             }
 
             let lower = text.to_lowercase();
             let generic_texts = [
-                "click here", "read more", "learn more", "here", "link", "more", "this", "continue",
+                "click here",
+                "read more",
+                "learn more",
+                "here",
+                "link",
+                "more",
+                "this",
+                "continue",
             ];
             for generic in &generic_texts {
                 if lower == *generic {
@@ -7735,8 +8510,7 @@ impl Analyzer for LinkTextAnalyzer {
                             "Link text \"{text}\" is generic and does not describe the destination."
                         ),
                         url: url.to_string(),
-                        recommendation: "Replace generic text with descriptive text."
-                            .to_string(),
+                        recommendation: "Replace generic text with descriptive text.".to_string(),
                     });
                     break;
                 }
@@ -7786,8 +8560,7 @@ impl Analyzer for ImageAltTextAnalyzer {
                         image.src
                     ),
                     url: url.to_string(),
-                    recommendation: "Add a descriptive alt attribute to the image."
-                        .to_string(),
+                    recommendation: "Add a descriptive alt attribute to the image.".to_string(),
                 });
             }
         }
@@ -7982,11 +8755,9 @@ impl Analyzer for XssProtectionAnalyzerV2 {
                     category: IssueCategory::Security,
                     code: "XSS-V2001".to_string(),
                     title: "Missing X-XSS-Protection header".to_string(),
-                    description: "No X-XSS-Protection header was found."
-                        .to_string(),
+                    description: "No X-XSS-Protection header was found.".to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-XSS-Protection: 1; mode=block."
-                        .to_string(),
+                    recommendation: "Set X-XSS-Protection: 1; mode=block.".to_string(),
                 });
             }
             Some(value) => {
@@ -7996,8 +8767,9 @@ impl Analyzer for XssProtectionAnalyzerV2 {
                         category: IssueCategory::Security,
                         code: "XSS-V2002".to_string(),
                         title: "X-XSS-Protection explicitly disabled".to_string(),
-                        description: "X-XSS-Protection is set to 0, explicitly disabling the XSS auditor."
-                            .to_string(),
+                        description:
+                            "X-XSS-Protection is set to 0, explicitly disabling the XSS auditor."
+                                .to_string(),
                         url: url.to_string(),
                         recommendation: "Ensure Content-Security-Policy is properly configured."
                             .to_string(),
@@ -8051,11 +8823,9 @@ impl Analyzer for ContentTypeSniffingAnalyzerV2 {
                     category: IssueCategory::Security,
                     code: "CT-V2001".to_string(),
                     title: "Missing X-Content-Type-Options header".to_string(),
-                    description: "No X-Content-Type-Options header was found."
-                        .to_string(),
+                    description: "No X-Content-Type-Options header was found.".to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-Content-Type-Options: nosniff."
-                        .to_string(),
+                    recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                 });
             }
             Some(value) => {
@@ -8069,8 +8839,7 @@ impl Analyzer for ContentTypeSniffingAnalyzerV2 {
                             "X-Content-Type-Options is \"{value}\" instead of \"nosniff\"."
                         ),
                         url: url.to_string(),
-                        recommendation: "Set X-Content-Type-Options: nosniff."
-                            .to_string(),
+                        recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
                     });
                 }
             }
@@ -8085,15 +8854,27 @@ impl Analyzer for ContentTypeSniffingAnalyzerV2 {
 // =========================================================================
 
 pub struct HstsPreloadListValidator;
-impl Default for HstsPreloadListValidator { fn default() -> Self { Self::new() } }
-impl HstsPreloadListValidator { pub fn new() -> Self { Self } }
+impl Default for HstsPreloadListValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl HstsPreloadListValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for HstsPreloadListValidator {
-    fn name(&self) -> &str { "hsts-preload-list-validator" }
+    fn name(&self) -> &str {
+        "hsts-preload-list-validator"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let hsts = ctx.headers.iter()
+        let hsts = ctx
+            .headers
+            .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security"))
             .map(|(_, v)| v.as_str());
         if let Some(value) = hsts {
@@ -8127,20 +8908,38 @@ impl Analyzer for HstsPreloadListValidator {
 // =========================================================================
 
 pub struct CspDirectiveValidator;
-impl Default for CspDirectiveValidator { fn default() -> Self { Self::new() } }
-impl CspDirectiveValidator { pub fn new() -> Self { Self } }
+impl Default for CspDirectiveValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl CspDirectiveValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for CspDirectiveValidator {
-    fn name(&self) -> &str { "csp-directive-validator" }
+    fn name(&self) -> &str {
+        "csp-directive-validator"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let csp = ctx.headers.iter()
+        let csp = ctx
+            .headers
+            .iter()
             .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
             .map(|(_, v)| v.as_str());
         if let Some(value) = csp {
             let lower = value.to_lowercase();
-            let recommended = ["default-src", "script-src", "style-src", "img-src", "connect-src"];
+            let recommended = [
+                "default-src",
+                "script-src",
+                "style-src",
+                "img-src",
+                "connect-src",
+            ];
             for dir in &recommended {
                 if !lower.contains(dir) {
                     findings.push(Finding {
@@ -8164,15 +8963,27 @@ impl Analyzer for CspDirectiveValidator {
 // =========================================================================
 
 pub struct CookieSecureFlagValidator;
-impl Default for CookieSecureFlagValidator { fn default() -> Self { Self::new() } }
-impl CookieSecureFlagValidator { pub fn new() -> Self { Self } }
+impl Default for CookieSecureFlagValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl CookieSecureFlagValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for CookieSecureFlagValidator {
-    fn name(&self) -> &str { "cookie-secure-flag" }
+    fn name(&self) -> &str {
+        "cookie-secure-flag"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if !url.starts_with("https://") { return findings; }
+        if !url.starts_with("https://") {
+            return findings;
+        }
         for (k, v) in ctx.headers {
             if k.eq_ignore_ascii_case("Set-Cookie") && !v.to_lowercase().contains("secure") {
                 let name = v.split('=').next().unwrap_or("unknown").trim();
@@ -8196,11 +9007,21 @@ impl Analyzer for CookieSecureFlagValidator {
 // =========================================================================
 
 pub struct CookieHttpOnlyFlagValidator;
-impl Default for CookieHttpOnlyFlagValidator { fn default() -> Self { Self::new() } }
-impl CookieHttpOnlyFlagValidator { pub fn new() -> Self { Self } }
+impl Default for CookieHttpOnlyFlagValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl CookieHttpOnlyFlagValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for CookieHttpOnlyFlagValidator {
-    fn name(&self) -> &str { "cookie-httponly-flag" }
+    fn name(&self) -> &str {
+        "cookie-httponly-flag"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -8227,15 +9048,27 @@ impl Analyzer for CookieHttpOnlyFlagValidator {
 // =========================================================================
 
 pub struct MixedContentFormValidator;
-impl Default for MixedContentFormValidator { fn default() -> Self { Self::new() } }
-impl MixedContentFormValidator { pub fn new() -> Self { Self } }
+impl Default for MixedContentFormValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl MixedContentFormValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for MixedContentFormValidator {
-    fn name(&self) -> &str { "mixed-content-form" }
+    fn name(&self) -> &str {
+        "mixed-content-form"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if !url.starts_with("https://") { return findings; }
+        if !url.starts_with("https://") {
+            return findings;
+        }
         if let Some(body) = ctx.body {
             let prefix_dq = "action=\"http://";
             let prefix_sq = "action='http://";
@@ -8255,7 +9088,9 @@ impl Analyzer for MixedContentFormValidator {
                             recommendation: "Change the form action URL to HTTPS.".to_string(),
                         });
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
             // For single-quote prefix
@@ -8274,7 +9109,9 @@ impl Analyzer for MixedContentFormValidator {
                             recommendation: "Change the form action URL to HTTPS.".to_string(),
                         });
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
         }
@@ -8287,15 +9124,27 @@ impl Analyzer for MixedContentFormValidator {
 // =========================================================================
 
 pub struct MixedContentScriptValidator;
-impl Default for MixedContentScriptValidator { fn default() -> Self { Self::new() } }
-impl MixedContentScriptValidator { pub fn new() -> Self { Self } }
+impl Default for MixedContentScriptValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl MixedContentScriptValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for MixedContentScriptValidator {
-    fn name(&self) -> &str { "mixed-content-script" }
+    fn name(&self) -> &str {
+        "mixed-content-script"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if !url.starts_with("https://") { return findings; }
+        if !url.starts_with("https://") {
+            return findings;
+        }
         if let Some(body) = ctx.body {
             let prefix_dq = "src=\"http://";
             let prefix_sq = "src='http://";
@@ -8311,7 +9160,9 @@ impl Analyzer for MixedContentScriptValidator {
                             count += 1;
                         }
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
             // For single-quote prefix
@@ -8325,7 +9176,9 @@ impl Analyzer for MixedContentScriptValidator {
                             count += 1;
                         }
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
             if count > 0 {
@@ -8349,19 +9202,33 @@ impl Analyzer for MixedContentScriptValidator {
 // =========================================================================
 
 pub struct MixedContentImageValidator;
-impl Default for MixedContentImageValidator { fn default() -> Self { Self::new() } }
-impl MixedContentImageValidator { pub fn new() -> Self { Self } }
+impl Default for MixedContentImageValidator {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl MixedContentImageValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for MixedContentImageValidator {
-    fn name(&self) -> &str { "mixed-content-image" }
+    fn name(&self) -> &str {
+        "mixed-content-image"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if !url.starts_with("https://") { return findings; }
+        if !url.starts_with("https://") {
+            return findings;
+        }
         if let Some(body) = ctx.body {
             let prefix_dq = "src=\"http://";
             let prefix_sq = "src='http://";
-            let img_exts = [".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".ico", ".bmp", ".tiff"];
+            let img_exts = [
+                ".jpg", ".jpeg", ".png", ".gif", ".svg", ".webp", ".ico", ".bmp", ".tiff",
+            ];
             let mut count = 0;
             // For double-quote prefix
             {
@@ -8374,7 +9241,9 @@ impl Analyzer for MixedContentImageValidator {
                             count += 1;
                         }
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
             // For single-quote prefix
@@ -8388,7 +9257,9 @@ impl Analyzer for MixedContentImageValidator {
                             count += 1;
                         }
                         remaining = &remaining[start + end + 1..];
-                    } else { break; }
+                    } else {
+                        break;
+                    }
                 }
             }
             if count > 0 {
@@ -8412,11 +9283,21 @@ impl Analyzer for MixedContentImageValidator {
 // =========================================================================
 
 pub struct LandmarkMainAnalyzer;
-impl Default for LandmarkMainAnalyzer { fn default() -> Self { Self::new() } }
-impl LandmarkMainAnalyzer { pub fn new() -> Self { Self } }
+impl Default for LandmarkMainAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl LandmarkMainAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for LandmarkMainAnalyzer {
-    fn name(&self) -> &str { "landmark-main" }
+    fn name(&self) -> &str {
+        "landmark-main"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         if !ctx.page.has_main_landmark {
@@ -8439,11 +9320,21 @@ impl Analyzer for LandmarkMainAnalyzer {
 // =========================================================================
 
 pub struct LandmarkNavAnalyzer;
-impl Default for LandmarkNavAnalyzer { fn default() -> Self { Self::new() } }
-impl LandmarkNavAnalyzer { pub fn new() -> Self { Self } }
+impl Default for LandmarkNavAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl LandmarkNavAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for LandmarkNavAnalyzer {
-    fn name(&self) -> &str { "landmark-nav" }
+    fn name(&self) -> &str {
+        "landmark-nav"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         if !ctx.page.has_nav_landmark {
@@ -8466,14 +9357,28 @@ impl Analyzer for LandmarkNavAnalyzer {
 // =========================================================================
 
 pub struct LandmarkBannerAnalyzer;
-impl Default for LandmarkBannerAnalyzer { fn default() -> Self { Self::new() } }
-impl LandmarkBannerAnalyzer { pub fn new() -> Self { Self } }
+impl Default for LandmarkBannerAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl LandmarkBannerAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for LandmarkBannerAnalyzer {
-    fn name(&self) -> &str { "landmark-banner" }
+    fn name(&self) -> &str {
+        "landmark-banner"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
-        let has_banner = ctx.page.landmarks.iter().any(|l| l == "banner" || l == "header");
+        let has_banner = ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l == "banner" || l == "header");
         if !has_banner {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -8494,15 +9399,27 @@ impl Analyzer for LandmarkBannerAnalyzer {
 // =========================================================================
 
 pub struct HeadingLevelSkipAnalyzer;
-impl Default for HeadingLevelSkipAnalyzer { fn default() -> Self { Self::new() } }
-impl HeadingLevelSkipAnalyzer { pub fn new() -> Self { Self } }
+impl Default for HeadingLevelSkipAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl HeadingLevelSkipAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for HeadingLevelSkipAnalyzer {
-    fn name(&self) -> &str { "heading-level-skip" }
+    fn name(&self) -> &str {
+        "heading-level-skip"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if ctx.page.headings.len() < 2 { return findings; }
+        if ctx.page.headings.len() < 2 {
+            return findings;
+        }
         let mut prev_level: Option<u8> = None;
         for heading in &ctx.page.headings {
             if let Some(prev) = prev_level {
@@ -8512,9 +9429,15 @@ impl Analyzer for HeadingLevelSkipAnalyzer {
                         category: IssueCategory::Accessibility,
                         code: "HEADSKIP001".to_string(),
                         title: "Heading level skip detected".to_string(),
-                        description: format!("Heading jumps from H{prev} to H{}, skipping intermediate levels.", heading.level),
+                        description: format!(
+                            "Heading jumps from H{prev} to H{}, skipping intermediate levels.",
+                            heading.level
+                        ),
                         url: url.to_string(),
-                        recommendation: format!("Use H{} after H{prev} to maintain document outline.", prev + 1),
+                        recommendation: format!(
+                            "Use H{} after H{prev} to maintain document outline.",
+                            prev + 1
+                        ),
                     });
                     break;
                 }
@@ -8530,11 +9453,21 @@ impl Analyzer for HeadingLevelSkipAnalyzer {
 // =========================================================================
 
 pub struct FormLabelAssociationAnalyzer;
-impl Default for FormLabelAssociationAnalyzer { fn default() -> Self { Self::new() } }
-impl FormLabelAssociationAnalyzer { pub fn new() -> Self { Self } }
+impl Default for FormLabelAssociationAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl FormLabelAssociationAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for FormLabelAssociationAnalyzer {
-    fn name(&self) -> &str { "form-label-association" }
+    fn name(&self) -> &str {
+        "form-label-association"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -8542,8 +9475,14 @@ impl Analyzer for FormLabelAssociationAnalyzer {
         for form in &ctx.page.forms {
             for input in &form.inputs {
                 if !input.has_label
-                    && input.aria_label.as_ref().is_none_or(|l| l.trim().is_empty())
-                    && input.aria_labelledby.as_ref().is_none_or(|l| l.trim().is_empty())
+                    && input
+                        .aria_label
+                        .as_ref()
+                        .is_none_or(|l| l.trim().is_empty())
+                    && input
+                        .aria_labelledby
+                        .as_ref()
+                        .is_none_or(|l| l.trim().is_empty())
                 {
                     unlabeled += 1;
                 }
@@ -8569,16 +9508,31 @@ impl Analyzer for FormLabelAssociationAnalyzer {
 // =========================================================================
 
 pub struct TableHeaderScopeAnalyzer;
-impl Default for TableHeaderScopeAnalyzer { fn default() -> Self { Self::new() } }
-impl TableHeaderScopeAnalyzer { pub fn new() -> Self { Self } }
+impl Default for TableHeaderScopeAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl TableHeaderScopeAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for TableHeaderScopeAnalyzer {
-    fn name(&self) -> &str { "table-header-scope" }
+    fn name(&self) -> &str {
+        "table-header-scope"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if ctx.page.tables_total == 0 { return findings; }
-        let without = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_headers);
+        if ctx.page.tables_total == 0 {
+            return findings;
+        }
+        let without = ctx
+            .page
+            .tables_total
+            .saturating_sub(ctx.page.tables_with_headers);
         if without > 0 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -8599,16 +9553,31 @@ impl Analyzer for TableHeaderScopeAnalyzer {
 // =========================================================================
 
 pub struct TableCaptionPresenceAnalyzer;
-impl Default for TableCaptionPresenceAnalyzer { fn default() -> Self { Self::new() } }
-impl TableCaptionPresenceAnalyzer { pub fn new() -> Self { Self } }
+impl Default for TableCaptionPresenceAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl TableCaptionPresenceAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for TableCaptionPresenceAnalyzer {
-    fn name(&self) -> &str { "table-caption-presence" }
+    fn name(&self) -> &str {
+        "table-caption-presence"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if ctx.page.tables_total == 0 { return findings; }
-        let without = ctx.page.tables_total.saturating_sub(ctx.page.tables_with_captions);
+        if ctx.page.tables_total == 0 {
+            return findings;
+        }
+        let without = ctx
+            .page
+            .tables_total
+            .saturating_sub(ctx.page.tables_with_captions);
         if without > 0 {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -8629,15 +9598,35 @@ impl Analyzer for TableCaptionPresenceAnalyzer {
 // =========================================================================
 
 pub struct AnchorTextGenericAnalyzer;
-impl Default for AnchorTextGenericAnalyzer { fn default() -> Self { Self::new() } }
-impl AnchorTextGenericAnalyzer { pub fn new() -> Self { Self } }
+impl Default for AnchorTextGenericAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl AnchorTextGenericAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for AnchorTextGenericAnalyzer {
-    fn name(&self) -> &str { "anchor-text-generic" }
+    fn name(&self) -> &str {
+        "anchor-text-generic"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let generic = ["click here", "read more", "learn more", "here", "more", "link", "this", "continue", "go"];
+        let generic = [
+            "click here",
+            "read more",
+            "learn more",
+            "here",
+            "more",
+            "link",
+            "this",
+            "continue",
+            "go",
+        ];
         for link in &ctx.page.links {
             let text = link.text.trim().to_lowercase();
             if !text.is_empty() && generic.contains(&text.as_str()) {
@@ -8646,9 +9635,13 @@ impl Analyzer for AnchorTextGenericAnalyzer {
                     category: IssueCategory::Accessibility,
                     code: "ANCHGEN001".to_string(),
                     title: "Link with generic anchor text".to_string(),
-                    description: format!("Link text \"{}\" is generic and does not describe the destination.", link.text.trim()),
+                    description: format!(
+                        "Link text \"{}\" is generic and does not describe the destination.",
+                        link.text.trim()
+                    ),
                     url: url.to_string(),
-                    recommendation: "Use descriptive text that explains the link purpose.".to_string(),
+                    recommendation: "Use descriptive text that explains the link purpose."
+                        .to_string(),
                 });
             }
         }
@@ -8661,11 +9654,21 @@ impl Analyzer for AnchorTextGenericAnalyzer {
 // =========================================================================
 
 pub struct AriaRequiredAttributesAnalyzer;
-impl Default for AriaRequiredAttributesAnalyzer { fn default() -> Self { Self::new() } }
-impl AriaRequiredAttributesAnalyzer { pub fn new() -> Self { Self } }
+impl Default for AriaRequiredAttributesAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl AriaRequiredAttributesAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for AriaRequiredAttributesAnalyzer {
-    fn name(&self) -> &str { "aria-required-attributes" }
+    fn name(&self) -> &str {
+        "aria-required-attributes"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -8689,11 +9692,21 @@ impl Analyzer for AriaRequiredAttributesAnalyzer {
 // =========================================================================
 
 pub struct FocusOrderPositiveTabindexAnalyzer;
-impl Default for FocusOrderPositiveTabindexAnalyzer { fn default() -> Self { Self::new() } }
-impl FocusOrderPositiveTabindexAnalyzer { pub fn new() -> Self { Self } }
+impl Default for FocusOrderPositiveTabindexAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl FocusOrderPositiveTabindexAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for FocusOrderPositiveTabindexAnalyzer {
-    fn name(&self) -> &str { "focus-order-positive-tabindex" }
+    fn name(&self) -> &str {
+        "focus-order-positive-tabindex"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         if ctx.page.has_positive_tabindex {
@@ -8716,8 +9729,16 @@ impl Analyzer for FocusOrderPositiveTabindexAnalyzer {
 // =========================================================================
 
 pub struct ColorContrastTextAnalyzer;
-impl Default for ColorContrastTextAnalyzer { fn default() -> Self { Self::new() } }
-impl ColorContrastTextAnalyzer { pub fn new() -> Self { Self } }
+impl Default for ColorContrastTextAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl ColorContrastTextAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl ColorContrastTextAnalyzer {
     fn parse_hex(hex: &str) -> Option<(u8, u8, u8)> {
@@ -8742,7 +9763,11 @@ impl ColorContrastTextAnalyzer {
     fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
         let f = |c: u8| -> f64 {
             let s = c as f64 / 255.0;
-            if s <= 0.03928 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+            if s <= 0.03928 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            }
         };
         0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
     }
@@ -8776,7 +9801,9 @@ impl ColorContrastTextAnalyzer {
 }
 
 impl Analyzer for ColorContrastTextAnalyzer {
-    fn name(&self) -> &str { "color-contrast-text" }
+    fn name(&self) -> &str {
+        "color-contrast-text"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -8785,7 +9812,9 @@ impl Analyzer for ColorContrastTextAnalyzer {
         let mut low = 0;
         for (fg, bg) in &pairs {
             let ratio = Self::contrast_ratio(*fg, *bg);
-            if ratio < 4.5 { low += 1; }
+            if ratio < 4.5 {
+                low += 1;
+            }
         }
         if low > 0 {
             findings.push(Finding {
@@ -8807,8 +9836,16 @@ impl Analyzer for ColorContrastTextAnalyzer {
 // =========================================================================
 
 pub struct ColorContrastLinkAnalyzer;
-impl Default for ColorContrastLinkAnalyzer { fn default() -> Self { Self::new() } }
-impl ColorContrastLinkAnalyzer { pub fn new() -> Self { Self } }
+impl Default for ColorContrastLinkAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl ColorContrastLinkAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl ColorContrastLinkAnalyzer {
     fn parse_hex(hex: &str) -> Option<(u8, u8, u8)> {
@@ -8833,7 +9870,11 @@ impl ColorContrastLinkAnalyzer {
     fn relative_luminance(r: u8, g: u8, b: u8) -> f64 {
         let f = |c: u8| -> f64 {
             let s = c as f64 / 255.0;
-            if s <= 0.03928 { s / 12.92 } else { ((s + 0.055) / 1.055).powf(2.4) }
+            if s <= 0.03928 {
+                s / 12.92
+            } else {
+                ((s + 0.055) / 1.055).powf(2.4)
+            }
         };
         0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
     }
@@ -8860,7 +9901,9 @@ impl ColorContrastLinkAnalyzer {
 }
 
 impl Analyzer for ColorContrastLinkAnalyzer {
-    fn name(&self) -> &str { "color-contrast-link" }
+    fn name(&self) -> &str {
+        "color-contrast-link"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -8869,7 +9912,9 @@ impl Analyzer for ColorContrastLinkAnalyzer {
         let mut low = 0;
         for (fg, bg) in &pairs {
             let ratio = Self::contrast_ratio(*fg, *bg);
-            if ratio < 3.0 { low += 1; }
+            if ratio < 3.0 {
+                low += 1;
+            }
         }
         if low > 0 {
             findings.push(Finding {
@@ -8893,20 +9938,29 @@ impl Analyzer for ColorContrastLinkAnalyzer {
 pub struct ReferrerPolicyAnalyzerV2;
 
 impl Default for ReferrerPolicyAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ReferrerPolicyAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ReferrerPolicyAnalyzerV2 {
-    fn name(&self) -> &str { "referrer-policy-v2" }
+    fn name(&self) -> &str {
+        "referrer-policy-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy"));
+        let has = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy"));
         if !has {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -8929,20 +9983,29 @@ impl Analyzer for ReferrerPolicyAnalyzerV2 {
 pub struct XFrameOptionsAnalyzerV2;
 
 impl Default for XFrameOptionsAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl XFrameOptionsAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for XFrameOptionsAnalyzerV2 {
-    fn name(&self) -> &str { "x-frame-options-v2" }
+    fn name(&self) -> &str {
+        "x-frame-options-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options"));
+        let has = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options"));
         if !has {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -8965,20 +10028,30 @@ impl Analyzer for XFrameOptionsAnalyzerV2 {
 pub struct ContentSecurityPolicyAnalyzerV2;
 
 impl Default for ContentSecurityPolicyAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContentSecurityPolicyAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ContentSecurityPolicyAnalyzerV2 {
-    fn name(&self) -> &str { "content-security-policy-v2" }
+    fn name(&self) -> &str {
+        "content-security-policy-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str());
+        let csp = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
+            .map(|(_, v)| v.as_str());
         match csp {
             None => {
                 findings.push(Finding {
@@ -9016,20 +10089,30 @@ impl Analyzer for ContentSecurityPolicyAnalyzerV2 {
 pub struct StrictTransportSecurityAnalyzerV3;
 
 impl Default for StrictTransportSecurityAnalyzerV3 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl StrictTransportSecurityAnalyzerV3 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for StrictTransportSecurityAnalyzerV3 {
-    fn name(&self) -> &str { "strict-transport-security-v3" }
+    fn name(&self) -> &str {
+        "strict-transport-security-v3"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let hsts = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str());
+        let hsts = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security"))
+            .map(|(_, v)| v.as_str());
         match hsts {
             None => {
                 findings.push(Finding {
@@ -9067,20 +10150,29 @@ impl Analyzer for StrictTransportSecurityAnalyzerV3 {
 pub struct XContentTypeOptionsAnalyzerV2;
 
 impl Default for XContentTypeOptionsAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl XContentTypeOptionsAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for XContentTypeOptionsAnalyzerV2 {
-    fn name(&self) -> &str { "x-content-type-options-v2" }
+    fn name(&self) -> &str {
+        "x-content-type-options-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options"));
+        let has = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options"));
         if !has {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -9103,20 +10195,30 @@ impl Analyzer for XContentTypeOptionsAnalyzerV2 {
 pub struct PermissionsPolicyAnalyzerV3;
 
 impl Default for PermissionsPolicyAnalyzerV3 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PermissionsPolicyAnalyzerV3 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for PermissionsPolicyAnalyzerV3 {
-    fn name(&self) -> &str { "permissions-policy-v3" }
+    fn name(&self) -> &str {
+        "permissions-policy-v3"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy")).map(|(_, v)| v.as_str());
+        let pp = ctx
+            .headers
+            .iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy"))
+            .map(|(_, v)| v.as_str());
         match pp {
             None => {
                 findings.push(Finding {
@@ -9155,20 +10257,29 @@ impl Analyzer for PermissionsPolicyAnalyzerV3 {
 pub struct CrossOriginIsolationAnalyzerV2;
 
 impl Default for CrossOriginIsolationAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CrossOriginIsolationAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CrossOriginIsolationAnalyzerV2 {
-    fn name(&self) -> &str { "cross-origin-isolation-v2" }
+    fn name(&self) -> &str {
+        "cross-origin-isolation-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy"));
+        let has = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy"));
         if !has {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -9191,20 +10302,29 @@ impl Analyzer for CrossOriginIsolationAnalyzerV2 {
 pub struct CrossOriginOpenerPolicyAnalyzerV2;
 
 impl Default for CrossOriginOpenerPolicyAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CrossOriginOpenerPolicyAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CrossOriginOpenerPolicyAnalyzerV2 {
-    fn name(&self) -> &str { "cross-origin-opener-policy-v2" }
+    fn name(&self) -> &str {
+        "cross-origin-opener-policy-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy"));
+        let has = ctx
+            .headers
+            .iter()
+            .any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy"));
         if !has {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -9227,15 +10347,21 @@ impl Analyzer for CrossOriginOpenerPolicyAnalyzerV2 {
 pub struct TabindexAnalyzerV2;
 
 impl Default for TabindexAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TabindexAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for TabindexAnalyzerV2 {
-    fn name(&self) -> &str { "tabindex-v2" }
+    fn name(&self) -> &str {
+        "tabindex-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -9262,21 +10388,32 @@ impl Analyzer for TabindexAnalyzerV2 {
 pub struct LinkAccessibilityAnalyzerV2;
 
 impl Default for LinkAccessibilityAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LinkAccessibilityAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for LinkAccessibilityAnalyzerV2 {
-    fn name(&self) -> &str { "link-accessibility-v2" }
+    fn name(&self) -> &str {
+        "link-accessibility-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let empty_text_links: Vec<&str> = ctx.page.links.iter()
-            .filter(|l| l.text.trim().is_empty() && l.aria_label.as_deref().unwrap_or("").is_empty())
+        let empty_text_links: Vec<&str> = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| {
+                l.text.trim().is_empty() && l.aria_label.as_deref().unwrap_or("").is_empty()
+            })
             .map(|l| l.href.as_str())
             .collect();
         if !empty_text_links.is_empty() {
@@ -9301,20 +10438,32 @@ impl Analyzer for LinkAccessibilityAnalyzerV2 {
 pub struct ImageAccessibilityAnalyzerV2;
 
 impl Default for ImageAccessibilityAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ImageAccessibilityAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ImageAccessibilityAnalyzerV2 {
-    fn name(&self) -> &str { "image-accessibility-v2" }
+    fn name(&self) -> &str {
+        "image-accessibility-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let missing_alt: Vec<&str> = ctx.page.images.iter().filter(|i| !i.has_alt).map(|i| i.src.as_str()).collect();
+        let missing_alt: Vec<&str> = ctx
+            .page
+            .images
+            .iter()
+            .filter(|i| !i.has_alt)
+            .map(|i| i.src.as_str())
+            .collect();
         if !missing_alt.is_empty() {
             findings.push(Finding {
                 severity: Severity::Error,
@@ -9337,15 +10486,21 @@ impl Analyzer for ImageAccessibilityAnalyzerV2 {
 pub struct FormAccessibilityAnalyzerV2;
 
 impl Default for FormAccessibilityAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FormAccessibilityAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for FormAccessibilityAnalyzerV2 {
-    fn name(&self) -> &str { "form-accessibility-v2" }
+    fn name(&self) -> &str {
+        "form-accessibility-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -9375,15 +10530,21 @@ impl Analyzer for FormAccessibilityAnalyzerV2 {
 pub struct TableAccessibilityAnalyzerV2;
 
 impl Default for TableAccessibilityAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TableAccessibilityAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for TableAccessibilityAnalyzerV2 {
-    fn name(&self) -> &str { "table-accessibility-v2" }
+    fn name(&self) -> &str {
+        "table-accessibility-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -9410,15 +10571,21 @@ impl Analyzer for TableAccessibilityAnalyzerV2 {
 pub struct AriaRolesAnalyzerV2;
 
 impl Default for AriaRolesAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl AriaRolesAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for AriaRolesAnalyzerV2 {
-    fn name(&self) -> &str { "aria-roles-v2" }
+    fn name(&self) -> &str {
+        "aria-roles-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -9445,20 +10612,28 @@ impl Analyzer for AriaRolesAnalyzerV2 {
 pub struct HeadingHierarchyAnalyzerV2;
 
 impl Default for HeadingHierarchyAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HeadingHierarchyAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HeadingHierarchyAnalyzerV2 {
-    fn name(&self) -> &str { "heading-hierarchy-v2" }
+    fn name(&self) -> &str {
+        "heading-hierarchy-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if ctx.page.headings.is_empty() { return findings; }
+        if ctx.page.headings.is_empty() {
+            return findings;
+        }
         let mut prev_level: Option<u8> = None;
         for heading in &ctx.page.headings {
             if let Some(prev) = prev_level {
@@ -9488,15 +10663,21 @@ impl Analyzer for HeadingHierarchyAnalyzerV2 {
 pub struct LanguageAttributeAnalyzerV2;
 
 impl Default for LanguageAttributeAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LanguageAttributeAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for LanguageAttributeAnalyzerV2 {
-    fn name(&self) -> &str { "language-attribute-v2" }
+    fn name(&self) -> &str {
+        "language-attribute-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -9590,18 +10771,22 @@ mod new_analyzer_tests {
     fn test_dns_rebinding_wildcard_with_creds() {
         let headers = vec![
             ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-            ("Access-Control-Allow-Credentials".to_string(), "true".to_string()),
+            (
+                "Access-Control-Allow-Credentials".to_string(),
+                "true".to_string(),
+            ),
         ];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND001"));
+        assert!(DnsRebindingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DNSREBIND001"));
     }
 
     #[test]
     fn test_dns_rebinding_wildcard_without_creds() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
@@ -9609,13 +10794,14 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_dns_rebinding_wildcard_with_local_refs() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com");
         let body = "Connect to 127.0.0.1 for local access";
         let ctx = make_ctx(&page, Some(200), &headers, Some(body));
-        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+        assert!(DnsRebindingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DNSREBIND002"));
     }
 
     #[test]
@@ -9630,9 +10816,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_dns_rebinding_specific_origin_no_finding() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "https://other.com".to_string()),
-        ];
+        let headers = vec![(
+            "Access-Control-Allow-Origin".to_string(),
+            "https://other.com".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(DnsRebindingAnalyzer::new().analyze(&ctx).is_empty());
@@ -9640,31 +10827,31 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_dns_rebinding_body_with_localhost() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com");
         let body = "Visit localhost:8080 for admin panel";
         let ctx = make_ctx(&page, Some(200), &headers, Some(body));
-        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+        assert!(DnsRebindingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DNSREBIND002"));
     }
 
     #[test]
     fn test_dns_rebinding_body_with_192_168() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com");
         let body = "Connect to 192.168.1.1 for local access";
         let ctx = make_ctx(&page, Some(200), &headers, Some(body));
-        assert!(DnsRebindingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "DNSREBIND002"));
+        assert!(DnsRebindingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "DNSREBIND002"));
     }
 
     #[test]
     fn test_dns_rebinding_body_no_local_refs() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com");
         let body = "This is a normal page with no local IPs";
         let ctx = make_ctx(&page, Some(200), &headers, Some(body));
@@ -9682,7 +10869,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_sri_name() {
-        assert_eq!(SubresourceIntegrityAnalyzer::new().name(), "subresource-integrity");
+        assert_eq!(
+            SubresourceIntegrityAnalyzer::new().name(),
+            "subresource-integrity"
+        );
     }
 
     #[test]
@@ -9700,9 +10890,13 @@ mod new_analyzer_tests {
             script_type: None,
             has_integrity: false,
         }];
-        let body = r#"<html><head><script src="https://cdn.example.com/lib.js"></script></head></html>"#;
+        let body =
+            r#"<html><head><script src="https://cdn.example.com/lib.js"></script></head></html>"#;
         let ctx = make_ctx(&page, Some(200), &[], Some(body));
-        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+        assert!(SubresourceIntegrityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SRISCRIPT001"));
     }
 
     #[test]
@@ -9772,18 +10966,20 @@ mod new_analyzer_tests {
     #[test]
     fn test_sri_mixed_sri_and_no_sri() {
         let mut page = make_page("https://example.com");
-        page.scripts = vec![
-            crate::parser::ScriptInfo {
-                src: Some("https://cdn.example.com/bad.js".to_string()),
-                r#async: false,
-                defer: false,
-                script_type: None,
-                has_integrity: false,
-            },
-        ];
-        let body = r#"<html><head><script src="https://cdn.example.com/bad.js"></script></head></html>"#;
+        page.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("https://cdn.example.com/bad.js".to_string()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+        }];
+        let body =
+            r#"<html><head><script src="https://cdn.example.com/bad.js"></script></head></html>"#;
         let ctx = make_ctx(&page, Some(200), &[], Some(body));
-        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+        assert!(SubresourceIntegrityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SRISCRIPT001"));
     }
 
     #[test]
@@ -9798,7 +10994,10 @@ mod new_analyzer_tests {
         }];
         let body = r#"<html><head><script src="//cdn.example.com/lib.js"></script></head></html>"#;
         let ctx = make_ctx(&page, Some(200), &[], Some(body));
-        assert!(SubresourceIntegrityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SRISCRIPT001"));
+        assert!(SubresourceIntegrityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SRISCRIPT001"));
     }
 
     #[test]
@@ -9822,7 +11021,10 @@ mod new_analyzer_tests {
     fn test_feature_policy_no_headers() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FP001"));
+        assert!(FeaturePolicyAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FP001"));
     }
 
     #[test]
@@ -9872,7 +11074,10 @@ mod new_analyzer_tests {
     fn test_feature_policy_404_still_checks() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(404), &[], None);
-        assert!(FeaturePolicyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FP001"));
+        assert!(FeaturePolicyAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FP001"));
     }
 
     #[test]
@@ -9900,12 +11105,18 @@ mod new_analyzer_tests {
     fn test_expect_ct_no_header() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(ExpectCTAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ECT001"));
+        assert!(ExpectCTAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ECT001"));
     }
 
     #[test]
     fn test_expect_ct_has_header() {
-        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let headers = vec![(
+            "Expect-CT".to_string(),
+            "max-age=86400, enforce".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(ExpectCTAnalyzer::new().analyze(&ctx).is_empty());
@@ -9972,35 +11183,53 @@ mod new_analyzer_tests {
     fn test_ct_no_header() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CT001"));
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CT001"));
     }
 
     #[test]
     fn test_ct_has_enforce() {
-        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let headers = vec![(
+            "Expect-CT".to_string(),
+            "max-age=86400, enforce".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_ct_report_only() {
-        let headers = vec![("Expect-CT".to_string(), "max-age=86400, enforce".to_string())];
+        let headers = vec![(
+            "Expect-CT".to_string(),
+            "max-age=86400, enforce".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_ct_non_200_skipped() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(301), &[], None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_ct_name() {
-        assert_eq!(CertificateTransparencyAnalyzer::new().name(), "certificate-transparency");
+        assert_eq!(
+            CertificateTransparencyAnalyzer::new().name(),
+            "certificate-transparency"
+        );
     }
 
     #[test]
@@ -10012,7 +11241,9 @@ mod new_analyzer_tests {
     fn test_ct_404_no_finding() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(404), &[], None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -10029,14 +11260,19 @@ mod new_analyzer_tests {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         // Has Expect-CT header but without "enforce" — CT analyzer requires enforce
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CT001"));
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CT001"));
     }
 
     #[test]
     fn test_ct_500_no_finding() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(500), &[], None);
-        assert!(CertificateTransparencyAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(CertificateTransparencyAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // CorsMisconfigurationAnalyzer tests
@@ -10052,28 +11288,33 @@ mod new_analyzer_tests {
     fn test_cors_wildcard_with_creds() {
         let headers = vec![
             ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-            ("Access-Control-Allow-Credentials".to_string(), "true".to_string()),
+            (
+                "Access-Control-Allow-Credentials".to_string(),
+                "true".to_string(),
+            ),
         ];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CORS001"));
+        assert!(CorsMisconfigurationAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CORS001"));
     }
 
     #[test]
     fn test_cors_wildcard_on_sensitive() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com/api/data");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "CORS002"));
+        assert!(CorsMisconfigurationAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CORS002"));
     }
 
     #[test]
     fn test_cors_wildcard_on_non_sensitive() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "*".to_string()),
-        ];
+        let headers = vec![("Access-Control-Allow-Origin".to_string(), "*".to_string())];
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).is_empty());
@@ -10081,9 +11322,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cors_specific_origin() {
-        let headers = vec![
-            ("Access-Control-Allow-Origin".to_string(), "https://other.com".to_string()),
-        ];
+        let headers = vec![(
+            "Access-Control-Allow-Origin".to_string(),
+            "https://other.com".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(CorsMisconfigurationAnalyzer::new().analyze(&ctx).is_empty());
@@ -10091,7 +11333,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cors_name() {
-        assert_eq!(CorsMisconfigurationAnalyzer::new().name(), "cors-misconfiguration");
+        assert_eq!(
+            CorsMisconfigurationAnalyzer::new().name(),
+            "cors-misconfiguration"
+        );
     }
 
     #[test]
@@ -10123,7 +11368,10 @@ mod new_analyzer_tests {
         page.aria_role_count = 3;
         page.aria_label_count = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIALABEL001"));
+        assert!(AriaLabelAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ARIALABEL001"));
     }
 
     #[test]
@@ -10151,7 +11399,10 @@ mod new_analyzer_tests {
         page.aria_role_count = 5;
         page.aria_label_count = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIALABEL001"));
+        assert!(AriaLabelAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ARIALABEL001"));
     }
 
     #[test]
@@ -10206,7 +11457,10 @@ mod new_analyzer_tests {
         page.tables_total = 3;
         page.tables_with_captions = 1;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+        assert!(TableCaptionAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABLECAP001"));
     }
 
     #[test]
@@ -10234,7 +11488,10 @@ mod new_analyzer_tests {
         page.tables_total = 1;
         page.tables_with_captions = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+        assert!(TableCaptionAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABLECAP001"));
     }
 
     #[test]
@@ -10243,7 +11500,10 @@ mod new_analyzer_tests {
         page.tables_total = 5;
         page.tables_with_captions = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+        assert!(TableCaptionAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABLECAP001"));
     }
 
     #[test]
@@ -10252,7 +11512,10 @@ mod new_analyzer_tests {
         page.tables_total = 4;
         page.tables_with_captions = 2;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableCaptionAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABLECAP001"));
+        assert!(TableCaptionAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABLECAP001"));
     }
 
     #[test]
@@ -10289,7 +11552,10 @@ mod new_analyzer_tests {
         page.has_nav_landmark = true;
         page.has_skip_link = false;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
+        assert!(SkipLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SKIPLINK001"));
     }
 
     #[test]
@@ -10318,7 +11584,10 @@ mod new_analyzer_tests {
         page.has_main_landmark = false;
         page.has_skip_link = false;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
+        assert!(SkipLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SKIPLINK001"));
     }
 
     #[test]
@@ -10348,7 +11617,10 @@ mod new_analyzer_tests {
         page.has_main_landmark = true;
         page.has_skip_link = false;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(SkipLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "SKIPLINK001"));
+        assert!(SkipLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SKIPLINK001"));
     }
 
     // TabindexAnalyzer tests
@@ -10365,7 +11637,10 @@ mod new_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = true;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABINDEX001"));
+        assert!(TabindexAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABINDEX001"));
     }
 
     #[test]
@@ -10373,7 +11648,10 @@ mod new_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.tabindex_negative_count = 5;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABINDEX002"));
+        assert!(TabindexAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABINDEX002"));
     }
 
     #[test]
@@ -10403,13 +11681,19 @@ mod new_analyzer_tests {
     fn test_perm_v2_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(PermissionsPolicyAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "PERM-V2001"));
+        assert!(PermissionsPolicyAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PERM-V2001"));
     }
 
     #[test]
     fn test_perm_v2_present() {
         let page = make_page("https://example.com");
-        let headers = vec![("Permissions-Policy".to_string(), "camera=(), microphone=(), geolocation=(), payment=()".to_string())];
+        let headers = vec![(
+            "Permissions-Policy".to_string(),
+            "camera=(), microphone=(), geolocation=(), payment=()".to_string(),
+        )];
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(PermissionsPolicyAnalyzerV2::new().analyze(&ctx).is_empty());
     }
@@ -10474,7 +11758,10 @@ mod new_analyzer_tests {
             has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(FormInputLabelAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FILABEL001"));
+        assert!(FormInputLabelAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FILABEL001"));
     }
 
     // LinkTextAnalyzer tests
@@ -10498,7 +11785,10 @@ mod new_analyzer_tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(LinkTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LINKTEXT001"));
+        assert!(LinkTextAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LINKTEXT001"));
     }
 
     #[test]
@@ -10513,7 +11803,10 @@ mod new_analyzer_tests {
             img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(LinkTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LINKTEXT002"));
+        assert!(LinkTextAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LINKTEXT002"));
     }
 
     #[test]
@@ -10553,7 +11846,10 @@ mod new_analyzer_tests {
             aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGALT001"));
+        assert!(ImageAltTextAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "IMGALT001"));
     }
 
     #[test]
@@ -10569,7 +11865,10 @@ mod new_analyzer_tests {
             aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(ImageAltTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGALT001"));
+        assert!(ImageAltTextAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "IMGALT001"));
     }
 
     #[test]
@@ -10603,7 +11902,10 @@ mod new_analyzer_tests {
         page.aria_role_count = 3;
         page.aria_label_count = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaRoleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIAROLE001"));
+        assert!(AriaRoleAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ARIAROLE001"));
     }
 
     #[test]
@@ -10621,21 +11923,33 @@ mod new_analyzer_tests {
     fn test_hsts_v2_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "HSTS-V2001"));
+        assert!(StrictTransportSecurityAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HSTS-V2001"));
     }
 
     #[test]
     fn test_hsts_v2_low_max_age() {
         let page = make_page("https://example.com");
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=3600".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=3600".to_string(),
+        )];
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "HSTS-V2002"));
+        assert!(StrictTransportSecurityAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HSTS-V2002"));
     }
 
     #[test]
     fn test_hsts_v2_no_include_subdomains() {
         let page = make_page("https://example.com");
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000".to_string(),
+        )];
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = StrictTransportSecurityAnalyzerV2::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "HSTS-V2003"));
@@ -10644,9 +11958,14 @@ mod new_analyzer_tests {
     #[test]
     fn test_hsts_v2_valid() {
         let page = make_page("https://example.com");
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains; preload".to_string(),
+        )];
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(StrictTransportSecurityAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(StrictTransportSecurityAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // XssProtectionAnalyzerV2 tests
@@ -10655,7 +11974,10 @@ mod new_analyzer_tests {
     fn test_xss_v2_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(XssProtectionAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "XSS-V2001"));
+        assert!(XssProtectionAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "XSS-V2001"));
     }
 
     #[test]
@@ -10663,7 +11985,10 @@ mod new_analyzer_tests {
         let page = make_page("https://example.com");
         let headers = vec![("X-XSS-Protection".to_string(), "0".to_string())];
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(XssProtectionAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "XSS-V2002"));
+        assert!(XssProtectionAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "XSS-V2002"));
     }
 
     // ContentTypeSniffingAnalyzerV2 tests
@@ -10672,7 +11997,10 @@ mod new_analyzer_tests {
     fn test_ct_v2_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CT-V2001"));
+        assert!(ContentTypeSniffingAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CT-V2001"));
     }
 
     #[test]
@@ -10680,7 +12008,10 @@ mod new_analyzer_tests {
         let page = make_page("https://example.com");
         let headers = vec![("X-Content-Type-Options".to_string(), "sniff".to_string())];
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CT-V2002"));
+        assert!(ContentTypeSniffingAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CT-V2002"));
     }
 
     #[test]
@@ -10688,14 +12019,19 @@ mod new_analyzer_tests {
         let page = make_page("https://example.com");
         let headers = vec![("X-Content-Type-Options".to_string(), "nosniff".to_string())];
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(ContentTypeSniffingAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(ContentTypeSniffingAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // === HstsPreloadListValidator tests ===
 
     #[test]
     fn test_hsts_preload_valid() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains; preload".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(HstsPreloadListValidator::new().analyze(&ctx).is_empty());
@@ -10703,7 +12039,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_hsts_preload_no_preload() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=31536000; includeSubDomains".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=31536000; includeSubDomains".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(HstsPreloadListValidator::new().analyze(&ctx).is_empty());
@@ -10711,7 +12050,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_hsts_preload_low_max_age() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; includeSubDomains; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300; includeSubDomains; preload".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let f = HstsPreloadListValidator::new().analyze(&ctx);
@@ -10720,10 +12062,16 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_hsts_preload_no_isd() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=63072000; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=63072000; preload".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(HstsPreloadListValidator::new().analyze(&ctx).iter().any(|f| f.code == "HSTSPRELOAD001"));
+        assert!(HstsPreloadListValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HSTSPRELOAD001"));
     }
 
     #[test]
@@ -10735,7 +12083,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_hsts_preload_name() {
-        assert_eq!(HstsPreloadListValidator::new().name(), "hsts-preload-list-validator");
+        assert_eq!(
+            HstsPreloadListValidator::new().name(),
+            "hsts-preload-list-validator"
+        );
     }
 
     #[test]
@@ -10745,26 +12096,40 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_hsts_preload_category() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300; preload".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let findings = HstsPreloadListValidator::new().analyze(&ctx);
-        for f in &findings { assert_eq!(f.category, IssueCategory::Security); }
+        for f in &findings {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     #[test]
     fn test_hsts_preload_severity() {
-        let headers = vec![("Strict-Transport-Security".to_string(), "max-age=300; preload".to_string())];
+        let headers = vec![(
+            "Strict-Transport-Security".to_string(),
+            "max-age=300; preload".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert_eq!(HstsPreloadListValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            HstsPreloadListValidator::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     // === CspDirectiveValidator tests ===
 
     #[test]
     fn test_csp_dir_missing_default_src() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let f = CspDirectiveValidator::new().analyze(&ctx);
@@ -10788,7 +12153,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_csp_dir_name() {
-        assert_eq!(CspDirectiveValidator::new().name(), "csp-directive-validator");
+        assert_eq!(
+            CspDirectiveValidator::new().name(),
+            "csp-directive-validator"
+        );
     }
 
     #[test]
@@ -10798,15 +12166,23 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_csp_dir_category() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        for f in CspDirectiveValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        for f in CspDirectiveValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     #[test]
     fn test_csp_dir_multiple_missing() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         let f = CspDirectiveValidator::new().analyze(&ctx);
@@ -10815,10 +12191,16 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_csp_dir_severity() {
-        let headers = vec![("Content-Security-Policy".to_string(), "script-src 'self'".to_string())];
+        let headers = vec![(
+            "Content-Security-Policy".to_string(),
+            "script-src 'self'".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert_eq!(CspDirectiveValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            CspDirectiveValidator::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     #[test]
@@ -10834,10 +12216,16 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cookie_secure_missing() {
-        let headers = vec![("Set-Cookie".to_string(), "session=abc; HttpOnly".to_string())];
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc; HttpOnly".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CookieSecureFlagValidator::new().analyze(&ctx).iter().any(|f| f.code == "COOKIESEC001"));
+        assert!(CookieSecureFlagValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COOKIESEC001"));
     }
 
     #[test]
@@ -10865,7 +12253,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cookie_secure_name() {
-        assert_eq!(CookieSecureFlagValidator::new().name(), "cookie-secure-flag");
+        assert_eq!(
+            CookieSecureFlagValidator::new().name(),
+            "cookie-secure-flag"
+        );
     }
 
     #[test]
@@ -10878,7 +12269,9 @@ mod new_analyzer_tests {
         let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        for f in CookieSecureFlagValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        for f in CookieSecureFlagValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     #[test]
@@ -10886,7 +12279,10 @@ mod new_analyzer_tests {
         let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert_eq!(CookieSecureFlagValidator::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            CookieSecureFlagValidator::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     // === CookieHttpOnlyFlagValidator tests ===
@@ -10896,12 +12292,18 @@ mod new_analyzer_tests {
         let headers = vec![("Set-Cookie".to_string(), "session=abc; Secure".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).iter().any(|f| f.code == "COOKIEHTTP001"));
+        assert!(CookieHttpOnlyFlagValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COOKIEHTTP001"));
     }
 
     #[test]
     fn test_cookie_httponly_present() {
-        let headers = vec![("Set-Cookie".to_string(), "session=abc; HttpOnly".to_string())];
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc; HttpOnly".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).is_empty());
@@ -10909,7 +12311,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cookie_httponly_both_flags() {
-        let headers = vec![("Set-Cookie".to_string(), "session=abc; Secure; HttpOnly".to_string())];
+        let headers = vec![(
+            "Set-Cookie".to_string(),
+            "session=abc; Secure; HttpOnly".to_string(),
+        )];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
         assert!(CookieHttpOnlyFlagValidator::new().analyze(&ctx).is_empty());
@@ -10924,7 +12329,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_cookie_httponly_name() {
-        assert_eq!(CookieHttpOnlyFlagValidator::new().name(), "cookie-httponly-flag");
+        assert_eq!(
+            CookieHttpOnlyFlagValidator::new().name(),
+            "cookie-httponly-flag"
+        );
     }
 
     #[test]
@@ -10937,7 +12345,9 @@ mod new_analyzer_tests {
         let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &headers, None);
-        for f in CookieHttpOnlyFlagValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        for f in CookieHttpOnlyFlagValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     // === MixedContentFormValidator tests ===
@@ -10946,15 +12356,44 @@ mod new_analyzer_tests {
     fn test_mixed_form_http_action() {
         let body = r#"<form action="http://example.com/submit">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert!(MixedContentFormValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXFRM001"));
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(MixedContentFormValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXFRM001"));
     }
 
     #[test]
     fn test_mixed_form_https_action() {
         let body = r#"<form action="https://example.com/submit">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentFormValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -10962,7 +12401,20 @@ mod new_analyzer_tests {
     fn test_mixed_form_http_page_skipped() {
         let body = r#"<form action="http://example.com/submit">"#;
         let page = make_page("http://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentFormValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -10975,7 +12427,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_mixed_form_name() {
-        assert_eq!(MixedContentFormValidator::new().name(), "mixed-content-form");
+        assert_eq!(
+            MixedContentFormValidator::new().name(),
+            "mixed-content-form"
+        );
     }
 
     #[test]
@@ -10987,16 +12442,47 @@ mod new_analyzer_tests {
     fn test_mixed_form_category() {
         let body = r#"<form action="http://example.com/submit">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        for f in MixedContentFormValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        for f in MixedContentFormValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     #[test]
     fn test_mixed_form_severity() {
         let body = r#"<form action="http://example.com/submit">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert_eq!(MixedContentFormValidator::new().analyze(&ctx)[0].severity, Severity::Error);
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert_eq!(
+            MixedContentFormValidator::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     // === MixedContentScriptValidator tests ===
@@ -11005,15 +12491,44 @@ mod new_analyzer_tests {
     fn test_mixed_script_http() {
         let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert!(MixedContentScriptValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXSCR001"));
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(MixedContentScriptValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXSCR001"));
     }
 
     #[test]
     fn test_mixed_script_https() {
         let body = r#"<script src="https://cdn.example.com/app.js"></script>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentScriptValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -11021,7 +12536,20 @@ mod new_analyzer_tests {
     fn test_mixed_script_http_page_skipped() {
         let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
         let page = make_page("http://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentScriptValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -11034,7 +12562,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_mixed_script_name() {
-        assert_eq!(MixedContentScriptValidator::new().name(), "mixed-content-script");
+        assert_eq!(
+            MixedContentScriptValidator::new().name(),
+            "mixed-content-script"
+        );
     }
 
     #[test]
@@ -11046,8 +12577,23 @@ mod new_analyzer_tests {
     fn test_mixed_script_category() {
         let body = r#"<script src="http://cdn.example.com/app.js"></script>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        for f in MixedContentScriptValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        for f in MixedContentScriptValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     // === MixedContentImageValidator tests ===
@@ -11056,15 +12602,44 @@ mod new_analyzer_tests {
     fn test_mixed_img_http() {
         let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert!(MixedContentImageValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXIMG001"));
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(MixedContentImageValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXIMG001"));
     }
 
     #[test]
     fn test_mixed_img_https() {
         let body = r#"<img src="https://cdn.example.com/photo.jpg">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentImageValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -11072,7 +12647,20 @@ mod new_analyzer_tests {
     fn test_mixed_img_http_page_skipped() {
         let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
         let page = make_page("http://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(MixedContentImageValidator::new().analyze(&ctx).is_empty());
     }
 
@@ -11085,7 +12673,10 @@ mod new_analyzer_tests {
 
     #[test]
     fn test_mixed_img_name() {
-        assert_eq!(MixedContentImageValidator::new().name(), "mixed-content-image");
+        assert_eq!(
+            MixedContentImageValidator::new().name(),
+            "mixed-content-image"
+        );
     }
 
     #[test]
@@ -11097,8 +12688,23 @@ mod new_analyzer_tests {
     fn test_mixed_img_category() {
         let body = r#"<img src="http://cdn.example.com/photo.jpg">"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        for f in MixedContentImageValidator::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Security); }
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        for f in MixedContentImageValidator::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Security);
+        }
     }
 
     // === LandmarkMainAnalyzer tests ===
@@ -11107,7 +12713,10 @@ mod new_analyzer_tests {
     fn test_landmark_main_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(LandmarkMainAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDMAIN001"));
+        assert!(LandmarkMainAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LANDMAIN001"));
     }
 
     #[test]
@@ -11119,23 +12728,32 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_landmark_main_name() { assert_eq!(LandmarkMainAnalyzer::new().name(), "landmark-main"); }
+    fn test_landmark_main_name() {
+        assert_eq!(LandmarkMainAnalyzer::new().name(), "landmark-main");
+    }
 
     #[test]
-    fn test_landmark_main_default() { let _ = LandmarkMainAnalyzer::default(); }
+    fn test_landmark_main_default() {
+        let _ = LandmarkMainAnalyzer::default();
+    }
 
     #[test]
     fn test_landmark_main_category() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in LandmarkMainAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in LandmarkMainAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     #[test]
     fn test_landmark_main_severity() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert_eq!(LandmarkMainAnalyzer::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            LandmarkMainAnalyzer::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     // === LandmarkNavAnalyzer tests ===
@@ -11144,7 +12762,10 @@ mod new_analyzer_tests {
     fn test_landmark_nav_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(LandmarkNavAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDNAV001"));
+        assert!(LandmarkNavAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LANDNAV001"));
     }
 
     #[test]
@@ -11156,16 +12777,22 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_landmark_nav_name() { assert_eq!(LandmarkNavAnalyzer::new().name(), "landmark-nav"); }
+    fn test_landmark_nav_name() {
+        assert_eq!(LandmarkNavAnalyzer::new().name(), "landmark-nav");
+    }
 
     #[test]
-    fn test_landmark_nav_default() { let _ = LandmarkNavAnalyzer::default(); }
+    fn test_landmark_nav_default() {
+        let _ = LandmarkNavAnalyzer::default();
+    }
 
     #[test]
     fn test_landmark_nav_category() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in LandmarkNavAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in LandmarkNavAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === LandmarkBannerAnalyzer tests ===
@@ -11174,7 +12801,10 @@ mod new_analyzer_tests {
     fn test_landmark_banner_missing() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(LandmarkBannerAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "LANDBAN001"));
+        assert!(LandmarkBannerAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "LANDBAN001"));
     }
 
     #[test]
@@ -11194,16 +12824,22 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_landmark_banner_name() { assert_eq!(LandmarkBannerAnalyzer::new().name(), "landmark-banner"); }
+    fn test_landmark_banner_name() {
+        assert_eq!(LandmarkBannerAnalyzer::new().name(), "landmark-banner");
+    }
 
     #[test]
-    fn test_landmark_banner_default() { let _ = LandmarkBannerAnalyzer::default(); }
+    fn test_landmark_banner_default() {
+        let _ = LandmarkBannerAnalyzer::default();
+    }
 
     #[test]
     fn test_landmark_banner_category() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in LandmarkBannerAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in LandmarkBannerAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === HeadingLevelSkipAnalyzer tests ===
@@ -11212,19 +12848,38 @@ mod new_analyzer_tests {
     fn test_heading_skip_h1_to_h3() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
-            crate::parser::Heading { level: 3, text: "H3".into(), length: 2 },
+            crate::parser::Heading {
+                level: 1,
+                text: "H1".into(),
+                length: 2,
+            },
+            crate::parser::Heading {
+                level: 3,
+                text: "H3".into(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "HEADSKIP001"));
+        assert!(HeadingLevelSkipAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HEADSKIP001"));
     }
 
     #[test]
     fn test_heading_skip_no_skip() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
-            crate::parser::Heading { level: 2, text: "H2".into(), length: 2 },
+            crate::parser::Heading {
+                level: 1,
+                text: "H1".into(),
+                length: 2,
+            },
+            crate::parser::Heading {
+                level: 2,
+                text: "H2".into(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).is_empty());
@@ -11233,7 +12888,11 @@ mod new_analyzer_tests {
     #[test]
     fn test_heading_skip_single() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![crate::parser::Heading { level: 1, text: "H1".into(), length: 2 }];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "H1".into(),
+            length: 2,
+        }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(HeadingLevelSkipAnalyzer::new().analyze(&ctx).is_empty());
     }
@@ -11246,20 +12905,34 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_heading_skip_name() { assert_eq!(HeadingLevelSkipAnalyzer::new().name(), "heading-level-skip"); }
+    fn test_heading_skip_name() {
+        assert_eq!(HeadingLevelSkipAnalyzer::new().name(), "heading-level-skip");
+    }
 
     #[test]
-    fn test_heading_skip_default() { let _ = HeadingLevelSkipAnalyzer::default(); }
+    fn test_heading_skip_default() {
+        let _ = HeadingLevelSkipAnalyzer::default();
+    }
 
     #[test]
     fn test_heading_skip_category() {
         let mut page = make_page("https://example.com");
         page.headings = vec![
-            crate::parser::Heading { level: 1, text: "H1".into(), length: 2 },
-            crate::parser::Heading { level: 3, text: "H3".into(), length: 2 },
+            crate::parser::Heading {
+                level: 1,
+                text: "H1".into(),
+                length: 2,
+            },
+            crate::parser::Heading {
+                level: 3,
+                text: "H3".into(),
+                length: 2,
+            },
         ];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in HeadingLevelSkipAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in HeadingLevelSkipAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === FormLabelAssociationAnalyzer tests ===
@@ -11268,27 +12941,54 @@ mod new_analyzer_tests {
     fn test_form_label_assoc_missing() {
         let mut page = make_page("https://example.com");
         page.forms = vec![crate::parser::ExtractedForm {
-            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            action: None,
+            method: "post".into(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
             inputs: vec![crate::parser::ExtractedInput {
-                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
-                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+                input_type: Some("text".into()),
+                name: Some("email".into()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
             }],
-            has_fieldset: false, has_legend: false,
+            has_fieldset: false,
+            has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "FORMLAB001"));
+        assert!(FormLabelAssociationAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FORMLAB001"));
     }
 
     #[test]
     fn test_form_label_assoc_with_label() {
         let mut page = make_page("https://example.com");
         page.forms = vec![crate::parser::ExtractedForm {
-            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            action: None,
+            method: "post".into(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
             inputs: vec![crate::parser::ExtractedInput {
-                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: true,
-                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+                input_type: Some("text".into()),
+                name: Some("email".into()),
+                id: None,
+                has_label: true,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
             }],
-            has_fieldset: false, has_legend: false,
+            has_fieldset: false,
+            has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).is_empty());
@@ -11298,12 +12998,24 @@ mod new_analyzer_tests {
     fn test_form_label_assoc_with_aria() {
         let mut page = make_page("https://example.com");
         page.forms = vec![crate::parser::ExtractedForm {
-            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            action: None,
+            method: "post".into(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
             inputs: vec![crate::parser::ExtractedInput {
-                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
-                aria_label: Some("Email".into()), aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+                input_type: Some("text".into()),
+                name: Some("email".into()),
+                id: None,
+                has_label: false,
+                aria_label: Some("Email".into()),
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
             }],
-            has_fieldset: false, has_legend: false,
+            has_fieldset: false,
+            has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(FormLabelAssociationAnalyzer::new().analyze(&ctx).is_empty());
@@ -11317,24 +13029,45 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_form_label_assoc_name() { assert_eq!(FormLabelAssociationAnalyzer::new().name(), "form-label-association"); }
+    fn test_form_label_assoc_name() {
+        assert_eq!(
+            FormLabelAssociationAnalyzer::new().name(),
+            "form-label-association"
+        );
+    }
 
     #[test]
-    fn test_form_label_assoc_default() { let _ = FormLabelAssociationAnalyzer::default(); }
+    fn test_form_label_assoc_default() {
+        let _ = FormLabelAssociationAnalyzer::default();
+    }
 
     #[test]
     fn test_form_label_assoc_category() {
         let mut page = make_page("https://example.com");
         page.forms = vec![crate::parser::ExtractedForm {
-            action: None, method: "post".into(), input_count: 1, has_file_input: false, has_search_input: false,
+            action: None,
+            method: "post".into(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
             inputs: vec![crate::parser::ExtractedInput {
-                input_type: Some("text".into()), name: Some("email".into()), id: None, has_label: false,
-                aria_label: None, aria_labelledby: None, aria_describedby: None, placeholder: None, required: false,
+                input_type: Some("text".into()),
+                name: Some("email".into()),
+                id: None,
+                has_label: false,
+                aria_label: None,
+                aria_labelledby: None,
+                aria_describedby: None,
+                placeholder: None,
+                required: false,
             }],
-            has_fieldset: false, has_legend: false,
+            has_fieldset: false,
+            has_legend: false,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in FormLabelAssociationAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in FormLabelAssociationAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === TableHeaderScopeAnalyzer tests ===
@@ -11345,7 +13078,10 @@ mod new_analyzer_tests {
         page.tables_total = 3;
         page.tables_with_headers = 1;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableHeaderScopeAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TBLSCOP001"));
+        assert!(TableHeaderScopeAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TBLSCOP001"));
     }
 
     #[test]
@@ -11365,10 +13101,14 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_tbl_scope_name() { assert_eq!(TableHeaderScopeAnalyzer::new().name(), "table-header-scope"); }
+    fn test_tbl_scope_name() {
+        assert_eq!(TableHeaderScopeAnalyzer::new().name(), "table-header-scope");
+    }
 
     #[test]
-    fn test_tbl_scope_default() { let _ = TableHeaderScopeAnalyzer::default(); }
+    fn test_tbl_scope_default() {
+        let _ = TableHeaderScopeAnalyzer::default();
+    }
 
     #[test]
     fn test_tbl_scope_category() {
@@ -11376,7 +13116,9 @@ mod new_analyzer_tests {
         page.tables_total = 1;
         page.tables_with_headers = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in TableHeaderScopeAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in TableHeaderScopeAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === TableCaptionPresenceAnalyzer tests ===
@@ -11387,7 +13129,10 @@ mod new_analyzer_tests {
         page.tables_total = 2;
         page.tables_with_captions = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(TableCaptionPresenceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TBLCAP001"));
+        assert!(TableCaptionPresenceAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TBLCAP001"));
     }
 
     #[test]
@@ -11407,10 +13152,17 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_tbl_cap_name() { assert_eq!(TableCaptionPresenceAnalyzer::new().name(), "table-caption-presence"); }
+    fn test_tbl_cap_name() {
+        assert_eq!(
+            TableCaptionPresenceAnalyzer::new().name(),
+            "table-caption-presence"
+        );
+    }
 
     #[test]
-    fn test_tbl_cap_default() { let _ = TableCaptionPresenceAnalyzer::default(); }
+    fn test_tbl_cap_default() {
+        let _ = TableCaptionPresenceAnalyzer::default();
+    }
 
     #[test]
     fn test_tbl_cap_category() {
@@ -11418,7 +13170,9 @@ mod new_analyzer_tests {
         page.tables_total = 1;
         page.tables_with_captions = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in TableCaptionPresenceAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in TableCaptionPresenceAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === AnchorTextGenericAnalyzer tests ===
@@ -11427,27 +13181,48 @@ mod new_analyzer_tests {
     fn test_anch_gen_click_here() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "/page".into(), text: "click here".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "/page".into(),
+            text: "click here".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCHGEN001"));
+        assert!(AnchorTextGenericAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ANCHGEN001"));
     }
 
     #[test]
     fn test_anch_gen_read_more() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "/page".into(), text: "read more".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "/page".into(),
+            text: "read more".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCHGEN001"));
+        assert!(AnchorTextGenericAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ANCHGEN001"));
     }
 
     #[test]
     fn test_anch_gen_good_text() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "/page".into(), text: "About our pricing".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "/page".into(),
+            text: "About our pricing".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).is_empty());
@@ -11457,7 +13232,12 @@ mod new_analyzer_tests {
     fn test_anch_gen_empty_text() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "/page".into(), text: "".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "/page".into(),
+            text: "".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
         assert!(AnchorTextGenericAnalyzer::new().analyze(&ctx).is_empty());
@@ -11471,19 +13251,33 @@ mod new_analyzer_tests {
     }
 
     #[test]
-    fn test_anch_gen_name() { assert_eq!(AnchorTextGenericAnalyzer::new().name(), "anchor-text-generic"); }
+    fn test_anch_gen_name() {
+        assert_eq!(
+            AnchorTextGenericAnalyzer::new().name(),
+            "anchor-text-generic"
+        );
+    }
 
     #[test]
-    fn test_anch_gen_default() { let _ = AnchorTextGenericAnalyzer::default(); }
+    fn test_anch_gen_default() {
+        let _ = AnchorTextGenericAnalyzer::default();
+    }
 
     #[test]
     fn test_anch_gen_category() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "/page".into(), text: "click here".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "/page".into(),
+            text: "click here".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in AnchorTextGenericAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in AnchorTextGenericAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === AriaRequiredAttributesAnalyzer tests ===
@@ -11494,7 +13288,10 @@ mod new_analyzer_tests {
         page.aria_role_count = 3;
         page.aria_label_count = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ARIAREQ001"));
+        assert!(AriaRequiredAttributesAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ARIAREQ001"));
     }
 
     #[test]
@@ -11503,21 +13300,32 @@ mod new_analyzer_tests {
         page.aria_role_count = 3;
         page.aria_label_count = 3;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(AriaRequiredAttributesAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_aria_req_no_roles() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(AriaRequiredAttributesAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(AriaRequiredAttributesAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_aria_req_name() { assert_eq!(AriaRequiredAttributesAnalyzer::new().name(), "aria-required-attributes"); }
+    fn test_aria_req_name() {
+        assert_eq!(
+            AriaRequiredAttributesAnalyzer::new().name(),
+            "aria-required-attributes"
+        );
+    }
 
     #[test]
-    fn test_aria_req_default() { let _ = AriaRequiredAttributesAnalyzer::default(); }
+    fn test_aria_req_default() {
+        let _ = AriaRequiredAttributesAnalyzer::default();
+    }
 
     #[test]
     fn test_aria_req_category() {
@@ -11525,7 +13333,9 @@ mod new_analyzer_tests {
         page.aria_role_count = 2;
         page.aria_label_count = 0;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in AriaRequiredAttributesAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in AriaRequiredAttributesAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === FocusOrderPositiveTabindexAnalyzer tests ===
@@ -11535,28 +13345,42 @@ mod new_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = true;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TABPOS001"));
+        assert!(FocusOrderPositiveTabindexAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TABPOS001"));
     }
 
     #[test]
     fn test_tabpos_no_positive() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(FocusOrderPositiveTabindexAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_tabpos_name() { assert_eq!(FocusOrderPositiveTabindexAnalyzer::new().name(), "focus-order-positive-tabindex"); }
+    fn test_tabpos_name() {
+        assert_eq!(
+            FocusOrderPositiveTabindexAnalyzer::new().name(),
+            "focus-order-positive-tabindex"
+        );
+    }
 
     #[test]
-    fn test_tabpos_default() { let _ = FocusOrderPositiveTabindexAnalyzer::default(); }
+    fn test_tabpos_default() {
+        let _ = FocusOrderPositiveTabindexAnalyzer::default();
+    }
 
     #[test]
     fn test_tabpos_category() {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = true;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        for f in FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        for f in FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     #[test]
@@ -11564,7 +13388,10 @@ mod new_analyzer_tests {
         let mut page = make_page("https://example.com");
         page.has_positive_tabindex = true;
         let ctx = make_ctx(&page, Some(200), &[], None);
-        assert_eq!(FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx)[0].severity, Severity::Error);
+        assert_eq!(
+            FocusOrderPositiveTabindexAnalyzer::new().analyze(&ctx)[0].severity,
+            Severity::Error
+        );
     }
 
     // === ColorContrastTextAnalyzer tests ===
@@ -11580,7 +13407,20 @@ mod new_analyzer_tests {
     fn test_colrct_good_contrast() {
         let body = r#"<p style="color: #000000; background-color: #ffffff">Text</p>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(ColorContrastTextAnalyzer::new().analyze(&ctx).is_empty());
     }
 
@@ -11588,22 +13428,60 @@ mod new_analyzer_tests {
     fn test_colrct_low_contrast() {
         let body = r#"<p style="color: #888888; background-color: #999999">Text</p>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert!(ColorContrastTextAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "COLRCT001"));
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(ColorContrastTextAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COLRCT001"));
     }
 
     #[test]
-    fn test_colrct_name() { assert_eq!(ColorContrastTextAnalyzer::new().name(), "color-contrast-text"); }
+    fn test_colrct_name() {
+        assert_eq!(
+            ColorContrastTextAnalyzer::new().name(),
+            "color-contrast-text"
+        );
+    }
 
     #[test]
-    fn test_colrct_default() { let _ = ColorContrastTextAnalyzer::default(); }
+    fn test_colrct_default() {
+        let _ = ColorContrastTextAnalyzer::default();
+    }
 
     #[test]
     fn test_colrct_category() {
         let body = r#"<p style="color: #888888; background-color: #999999">Text</p>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        for f in ColorContrastTextAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        for f in ColorContrastTextAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 
     // === ColorContrastLinkAnalyzer tests ===
@@ -11619,7 +13497,20 @@ mod new_analyzer_tests {
     fn test_colrcl_good_contrast() {
         let body = r#"<a style="color: #0000ff; background-color: #ffffff">Link</a>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
         assert!(ColorContrastLinkAnalyzer::new().analyze(&ctx).is_empty());
     }
 
@@ -11627,21 +13518,59 @@ mod new_analyzer_tests {
     fn test_colrcl_low_contrast() {
         let body = r#"<a style="color: #cccccc; background-color: #dddddd">Link</a>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        assert!(ColorContrastLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "COLRCL001"));
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(ColorContrastLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "COLRCL001"));
     }
 
     #[test]
-    fn test_colrcl_name() { assert_eq!(ColorContrastLinkAnalyzer::new().name(), "color-contrast-link"); }
+    fn test_colrcl_name() {
+        assert_eq!(
+            ColorContrastLinkAnalyzer::new().name(),
+            "color-contrast-link"
+        );
+    }
 
     #[test]
-    fn test_colrcl_default() { let _ = ColorContrastLinkAnalyzer::default(); }
+    fn test_colrcl_default() {
+        let _ = ColorContrastLinkAnalyzer::default();
+    }
 
     #[test]
     fn test_colrcl_category() {
         let body = r#"<a style="color: #cccccc; background-color: #dddddd">Link</a>"#;
         let page = make_page("https://example.com");
-        let ctx = AnalysisContext { page: &page, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None };
-        for f in ColorContrastLinkAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Accessibility); }
+        let ctx = AnalysisContext {
+            page: &page,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        for f in ColorContrastLinkAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Accessibility);
+        }
     }
 }

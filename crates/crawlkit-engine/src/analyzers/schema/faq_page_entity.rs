@@ -141,7 +141,9 @@ mod tests {
             data: serde_json::json!({"@type": "FAQPage"}),
         }];
         // No mainEntity at all - this analyzer skips when mainEntity is absent
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -154,7 +156,10 @@ mod tests {
                 {"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}}
             ]}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FAQPAGE001"));
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FAQPAGE001"));
     }
 
     #[test]
@@ -168,7 +173,9 @@ mod tests {
                 {"@type": "Question", "name": "Q2"}
             ]}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -179,7 +186,10 @@ mod tests {
             r#type: Some("FAQPage".to_string()),
             data: serde_json::json!({"@type": "FAQPage", "mainEntity": []}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FAQPAGE001"));
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FAQPAGE001"));
     }
 
     #[test]
@@ -190,7 +200,10 @@ mod tests {
             r#type: Some("FAQPage".to_string()),
             data: serde_json::json!({"@type": "FAQPage", "mainEntity": "not an array"}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FAQPAGE001"));
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FAQPAGE001"));
     }
 
     #[test]
@@ -201,13 +214,17 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article"}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -227,7 +244,9 @@ mod tests {
                 {"@type": "Question", "name": "Q3"}
             ]}),
         }];
-        assert!(FaqPageEntityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FaqPageEntityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]

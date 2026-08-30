@@ -31,7 +31,12 @@ impl Analyzer for MusicAlbumSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for MusicAlbumSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the album title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the album title.".to_string(),
                 });
             }
 
@@ -65,7 +69,6 @@ impl Analyzer for MusicAlbumSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -127,149 +130,140 @@ mod tests {
     }
 
     #[test]
-fn test_musicalbum_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("MusicAlbum".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "MusicAlbum",
-            "byArtist": {"@type": "Person", "name": "Artist"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MUSALB001"));
-}
-
-
-    #[test]
-fn test_musicalbum_missing_byartist() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("MusicAlbum".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "MusicAlbum",
-            "name": "Thriller"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MUSALB002"));
-}
-
-
-    #[test]
-fn test_musicalbum_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("MusicAlbum".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "MusicAlbum",
-            "name": "Thriller",
-            "byArtist": {"@type": "Person", "name": "Michael Jackson"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_musicalbum_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_musicalbum_non_musicalbum_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_musicalbum_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("MusicAlbum".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "MusicAlbum"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_musicalbum_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("MusicAlbum".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "MusicAlbum",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MUSALB001"));
-}
-
-
-    #[test]
-fn test_musicalbum_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_musicalbum_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("MusicAlbum".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "MusicAlbum",
-                "name": "Good Album",
                 "byArtist": {"@type": "Person", "name": "Artist"}
             }),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MUSALB001"));
+    }
+
+    #[test]
+    fn test_musicalbum_missing_byartist() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("MusicAlbum".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "MusicAlbum",
+                "name": "Thriller"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MUSALB002"));
+    }
+
+    #[test]
+    fn test_musicalbum_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("MusicAlbum".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "MusicAlbum",
+                "name": "Thriller",
+                "byArtist": {"@type": "Person", "name": "Michael Jackson"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_musicalbum_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_musicalbum_non_musicalbum_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_musicalbum_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("MusicAlbum".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "MusicAlbum"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MUSALB001"));
-    assert!(findings.iter().any(|f| f.code == "MUSALB002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
 
+    #[test]
+    fn test_musicalbum_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("MusicAlbum".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "MusicAlbum",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MUSALB001"));
+    }
 
+    #[test]
+    fn test_musicalbum_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("MusicAlbum".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "MusicAlbum",
+                    "name": "Good Album",
+                    "byArtist": {"@type": "Person", "name": "Artist"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("MusicAlbum".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "MusicAlbum"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = MusicAlbumSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MUSALB001"));
+        assert!(findings.iter().any(|f| f.code == "MUSALB002"));
+    }
 }

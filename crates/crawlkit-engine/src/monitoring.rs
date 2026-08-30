@@ -1,7 +1,9 @@
-use crate::compare::{CrawlDiff, ChangeKind};
+use crate::compare::{ChangeKind, CrawlDiff};
 
 /// Severity level for a monitoring alert.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum AlertSeverity {
     /// Minor change: new page added, title tweak, small content drift.
     Info,
@@ -371,7 +373,7 @@ pub fn analyze_crawl_delta(diff: &CrawlDiff, threshold: usize) -> MonitoringResu
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compare::{CwvChange, DiffEntry, ChangeKind};
+    use crate::compare::{ChangeKind, CwvChange, DiffEntry};
 
     fn empty_diff() -> CrawlDiff {
         CrawlDiff {
@@ -420,7 +422,9 @@ mod tests {
         assert_eq!(result.new_pages, 1);
         assert_eq!(result.alerts.len(), 1);
         assert_eq!(result.alerts[0].severity, AlertSeverity::Info);
-        assert!(result.changed_urls.contains(&"https://example.com/new".to_string()));
+        assert!(result
+            .changed_urls
+            .contains(&"https://example.com/new".to_string()));
     }
 
     #[test]
@@ -472,7 +476,9 @@ mod tests {
         });
         let result = analyze_crawl_delta(&diff, 1);
         assert_eq!(result.changed_pages, 1);
-        assert!(result.changed_urls.contains(&"https://example.com/page".to_string()));
+        assert!(result
+            .changed_urls
+            .contains(&"https://example.com/page".to_string()));
     }
 
     #[test]
@@ -542,11 +548,26 @@ mod tests {
 
     #[test]
     fn test_severity_classification_content_change() {
-        assert_eq!(classify_content_change(Some(1000), Some(400)), AlertSeverity::Critical);
-        assert_eq!(classify_content_change(Some(1000), Some(700)), AlertSeverity::Warning);
-        assert_eq!(classify_content_change(Some(1000), Some(950)), AlertSeverity::Info);
-        assert_eq!(classify_content_change(Some(1000), None), AlertSeverity::Warning);
-        assert_eq!(classify_content_change(None, Some(500)), AlertSeverity::Warning);
+        assert_eq!(
+            classify_content_change(Some(1000), Some(400)),
+            AlertSeverity::Critical
+        );
+        assert_eq!(
+            classify_content_change(Some(1000), Some(700)),
+            AlertSeverity::Warning
+        );
+        assert_eq!(
+            classify_content_change(Some(1000), Some(950)),
+            AlertSeverity::Info
+        );
+        assert_eq!(
+            classify_content_change(Some(1000), None),
+            AlertSeverity::Warning
+        );
+        assert_eq!(
+            classify_content_change(None, Some(500)),
+            AlertSeverity::Warning
+        );
     }
 
     #[test]
@@ -576,7 +597,11 @@ mod tests {
             change: ChangeKind::Removed,
         });
         let result = analyze_crawl_delta(&diff, 0);
-        let removed_alert = result.alerts.iter().find(|a| a.url.contains("gone")).unwrap();
+        let removed_alert = result
+            .alerts
+            .iter()
+            .find(|a| a.url.contains("gone"))
+            .unwrap();
         assert_eq!(removed_alert.severity, AlertSeverity::Critical);
         assert_eq!(result.overall_severity, AlertSeverity::Critical);
     }
@@ -619,7 +644,11 @@ mod tests {
             },
         });
         let result = analyze_crawl_delta(&diff, 0);
-        let alert = result.alerts.iter().find(|a| a.url.contains("gutted")).unwrap();
+        let alert = result
+            .alerts
+            .iter()
+            .find(|a| a.url.contains("gutted"))
+            .unwrap();
         assert_eq!(alert.severity, AlertSeverity::Critical);
     }
 

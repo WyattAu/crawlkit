@@ -217,11 +217,7 @@ pub fn export_csv(
             record.push(page.schema_types.clone().unwrap_or_default());
         }
         if selector.viewport_ok {
-            record.push(
-                page.viewport_ok
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
-            );
+            record.push(page.viewport_ok.map(|v| v.to_string()).unwrap_or_default());
         }
         if selector.has_csp {
             record.push(page.has_csp.map(|v| v.to_string()).unwrap_or_default());
@@ -230,11 +226,7 @@ pub fn export_csv(
             record.push(page.has_hsts.map(|v| v.to_string()).unwrap_or_default());
         }
         if selector.images_total {
-            record.push(
-                page.images_total
-                    .map(|v| v.to_string())
-                    .unwrap_or_default(),
-            );
+            record.push(page.images_total.map(|v| v.to_string()).unwrap_or_default());
         }
         if selector.images_missing_alt {
             record.push(

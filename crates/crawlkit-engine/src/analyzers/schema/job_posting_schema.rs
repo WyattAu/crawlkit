@@ -58,8 +58,7 @@ impl Analyzer for JobPostingSchemaValidator {
                                   \"datePosted\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"datePosted\" with an ISO 8601 date."
-                        .to_string(),
+                    recommendation: "Add \"datePosted\" with an ISO 8601 date.".to_string(),
                 });
             }
 
@@ -70,9 +69,10 @@ impl Analyzer for JobPostingSchemaValidator {
                     category: IssueCategory::Schema,
                     code: "JOB003".to_string(),
                     title: "JobPosting schema missing validThrough".to_string(),
-                    description: "A JobPosting structured data block is missing the \"validThrough\" \
+                    description:
+                        "A JobPosting structured data block is missing the \"validThrough\" \
                                   property. This tells search engines when the job posting expires."
-                        .to_string(),
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"validThrough\" with an ISO 8601 date/time when the \
                                      posting expires."
@@ -84,7 +84,6 @@ impl Analyzer for JobPostingSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -146,122 +145,114 @@ mod tests {
     }
 
     #[test]
-fn test_job_missing_title() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JOB001"));
-}
-
-
-    #[test]
-fn test_job_missing_date_posted() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JOB002"));
-}
-
+    fn test_job_missing_title() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JOB001"));
+    }
 
     #[test]
-fn test_job_missing_valid_through() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Engineer",
-            "datePosted": "2024-01-01"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JOB003"));
-}
-
+    fn test_job_missing_date_posted() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JOB002"));
+    }
 
     #[test]
-fn test_job_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Engineer",
-            "datePosted": "2024-01-01",
-            "validThrough": "2024-12-31"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_job_missing_valid_through() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Engineer",
+                "datePosted": "2024-01-01"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JOB003"));
+    }
 
     #[test]
-fn test_job_missing_all() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JOB001"));
-    assert!(findings.iter().any(|f| f.code == "JOB002"));
-    assert!(findings.iter().any(|f| f.code == "JOB003"));
-}
-
-
-    #[test]
-fn test_job_non_job_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_job_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Engineer",
+                "datePosted": "2024-01-01",
+                "validThrough": "2024-12-31"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_job_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_job_missing_all() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JOB001"));
+        assert!(findings.iter().any(|f| f.code == "JOB002"));
+        assert!(findings.iter().any(|f| f.code == "JOB003"));
+    }
 
+    #[test]
+    fn test_job_non_job_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_job_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

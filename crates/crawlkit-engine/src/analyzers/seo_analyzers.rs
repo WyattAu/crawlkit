@@ -1,4 +1,19 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains, clippy::redundant_clone)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::manual_range_contains,
+    clippy::redundant_closure,
+    clippy::collapsible_if,
+    clippy::unnecessary_map_or,
+    clippy::default_constructed_unit_structs,
+    clippy::needless_return,
+    clippy::needless_range_loop,
+    clippy::useless_format,
+    clippy::if_same_then_else,
+    clippy::derivable_impls,
+    clippy::manual_pattern_char_comparison,
+    clippy::manual_contains,
+    clippy::redundant_clone
+)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -898,9 +913,7 @@ impl Analyzer for OpenSearchValidator {
         let url = &ctx.page.url;
 
         // OPSEARCH001: No OpenSearch description XML link in head
-        let has_opensearch = ctx
-            .body
-            .is_some_and(|body| Self::has_opensearch_link(body));
+        let has_opensearch = ctx.body.is_some_and(|body| Self::has_opensearch_link(body));
         if !has_opensearch {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -1027,14 +1040,16 @@ impl Analyzer for OpenSearchDescriptionValidator {
                 category: IssueCategory::Seo,
                 code: "OPDESC001".to_string(),
                 title: "Missing OpenSearch description".to_string(),
-                description: "No <link rel=\"search\" type=\"application/opensearchdescription+xml\"> \
+                description:
+                    "No <link rel=\"search\" type=\"application/opensearchdescription+xml\"> \
                               tag was found. An OpenSearch description document allows browsers to \
                               discover and add your site's search functionality."
-                    .to_string(),
+                        .to_string(),
                 url: url.clone(),
-                recommendation: "Create an OpenSearch XML description file and add a <link> tag in \
+                recommendation:
+                    "Create an OpenSearch XML description file and add a <link> tag in \
                                  the page head pointing to it."
-                    .to_string(),
+                        .to_string(),
             });
         }
 
@@ -1603,8 +1618,10 @@ impl PaginationAnalyzer {
     /// pagination query parameters or path segments.
     pub(crate) fn is_paginated_url(url: &str) -> bool {
         if let Ok(parsed) = Url::parse(url) {
-            let query_pairs: Vec<(String, String)> =
-                parsed.query_pairs().map(|(k, v)| (k.into_owned(), v.into_owned())).collect();
+            let query_pairs: Vec<(String, String)> = parsed
+                .query_pairs()
+                .map(|(k, v)| (k.into_owned(), v.into_owned()))
+                .collect();
             let has_pagination_query = query_pairs.iter().any(|(k, _)| {
                 matches!(
                     k.to_lowercase().as_str(),
@@ -1660,7 +1677,6 @@ impl PaginationAnalyzer {
         }
         None
     }
-
 }
 
 impl Default for PaginationAnalyzer {
@@ -2062,12 +2078,7 @@ impl Analyzer for CharsetValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let meta_charset = ctx
-            .page
-            .meta
-            .charset
-            .as_ref()
-            .map(|c| c.to_lowercase());
+        let meta_charset = ctx.page.meta.charset.as_ref().map(|c| c.to_lowercase());
 
         let header_charset = ctx
             .content_type
@@ -2359,10 +2370,7 @@ impl MobileViewportAnalyzer {
         for part in content.split(',') {
             let trimmed = part.trim();
             if let Some((key, value)) = trimmed.split_once('=') {
-                map.insert(
-                    key.trim().to_lowercase(),
-                    value.trim().to_lowercase(),
-                );
+                map.insert(key.trim().to_lowercase(), value.trim().to_lowercase());
             }
         }
         map
@@ -2479,12 +2487,8 @@ impl Analyzer for InternalLinkAnchorAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let internal_links: Vec<&ExtractedLink> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| !l.is_external)
-            .collect();
+        let internal_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| !l.is_external).collect();
 
         if internal_links.is_empty() {
             return findings;
@@ -2616,12 +2620,8 @@ impl Analyzer for WikipediaLinkAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let external_links: Vec<&ExtractedLink> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| l.is_external)
-            .collect();
+        let external_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| l.is_external).collect();
 
         if external_links.is_empty() {
             return findings;
@@ -2691,8 +2691,15 @@ fn is_wikipedia_url(href: &str) -> bool {
     }
     // Exclude Wikipedia namespace pages (case-insensitive)
     let namespaces = [
-        "wikipedia:", "help:", "special:", "template:", "talk:", "user:",
-        "category:", "portal:", "file:",
+        "wikipedia:",
+        "help:",
+        "special:",
+        "template:",
+        "talk:",
+        "user:",
+        "category:",
+        "portal:",
+        "file:",
     ];
     !namespaces.iter().any(|ns| {
         let marker = format!("/wiki/{ns}");
@@ -2739,12 +2746,8 @@ impl Analyzer for AnchorTextDiversityAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let internal_links: Vec<&ExtractedLink> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| !l.is_external)
-            .collect();
+        let internal_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| !l.is_external).collect();
 
         // Need at least 3 internal links with anchor text to analyze
         let links_with_text: Vec<&ExtractedLink> = internal_links
@@ -2795,10 +2798,11 @@ impl Analyzer for AnchorTextDiversityAnalyzer {
                         count = anchors.len()
                     ),
                     url: url.clone(),
-                    recommendation: "Diversify anchor text across internal links. Use descriptive, \
+                    recommendation:
+                        "Diversify anchor text across internal links. Use descriptive, \
                                      varied phrases that naturally reflect the content of each \
                                      linked page."
-                        .to_string(),
+                            .to_string(),
                 });
             }
         }
@@ -2806,10 +2810,7 @@ impl Analyzer for AnchorTextDiversityAnalyzer {
         // ANCH-DIV002: >80% of anchor text is generic
         {
             let total = anchors.len();
-            let generic_count = anchors
-                .iter()
-                .filter(|a| is_generic_anchor(a))
-                .count();
+            let generic_count = anchors.iter().filter(|a| is_generic_anchor(a)).count();
 
             let ratio = generic_count as f64 / total as f64;
             if ratio > 0.8 && total >= 3 {
@@ -3181,7 +3182,9 @@ impl RobotsTxtDirectivesAnalyzer {
 
     /// Check if a path is disallowed for the given user-agent in robots.txt.
     fn is_disallowed(path: &str, disallowed_paths: &[String]) -> bool {
-        disallowed_paths.iter().any(|blocked| path.starts_with(blocked.as_str()))
+        disallowed_paths
+            .iter()
+            .any(|blocked| path.starts_with(blocked.as_str()))
     }
 }
 
@@ -3236,8 +3239,7 @@ impl Analyzer for RobotsTxtDirectivesAnalyzer {
                     description: format!(
                         "This page's path ({}) matches a Disallow directive in robots.txt for \
                          the wildcard user-agent. Crawling disallowed pages may waste crawl budget \
-                         and could be blocked by search engines."
-                    ,
+                         and could be blocked by search engines.",
                         path
                     ),
                     url: url.to_string(),
@@ -3336,15 +3338,21 @@ impl Analyzer for SitemapUrlAnalyzer {
 pub struct TitleAnalysisDeepAnalyzer;
 
 impl Default for TitleAnalysisDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TitleAnalysisDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for TitleAnalysisDeepAnalyzer {
-    fn name(&self) -> &str { "title-analysis-deep" }
+    fn name(&self) -> &str {
+        "title-analysis-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3355,21 +3363,75 @@ impl Analyzer for TitleAnalysisDeepAnalyzer {
         };
 
         if title.len() < 20 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLEDEEP001".to_string(), title: "Title too short".to_string(), description: format!("Title is {} characters. Aim for 30-60 characters.", title.len()), url: url.clone(), recommendation: "Expand the title to 30-60 characters with target keywords.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "TITLEDEEP001".to_string(),
+                title: "Title too short".to_string(),
+                description: format!(
+                    "Title is {} characters. Aim for 30-60 characters.",
+                    title.len()
+                ),
+                url: url.clone(),
+                recommendation: "Expand the title to 30-60 characters with target keywords."
+                    .to_string(),
+            });
         }
         if title.len() > 65 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLEDEEP002".to_string(), title: "Title too long for SERP display".to_string(), description: format!("Title is {} characters. Google typically shows ~60 characters.", title.len()), url: url.clone(), recommendation: "Shorten the title to under 60 characters to avoid truncation in SERPs.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "TITLEDEEP002".to_string(),
+                title: "Title too long for SERP display".to_string(),
+                description: format!(
+                    "Title is {} characters. Google typically shows ~60 characters.",
+                    title.len()
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Shorten the title to under 60 characters to avoid truncation in SERPs."
+                        .to_string(),
+            });
         }
 
-        let has_brand_separator = title.contains(" | ") || title.contains(" - ") || title.contains(" – ") || title.contains(" — ");
+        let has_brand_separator = title.contains(" | ")
+            || title.contains(" - ")
+            || title.contains(" – ")
+            || title.contains(" — ");
         if !has_brand_separator && title.len() > 30 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEDEEP003".to_string(), title: "Title missing brand separator".to_string(), description: "Title doesn't contain a common brand separator (|, -, –).".to_string(), url: url.clone(), recommendation: "Consider adding ' | Brand Name' at the end for brand recognition.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "TITLEDEEP003".to_string(),
+                title: "Title missing brand separator".to_string(),
+                description: "Title doesn't contain a common brand separator (|, -, –)."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Consider adding ' | Brand Name' at the end for brand recognition."
+                    .to_string(),
+            });
         }
 
         let words: Vec<&str> = title.split_whitespace().collect();
-        let stop_count = words.iter().filter(|w| STOP_WORDS.contains(&w.to_lowercase().as_str())).count();
+        let stop_count = words
+            .iter()
+            .filter(|w| STOP_WORDS.contains(&w.to_lowercase().as_str()))
+            .count();
         if words.len() > 3 && stop_count as f64 / words.len() as f64 > 0.5 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEDEEP004".to_string(), title: "Title has many stop words".to_string(), description: format!("{} of {} words are stop words, which may dilute keyword prominence.", stop_count, words.len()), url: url.clone(), recommendation: "Reduce stop words and focus on target keywords in the title.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "TITLEDEEP004".to_string(),
+                title: "Title has many stop words".to_string(),
+                description: format!(
+                    "{} of {} words are stop words, which may dilute keyword prominence.",
+                    stop_count,
+                    words.len()
+                ),
+                url: url.clone(),
+                recommendation: "Reduce stop words and focus on target keywords in the title."
+                    .to_string(),
+            });
         }
 
         findings
@@ -3383,15 +3445,21 @@ impl Analyzer for TitleAnalysisDeepAnalyzer {
 pub struct MetaDescriptionDeepAnalyzer;
 
 impl Default for MetaDescriptionDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetaDescriptionDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for MetaDescriptionDeepAnalyzer {
-    fn name(&self) -> &str { "meta-description-deep" }
+    fn name(&self) -> &str {
+        "meta-description-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3402,20 +3470,64 @@ impl Analyzer for MetaDescriptionDeepAnalyzer {
         };
 
         if desc.len() < 70 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADEEP001".to_string(), title: "Meta description too short".to_string(), description: format!("Description is {} characters. Aim for 120-155 characters.", desc.len()), url: url.clone(), recommendation: "Expand the meta description to 120-155 characters.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "METADEEP001".to_string(),
+                title: "Meta description too short".to_string(),
+                description: format!(
+                    "Description is {} characters. Aim for 120-155 characters.",
+                    desc.len()
+                ),
+                url: url.clone(),
+                recommendation: "Expand the meta description to 120-155 characters.".to_string(),
+            });
         }
         if desc.len() > 160 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADEEP002".to_string(), title: "Meta description too long".to_string(), description: format!("Description is {} characters. Google typically shows ~155 characters.", desc.len()), url: url.clone(), recommendation: "Shorten the meta description to under 155 characters.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "METADEEP002".to_string(),
+                title: "Meta description too long".to_string(),
+                description: format!(
+                    "Description is {} characters. Google typically shows ~155 characters.",
+                    desc.len()
+                ),
+                url: url.clone(),
+                recommendation: "Shorten the meta description to under 155 characters.".to_string(),
+            });
         }
 
         if desc.contains("\"") || desc.contains("'") {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADEEP003".to_string(), title: "Meta description contains quotes".to_string(), description: "Quotes in meta descriptions may cause truncation in SERPs.".to_string(), url: url.clone(), recommendation: "Remove or replace quotes with other punctuation.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "METADEEP003".to_string(),
+                title: "Meta description contains quotes".to_string(),
+                description: "Quotes in meta descriptions may cause truncation in SERPs."
+                    .to_string(),
+                url: url.clone(),
+                recommendation: "Remove or replace quotes with other punctuation.".to_string(),
+            });
         }
 
         let words: Vec<&str> = desc.split_whitespace().collect();
-        let unique_words: std::collections::HashSet<String> = words.iter().map(|w| w.to_lowercase()).collect();
+        let unique_words: std::collections::HashSet<String> =
+            words.iter().map(|w| w.to_lowercase()).collect();
         if words.len() > 5 && unique_words.len() as f64 / (words.len() as f64) < 0.6 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADEEP004".to_string(), title: "Meta description has repetitive words".to_string(), description: "Many repeated words in the meta description reduce its effectiveness.".to_string(), url: url.clone(), recommendation: "Diversify vocabulary in the meta description for better click-through rates.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "METADEEP004".to_string(),
+                title: "Meta description has repetitive words".to_string(),
+                description:
+                    "Many repeated words in the meta description reduce its effectiveness."
+                        .to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Diversify vocabulary in the meta description for better click-through rates."
+                        .to_string(),
+            });
         }
 
         findings
@@ -3429,15 +3541,21 @@ impl Analyzer for MetaDescriptionDeepAnalyzer {
 pub struct CanonicalValidationDeepAnalyzer;
 
 impl Default for CanonicalValidationDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CanonicalValidationDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CanonicalValidationDeepAnalyzer {
-    fn name(&self) -> &str { "canonical-validation-deep" }
+    fn name(&self) -> &str {
+        "canonical-validation-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3456,16 +3574,47 @@ impl Analyzer for CanonicalValidationDeepAnalyzer {
                 findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANDEEP001".to_string(), title: "Canonical path mismatch".to_string(), description: format!("Canonical path '{canonical_path}' differs from page path '{page_path}' on the same host."), url: url.clone(), recommendation: "Canonical should point to the same path unless intentionally consolidating pages.".to_string() });
             }
 
-            let canonical_params: std::collections::HashMap<String, String> = canonical_url.query_pairs().into_owned().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-            let page_params: std::collections::HashMap<String, String> = page_url.query_pairs().into_owned().map(|(k, v)| (k.to_string(), v.to_string())).collect();
-            let has_diff = page_params.iter().any(|(k, v)| canonical_params.get(k.as_str()) != Some(v));
+            let canonical_params: std::collections::HashMap<String, String> = canonical_url
+                .query_pairs()
+                .into_owned()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            let page_params: std::collections::HashMap<String, String> = page_url
+                .query_pairs()
+                .into_owned()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect();
+            let has_diff = page_params
+                .iter()
+                .any(|(k, v)| canonical_params.get(k.as_str()) != Some(v));
             if has_diff && canonical_params.len() == page_params.len() {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANDEEP002".to_string(), title: "Canonical differs by parameters".to_string(), description: "Canonical URL differs from page URL only by query parameters.".to_string(), url: url.clone(), recommendation: "Verify the canonical correctly points to the preferred URL version.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "CANDEEP002".to_string(),
+                    title: "Canonical differs by parameters".to_string(),
+                    description: "Canonical URL differs from page URL only by query parameters."
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation:
+                        "Verify the canonical correctly points to the preferred URL version."
+                            .to_string(),
+                });
             }
         }
 
         if canonical.as_str().contains('#') {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANDEEP003".to_string(), title: "Canonical URL contains fragment".to_string(), description: "The canonical URL includes a fragment (#) which search engines ignore.".to_string(), url: url.clone(), recommendation: "Remove the fragment from the canonical URL.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "CANDEEP003".to_string(),
+                title: "Canonical URL contains fragment".to_string(),
+                description:
+                    "The canonical URL includes a fragment (#) which search engines ignore."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Remove the fragment from the canonical URL.".to_string(),
+            });
         }
 
         findings
@@ -3479,15 +3628,21 @@ impl Analyzer for CanonicalValidationDeepAnalyzer {
 pub struct SitemapCoverageDeepAnalyzer;
 
 impl Default for SitemapCoverageDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SitemapCoverageDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for SitemapCoverageDeepAnalyzer {
-    fn name(&self) -> &str { "sitemap-coverage-deep" }
+    fn name(&self) -> &str {
+        "sitemap-coverage-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3498,7 +3653,19 @@ impl Analyzer for SitemapCoverageDeepAnalyzer {
             if lower.contains("sitemap:") {
                 let sitemap_count = lower.matches("sitemap:").count();
                 if sitemap_count > 5 {
-                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPDEEP001".to_string(), title: "Many sitemaps declared in robots.txt".to_string(), description: format!("robots.txt declares {sitemap_count} sitemaps. Consider consolidating."), url: url.clone(), recommendation: "Use a sitemap index file instead of listing many individual sitemaps.".to_string() });
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Seo,
+                        code: "SITEMAPDEEP001".to_string(),
+                        title: "Many sitemaps declared in robots.txt".to_string(),
+                        description: format!(
+                            "robots.txt declares {sitemap_count} sitemaps. Consider consolidating."
+                        ),
+                        url: url.clone(),
+                        recommendation:
+                            "Use a sitemap index file instead of listing many individual sitemaps."
+                                .to_string(),
+                    });
                 }
             } else {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPDEEP002".to_string(), title: "No sitemap declared in robots.txt".to_string(), description: "robots.txt doesn't reference any sitemap. While not required, sitemaps help discovery.".to_string(), url: url.clone(), recommendation: "Add a Sitemap: directive to robots.txt pointing to your sitemap.xml.".to_string() });
@@ -3522,15 +3689,21 @@ impl Analyzer for SitemapCoverageDeepAnalyzer {
 pub struct RobotsTxtAnalysisDeepAnalyzer;
 
 impl Default for RobotsTxtAnalysisDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RobotsTxtAnalysisDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for RobotsTxtAnalysisDeepAnalyzer {
-    fn name(&self) -> &str { "robots-txt-analysis-deep" }
+    fn name(&self) -> &str {
+        "robots-txt-analysis-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -3559,7 +3732,10 @@ impl Analyzer for RobotsTxtAnalysisDeepAnalyzer {
             }
         }
 
-        let crawl_delay_lines: Vec<&str> = robots.lines().filter(|l| l.trim().to_lowercase().starts_with("crawl-delay:")).collect();
+        let crawl_delay_lines: Vec<&str> = robots
+            .lines()
+            .filter(|l| l.trim().to_lowercase().starts_with("crawl-delay:"))
+            .collect();
         for line in &crawl_delay_lines {
             let val_str = line.split(':').nth(1).unwrap_or("").trim();
             if let Ok(delay) = val_str.parse::<f64>() {
@@ -3580,38 +3756,80 @@ impl Analyzer for RobotsTxtAnalysisDeepAnalyzer {
 pub struct InternalLinkQualityAnalyzer;
 
 impl Default for InternalLinkQualityAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InternalLinkQualityAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for InternalLinkQualityAnalyzer {
-    fn name(&self) -> &str { "internal-link-quality" }
+    fn name(&self) -> &str {
+        "internal-link-quality"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let internal_links: Vec<&ExtractedLink> = ctx.page.links.iter().filter(|l| !l.is_external).collect();
+        let internal_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| !l.is_external).collect();
         if internal_links.is_empty() {
             return findings;
         }
 
         let self_links: usize = internal_links.iter().filter(|l| l.href == *url).count();
         if self_links > 0 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ001".to_string(), title: "Page contains self-links".to_string(), description: format!("{self_links} link(s) point to the same page."), url: url.clone(), recommendation: "Remove or nofollow self-referencing internal links.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "INTLINKQ001".to_string(),
+                title: "Page contains self-links".to_string(),
+                description: format!("{self_links} link(s) point to the same page."),
+                url: url.clone(),
+                recommendation: "Remove or nofollow self-referencing internal links.".to_string(),
+            });
         }
 
-        let nofollow_count = internal_links.iter().filter(|l| l.rel.iter().any(|r| r == "nofollow")).count();
+        let nofollow_count = internal_links
+            .iter()
+            .filter(|l| l.rel.iter().any(|r| r == "nofollow"))
+            .count();
         if nofollow_count > 0 && nofollow_count == internal_links.len() {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTLINKQ002".to_string(), title: "All internal links are nofollowed".to_string(), description: "Every internal link on this page has rel=nofollow, preventing PageRank flow.".to_string(), url: url.clone(), recommendation: "Remove nofollow from internal links to allow link equity flow.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "INTLINKQ002".to_string(),
+                title: "All internal links are nofollowed".to_string(),
+                description:
+                    "Every internal link on this page has rel=nofollow, preventing PageRank flow."
+                        .to_string(),
+                url: url.clone(),
+                recommendation: "Remove nofollow from internal links to allow link equity flow."
+                    .to_string(),
+            });
         }
 
-        let empty_text = internal_links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        let empty_text = internal_links
+            .iter()
+            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+            .count();
         if empty_text > 0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTLINKQ003".to_string(), title: "Internal links with empty anchor text".to_string(), description: format!("{empty_text} internal link(s) have no visible text or aria-label."), url: url.clone(), recommendation: "Add descriptive anchor text to all internal links.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "INTLINKQ003".to_string(),
+                title: "Internal links with empty anchor text".to_string(),
+                description: format!(
+                    "{empty_text} internal link(s) have no visible text or aria-label."
+                ),
+                url: url.clone(),
+                recommendation: "Add descriptive anchor text to all internal links.".to_string(),
+            });
         }
 
         findings
@@ -3625,40 +3843,79 @@ impl Analyzer for InternalLinkQualityAnalyzer {
 pub struct ExternalLinkAuthorityDeepAnalyzer;
 
 impl Default for ExternalLinkAuthorityDeepAnalyzer {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExternalLinkAuthorityDeepAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ExternalLinkAuthorityDeepAnalyzer {
-    fn name(&self) -> &str { "external-link-authority-deep" }
+    fn name(&self) -> &str {
+        "external-link-authority-deep"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let external_links: Vec<&ExtractedLink> = ctx.page.links.iter().filter(|l| l.is_external).collect();
+        let external_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| l.is_external).collect();
         if external_links.is_empty() {
             return findings;
         }
 
-        let nofollow_count = external_links.iter().filter(|l| l.rel.iter().any(|r| r == "nofollow")).count();
+        let nofollow_count = external_links
+            .iter()
+            .filter(|l| l.rel.iter().any(|r| r == "nofollow"))
+            .count();
         let followed_count = external_links.len() - nofollow_count;
 
         if followed_count > 10 {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTLINKAUTH001".to_string(), title: "Many followed external links".to_string(), description: format!("{followed_count} external link(s) are followed (not nofollowed)."), url: url.clone(), recommendation: "Consider nofollowing non-essential external links to conserve link equity.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "EXTLINKAUTH001".to_string(),
+                title: "Many followed external links".to_string(),
+                description: format!(
+                    "{followed_count} external link(s) are followed (not nofollowed)."
+                ),
+                url: url.clone(),
+                recommendation:
+                    "Consider nofollowing non-essential external links to conserve link equity."
+                        .to_string(),
+            });
         }
 
-        let empty_text = external_links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        let empty_text = external_links
+            .iter()
+            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+            .count();
         if empty_text > 0 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "EXTLINKAUTH002".to_string(), title: "External links with empty anchor text".to_string(), description: format!("{empty_text} external link(s) have no visible text."), url: url.clone(), recommendation: "Add descriptive anchor text to external links.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "EXTLINKAUTH002".to_string(),
+                title: "External links with empty anchor text".to_string(),
+                description: format!("{empty_text} external link(s) have no visible text."),
+                url: url.clone(),
+                recommendation: "Add descriptive anchor text to external links.".to_string(),
+            });
         }
 
-        let same_domain_count = external_links.iter().filter(|l| {
-            url::Url::parse(&l.href).ok().and_then(|u| u.host_str().map(|h| h.to_string())).map_or(false, |h| url.contains(&h))
-        }).count();
+        let same_domain_count = external_links
+            .iter()
+            .filter(|l| {
+                url::Url::parse(&l.href)
+                    .ok()
+                    .and_then(|u| u.host_str().map(|h| h.to_string()))
+                    .map_or(false, |h| url.contains(&h))
+            })
+            .count();
         if same_domain_count > 0 {
             findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTLINKAUTH003".to_string(), title: "External links pointing to same domain".to_string(), description: format!("{same_domain_count} external link(s) point to the same domain (may be relative URLs misclassified)."), url: url.clone(), recommendation: "Verify these are truly external links, not internal ones.".to_string() });
         }
@@ -3835,7 +4092,10 @@ mod tests_new_analyzers {
 
     #[test]
     fn test_lang_name() {
-        assert_eq!(LanguageAttributeAnalyzer::new().name(), "language-attribute");
+        assert_eq!(
+            LanguageAttributeAnalyzer::new().name(),
+            "language-attribute"
+        );
     }
 
     #[test]
@@ -4516,8 +4776,7 @@ mod tests_new_analyzers {
     #[test]
     fn test_canonical_depth_both_issues() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(Url::parse("https://example.com/a/b/c/d?ref=nav").unwrap());
+        page.meta.canonical = Some(Url::parse("https://example.com/a/b/c/d?ref=nav").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalDepthAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CDEP001"));
@@ -6130,7 +6389,10 @@ mod tests_new_analyzers {
     #[test]
     fn test_title_px_exceeds_limit() {
         let mut page = make_page("https://example.com");
-        page.meta.title = Some("This is a very long page title that definitely exceeds the pixel width limit for SERP".to_string());
+        page.meta.title = Some(
+            "This is a very long page title that definitely exceeds the pixel width limit for SERP"
+                .to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
         let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "TITLE-PX001"));
@@ -6192,7 +6454,10 @@ mod tests_new_analyzers {
     #[test]
     fn test_title_px_severity_warning() {
         let mut page = make_page("https://example.com");
-        page.meta.title = Some("This is a very long page title that definitely exceeds the pixel width limit for SERP".to_string());
+        page.meta.title = Some(
+            "This is a very long page title that definitely exceeds the pixel width limit for SERP"
+                .to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
         let findings = TitlePixelWidthAnalyzer::new().analyze(&ctx);
         let f = findings.iter().find(|f| f.code == "TITLE-PX001").unwrap();
@@ -6221,7 +6486,9 @@ mod tests_new_analyzers {
     fn test_mdesc_px_no_description() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionPixelWidthAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -6229,13 +6496,17 @@ mod tests_new_analyzers {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionPixelWidthAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_mdesc_px_within_limit() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("A reasonable meta description that fits within SERP limits perfectly.".to_string());
+        page.meta.description = Some(
+            "A reasonable meta description that fits within SERP limits perfectly.".to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
         let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "MDESC-PX001"));
@@ -6262,7 +6533,10 @@ mod tests_new_analyzers {
     #[test]
     fn test_mdesc_px_exact_70_chars() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefgh".to_string());
+        page.meta.description = Some(
+            "Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefgh"
+                .to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
         let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "MDESC-PX002"));
@@ -6271,7 +6545,9 @@ mod tests_new_analyzers {
     #[test]
     fn test_mdesc_px_69_chars() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abc".to_string());
+        page.meta.description = Some(
+            "Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abcdefghij Abc".to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
         let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "MDESC-PX002"));
@@ -6289,7 +6565,8 @@ mod tests_new_analyzers {
     #[test]
     fn test_mdesc_px_mixed_content() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("Buy shoes online - best prices for running shoes and hiking boots".to_string());
+        page.meta.description =
+            Some("Buy shoes online - best prices for running shoes and hiking boots".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = MetaDescriptionPixelWidthAnalyzer::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "MDESC-PX001"));
@@ -6297,9 +6574,18 @@ mod tests_new_analyzers {
 
     #[test]
     fn test_mdesc_px_estimate_function() {
-        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width(""), 0.0);
-        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("abc"), 21.0);
-        assert_eq!(MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("中"), 14.0);
+        assert_eq!(
+            MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width(""),
+            0.0
+        );
+        assert_eq!(
+            MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("abc"),
+            21.0
+        );
+        assert_eq!(
+            MetaDescriptionPixelWidthAnalyzer::estimate_pixel_width("中"),
+            14.0
+        );
     }
 
     #[test]
@@ -6367,9 +6653,11 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_relevant_anchor_text() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![ExtractedLink {
             href: "/rust-guide".to_string(),
             text: "Rust programming guide".to_string(),
@@ -6386,15 +6674,52 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_irrelevant_anchor_text() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming Languages".to_string(), length: 26 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming Languages".to_string(),
+            length: 26,
+        }];
         page.links = vec![
-            ExtractedLink { href: "/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/d".to_string(), text: "see details".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/e".to_string(), text: "view more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "see details".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/e".to_string(),
+                text: "view more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
@@ -6404,15 +6729,52 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_mixed_relevance() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![
-            ExtractedLink { href: "/a".to_string(), text: "rust guide".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/b".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/c".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/d".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/e".to_string(), text: "view details".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "rust guide".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/e".to_string(),
+                text: "view details".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
@@ -6422,9 +6784,11 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_empty_anchor_text_skipped() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![ExtractedLink {
             href: "/a".to_string(),
             text: String::new(),
@@ -6441,9 +6805,11 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_external_links_not_counted() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![ExtractedLink {
             href: "https://other.com/rust".to_string(),
             text: "Rust".to_string(),
@@ -6460,15 +6826,52 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_stop_words_excluded() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "The Best Rust Guide".to_string(), length: 19 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "The Best Rust Guide".to_string(),
+            length: 19,
+        }];
         page.links = vec![
-            ExtractedLink { href: "/a".to_string(), text: "the".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/b".to_string(), text: "best".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/c".to_string(), text: "rust guide tutorial".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/d".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/e".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "the".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "best".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "rust guide tutorial".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/d".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/e".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
@@ -6478,13 +6881,36 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_severity_warning() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![
-            ExtractedLink { href: "/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
@@ -6495,19 +6921,45 @@ mod tests_new_analyzers {
 
     #[test]
     fn test_intopic_name() {
-        assert_eq!(InternalLinkTopicalAnalyzer::new().name(), "internal-link-topical");
+        assert_eq!(
+            InternalLinkTopicalAnalyzer::new().name(),
+            "internal-link-topical"
+        );
     }
 
     #[test]
     fn test_intopic_case_insensitive_matching() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "RUST Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "RUST Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![
-            ExtractedLink { href: "/a".to_string(), text: "rust guide".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/b".to_string(), text: "read more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            ExtractedLink { href: "/c".to_string(), text: "learn more".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            ExtractedLink {
+                href: "/a".to_string(),
+                text: "rust guide".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/b".to_string(),
+                text: "read more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            ExtractedLink {
+                href: "/c".to_string(),
+                text: "learn more".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = InternalLinkTopicalAnalyzer::new().analyze(&ctx);
@@ -6517,9 +6969,11 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_heading_empty_text() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "".to_string(), length: 0 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "".to_string(),
+            length: 0,
+        }];
         page.links = vec![ExtractedLink {
             href: "/a".to_string(),
             text: "click here".to_string(),
@@ -6536,9 +6990,11 @@ mod tests_new_analyzers {
     #[test]
     fn test_intopic_single_link_relevant() {
         let mut page = make_page("https://example.com");
-        page.headings = vec![
-            crate::parser::Heading { level: 1, text: "Rust Programming".to_string(), length: 16 },
-        ];
+        page.headings = vec![crate::parser::Heading {
+            level: 1,
+            text: "Rust Programming".to_string(),
+            length: 16,
+        }];
         page.links = vec![ExtractedLink {
             href: "/rust".to_string(),
             text: "rust tutorial".to_string(),
@@ -6730,8 +7186,7 @@ impl Analyzer for RedirectLoopDetector {
                             hop.from
                         ),
                         url: url.clone(),
-                        recommendation: "Fix the redirect chain to eliminate the loop."
-                            .to_string(),
+                        recommendation: "Fix the redirect chain to eliminate the loop.".to_string(),
                     });
                     return findings;
                 }
@@ -6824,12 +7279,7 @@ impl Analyzer for InternalNofollowOveruseValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let internal_links: Vec<_> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| !l.is_external)
-            .collect();
+        let internal_links: Vec<_> = ctx.page.links.iter().filter(|l| !l.is_external).collect();
 
         if internal_links.len() < 5 {
             return findings;
@@ -6895,12 +7345,7 @@ impl Analyzer for ExternalNofollowUnderuseValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let external_links: Vec<_> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| l.is_external)
-            .collect();
+        let external_links: Vec<_> = ctx.page.links.iter().filter(|l| l.is_external).collect();
 
         if external_links.len() < 5 {
             return findings;
@@ -7100,8 +7545,7 @@ impl Analyzer for TitleLengthQualityAnalyzer {
                     "Title is {len} characters. Titles over 60 characters may be truncated."
                 ),
                 url: url.clone(),
-                recommendation: "Keep the title under 60 characters."
-                    .into(),
+                recommendation: "Keep the title under 60 characters.".into(),
             });
         } else if len > 70 {
             findings.push(Finding {
@@ -7113,8 +7557,7 @@ impl Analyzer for TitleLengthQualityAnalyzer {
                     "Title is {len} characters, which exceeds the recommended maximum."
                 ),
                 url: url.clone(),
-                recommendation: "Keep the title under 60 characters."
-                    .into(),
+                recommendation: "Keep the title under 60 characters.".into(),
             });
         }
 
@@ -7125,11 +7568,9 @@ impl Analyzer for TitleLengthQualityAnalyzer {
                 category: IssueCategory::Seo,
                 code: "TITLE-QLT004".to_string(),
                 title: "Title appears to be a single word".to_string(),
-                description: "The title consists of only one word."
-                    .to_string(),
+                description: "The title consists of only one word.".to_string(),
                 url: url.clone(),
-                recommendation: "Expand the title to include multiple descriptive words."
-                    .into(),
+                recommendation: "Expand the title to include multiple descriptive words.".into(),
             });
         }
 
@@ -7201,11 +7642,13 @@ impl Analyzer for MetaDescriptionQualityAnalyzer {
             });
         }
 
-        let sentences: Vec<&str> = description.split(['.', '!', '?'])
+        let sentences: Vec<&str> = description
+            .split(['.', '!', '?'])
             .filter(|s| !s.trim().is_empty())
             .collect();
         if sentences.len() > 1 {
-            let lower_sentences: Vec<String> = sentences.iter().map(|s| s.trim().to_lowercase()).collect();
+            let lower_sentences: Vec<String> =
+                sentences.iter().map(|s| s.trim().to_lowercase()).collect();
             let mut seen = std::collections::HashSet::new();
             for s in &lower_sentences {
                 if !seen.insert(s.clone()) {
@@ -7214,11 +7657,9 @@ impl Analyzer for MetaDescriptionQualityAnalyzer {
                         category: IssueCategory::Seo,
                         code: "META-QLT003".to_string(),
                         title: "Meta description contains duplicate sentences".to_string(),
-                        description: "The meta description contains repeated text."
-                            .to_string(),
+                        description: "The meta description contains repeated text.".to_string(),
                         url: url.clone(),
-                        recommendation: "Write unique, varied content."
-                            .into(),
+                        recommendation: "Write unique, varied content.".into(),
                     });
                     break;
                 }
@@ -7256,12 +7697,8 @@ impl Analyzer for InternalLinkAnchorAnalyzerV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let internal_links: Vec<&ExtractedLink> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| !l.is_external)
-            .collect();
+        let internal_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| !l.is_external).collect();
 
         if internal_links.is_empty() {
             return findings;
@@ -7331,7 +7768,9 @@ impl WikipediaLinkAnalyzerV2 {
 
     fn is_wikipedia_or_wikimedia(url: &str) -> bool {
         let lower = url.to_lowercase();
-        lower.contains("wikipedia.org") || lower.contains("wikimedia.org") || lower.contains("wikidata.org")
+        lower.contains("wikipedia.org")
+            || lower.contains("wikimedia.org")
+            || lower.contains("wikidata.org")
     }
 }
 
@@ -7344,12 +7783,8 @@ impl Analyzer for WikipediaLinkAnalyzerV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let external_links: Vec<&ExtractedLink> = ctx
-            .page
-            .links
-            .iter()
-            .filter(|l| l.is_external)
-            .collect();
+        let external_links: Vec<&ExtractedLink> =
+            ctx.page.links.iter().filter(|l| l.is_external).collect();
 
         if external_links.is_empty() {
             return findings;
@@ -7377,7 +7812,9 @@ impl Analyzer for WikipediaLinkAnalyzerV2 {
 
         let nofollow_wiki = external_links
             .iter()
-            .filter(|l| Self::is_wikipedia_or_wikimedia(&l.href) && l.rel.iter().any(|r| r == "nofollow"))
+            .filter(|l| {
+                Self::is_wikipedia_or_wikimedia(&l.href) && l.rel.iter().any(|r| r == "nofollow")
+            })
             .count();
 
         if nofollow_wiki > 0 {
@@ -7390,8 +7827,7 @@ impl Analyzer for WikipediaLinkAnalyzerV2 {
                     "{nofollow_wiki} Wikipedia/Wikimedia link(s) are marked with rel=\"nofollow\"."
                 ),
                 url: url.clone(),
-                recommendation: "Consider removing nofollow from Wikipedia links."
-                    .to_string(),
+                recommendation: "Consider removing nofollow from Wikipedia links.".to_string(),
             });
         }
 
@@ -7404,11 +7840,21 @@ impl Analyzer for WikipediaLinkAnalyzerV2 {
 // =========================================================================
 
 pub struct MetaDescriptionLengthAnalyzerV2;
-impl Default for MetaDescriptionLengthAnalyzerV2 { fn default() -> Self { Self::new() } }
-impl MetaDescriptionLengthAnalyzerV2 { pub fn new() -> Self { Self } }
+impl Default for MetaDescriptionLengthAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl MetaDescriptionLengthAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for MetaDescriptionLengthAnalyzerV2 {
-    fn name(&self) -> &str { "meta-description-length-v2" }
+    fn name(&self) -> &str {
+        "meta-description-length-v2"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -7437,11 +7883,21 @@ impl Analyzer for MetaDescriptionLengthAnalyzerV2 {
 // =========================================================================
 
 pub struct TitleKeywordAnalyzer;
-impl Default for TitleKeywordAnalyzer { fn default() -> Self { Self::new() } }
-impl TitleKeywordAnalyzer { pub fn new() -> Self { Self } }
+impl Default for TitleKeywordAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl TitleKeywordAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for TitleKeywordAnalyzer {
-    fn name(&self) -> &str { "title-keyword" }
+    fn name(&self) -> &str {
+        "title-keyword"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -7450,7 +7906,9 @@ impl Analyzer for TitleKeywordAnalyzer {
             // Check for common keyword absence patterns
             let has_keyword = !ctx.page.meta.description.as_ref().map_or(true, |d| {
                 let words: Vec<&str> = d.split_whitespace().filter(|w| w.len() > 3).collect();
-                words.iter().all(|w| !title_lower.contains(&w.to_lowercase()))
+                words
+                    .iter()
+                    .all(|w| !title_lower.contains(&w.to_lowercase()))
             });
             if !has_keyword && ctx.page.meta.description.is_some() {
                 findings.push(Finding {
@@ -7473,20 +7931,34 @@ impl Analyzer for TitleKeywordAnalyzer {
 // =========================================================================
 
 pub struct CanonicalSelfReferenceAnalyzerV2;
-impl Default for CanonicalSelfReferenceAnalyzerV2 { fn default() -> Self { Self::new() } }
-impl CanonicalSelfReferenceAnalyzerV2 { pub fn new() -> Self { Self } }
+impl Default for CanonicalSelfReferenceAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl CanonicalSelfReferenceAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl CanonicalSelfReferenceAnalyzerV2 {
     fn normalize(url: &str) -> String {
         let mut s = url.to_string();
-        if let Some(pos) = s.find('#') { s.truncate(pos); }
-        if s.ends_with('/') && url.trim_end_matches('/') != "/" { s.pop(); }
+        if let Some(pos) = s.find('#') {
+            s.truncate(pos);
+        }
+        if s.ends_with('/') && url.trim_end_matches('/') != "/" {
+            s.pop();
+        }
         s.to_lowercase()
     }
 }
 
 impl Analyzer for CanonicalSelfReferenceAnalyzerV2 {
-    fn name(&self) -> &str { "canonical-self-reference-v2" }
+    fn name(&self) -> &str {
+        "canonical-self-reference-v2"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -7516,28 +7988,41 @@ impl Analyzer for CanonicalSelfReferenceAnalyzerV2 {
 // =========================================================================
 
 pub struct HreflangReciprocalAnalyzerV2;
-impl Default for HreflangReciprocalAnalyzerV2 { fn default() -> Self { Self::new() } }
-impl HreflangReciprocalAnalyzerV2 { pub fn new() -> Self { Self } }
+impl Default for HreflangReciprocalAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl HreflangReciprocalAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for HreflangReciprocalAnalyzerV2 {
-    fn name(&self) -> &str { "hreflang-reciprocal-v2" }
+    fn name(&self) -> &str {
+        "hreflang-reciprocal-v2"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let hreflang = &ctx.page.meta.hreflang;
-        if hreflang.is_empty() { return findings; }
+        if hreflang.is_empty() {
+            return findings;
+        }
         let self_url = Url::parse(url);
         if let Ok(self_url) = self_url {
-            let self_paths: Vec<String> = hreflang.iter()
+            let self_paths: Vec<String> = hreflang
+                .iter()
                 .filter(|h| h.url == self_url)
                 .map(|h| h.lang.clone())
                 .collect();
             for h in hreflang {
                 if self_paths.contains(&h.lang) {
                     // This language's URL points to us, but do we reciprocate?
-                    let reciprocates = hreflang.iter().any(|other|
-                        other.lang == h.lang && other.url == self_url
-                    );
+                    let reciprocates = hreflang
+                        .iter()
+                        .any(|other| other.lang == h.lang && other.url == self_url);
                     if !reciprocates {
                         findings.push(Finding {
                             severity: Severity::Warning,
@@ -7561,18 +8046,34 @@ impl Analyzer for HreflangReciprocalAnalyzerV2 {
 // =========================================================================
 
 pub struct InternalLinkAnchorTextDiversityAnalyzer;
-impl Default for InternalLinkAnchorTextDiversityAnalyzer { fn default() -> Self { Self::new() } }
-impl InternalLinkAnchorTextDiversityAnalyzer { pub fn new() -> Self { Self } }
+impl Default for InternalLinkAnchorTextDiversityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl InternalLinkAnchorTextDiversityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for InternalLinkAnchorTextDiversityAnalyzer {
-    fn name(&self) -> &str { "internal-link-anchor-text-diversity" }
+    fn name(&self) -> &str {
+        "internal-link-anchor-text-diversity"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let page_url = Url::parse(url).ok();
         if let Some(page_url) = &page_url {
-            let internal_links: Vec<&ExtractedLink> = ctx.page.links.iter()
-                .filter(|l| !l.is_external && Url::parse(&l.href).map_or(true, |u| u.host_str() == page_url.host_str()))
+            let internal_links: Vec<&ExtractedLink> = ctx
+                .page
+                .links
+                .iter()
+                .filter(|l| {
+                    !l.is_external
+                        && Url::parse(&l.href).map_or(true, |u| u.host_str() == page_url.host_str())
+                })
                 .collect();
             if internal_links.len() >= 5 {
                 let mut text_counts: HashMap<String, usize> = HashMap::new();
@@ -7609,25 +8110,51 @@ impl Analyzer for InternalLinkAnchorTextDiversityAnalyzer {
 // =========================================================================
 
 pub struct ExternalLinkAuthorityAnalyzer;
-impl Default for ExternalLinkAuthorityAnalyzer { fn default() -> Self { Self::new() } }
-impl ExternalLinkAuthorityAnalyzer { pub fn new() -> Self { Self } }
+impl Default for ExternalLinkAuthorityAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl ExternalLinkAuthorityAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl ExternalLinkAuthorityAnalyzer {
     const HIGH_AUTHORITY_DOMAINS: &[&str] = &[
-        "wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org",
-        "w3.org", "schema.org", "developer.mozilla.org", "docs.python.org",
-        "learn.microsoft.com", "cloud.google.com", "aws.amazon.com",
+        "wikipedia.org",
+        "github.com",
+        "stackoverflow.com",
+        "mozilla.org",
+        "w3.org",
+        "schema.org",
+        "developer.mozilla.org",
+        "docs.python.org",
+        "learn.microsoft.com",
+        "cloud.google.com",
+        "aws.amazon.com",
     ];
 }
 
 impl Analyzer for ExternalLinkAuthorityAnalyzer {
-    fn name(&self) -> &str { "external-link-authority" }
+    fn name(&self) -> &str {
+        "external-link-authority"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let high_auth: usize = ctx.page.links.iter().filter(|l| {
-            l.is_external && Self::HIGH_AUTHORITY_DOMAINS.iter().any(|d| l.href.contains(d))
-        }).count();
+        let high_auth: usize = ctx
+            .page
+            .links
+            .iter()
+            .filter(|l| {
+                l.is_external
+                    && Self::HIGH_AUTHORITY_DOMAINS
+                        .iter()
+                        .any(|d| l.href.contains(d))
+            })
+            .count();
         let total_ext = ctx.page.links.iter().filter(|l| l.is_external).count();
         if total_ext >= 3 && high_auth == 0 {
             findings.push(Finding {
@@ -7653,16 +8180,26 @@ pub struct SitemapCoverageAnalyzerV2 {
 }
 
 impl Default for SitemapCoverageAnalyzerV2 {
-    fn default() -> Self { Self { known_urls: HashSet::new() } }
+    fn default() -> Self {
+        Self {
+            known_urls: HashSet::new(),
+        }
+    }
 }
 
 impl SitemapCoverageAnalyzerV2 {
-    pub fn new(known_urls: HashSet<String>) -> Self { Self { known_urls } }
-    pub fn empty() -> Self { Self::new(HashSet::new()) }
+    pub fn new(known_urls: HashSet<String>) -> Self {
+        Self { known_urls }
+    }
+    pub fn empty() -> Self {
+        Self::new(HashSet::new())
+    }
 }
 
 impl Analyzer for SitemapCoverageAnalyzerV2 {
-    fn name(&self) -> &str { "sitemap-coverage-v2" }
+    fn name(&self) -> &str {
+        "sitemap-coverage-v2"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -7674,7 +8211,9 @@ impl Analyzer for SitemapCoverageAnalyzerV2 {
                 title: "Page not found in sitemap".to_string(),
                 description: "This page URL was not found in any sitemap file.".to_string(),
                 url: url.to_string(),
-                recommendation: "Add this page to your sitemap.xml to help search engines discover it.".to_string(),
+                recommendation:
+                    "Add this page to your sitemap.xml to help search engines discover it."
+                        .to_string(),
             });
         }
         findings
@@ -7686,18 +8225,32 @@ impl Analyzer for SitemapCoverageAnalyzerV2 {
 // =========================================================================
 
 pub struct RobotsTxtCoverageAnalyzerV2;
-impl Default for RobotsTxtCoverageAnalyzerV2 { fn default() -> Self { Self::new() } }
-impl RobotsTxtCoverageAnalyzerV2 { pub fn new() -> Self { Self } }
+impl Default for RobotsTxtCoverageAnalyzerV2 {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl RobotsTxtCoverageAnalyzerV2 {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for RobotsTxtCoverageAnalyzerV2 {
-    fn name(&self) -> &str { "robots-txt-coverage-v2" }
+    fn name(&self) -> &str {
+        "robots-txt-coverage-v2"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(robots) = ctx.robots_txt {
             let path = Url::parse(url).map_or(String::new(), |u| {
                 let p = u.path().to_string();
-                if p.ends_with('/') { p } else { p }
+                if p.ends_with('/') {
+                    p
+                } else {
+                    p
+                }
             });
             let lower = robots.to_lowercase();
             let lines: Vec<&str> = lower.lines().collect();
@@ -7737,20 +8290,36 @@ impl Analyzer for RobotsTxtCoverageAnalyzerV2 {
 // =========================================================================
 
 pub struct PaginationLinkAnalyzer;
-impl Default for PaginationLinkAnalyzer { fn default() -> Self { Self::new() } }
-impl PaginationLinkAnalyzer { pub fn new() -> Self { Self } }
+impl Default for PaginationLinkAnalyzer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+impl PaginationLinkAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for PaginationLinkAnalyzer {
-    fn name(&self) -> &str { "pagination-link" }
+    fn name(&self) -> &str {
+        "pagination-link"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let is_pagination = ctx.page.links.iter().any(|l| {
-            l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string())
-        });
+        let is_pagination =
+            ctx.page.links.iter().any(|l| {
+                l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string())
+            });
         if is_pagination {
-            let nofollow_pagination: Vec<&ExtractedLink> = ctx.page.links.iter()
-                .filter(|l| l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string()))
+            let nofollow_pagination: Vec<&ExtractedLink> = ctx
+                .page
+                .links
+                .iter()
+                .filter(|l| {
+                    l.rel.contains(&"next".to_string()) || l.rel.contains(&"prev".to_string())
+                })
                 .filter(|l| l.rel.contains(&"nofollow".to_string()))
                 .collect();
             if !nofollow_pagination.is_empty() {
@@ -7776,15 +8345,21 @@ impl Analyzer for PaginationLinkAnalyzer {
 pub struct MetaDescriptionAnalyzerV3;
 
 impl Default for MetaDescriptionAnalyzerV3 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MetaDescriptionAnalyzerV3 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for MetaDescriptionAnalyzerV3 {
-    fn name(&self) -> &str { "meta-description-v3" }
+    fn name(&self) -> &str {
+        "meta-description-v3"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -7813,15 +8388,21 @@ impl Analyzer for MetaDescriptionAnalyzerV3 {
 pub struct TitleAnalyzerV3;
 
 impl Default for TitleAnalyzerV3 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl TitleAnalyzerV3 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for TitleAnalyzerV3 {
-    fn name(&self) -> &str { "title-v3" }
+    fn name(&self) -> &str {
+        "title-v3"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -7850,15 +8431,21 @@ impl Analyzer for TitleAnalyzerV3 {
 pub struct CanonicalUrlAnalyzerV2;
 
 impl Default for CanonicalUrlAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl CanonicalUrlAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for CanonicalUrlAnalyzerV2 {
-    fn name(&self) -> &str { "canonical-url-v2" }
+    fn name(&self) -> &str {
+        "canonical-url-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -7889,15 +8476,21 @@ impl Analyzer for CanonicalUrlAnalyzerV2 {
 pub struct HreflangValidatorV3;
 
 impl Default for HreflangValidatorV3 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HreflangValidatorV3 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for HreflangValidatorV3 {
-    fn name(&self) -> &str { "hreflang-v3" }
+    fn name(&self) -> &str {
+        "hreflang-v3"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -7928,15 +8521,21 @@ impl Analyzer for HreflangValidatorV3 {
 pub struct SitemapAnalyzerV2;
 
 impl Default for SitemapAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SitemapAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for SitemapAnalyzerV2 {
-    fn name(&self) -> &str { "sitemap-v2" }
+    fn name(&self) -> &str {
+        "sitemap-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -7947,7 +8546,10 @@ impl Analyzer for SitemapAnalyzerV2 {
                 let after = &body[pos..];
                 if let Some(end) = after.find('"') {
                     let sitemap_path = &after[..end];
-                    if !sitemap_path.ends_with(".xml") && !sitemap_path.ends_with(".xml.gz") && !sitemap_path.is_empty() {
+                    if !sitemap_path.ends_with(".xml")
+                        && !sitemap_path.ends_with(".xml.gz")
+                        && !sitemap_path.is_empty()
+                    {
                         findings.push(Finding {
                             severity: Severity::Info,
                             category: IssueCategory::Seo,
@@ -7972,22 +8574,29 @@ impl Analyzer for SitemapAnalyzerV2 {
 pub struct RobotsTxtAnalyzerV2;
 
 impl Default for RobotsTxtAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RobotsTxtAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for RobotsTxtAnalyzerV2 {
-    fn name(&self) -> &str { "robots-txt-v2" }
+    fn name(&self) -> &str {
+        "robots-txt-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(robots) = ctx.robots_txt {
             let lines: Vec<&str> = robots.lines().collect();
-            let disallowed: Vec<&str> = lines.iter()
+            let disallowed: Vec<&str> = lines
+                .iter()
                 .filter(|l| l.starts_with("Disallow:") || l.starts_with("disallow:"))
                 .map(|l| l.split(':').nth(1).unwrap_or("").trim())
                 .filter(|p| !p.is_empty())
@@ -8018,22 +8627,33 @@ impl Analyzer for RobotsTxtAnalyzerV2 {
 pub struct InternalLinkAnalyzerV2;
 
 impl Default for InternalLinkAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl InternalLinkAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for InternalLinkAnalyzerV2 {
-    fn name(&self) -> &str { "internal-link-v2" }
+    fn name(&self) -> &str {
+        "internal-link-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let page_host = url::Url::parse(url).ok().and_then(|u| u.host_str().map(|s| s.to_string()));
+        let page_host = url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(|s| s.to_string()));
         if let Some(host) = &page_host {
-            let empty_text_internal: Vec<&str> = ctx.page.links.iter()
+            let empty_text_internal: Vec<&str> = ctx
+                .page
+                .links
+                .iter()
                 .filter(|l| !l.is_external)
                 .filter(|l| l.href.contains(host) || l.href.starts_with('/'))
                 .filter(|l| l.text.trim().is_empty())
@@ -8062,21 +8682,30 @@ impl Analyzer for InternalLinkAnalyzerV2 {
 pub struct ExternalLinkAnalyzerV2;
 
 impl Default for ExternalLinkAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ExternalLinkAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ExternalLinkAnalyzerV2 {
-    fn name(&self) -> &str { "external-link-v2" }
+    fn name(&self) -> &str {
+        "external-link-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let low_authority_tlds = [".xyz", ".top", ".buzz", ".club", ".work", ".click"];
-        let suspicious: Vec<&str> = ctx.page.links.iter()
+        let suspicious: Vec<&str> = ctx
+            .page
+            .links
+            .iter()
             .filter(|l| l.is_external)
             .filter(|l| {
                 let lower = l.href.to_lowercase();
@@ -8106,15 +8735,21 @@ impl Analyzer for ExternalLinkAnalyzerV2 {
 pub struct KeywordAnalyzerV2;
 
 impl Default for KeywordAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl KeywordAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for KeywordAnalyzerV2 {
-    fn name(&self) -> &str { "keyword-v2" }
+    fn name(&self) -> &str {
+        "keyword-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -8155,15 +8790,21 @@ impl Analyzer for KeywordAnalyzerV2 {
 pub struct ContentQualityAnalyzerV2;
 
 impl Default for ContentQualityAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ContentQualityAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ContentQualityAnalyzerV2 {
-    fn name(&self) -> &str { "content-quality-v2" }
+    fn name(&self) -> &str {
+        "content-quality-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -8174,7 +8815,11 @@ impl Analyzer for ContentQualityAnalyzerV2 {
             for word in body.split_whitespace() {
                 syllable_count += super::count_syllables(word);
             }
-            let grade = super::flesch_kincaid_grade(ctx.page.word_count, ctx.page.sentence_count, syllable_count);
+            let grade = super::flesch_kincaid_grade(
+                ctx.page.word_count,
+                ctx.page.sentence_count,
+                syllable_count,
+            );
             if grade > 12.0 {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -8198,15 +8843,21 @@ impl Analyzer for ContentQualityAnalyzerV2 {
 pub struct WordCountAnalyzerV2;
 
 impl Default for WordCountAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl WordCountAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for WordCountAnalyzerV2 {
-    fn name(&self) -> &str { "word-count-v2" }
+    fn name(&self) -> &str {
+        "word-count-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -8233,15 +8884,21 @@ impl Analyzer for WordCountAnalyzerV2 {
 pub struct LinkAnalyzerV2;
 
 impl Default for LinkAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl LinkAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for LinkAnalyzerV2 {
-    fn name(&self) -> &str { "link-v2" }
+    fn name(&self) -> &str {
+        "link-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -8366,14 +9023,20 @@ mod new_seo_tests {
     fn test_pagination_depth_page_6() {
         let page = make_page("https://example.com/products?page=6");
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+        assert!(PaginationDepthValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAGDEP001"));
     }
 
     #[test]
     fn test_pagination_depth_page_path() {
         let page = make_page("https://example.com/blog/page/10/");
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+        assert!(PaginationDepthValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAGDEP001"));
     }
 
     #[test]
@@ -8406,14 +9069,20 @@ mod new_seo_tests {
     fn test_pagination_depth_page_100() {
         let page = make_page("https://example.com/products?page=100");
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+        assert!(PaginationDepthValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAGDEP001"));
     }
 
     #[test]
     fn test_pagination_depth_category_param() {
         let page = make_page("https://example.com/products?category=books&page=7");
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationDepthValidator::new().analyze(&ctx).iter().any(|f| f.code == "PAGDEP001"));
+        assert!(PaginationDepthValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAGDEP001"));
     }
 
     // RedirectLoopDetector tests
@@ -8462,22 +9131,26 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+        assert!(RedirectLoopDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REDIRLOOP001"));
     }
 
     #[test]
     fn test_redirect_loop_self_redirect() {
         let page = make_page("https://example.com/a");
         use url::Url;
-        let chain = vec![
-            crate::RedirectHop {
-                from: Url::parse("http://example.com/a").unwrap(),
-                to: Url::parse("http://example.com/a").unwrap(),
-                status_code: 301,
-            },
-        ];
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com/a").unwrap(),
+            to: Url::parse("http://example.com/a").unwrap(),
+            status_code: 301,
+        }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+        assert!(RedirectLoopDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REDIRLOOP001"));
     }
 
     #[test]
@@ -8502,7 +9175,10 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(RedirectLoopDetector::new().analyze(&ctx).iter().any(|f| f.code == "REDIRLOOP001"));
+        assert!(RedirectLoopDetector::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REDIRLOOP001"));
     }
 
     #[test]
@@ -8539,13 +9215,11 @@ mod new_seo_tests {
     fn test_redirect_loop_same_url_different_schemes() {
         let page = make_page("https://example.com/a");
         use url::Url;
-        let chain = vec![
-            crate::RedirectHop {
-                from: Url::parse("http://example.com/a").unwrap(),
-                to: Url::parse("https://example.com/a").unwrap(),
-                status_code: 301,
-            },
-        ];
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com/a").unwrap(),
+            to: Url::parse("https://example.com/a").unwrap(),
+            status_code: 301,
+        }];
         let ctx = make_ctx_with_chain(&page, &chain);
         // Same path different scheme is NOT a loop
         assert!(RedirectLoopDetector::new().analyze(&ctx).is_empty());
@@ -8557,7 +9231,9 @@ mod new_seo_tests {
     fn test_mixed_protocol_no_redirects() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8570,7 +9246,9 @@ mod new_seo_tests {
             status_code: 301,
         }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8583,7 +9261,10 @@ mod new_seo_tests {
             status_code: 302,
         }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXPROT001"));
     }
 
     #[test]
@@ -8596,7 +9277,10 @@ mod new_seo_tests {
             status_code: 307,
         }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXPROT001"));
     }
 
     #[test]
@@ -8609,7 +9293,10 @@ mod new_seo_tests {
             status_code: 308,
         }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXPROT001"));
     }
 
     #[test]
@@ -8622,12 +9309,17 @@ mod new_seo_tests {
             status_code: 302,
         }];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).is_empty());
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_mixed_protocol_name() {
-        assert_eq!(MixedProtocolRedirectValidator::new().name(), "mixed-protocol-redirect");
+        assert_eq!(
+            MixedProtocolRedirectValidator::new().name(),
+            "mixed-protocol-redirect"
+        );
     }
 
     #[test]
@@ -8647,7 +9339,10 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx_with_chain(&page, &chain);
-        assert!(MixedProtocolRedirectValidator::new().analyze(&ctx).iter().any(|f| f.code == "MIXPROT001"));
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "MIXPROT001"));
     }
 
     // InternalNofollowOveruseValidator tests
@@ -8656,7 +9351,9 @@ mod new_seo_tests {
     fn test_nofollow_overuse_no_internal_links() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8675,7 +9372,9 @@ mod new_seo_tests {
         // Only 1 nofollow = 10% < 30%
         page.links[0].rel = vec!["nofollow".to_string()];
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8696,7 +9395,10 @@ mod new_seo_tests {
             page.links[i].rel = vec!["nofollow".to_string()];
         }
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NOFOLLOW001"));
     }
 
     #[test]
@@ -8713,7 +9415,9 @@ mod new_seo_tests {
             })
             .collect();
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).is_empty());
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8730,12 +9434,18 @@ mod new_seo_tests {
             })
             .collect();
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NOFOLLOW001"));
     }
 
     #[test]
     fn test_nofollow_overuse_name() {
-        assert_eq!(InternalNofollowOveruseValidator::new().name(), "internal-nofollow-overuse");
+        assert_eq!(
+            InternalNofollowOveruseValidator::new().name(),
+            "internal-nofollow-overuse"
+        );
     }
 
     #[test]
@@ -8768,7 +9478,10 @@ mod new_seo_tests {
         }
         page.links = links;
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalNofollowOveruseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW001"));
+        assert!(InternalNofollowOveruseValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NOFOLLOW001"));
     }
 
     // ExternalNofollowUnderuseValidator tests
@@ -8777,7 +9490,9 @@ mod new_seo_tests {
     fn test_nofollow_underuse_no_external() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+        assert!(ExternalNofollowUnderuseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8797,7 +9512,9 @@ mod new_seo_tests {
         page.links[0].rel = vec!["nofollow".to_string()];
         page.links[1].rel = vec!["nofollow".to_string()];
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+        assert!(ExternalNofollowUnderuseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8815,19 +9532,27 @@ mod new_seo_tests {
             .collect();
         // 0 nofollow = 0% < 10%
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).iter().any(|f| f.code == "NOFOLLOW002"));
+        assert!(ExternalNofollowUnderuseValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NOFOLLOW002"));
     }
 
     #[test]
     fn test_nofollow_underuse_fewer_than_5() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+        assert!(ExternalNofollowUnderuseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_nofollow_underuse_name() {
-        assert_eq!(ExternalNofollowUnderuseValidator::new().name(), "external-nofollow-underuse");
+        assert_eq!(
+            ExternalNofollowUnderuseValidator::new().name(),
+            "external-nofollow-underuse"
+        );
     }
 
     #[test]
@@ -8846,7 +9571,9 @@ mod new_seo_tests {
         // 1 nofollow = 10% = 10% (not < 10%)
         page.links[0].rel = vec!["nofollow".to_string()];
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalNofollowUnderuseValidator::new().analyze(&ctx).is_empty());
+        assert!(ExternalNofollowUnderuseValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // SitemapXmlSizeValidator tests
@@ -8871,7 +9598,10 @@ mod new_seo_tests {
         let page = make_page("https://example.com/sitemap.xml");
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body_size = Some(60 * 1024 * 1024); // 60MB
-        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "SITEMAPSIZE001"));
+        assert!(SitemapXmlSizeValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SITEMAPSIZE001"));
     }
 
     #[test]
@@ -8900,7 +9630,10 @@ mod new_seo_tests {
         let page = make_page("https://example.com/sitemap.xml");
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body_size = Some(100 * 1024 * 1024); // 100MB
-        assert!(SitemapXmlSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "SITEMAPSIZE001"));
+        assert!(SitemapXmlSizeValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SITEMAPSIZE001"));
     }
 
     // RobotsTxtSizeValidator tests
@@ -8927,7 +9660,10 @@ mod new_seo_tests {
         let robots = "User-agent: *\n".repeat(40000);
         let mut ctx = make_ctx(&page, Some(200));
         ctx.robots_txt = Some(&robots);
-        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTSSIZE001"));
+        assert!(RobotsTxtSizeValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ROBOTSSIZE001"));
     }
 
     #[test]
@@ -8958,7 +9694,10 @@ mod new_seo_tests {
         let robots = "x".repeat(600 * 1024);
         let mut ctx = make_ctx(&page, Some(200));
         ctx.robots_txt = Some(&robots);
-        assert!(RobotsTxtSizeValidator::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTSSIZE001"));
+        assert!(RobotsTxtSizeValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ROBOTSSIZE001"));
     }
 
     // ---- HreflangSelfReferenceValidator tests ----
@@ -8967,7 +9706,9 @@ mod new_seo_tests {
     fn test_href_self_no_hreflang() {
         let page = make_page("https://example.com/en");
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -8984,7 +9725,9 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9001,21 +9744,24 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).iter().any(|f| f.code == "HREFSELF001"));
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HREFSELF001"));
     }
 
     #[test]
     fn test_href_self_self_ref_via_canonical() {
         let mut page = make_page("https://example.com/en");
-        page.meta.hreflang = vec![
-            crate::meta::HreflangTag {
-                lang: "en".to_string(),
-                url: Url::parse("https://example.com/en/").unwrap(),
-            },
-        ];
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en/").unwrap(),
+        }];
         page.meta.canonical = Some(Url::parse("https://example.com/en").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9032,33 +9778,36 @@ mod new_seo_tests {
             },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).iter().any(|f| f.code == "HREFSELF001"));
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HREFSELF001"));
     }
 
     #[test]
     fn test_href_self_trailing_slash_match() {
         let mut page = make_page("https://example.com/en/");
-        page.meta.hreflang = vec![
-            crate::meta::HreflangTag {
-                lang: "en".to_string(),
-                url: Url::parse("https://example.com/en").unwrap(),
-            },
-        ];
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_href_self_single_self_ref() {
         let mut page = make_page("https://example.com/en");
-        page.meta.hreflang = vec![
-            crate::meta::HreflangTag {
-                lang: "en".to_string(),
-                url: Url::parse("https://example.com/en").unwrap(),
-            },
-        ];
+        page.meta.hreflang = vec![crate::meta::HreflangTag {
+            lang: "en".to_string(),
+            url: Url::parse("https://example.com/en").unwrap(),
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(HreflangSelfReferenceValidator::new().analyze(&ctx).is_empty());
+        assert!(HreflangSelfReferenceValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9086,7 +9835,10 @@ mod new_seo_tests {
 
     #[test]
     fn test_href_self_name() {
-        assert_eq!(HreflangSelfReferenceValidator::new().name(), "hreflang-self-reference");
+        assert_eq!(
+            HreflangSelfReferenceValidator::new().name(),
+            "hreflang-self-reference"
+        );
     }
 
     #[test]
@@ -9100,7 +9852,10 @@ mod new_seo_tests {
     fn test_opdesc_no_body() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "OPDESC001"));
     }
 
     #[test]
@@ -9109,7 +9864,9 @@ mod new_seo_tests {
         let body = r#"<html><head><link rel="search" type="application/opensearchdescription+xml" title="Search" href="/opensearch.xml"></head></html>"#;
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9118,7 +9875,10 @@ mod new_seo_tests {
         let body = "<html><head><title>Test</title></head></html>";
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "OPDESC001"));
     }
 
     #[test]
@@ -9127,7 +9887,9 @@ mod new_seo_tests {
         let body = r#"<html><head><link rel='search' type='application/opensearchdescription+xml' title='Search' href='/opensearch.xml'></head></html>"#;
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9136,7 +9898,10 @@ mod new_seo_tests {
         let body = r#"<html><head><link rel="search" type="text/html" title="Search" href="/search"></head></html>"#;
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "OPDESC001"));
     }
 
     #[test]
@@ -9145,7 +9910,10 @@ mod new_seo_tests {
         let body = r#"<html><head><link rel="search" type="application/rss+xml" title="Feed" href="/feed.xml"></head></html>"#;
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "OPDESC001"));
     }
 
     #[test]
@@ -9153,7 +9921,10 @@ mod new_seo_tests {
         let page = make_page("https://example.com");
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some("");
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).iter().any(|f| f.code == "OPDESC001"));
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "OPDESC001"));
     }
 
     #[test]
@@ -9162,12 +9933,17 @@ mod new_seo_tests {
         let body = r#"<html><head><link REL="search" TYPE="application/opensearchdescription+xml" TITLE="Search" HREF="/opensearch.xml"></head></html>"#;
         let mut ctx = make_ctx(&page, Some(200));
         ctx.body = Some(body);
-        assert!(OpenSearchDescriptionValidator::new().analyze(&ctx).is_empty());
+        assert!(OpenSearchDescriptionValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_opdesc_name() {
-        assert_eq!(OpenSearchDescriptionValidator::new().name(), "opensearch-description");
+        assert_eq!(
+            OpenSearchDescriptionValidator::new().name(),
+            "opensearch-description"
+        );
     }
 
     #[test]
@@ -9189,7 +9965,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("Hi".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TITLE-QLT001"));
+        assert!(TitleLengthQualityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TITLE-QLT001"));
     }
 
     #[test]
@@ -9205,7 +9984,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.title = Some("A".repeat(80));
         let ctx = make_ctx(&page, Some(200));
-        assert!(TitleLengthQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "TITLE-QLT003"));
+        assert!(TitleLengthQualityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "TITLE-QLT003"));
     }
 
     #[test]
@@ -9223,7 +10005,9 @@ mod new_seo_tests {
     fn test_meta_qlt_no_description() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionQualityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9231,15 +10015,23 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("Short".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT001"));
+        assert!(MetaDescriptionQualityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "META-QLT001"));
     }
 
     #[test]
     fn test_meta_qlt_just_right() {
         let mut page = make_page("https://example.com");
-        page.meta.description = Some("A comprehensive guide to building modern web applications with Rust and WebAssembly.".to_string());
+        page.meta.description = Some(
+            "A comprehensive guide to building modern web applications with Rust and WebAssembly."
+                .to_string(),
+        );
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionQualityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9247,7 +10039,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(200));
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT002"));
+        assert!(MetaDescriptionQualityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "META-QLT002"));
     }
 
     #[test]
@@ -9255,7 +10050,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("Learn Rust programming. Learn Rust programming.".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionQualityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "META-QLT003"));
+        assert!(MetaDescriptionQualityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "META-QLT003"));
     }
 
     // InternalLinkAnchorAnalyzerV2 tests
@@ -9271,9 +10069,30 @@ mod new_seo_tests {
     fn test_anchor_v2_good_diversity() {
         let mut page = make_page("https://example.com");
         page.links = vec![
-            crate::parser::ExtractedLink { href: "https://example.com/a".to_string(), text: "Page A".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/b".to_string(), text: "Page B".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/c".to_string(), text: "Page C".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/a".to_string(),
+                text: "Page A".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/b".to_string(),
+                text: "Page B".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/c".to_string(),
+                text: "Page C".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
         assert!(InternalLinkAnchorAnalyzerV2::new().analyze(&ctx).is_empty());
@@ -9283,16 +10102,68 @@ mod new_seo_tests {
     fn test_anchor_v2_low_diversity() {
         let mut page = make_page("https://example.com");
         page.links = vec![
-            crate::parser::ExtractedLink { href: "https://example.com/a".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/b".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/c".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/d".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/e".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/f".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
-            crate::parser::ExtractedLink { href: "https://example.com/g".to_string(), text: "click here".to_string(), rel: vec![], is_external: false, aria_label: None, img_alt: None },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/a".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/b".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/c".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/d".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/e".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/f".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
+            crate::parser::ExtractedLink {
+                href: "https://example.com/g".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            },
         ];
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalLinkAnchorAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "ANCH-V2001"));
+        assert!(InternalLinkAnchorAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ANCH-V2001"));
     }
 
     // WikipediaLinkAnalyzerV2 tests
@@ -9307,19 +10178,32 @@ mod new_seo_tests {
     #[test]
     fn test_wiki_v2_has_wiki_link() {
         let mut page = make_page("https://example.com");
-        page.links = vec![
-            crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Rust".to_string(), text: "Rust".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
-        ];
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "WIKI-V2001"));
+        assert!(WikipediaLinkAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "WIKI-V2001"));
     }
 
     #[test]
     fn test_wiki_v2_nofollow() {
         let mut page = make_page("https://example.com");
-        page.links = vec![
-            crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Rust".to_string(), text: "Rust".to_string(), rel: vec!["nofollow".to_string()], is_external: true, aria_label: None, img_alt: None },
-        ];
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://en.wikipedia.org/wiki/Rust".to_string(),
+            text: "Rust".to_string(),
+            rel: vec!["nofollow".to_string()],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
         let ctx = make_ctx(&page, Some(200));
         let findings = WikipediaLinkAnalyzerV2::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "WIKI-V2001"));
@@ -9329,9 +10213,14 @@ mod new_seo_tests {
     #[test]
     fn test_wiki_v2_no_wiki_links() {
         let mut page = make_page("https://example.com");
-        page.links = vec![
-            crate::parser::ExtractedLink { href: "https://github.com/rust-lang/rust".to_string(), text: "Rust GitHub".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
-        ];
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://github.com/rust-lang/rust".to_string(),
+            text: "Rust GitHub".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
         let ctx = make_ctx(&page, Some(200));
         assert!(WikipediaLinkAnalyzerV2::new().analyze(&ctx).is_empty());
     }
@@ -9343,7 +10232,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(200));
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "META-PX001"));
+        assert!(MetaDescriptionLengthAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "META-PX001"));
     }
 
     #[test]
@@ -9351,28 +10243,41 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("Short description".to_string());
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionLengthAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_meta_px_no_desc() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionLengthAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_meta_px_name() { assert_eq!(MetaDescriptionLengthAnalyzerV2::new().name(), "meta-description-length-v2"); }
+    fn test_meta_px_name() {
+        assert_eq!(
+            MetaDescriptionLengthAnalyzerV2::new().name(),
+            "meta-description-length-v2"
+        );
+    }
 
     #[test]
-    fn test_meta_px_default() { let _ = MetaDescriptionLengthAnalyzerV2::default(); }
+    fn test_meta_px_default() {
+        let _ = MetaDescriptionLengthAnalyzerV2::default();
+    }
 
     #[test]
     fn test_meta_px_category() {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(200));
         let ctx = make_ctx(&page, Some(200));
-        for f in MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     #[test]
@@ -9380,7 +10285,9 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(160));
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(MetaDescriptionLengthAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9388,7 +10295,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(161));
         let ctx = make_ctx(&page, Some(200));
-        assert!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "META-PX001"));
+        assert!(MetaDescriptionLengthAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "META-PX001"));
     }
 
     #[test]
@@ -9396,7 +10306,10 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com");
         page.meta.description = Some("A".repeat(200));
         let ctx = make_ctx(&page, Some(200));
-        assert_eq!(MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            MetaDescriptionLengthAnalyzerV2::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 
     // === TitleKeywordAnalyzer tests ===
@@ -9417,10 +10330,14 @@ mod new_seo_tests {
     }
 
     #[test]
-    fn test_title_kw_name() { assert_eq!(TitleKeywordAnalyzer::new().name(), "title-keyword"); }
+    fn test_title_kw_name() {
+        assert_eq!(TitleKeywordAnalyzer::new().name(), "title-keyword");
+    }
 
     #[test]
-    fn test_title_kw_default() { let _ = TitleKeywordAnalyzer::default(); }
+    fn test_title_kw_default() {
+        let _ = TitleKeywordAnalyzer::default();
+    }
 
     #[test]
     fn test_title_kw_category() {
@@ -9428,7 +10345,9 @@ mod new_seo_tests {
         page.meta.title = Some("My Page".to_string());
         page.meta.description = Some("completely different content".to_string());
         let ctx = make_ctx(&page, Some(200));
-        for f in TitleKeywordAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in TitleKeywordAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === CanonicalSelfReferenceAnalyzerV2 tests ===
@@ -9438,7 +10357,9 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com/page");
         page.meta.canonical = Some(Url::parse("https://example.com/page").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(CanonicalSelfReferenceAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -9446,28 +10367,42 @@ mod new_seo_tests {
         let mut page = make_page("https://example.com/page");
         page.meta.canonical = Some(Url::parse("https://example.com/other").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "CAN-SR001"));
+        assert!(CanonicalSelfReferenceAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "CAN-SR001"));
     }
 
     #[test]
     fn test_can_sr_no_canonical() {
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
-        assert!(CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx).is_empty());
+        assert!(CanonicalSelfReferenceAnalyzerV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_can_sr_name() { assert_eq!(CanonicalSelfReferenceAnalyzerV2::new().name(), "canonical-self-reference-v2"); }
+    fn test_can_sr_name() {
+        assert_eq!(
+            CanonicalSelfReferenceAnalyzerV2::new().name(),
+            "canonical-self-reference-v2"
+        );
+    }
 
     #[test]
-    fn test_can_sr_default() { let _ = CanonicalSelfReferenceAnalyzerV2::default(); }
+    fn test_can_sr_default() {
+        let _ = CanonicalSelfReferenceAnalyzerV2::default();
+    }
 
     #[test]
     fn test_can_sr_category() {
         let mut page = make_page("https://example.com/page");
         page.meta.canonical = Some(Url::parse("https://example.com/other").unwrap());
         let ctx = make_ctx(&page, Some(200));
-        for f in CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in CanonicalSelfReferenceAnalyzerV2::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === InternalLinkAnchorTextDiversityAnalyzer tests ===
@@ -9475,53 +10410,92 @@ mod new_seo_tests {
     #[test]
     fn test_anch_div_low_diversity() {
         let mut page = make_page("https://example.com");
-        let links = (0..10).map(|_| crate::parser::ExtractedLink {
-            href: "https://example.com/page".to_string(), text: "click here".to_string(),
-            rel: vec![], is_external: false, aria_label: None, img_alt: None,
-        }).collect::<Vec<_>>();
+        let links = (0..10)
+            .map(|_| crate::parser::ExtractedLink {
+                href: "https://example.com/page".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect::<Vec<_>>();
         page.links = links;
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "ANCH-DIV001"));
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ANCH-DIV001"));
     }
 
     #[test]
     fn test_anch_div_good_diversity() {
         let mut page = make_page("https://example.com");
         let texts = ["About", "Contact", "Pricing", "Blog", "FAQ", "Help"];
-        page.links = texts.iter().map(|t| crate::parser::ExtractedLink {
-            href: "https://example.com/page".to_string(), text: t.to_string(),
-            rel: vec![], is_external: false, aria_label: None, img_alt: None,
-        }).collect();
+        page.links = texts
+            .iter()
+            .map(|t| crate::parser::ExtractedLink {
+                href: "https://example.com/page".to_string(),
+                text: t.to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_anch_div_too_few_links() {
         let mut page = make_page("https://example.com");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page".to_string(), text: "click here".to_string(),
-            rel: vec![], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page".to_string(),
+            text: "click here".to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(InternalLinkAnchorTextDiversityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_anch_div_name() { assert_eq!(InternalLinkAnchorTextDiversityAnalyzer::new().name(), "internal-link-anchor-text-diversity"); }
+    fn test_anch_div_name() {
+        assert_eq!(
+            InternalLinkAnchorTextDiversityAnalyzer::new().name(),
+            "internal-link-anchor-text-diversity"
+        );
+    }
 
     #[test]
-    fn test_anch_div_default() { let _ = InternalLinkAnchorTextDiversityAnalyzer::default(); }
+    fn test_anch_div_default() {
+        let _ = InternalLinkAnchorTextDiversityAnalyzer::default();
+    }
 
     #[test]
     fn test_anch_div_category() {
         let mut page = make_page("https://example.com");
-        page.links = (0..10).map(|_| crate::parser::ExtractedLink {
-            href: "https://example.com/page".to_string(), text: "click here".to_string(),
-            rel: vec![], is_external: false, aria_label: None, img_alt: None,
-        }).collect();
+        page.links = (0..10)
+            .map(|_| crate::parser::ExtractedLink {
+                href: "https://example.com/page".to_string(),
+                text: "click here".to_string(),
+                rel: vec![],
+                is_external: false,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
         let ctx = make_ctx(&page, Some(200));
-        for f in InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in InternalLinkAnchorTextDiversityAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === ExternalLinkAuthorityAnalyzer tests ===
@@ -9529,47 +10503,87 @@ mod new_seo_tests {
     #[test]
     fn test_ext_auth_no_high_auth() {
         let mut page = make_page("https://example.com");
-        page.links = (0..5).map(|i| crate::parser::ExtractedLink {
-            href: format!("https://random{i}.com/page"), text: format!("Link {i}"),
-            rel: vec![], is_external: true, aria_label: None, img_alt: None,
-        }).collect();
+        page.links = (0..5)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://random{i}.com/page"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "EXT-AUTH001"));
+        assert!(ExternalLinkAuthorityAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "EXT-AUTH001"));
     }
 
     #[test]
     fn test_ext_auth_has_high_auth() {
         let mut page = make_page("https://example.com");
-        page.links = vec![
-            crate::parser::ExtractedLink { href: "https://wikipedia.org/wiki/Test".to_string(), text: "Wiki".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None },
-        ];
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://wikipedia.org/wiki/Test".to_string(),
+            text: "Wiki".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ExternalLinkAuthorityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_ext_auth_few_links() {
         let mut page = make_page("https://example.com");
-        page.links = vec![crate::parser::ExtractedLink { href: "https://random.com".to_string(), text: "Link".to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None }];
+        page.links = vec![crate::parser::ExtractedLink {
+            href: "https://random.com".to_string(),
+            text: "Link".to_string(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(ExternalLinkAuthorityAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ExternalLinkAuthorityAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
-    fn test_ext_auth_name() { assert_eq!(ExternalLinkAuthorityAnalyzer::new().name(), "external-link-authority"); }
+    fn test_ext_auth_name() {
+        assert_eq!(
+            ExternalLinkAuthorityAnalyzer::new().name(),
+            "external-link-authority"
+        );
+    }
 
     #[test]
-    fn test_ext_auth_default() { let _ = ExternalLinkAuthorityAnalyzer::default(); }
+    fn test_ext_auth_default() {
+        let _ = ExternalLinkAuthorityAnalyzer::default();
+    }
 
     #[test]
     fn test_ext_auth_category() {
         let mut page = make_page("https://example.com");
-        page.links = (0..5).map(|i| crate::parser::ExtractedLink {
-            href: format!("https://random{i}.com/page"), text: format!("Link {i}"),
-            rel: vec![], is_external: true, aria_label: None, img_alt: None,
-        }).collect();
+        page.links = (0..5)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://random{i}.com/page"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
         let ctx = make_ctx(&page, Some(200));
-        for f in ExternalLinkAuthorityAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in ExternalLinkAuthorityAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === SitemapCoverageAnalyzerV2 tests ===
@@ -9601,10 +10615,17 @@ mod new_seo_tests {
     }
 
     #[test]
-    fn test_sitemap_cov_name() { assert_eq!(SitemapCoverageAnalyzerV2::empty().name(), "sitemap-coverage-v2"); }
+    fn test_sitemap_cov_name() {
+        assert_eq!(
+            SitemapCoverageAnalyzerV2::empty().name(),
+            "sitemap-coverage-v2"
+        );
+    }
 
     #[test]
-    fn test_sitemap_cov_default() { let _ = SitemapCoverageAnalyzerV2::default(); }
+    fn test_sitemap_cov_default() {
+        let _ = SitemapCoverageAnalyzerV2::default();
+    }
 
     #[test]
     fn test_sitemap_cov_category() {
@@ -9612,7 +10633,9 @@ mod new_seo_tests {
         let page = make_page("https://example.com/page");
         let ctx = make_ctx(&page, Some(200));
         let a = SitemapCoverageAnalyzerV2::new(known);
-        for f in a.analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in a.analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === RobotsTxtCoverageAnalyzerV2 tests ===
@@ -9622,11 +10645,23 @@ mod new_seo_tests {
         let robots = "User-agent: *\nDisallow: /page\n";
         let page = make_page("https://example.com/page");
         let ctx = AnalysisContext {
-            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
-            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
-            server: None, content_type: None, rendered: None,
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
         };
-        assert!(RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx).iter().any(|f| f.code == "ROBOTS-COV001"));
+        assert!(RobotsTxtCoverageAnalyzerV2::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "ROBOTS-COV001"));
     }
 
     #[test]
@@ -9634,9 +10669,18 @@ mod new_seo_tests {
         let robots = "User-agent: *\nDisallow: /admin\n";
         let page = make_page("https://example.com/page");
         let ctx = AnalysisContext {
-            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
-            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
-            server: None, content_type: None, rendered: None,
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
         };
         assert!(RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx).is_empty());
     }
@@ -9649,21 +10693,39 @@ mod new_seo_tests {
     }
 
     #[test]
-    fn test_robots_cov_name() { assert_eq!(RobotsTxtCoverageAnalyzerV2::new().name(), "robots-txt-coverage-v2"); }
+    fn test_robots_cov_name() {
+        assert_eq!(
+            RobotsTxtCoverageAnalyzerV2::new().name(),
+            "robots-txt-coverage-v2"
+        );
+    }
 
     #[test]
-    fn test_robots_cov_default() { let _ = RobotsTxtCoverageAnalyzerV2::default(); }
+    fn test_robots_cov_default() {
+        let _ = RobotsTxtCoverageAnalyzerV2::default();
+    }
 
     #[test]
     fn test_robots_cov_category() {
         let robots = "User-agent: *\nDisallow: /page\n";
         let page = make_page("https://example.com/page");
         let ctx = AnalysisContext {
-            page: &page, body: None, status_code: Some(200), headers: &[], response_time: None,
-            redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None,
-            server: None, content_type: None, rendered: None,
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: Some(robots),
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
         };
-        for f in RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in RobotsTxtCoverageAnalyzerV2::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     // === PaginationLinkAnalyzer tests ===
@@ -9672,19 +10734,30 @@ mod new_seo_tests {
     fn test_pag_nofollow() {
         let mut page = make_page("https://example.com/page/1");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
-            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page/2".to_string(),
+            text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "PAG-LINK001"));
+        assert!(PaginationLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAG-LINK001"));
     }
 
     #[test]
     fn test_pag_no_nofollow() {
         let mut page = make_page("https://example.com/page/1");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
-            rel: vec!["next".to_string()], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page/2".to_string(),
+            text: "Next".to_string(),
+            rel: vec!["next".to_string()],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
         assert!(PaginationLinkAnalyzer::new().analyze(&ctx).is_empty());
@@ -9701,38 +10774,62 @@ mod new_seo_tests {
     fn test_pag_prev_nofollow() {
         let mut page = make_page("https://example.com/page/2");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page/1".to_string(), text: "Prev".to_string(),
-            rel: vec!["prev".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page/1".to_string(),
+            text: "Prev".to_string(),
+            rel: vec!["prev".to_string(), "nofollow".to_string()],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert!(PaginationLinkAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "PAG-LINK001"));
+        assert!(PaginationLinkAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "PAG-LINK001"));
     }
 
     #[test]
-    fn test_pag_name() { assert_eq!(PaginationLinkAnalyzer::new().name(), "pagination-link"); }
+    fn test_pag_name() {
+        assert_eq!(PaginationLinkAnalyzer::new().name(), "pagination-link");
+    }
 
     #[test]
-    fn test_pag_default() { let _ = PaginationLinkAnalyzer::default(); }
+    fn test_pag_default() {
+        let _ = PaginationLinkAnalyzer::default();
+    }
 
     #[test]
     fn test_pag_category() {
         let mut page = make_page("https://example.com/page/1");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
-            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page/2".to_string(),
+            text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        for f in PaginationLinkAnalyzer::new().analyze(&ctx) { assert_eq!(f.category, IssueCategory::Seo); }
+        for f in PaginationLinkAnalyzer::new().analyze(&ctx) {
+            assert_eq!(f.category, IssueCategory::Seo);
+        }
     }
 
     #[test]
     fn test_pag_severity() {
         let mut page = make_page("https://example.com/page/1");
         page.links = vec![crate::parser::ExtractedLink {
-            href: "https://example.com/page/2".to_string(), text: "Next".to_string(),
-            rel: vec!["next".to_string(), "nofollow".to_string()], is_external: false, aria_label: None, img_alt: None,
+            href: "https://example.com/page/2".to_string(),
+            text: "Next".to_string(),
+            rel: vec!["next".to_string(), "nofollow".to_string()],
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
         }];
         let ctx = make_ctx(&page, Some(200));
-        assert_eq!(PaginationLinkAnalyzer::new().analyze(&ctx)[0].severity, Severity::Warning);
+        assert_eq!(
+            PaginationLinkAnalyzer::new().analyze(&ctx)[0].severity,
+            Severity::Warning
+        );
     }
 }

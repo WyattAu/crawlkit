@@ -31,7 +31,12 @@ impl Analyzer for PlanSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,12 +45,16 @@ impl Analyzer for PlanSchemaValidator {
                     description: "A Plan structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the plan name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the plan name.".to_string(),
                 });
             }
 
-            if data.get("description").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Schema,
@@ -55,8 +64,7 @@ impl Analyzer for PlanSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"description\" with details about the plan."
-                        .to_string(),
+                    recommendation: "Add \"description\" with details about the plan.".to_string(),
                 });
             }
         }
@@ -64,7 +72,6 @@ impl Analyzer for PlanSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -126,149 +133,140 @@ mod tests {
     }
 
     #[test]
-fn test_plan_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Plan".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Plan",
-            "description": "A monthly plan"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PLAN001"));
-}
-
-
-    #[test]
-fn test_plan_missing_description() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Plan".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Plan",
-            "name": "Premium Plan"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PLAN002"));
-}
-
-
-    #[test]
-fn test_plan_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Plan".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Plan",
-            "name": "Premium Plan",
-            "description": "Unlimited access"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_plan_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_plan_non_plan_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_plan_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Plan".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Plan"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_plan_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Plan".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Plan",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PLAN001"));
-}
-
-
-    #[test]
-fn test_plan_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_plan_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Plan".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Plan",
-                "name": "Good Plan",
-                "description": "Details"
+                "description": "A monthly plan"
             }),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAN001"));
+    }
+
+    #[test]
+    fn test_plan_missing_description() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Plan".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Plan",
+                "name": "Premium Plan"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAN002"));
+    }
+
+    #[test]
+    fn test_plan_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Plan".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Plan",
+                "name": "Premium Plan",
+                "description": "Unlimited access"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_plan_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_plan_non_plan_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_plan_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Plan".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Plan"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = PlanSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PLAN001"));
-    assert!(findings.iter().any(|f| f.code == "PLAN002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
 
+    #[test]
+    fn test_plan_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Plan".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Plan",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAN001"));
+    }
 
+    #[test]
+    fn test_plan_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Plan".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Plan",
+                    "name": "Good Plan",
+                    "description": "Details"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Plan".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Plan"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = PlanSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PLAN001"));
+        assert!(findings.iter().any(|f| f.code == "PLAN002"));
+    }
 }

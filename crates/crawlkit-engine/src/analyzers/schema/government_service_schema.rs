@@ -31,7 +31,12 @@ impl Analyzer for GovernmentServiceSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for GovernmentServiceSchemaValidator {
                                   \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the government service name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the government service name.".to_string(),
                 });
             }
 
@@ -66,7 +70,6 @@ impl Analyzer for GovernmentServiceSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -128,148 +131,139 @@ mod tests {
     }
 
     #[test]
-fn test_gov_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("GovernmentService".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "GovernmentService"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "GOV001"));
-}
-
-
-    #[test]
-fn test_gov_missing_provider() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("GovernmentService".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "GovernmentService",
-            "name": "DMV"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "GOV002"));
-}
-
-
-    #[test]
-fn test_gov_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("GovernmentService".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "GovernmentService",
-            "name": "DMV",
-            "provider": {"@type": "GovernmentOrganization", "name": "State Gov"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_gov_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_gov_non_gov_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_gov_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("GovernmentService".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "GovernmentService"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_gov_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("GovernmentService".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "GovernmentService",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "GOV001"));
-}
-
-
-    #[test]
-fn test_gov_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("GovernmentService".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "GovernmentService",
-                "name": "Good Service",
-                "provider": {"@type": "GovernmentOrganization"}
-            }),
-        },
-        StructuredData {
+    fn test_gov_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("GovernmentService".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "GovernmentService"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "GOV001"));
-    assert!(findings.iter().any(|f| f.code == "GOV002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "GOV001"));
+    }
 
+    #[test]
+    fn test_gov_missing_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("GovernmentService".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "GovernmentService",
+                "name": "DMV"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "GOV002"));
+    }
 
+    #[test]
+    fn test_gov_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("GovernmentService".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "GovernmentService",
+                "name": "DMV",
+                "provider": {"@type": "GovernmentOrganization", "name": "State Gov"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_gov_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_gov_non_gov_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_gov_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("GovernmentService".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "GovernmentService"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_gov_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("GovernmentService".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "GovernmentService",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "GOV001"));
+    }
+
+    #[test]
+    fn test_gov_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("GovernmentService".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "GovernmentService",
+                    "name": "Good Service",
+                    "provider": {"@type": "GovernmentOrganization"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("GovernmentService".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "GovernmentService"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = GovernmentServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "GOV001"));
+        assert!(findings.iter().any(|f| f.code == "GOV002"));
+    }
 }

@@ -1,4 +1,9 @@
-#![allow(clippy::unwrap_used, clippy::needless_return, clippy::redundant_clone, clippy::unnecessary_to_owned)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::needless_return,
+    clippy::redundant_clone,
+    clippy::unnecessary_to_owned
+)]
 #![allow(unused_imports, unused_variables, unused_mut)]
 
 use std::collections::{HashMap, HashSet};
@@ -160,7 +165,12 @@ impl InternalLinkGraphAnalyzer {
 
     /// Extract the domain from a URL for same-origin comparisons.
     fn extract_domain(url: &str) -> &str {
-        url.split("://").nth(1).unwrap_or(url).split('/').next().unwrap_or(url)
+        url.split("://")
+            .nth(1)
+            .unwrap_or(url)
+            .split('/')
+            .next()
+            .unwrap_or(url)
     }
 
     /// Check whether two URLs share the same origin.
@@ -233,8 +243,9 @@ impl PostCrawlAnalyzer for InternalLinkGraphAnalyzer {
                         "Page '{url}' has {count} outgoing links, which may dilute link equity."
                     ),
                     url: url.clone(),
-                    recommendation: "Reduce the number of links per page to keep link equity focused."
-                        .to_string(),
+                    recommendation:
+                        "Reduce the number of links per page to keep link equity focused."
+                            .to_string(),
                 });
             }
         }
@@ -291,9 +302,7 @@ impl PostCrawlAnalyzer for InternalLinkGraphAnalyzer {
 
         // GRAPH004: single page receives >30% of all internal links
         if total_outgoing > 0 {
-            if let Some((top_url, top_count)) =
-                incoming.iter().max_by_key(|(_, c)| *c)
-            {
+            if let Some((top_url, top_count)) = incoming.iter().max_by_key(|(_, c)| *c) {
                 let pct = (*top_count as f64) / (total_outgoing as f64) * 100.0;
                 if pct > 30.0 && *top_count > 1 {
                     findings.push(Finding {
@@ -496,10 +505,7 @@ impl PostCrawlAnalyzer for CannibalizationDetector {
                 if let Some(title) = &page.title {
                     let kw = Self::extract_primary_keyword(title);
                     if !kw.is_empty() {
-                        keyword_pages
-                            .entry(kw)
-                            .or_default()
-                            .push(page.url.as_str());
+                        keyword_pages.entry(kw).or_default().push(page.url.as_str());
                     }
                 }
             }
@@ -550,8 +556,9 @@ impl PostCrawlAnalyzer for CannibalizationDetector {
                             urls.join(", ")
                         ),
                         url: urls[0].to_string(),
-                        recommendation: "Ensure each page has a unique self-referencing canonical URL."
-                            .to_string(),
+                        recommendation:
+                            "Ensure each page has a unique self-referencing canonical URL."
+                                .to_string(),
                     });
                 }
             }
@@ -583,7 +590,12 @@ impl OrphanPageDetector {
     }
 
     fn extract_domain(url: &str) -> &str {
-        url.split("://").nth(1).unwrap_or(url).split('/').next().unwrap_or(url)
+        url.split("://")
+            .nth(1)
+            .unwrap_or(url)
+            .split('/')
+            .next()
+            .unwrap_or(url)
     }
 
     fn same_origin(a: &str, b: &str) -> bool {
@@ -667,7 +679,8 @@ impl SitemapCoverageAnalyzer {
         // Must end with .xml or .xml.gz and contain "sitemap" in the filename (not just the path)
         let path_part = lower.split("://").nth(1).unwrap_or(&lower);
         let filename = path_part.rsplit('/').next().unwrap_or(path_part);
-        filename.starts_with("sitemap") && (filename.ends_with(".xml") || filename.ends_with(".xml.gz"))
+        filename.starts_with("sitemap")
+            && (filename.ends_with(".xml") || filename.ends_with(".xml.gz"))
     }
 }
 
@@ -758,7 +771,12 @@ impl LinkEquityDistributor {
     }
 
     fn extract_domain(url: &str) -> &str {
-        url.split("://").nth(1).unwrap_or(url).split('/').next().unwrap_or(url)
+        url.split("://")
+            .nth(1)
+            .unwrap_or(url)
+            .split('/')
+            .next()
+            .unwrap_or(url)
     }
 
     fn same_origin(a: &str, b: &str) -> bool {
@@ -866,20 +884,30 @@ impl PostCrawlAnalyzer for LinkEquityDistributor {
 pub struct RedirectChainOptimizer;
 
 impl Default for RedirectChainOptimizer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl RedirectChainOptimizer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for RedirectChainOptimizer {
-    fn name(&self) -> &str { "redirect-chain-optimizer" }
+    fn name(&self) -> &str {
+        "redirect-chain-optimizer"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         // Count pages with 3xx status (redirects)
-        let redirect_count = data.pages.iter().filter(|p| p.status_code >= 300 && p.status_code < 400).count();
+        let redirect_count = data
+            .pages
+            .iter()
+            .filter(|p| p.status_code >= 300 && p.status_code < 400)
+            .count();
         let total = data.pages.len();
         if total > 0 && redirect_count as f64 / total as f64 > 0.1 {
             findings.push(Finding {
@@ -887,7 +915,12 @@ impl PostCrawlAnalyzer for RedirectChainOptimizer {
                 category: IssueCategory::Http,
                 code: "REDIR-C001".to_string(),
                 title: "High redirect ratio detected".to_string(),
-                description: format!("{}/{} pages ({:.0}%) are redirects. Chains > 3 hops waste crawl budget.", redirect_count, total, redirect_count as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) are redirects. Chains > 3 hops waste crawl budget.",
+                    redirect_count,
+                    total,
+                    redirect_count as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Flatten redirect chains to max 1 hop.".to_string(),
             });
@@ -903,20 +936,28 @@ impl PostCrawlAnalyzer for RedirectChainOptimizer {
 pub struct LinkVelocityAnalyzer;
 
 impl Default for LinkVelocityAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl LinkVelocityAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for LinkVelocityAnalyzer {
-    fn name(&self) -> &str { "link-velocity" }
+    fn name(&self) -> &str {
+        "link-velocity"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
 
         let avg_links: f64 = data.pages.iter().map(|p| (0) as f64).sum::<f64>() / total as f64;
         if avg_links < 2.0 {
@@ -938,9 +979,16 @@ impl PostCrawlAnalyzer for LinkVelocityAnalyzer {
                 category: IssueCategory::Seo,
                 code: "LINK-V002".to_string(),
                 title: "High percentage of zero-link pages".to_string(),
-                description: format!("{}/{} pages ({:.0}%) have no outgoing links.", zero_link_pages, total, zero_link_pages as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) have no outgoing links.",
+                    zero_link_pages,
+                    total,
+                    zero_link_pages as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
-                recommendation: "Add navigation links and contextual links to reduce dead-end pages.".to_string(),
+                recommendation:
+                    "Add navigation links and contextual links to reduce dead-end pages."
+                        .to_string(),
             });
         }
         findings
@@ -954,29 +1002,46 @@ impl PostCrawlAnalyzer for LinkVelocityAnalyzer {
 pub struct ContentFreshnessCrossPageAnalyzer;
 
 impl Default for ContentFreshnessCrossPageAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl ContentFreshnessCrossPageAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for ContentFreshnessCrossPageAnalyzer {
-    fn name(&self) -> &str { "content-freshness-cross" }
+    fn name(&self) -> &str {
+        "content-freshness-cross"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
 
-        let low_word_pages = data.pages.iter().filter(|p| p.word_count.unwrap_or(0) < 200).count();
+        let low_word_pages = data
+            .pages
+            .iter()
+            .filter(|p| p.word_count.unwrap_or(0) < 200)
+            .count();
         if low_word_pages as f64 / total as f64 > 0.5 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Content,
                 code: "FRESH-C002".to_string(),
                 title: "Low average content depth".to_string(),
-                description: format!("{}/{} pages ({:.0}%) have fewer than 200 words.", low_word_pages, total, low_word_pages as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) have fewer than 200 words.",
+                    low_word_pages,
+                    total,
+                    low_word_pages as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Expand thin pages with substantive, unique content.".to_string(),
             });
@@ -992,15 +1057,21 @@ impl PostCrawlAnalyzer for ContentFreshnessCrossPageAnalyzer {
 pub struct KeywordCannibalizationAnalyzer;
 
 impl Default for KeywordCannibalizationAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl KeywordCannibalizationAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for KeywordCannibalizationAnalyzer {
-    fn name(&self) -> &str { "keyword-cannibalization" }
+    fn name(&self) -> &str {
+        "keyword-cannibalization"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
@@ -1010,7 +1081,8 @@ impl PostCrawlAnalyzer for KeywordCannibalizationAnalyzer {
             if let Some(ref title) = page.title {
                 let normalized = title.trim().to_lowercase();
                 if normalized.len() > 5 {
-                    let url_str = page.url.to_string(); title_map.entry(normalized).or_default().push(url_str);
+                    let url_str = page.url.to_string();
+                    title_map.entry(normalized).or_default().push(url_str);
                 }
             }
         }
@@ -1021,9 +1093,15 @@ impl PostCrawlAnalyzer for KeywordCannibalizationAnalyzer {
                     category: IssueCategory::Seo,
                     code: "KEY-CANNIB001".to_string(),
                     title: "Duplicate titles detected".to_string(),
-                    description: format!("{} pages share the title \"{}\": {}", urls.len(), title, urls.join(", ")),
+                    description: format!(
+                        "{} pages share the title \"{}\": {}",
+                        urls.len(),
+                        title,
+                        urls.join(", ")
+                    ),
                     url: urls[0].to_string(),
-                    recommendation: "Differentiate titles to avoid keyword cannibalization.".to_string(),
+                    recommendation: "Differentiate titles to avoid keyword cannibalization."
+                        .to_string(),
                 });
             }
         }
@@ -1038,20 +1116,28 @@ impl PostCrawlAnalyzer for KeywordCannibalizationAnalyzer {
 pub struct InternalLinkBalanceAnalyzer;
 
 impl Default for InternalLinkBalanceAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl InternalLinkBalanceAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
-    fn name(&self) -> &str { "internal-link-balance" }
+    fn name(&self) -> &str {
+        "internal-link-balance"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
 
         let total_internal: usize = data.pages.iter().map(|p| 0).sum();
         let total_external: usize = data.pages.iter().map(|p| 0).sum();
@@ -1077,9 +1163,15 @@ impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
                 category: IssueCategory::Seo,
                 code: "LINK-BAL002".to_string(),
                 title: "High percentage of dead-end pages".to_string(),
-                description: format!("{}/{} pages ({:.0}%) have no outgoing links.", dead_ends, total, dead_ends as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) have no outgoing links.",
+                    dead_ends,
+                    total,
+                    dead_ends as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
-                recommendation: "Add navigation and contextual links to dead-end pages.".to_string(),
+                recommendation: "Add navigation and contextual links to dead-end pages."
+                    .to_string(),
             });
         }
         findings
@@ -1093,31 +1185,49 @@ impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
 pub struct CrawlQualityAnalyzer;
 
 impl Default for CrawlQualityAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl CrawlQualityAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for CrawlQualityAnalyzer {
-    fn name(&self) -> &str { "crawl-quality" }
+    fn name(&self) -> &str {
+        "crawl-quality"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
 
-        let error_4xx = data.pages.iter().filter(|p| p.status_code >= 400 && p.status_code < 500).count();
+        let error_4xx = data
+            .pages
+            .iter()
+            .filter(|p| p.status_code >= 400 && p.status_code < 500)
+            .count();
         if error_4xx as f64 / total as f64 > 0.2 {
             findings.push(Finding {
                 severity: Severity::Error,
                 category: IssueCategory::Http,
                 code: "QUALITY001".to_string(),
                 title: "High 4xx error rate".to_string(),
-                description: format!("{}/{} pages ({:.0}%) return 4xx errors.", error_4xx, total, error_4xx as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) return 4xx errors.",
+                    error_4xx,
+                    total,
+                    error_4xx as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
-                recommendation: "Fix broken links and remove pages that no longer exist.".to_string(),
+                recommendation: "Fix broken links and remove pages that no longer exist."
+                    .to_string(),
             });
         }
 
@@ -1128,7 +1238,12 @@ impl PostCrawlAnalyzer for CrawlQualityAnalyzer {
                 category: IssueCategory::Http,
                 code: "QUALITY002".to_string(),
                 title: "High 5xx error rate".to_string(),
-                description: format!("{}/{} pages ({:.0}%) return 5xx errors.", error_5xx, total, error_5xx as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) return 5xx errors.",
+                    error_5xx,
+                    total,
+                    error_5xx as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Investigate server errors and ensure stable hosting.".to_string(),
             });
@@ -1144,21 +1259,33 @@ impl PostCrawlAnalyzer for CrawlQualityAnalyzer {
 pub struct SchemaCoverageAnalyzer;
 
 impl Default for SchemaCoverageAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl SchemaCoverageAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for SchemaCoverageAnalyzer {
-    fn name(&self) -> &str { "schema-coverage" }
+    fn name(&self) -> &str {
+        "schema-coverage"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
-        let with_schema = data.pages.iter().filter(|p| p.has_structured_data == Some(true)).count();
+        if total == 0 {
+            return findings;
+        }
+        let with_schema = data
+            .pages
+            .iter()
+            .filter(|p| p.has_structured_data == Some(true))
+            .count();
         let pct = with_schema as f64 / total as f64 * 100.0;
         if pct < 10.0 {
             findings.push(Finding {
@@ -1166,7 +1293,10 @@ impl PostCrawlAnalyzer for SchemaCoverageAnalyzer {
                 category: IssueCategory::Seo,
                 code: "SCHEMA-COV001".to_string(),
                 title: "Low structured data coverage".to_string(),
-                description: format!("Only {}/{} pages ({:.0}%) have structured data.", with_schema, total, pct),
+                description: format!(
+                    "Only {}/{} pages ({:.0}%) have structured data.",
+                    with_schema, total, pct
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add structured data to more pages.".to_string(),
             });
@@ -1182,28 +1312,45 @@ impl PostCrawlAnalyzer for SchemaCoverageAnalyzer {
 pub struct MobileReadinessAnalyzer;
 
 impl Default for MobileReadinessAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl MobileReadinessAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for MobileReadinessAnalyzer {
-    fn name(&self) -> &str { "mobile-readiness" }
+    fn name(&self) -> &str {
+        "mobile-readiness"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
-        let no_viewport = data.pages.iter().filter(|p| p.viewport_ok == Some(false)).count();
+        if total == 0 {
+            return findings;
+        }
+        let no_viewport = data
+            .pages
+            .iter()
+            .filter(|p| p.viewport_ok == Some(false))
+            .count();
         if no_viewport as f64 / total as f64 > 0.2 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Mobile,
                 code: "MOBILE-C001".to_string(),
                 title: "High rate of missing viewport".to_string(),
-                description: format!("{}/{} pages ({:.0}%) missing proper viewport.", no_viewport, total, no_viewport as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) missing proper viewport.",
+                    no_viewport,
+                    total,
+                    no_viewport as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add viewport meta tag to all pages.".to_string(),
             });
@@ -1219,29 +1366,50 @@ impl PostCrawlAnalyzer for MobileReadinessAnalyzer {
 pub struct SecurityPostureAnalyzer;
 
 impl Default for SecurityPostureAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl SecurityPostureAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for SecurityPostureAnalyzer {
-    fn name(&self) -> &str { "security-posture" }
+    fn name(&self) -> &str {
+        "security-posture"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
-        let no_csp = data.pages.iter().filter(|p| p.has_csp == Some(false)).count();
-        let no_hsts = data.pages.iter().filter(|p| p.has_hsts == Some(false)).count();
+        if total == 0 {
+            return findings;
+        }
+        let no_csp = data
+            .pages
+            .iter()
+            .filter(|p| p.has_csp == Some(false))
+            .count();
+        let no_hsts = data
+            .pages
+            .iter()
+            .filter(|p| p.has_hsts == Some(false))
+            .count();
         if no_csp as f64 / total as f64 > 0.3 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Security,
                 code: "SEC-C001".to_string(),
                 title: "Low CSP coverage".to_string(),
-                description: format!("{}/{} pages ({:.0}%) missing CSP header.", no_csp, total, no_csp as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) missing CSP header.",
+                    no_csp,
+                    total,
+                    no_csp as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add Content-Security-Policy headers.".to_string(),
             });
@@ -1252,7 +1420,12 @@ impl PostCrawlAnalyzer for SecurityPostureAnalyzer {
                 category: IssueCategory::Security,
                 code: "SEC-C002".to_string(),
                 title: "Low HSTS coverage".to_string(),
-                description: format!("{}/{} pages ({:.0}%) missing HSTS header.", no_hsts, total, no_hsts as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) missing HSTS header.",
+                    no_hsts,
+                    total,
+                    no_hsts as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add Strict-Transport-Security headers.".to_string(),
             });
@@ -1268,20 +1441,28 @@ impl PostCrawlAnalyzer for SecurityPostureAnalyzer {
 pub struct ImageOptimizationAnalyzer;
 
 impl Default for ImageOptimizationAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl ImageOptimizationAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for ImageOptimizationAnalyzer {
-    fn name(&self) -> &str { "image-optimization" }
+    fn name(&self) -> &str {
+        "image-optimization"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
         let total_images: usize = data.pages.iter().filter_map(|p| p.images_total).sum();
         let missing_alt: usize = data.pages.iter().filter_map(|p| p.images_missing_alt).sum();
         if total_images > 0 && missing_alt as f64 / total_images as f64 > 0.5 {
@@ -1290,7 +1471,12 @@ impl PostCrawlAnalyzer for ImageOptimizationAnalyzer {
                 category: IssueCategory::Images,
                 code: "IMG-OPT001".to_string(),
                 title: "High rate of missing alt text".to_string(),
-                description: format!("{}/{} images ({:.0}%) missing alt text across crawl.", missing_alt, total_images, missing_alt as f64 / total_images as f64 * 100.0),
+                description: format!(
+                    "{}/{} images ({:.0}%) missing alt text across crawl.",
+                    missing_alt,
+                    total_images,
+                    missing_alt as f64 / total_images as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add descriptive alt text to all images.".to_string(),
             });
@@ -1306,29 +1492,46 @@ impl PostCrawlAnalyzer for ImageOptimizationAnalyzer {
 pub struct HeadingStructureAnalyzer;
 
 impl Default for HeadingStructureAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl HeadingStructureAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for HeadingStructureAnalyzer {
-    fn name(&self) -> &str { "heading-structure" }
+    fn name(&self) -> &str {
+        "heading-structure"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
         let no_h1 = data.pages.iter().filter(|p| p.h1_count == Some(0)).count();
-        let multi_h1 = data.pages.iter().filter(|p| p.h1_count.is_some_and(|c| c > 1)).count();
+        let multi_h1 = data
+            .pages
+            .iter()
+            .filter(|p| p.h1_count.is_some_and(|c| c > 1))
+            .count();
         if no_h1 as f64 / total as f64 > 0.3 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Seo,
                 code: "HEAD-C001".to_string(),
                 title: "High rate of pages without H1".to_string(),
-                description: format!("{}/{} pages ({:.0}%) missing H1 heading.", no_h1, total, no_h1 as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) missing H1 heading.",
+                    no_h1,
+                    total,
+                    no_h1 as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Add a unique H1 heading to each page.".to_string(),
             });
@@ -1339,7 +1542,12 @@ impl PostCrawlAnalyzer for HeadingStructureAnalyzer {
                 category: IssueCategory::Seo,
                 code: "HEAD-C002".to_string(),
                 title: "High rate of multiple H1s".to_string(),
-                description: format!("{}/{} pages ({:.0}%) have multiple H1 headings.", multi_h1, total, multi_h1 as f64 / total as f64 * 100.0),
+                description: format!(
+                    "{}/{} pages ({:.0}%) have multiple H1 headings.",
+                    multi_h1,
+                    total,
+                    multi_h1 as f64 / total as f64 * 100.0
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Use a single H1 per page.".to_string(),
             });
@@ -1355,25 +1563,47 @@ impl PostCrawlAnalyzer for HeadingStructureAnalyzer {
 pub struct CanonicalConsistencyAnalyzer;
 
 impl Default for CanonicalConsistencyAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl CanonicalConsistencyAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for CanonicalConsistencyAnalyzer {
-    fn name(&self) -> &str { "canonical-consistency" }
+    fn name(&self) -> &str {
+        "canonical-consistency"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
-        let with_canonical = data.pages.iter().filter(|p| p.canonical_url.is_some()).count();
-        let self_canonical = data.pages.iter().filter(|p| {
-            p.canonical_url.as_ref().is_some_and(|c| c.as_str() == p.url.as_str())
-        }).count();
-        let pct_self = if with_canonical > 0 { self_canonical as f64 / with_canonical as f64 * 100.0 } else { 0.0 };
+        if total == 0 {
+            return findings;
+        }
+        let with_canonical = data
+            .pages
+            .iter()
+            .filter(|p| p.canonical_url.is_some())
+            .count();
+        let self_canonical = data
+            .pages
+            .iter()
+            .filter(|p| {
+                p.canonical_url
+                    .as_ref()
+                    .is_some_and(|c| c.as_str() == p.url.as_str())
+            })
+            .count();
+        let pct_self = if with_canonical > 0 {
+            self_canonical as f64 / with_canonical as f64 * 100.0
+        } else {
+            0.0
+        };
         if pct_self > 90.0 && with_canonical > 5 {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -1396,22 +1626,34 @@ impl PostCrawlAnalyzer for CanonicalConsistencyAnalyzer {
 pub struct OverallHealthScoreAnalyzer;
 
 impl Default for OverallHealthScoreAnalyzer {
-    fn default() -> Self { Self }
+    fn default() -> Self {
+        Self
+    }
 }
 
 impl OverallHealthScoreAnalyzer {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl PostCrawlAnalyzer for OverallHealthScoreAnalyzer {
-    fn name(&self) -> &str { "overall-health-score" }
+    fn name(&self) -> &str {
+        "overall-health-score"
+    }
 
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 { return findings; }
+        if total == 0 {
+            return findings;
+        }
 
-        let success_count = data.pages.iter().filter(|p| p.status_code >= 200 && p.status_code < 300).count();
+        let success_count = data
+            .pages
+            .iter()
+            .filter(|p| p.status_code >= 200 && p.status_code < 300)
+            .count();
         let score = (success_count as f64 / total as f64 * 100.0) as u64;
 
         if score < 80 {
@@ -1420,7 +1662,10 @@ impl PostCrawlAnalyzer for OverallHealthScoreAnalyzer {
                 category: IssueCategory::Seo,
                 code: "HEALTH001".to_string(),
                 title: format!("Crawl health score: {}/100", score),
-                description: format!("{}/{} pages ({:.0}%) returned successful responses.", success_count, total, score as f64),
+                description: format!(
+                    "{}/{} pages ({:.0}%) returned successful responses.",
+                    success_count, total, score as f64
+                ),
                 url: data.seed_url.clone(),
                 recommendation: "Investigate non-200 responses and fix broken pages.".to_string(),
             });
@@ -1694,11 +1939,11 @@ mod tests {
         let targets: Vec<String> = (0..55)
             .map(|i| format!("https://example.com/page{i}"))
             .collect();
-        let pages: Vec<PageData> = targets
+        let pages: Vec<PageData> = targets.iter().map(|u| test_page(u)).collect();
+        let mut all_links = pages
             .iter()
-            .map(|u| test_page(u))
-            .collect();
-        let mut all_links = pages.iter().map(|p| test_page(p.url.as_str())).collect::<Vec<_>>();
+            .map(|p| test_page(p.url.as_str()))
+            .collect::<Vec<_>>();
         all_links.insert(0, test_page("https://example.com"));
         let data = CrawlData {
             pages: all_links,
@@ -1875,8 +2120,14 @@ mod tests {
         let analyzer = CrossPageDuplicateContentDetector::new();
         let data = CrawlData {
             pages: vec![
-                page_with_desc("https://example.com/a", "We sell the best running shoes for all occasions"),
-                page_with_desc("https://example.com/b", "We sell the best running shoes for all occasions"),
+                page_with_desc(
+                    "https://example.com/a",
+                    "We sell the best running shoes for all occasions",
+                ),
+                page_with_desc(
+                    "https://example.com/b",
+                    "We sell the best running shoes for all occasions",
+                ),
             ],
             links: vec![],
             issues: vec![],
@@ -1891,7 +2142,10 @@ mod tests {
         let analyzer = CrossPageDuplicateContentDetector::new();
         let data = CrawlData {
             pages: vec![
-                page_with_desc("https://example.com/a", "Premium running shoes for marathons"),
+                page_with_desc(
+                    "https://example.com/a",
+                    "Premium running shoes for marathons",
+                ),
                 page_with_desc("https://example.com/b", "Budget trail shoes for hiking"),
             ],
             links: vec![],
@@ -1921,7 +2175,10 @@ mod tests {
     fn test_dup_cross_missing_titles_ignored() {
         let analyzer = CrossPageDuplicateContentDetector::new();
         let data = CrawlData {
-            pages: vec![page_no_title("https://example.com/a"), page_no_title("https://example.com/b")],
+            pages: vec![
+                page_no_title("https://example.com/a"),
+                page_no_title("https://example.com/b"),
+            ],
             links: vec![],
             issues: vec![],
             seed_url: "https://example.com".to_string(),
@@ -1990,7 +2247,10 @@ mod tests {
         let data = CrawlData {
             pages: vec![
                 page_with_title("https://example.com/a", "Running Shoes for Beginners Guide"),
-                page_with_title("https://example.com/b", "Running Shoes for Beginners Review"),
+                page_with_title(
+                    "https://example.com/b",
+                    "Running Shoes for Beginners Review",
+                ),
                 page_with_title("https://example.com/c", "Running Shoes for Beginners Tips"),
             ],
             links: vec![],
@@ -2320,7 +2580,9 @@ mod tests {
         };
         let findings = analyzer.analyze_crawl(&data);
         // The about page is in the sitemap, so it should not be flagged
-        assert!(!findings.iter().any(|f| f.url == "https://example.com/about"));
+        assert!(!findings
+            .iter()
+            .any(|f| f.url == "https://example.com/about"));
     }
 
     #[test]
@@ -2331,10 +2593,7 @@ mod tests {
                 test_page("https://example.com"),
                 test_page("https://example.com/sitemap.xml"),
             ],
-            links: vec![(
-                "https://example.com/sitemap.xml".to_string(),
-                vec![],
-            )],
+            links: vec![("https://example.com/sitemap.xml".to_string(), vec![])],
             issues: vec![],
             seed_url: "https://example.com".to_string(),
         };
@@ -2361,7 +2620,9 @@ mod tests {
         };
         let findings = analyzer.analyze_crawl(&data);
         // page1 is in the sitemap, so it should not be flagged
-        assert!(!findings.iter().any(|f| f.url == "https://example.com/page1"));
+        assert!(!findings
+            .iter()
+            .any(|f| f.url == "https://example.com/page1"));
     }
 
     #[test]
@@ -2391,12 +2652,24 @@ mod tests {
 
     #[test]
     fn test_sitemap_coverage_is_sitemap_url_heuristic() {
-        assert!(SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/sitemap.xml"));
-        assert!(SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/sitemap_index.xml"));
-        assert!(SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/sitemap.xml.gz"));
-        assert!(!SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/about"));
-        assert!(!SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/sitemap-page"));
-        assert!(!SitemapCoverageAnalyzer::is_sitemap_url("https://example.com/not-sitemap.xml"));
+        assert!(SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/sitemap.xml"
+        ));
+        assert!(SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/sitemap_index.xml"
+        ));
+        assert!(SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/sitemap.xml.gz"
+        ));
+        assert!(!SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/about"
+        ));
+        assert!(!SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/sitemap-page"
+        ));
+        assert!(!SitemapCoverageAnalyzer::is_sitemap_url(
+            "https://example.com/not-sitemap.xml"
+        ));
     }
 
     // ===== LinkEquityDistributor tests =====
@@ -2665,7 +2938,12 @@ mod tests {
     #[test]
     fn test_schema_coverage_empty_crawl() {
         let analyzer = SchemaCoverageAnalyzer::new();
-        let data = CrawlData { pages: vec![], links: vec![], issues: vec![], seed_url: "https://example.com".to_string() };
+        let data = CrawlData {
+            pages: vec![],
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
         assert!(analyzer.analyze_crawl(&data).is_empty());
     }
 
@@ -2714,7 +2992,12 @@ mod tests {
     #[test]
     fn test_mobile_readiness_empty_crawl() {
         let analyzer = MobileReadinessAnalyzer::new();
-        let data = CrawlData { pages: vec![], links: vec![], issues: vec![], seed_url: "https://example.com".to_string() };
+        let data = CrawlData {
+            pages: vec![],
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
         assert!(analyzer.analyze_crawl(&data).is_empty());
     }
 

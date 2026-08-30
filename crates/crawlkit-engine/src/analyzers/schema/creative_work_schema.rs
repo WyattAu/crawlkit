@@ -31,7 +31,12 @@ impl Analyzer for CreativeWorkSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for CreativeWorkSchemaValidator {
                                   property. Search engines use this to understand the work title."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the title of the creative work."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the title of the creative work.".to_string(),
                 });
             }
 
@@ -145,7 +149,10 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork"}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CREATIVE001"));
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CREATIVE001"));
     }
 
     #[test]
@@ -156,7 +163,10 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork", "name": "Title"}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CREATIVE002"));
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CREATIVE002"));
     }
 
     #[test]
@@ -167,7 +177,10 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork", "name": "Title"}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CREATIVE003"));
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CREATIVE003"));
     }
 
     #[test]
@@ -178,7 +191,9 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork", "name": "Title", "author": {"@type": "Person", "name": "Author"}, "datePublished": "2024-01-01"}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -189,13 +204,17 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product"}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_creative_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -218,7 +237,10 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork", "name": "Title", "dateCreated": "2024-01-01"}),
         }];
-        assert!(!CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CREATIVE003"));
+        assert!(!CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CREATIVE003"));
     }
 
     #[test]
@@ -243,6 +265,9 @@ mod tests {
             r#type: Some("CreativeWork".to_string()),
             data: serde_json::json!({"@type": "CreativeWork", "name": ""}),
         }];
-        assert!(CreativeWorkSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "CREATIVE001"));
+        assert!(CreativeWorkSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "CREATIVE001"));
     }
 }

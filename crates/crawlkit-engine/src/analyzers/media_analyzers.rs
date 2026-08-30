@@ -1,4 +1,18 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::manual_range_contains,
+    clippy::redundant_closure,
+    clippy::collapsible_if,
+    clippy::unnecessary_map_or,
+    clippy::default_constructed_unit_structs,
+    clippy::needless_return,
+    clippy::needless_range_loop,
+    clippy::useless_format,
+    clippy::if_same_then_else,
+    clippy::derivable_impls,
+    clippy::manual_pattern_char_comparison,
+    clippy::manual_contains
+)]
 use std::collections::HashSet;
 
 use crate::types::{IssueCategory, Severity};
@@ -35,8 +49,8 @@ impl Analyzer for PreloadHintAnalyzer {
         let body = ctx.body.unwrap_or("");
 
         // Count preload hints
-        let preload_count = body.matches("rel=\"preload\"").count()
-            + body.matches("rel='preload'").count();
+        let preload_count =
+            body.matches("rel=\"preload\"").count() + body.matches("rel='preload'").count();
 
         // PRELOAD002: Too many preload hints (>5)
         if preload_count > 5 {
@@ -64,8 +78,10 @@ impl Analyzer for PreloadHintAnalyzer {
             .images
             .iter()
             .any(|img| !img.is_lazy_loaded && img.width.map_or(false, |w| w > 600));
-        let has_preconnect = body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
-        let has_dns_prefetch = body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
+        let has_preconnect =
+            body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
+        let has_dns_prefetch =
+            body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
 
         // Count external origins (same as CriticalResourceAnalyzer logic)
         let origins: HashSet<String> = ctx
@@ -103,7 +119,11 @@ impl Analyzer for PreloadHintAnalyzer {
                                  critical above-the-fold images."
                     .to_string(),
             });
-        } else if external_origins.len() >= 2 && !has_preconnect && !has_dns_prefetch && preload_count == 0 {
+        } else if external_origins.len() >= 2
+            && !has_preconnect
+            && !has_dns_prefetch
+            && preload_count == 0
+        {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Performance,
@@ -285,7 +305,9 @@ impl Analyzer for ImageLazyLoadAnalyzer {
             .map(|img| img.src.as_str())
             .collect();
 
-        if !unknown_size_no_lazy.is_empty() && unknown_size_no_lazy.len() <= ctx.page.images.len() / 2 {
+        if !unknown_size_no_lazy.is_empty()
+            && unknown_size_no_lazy.len() <= ctx.page.images.len() / 2
+        {
             let examples = if unknown_size_no_lazy.len() > 3 {
                 format!(
                     "{}, ...",
@@ -638,8 +660,10 @@ impl Analyzer for ConnectionAnalyzer {
 
         // CONN002: Missing preconnect for external origins
         let body = ctx.body.unwrap_or("");
-        let has_preconnect = body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
-        let has_dns_prefetch = body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
+        let has_preconnect =
+            body.contains("rel=\"preconnect\"") || body.contains("rel='preconnect'");
+        let has_dns_prefetch =
+            body.contains("rel=\"dns-prefetch\"") || body.contains("rel='dns-prefetch'");
 
         let external_origins: Vec<&str> = origins.iter().map(|s| s.as_str()).collect();
 
@@ -1131,9 +1155,7 @@ impl ProductVariantAnalyzer {
     }
 
     fn has_offers(data: &serde_json::Value) -> bool {
-        data.get("offers")
-            .map(|v| !v.is_null())
-            .unwrap_or(false)
+        data.get("offers").map(|v| !v.is_null()).unwrap_or(false)
     }
 }
 
@@ -1219,9 +1241,7 @@ impl PricingSchemaValidator {
             .unwrap_or(false)
     }
 
-    fn extract_offer(
-        data: &serde_json::Value,
-    ) -> Option<&serde_json::Value> {
+    fn extract_offer(data: &serde_json::Value) -> Option<&serde_json::Value> {
         if let Some(offers) = data.get("offers") {
             if let Some(arr) = offers.as_array() {
                 return arr.first();
@@ -1389,7 +1409,8 @@ impl AggregateRatingValidator {
             }
             // Nested aggregateRating in other schemas
             if let Some(ar) = sd.data.get("aggregateRating") {
-                if ar.get("@type")
+                if ar
+                    .get("@type")
                     .and_then(|t| t.as_str())
                     .map(|t| t == "AggregateRating")
                     .unwrap_or(false)
@@ -1439,10 +1460,7 @@ impl Analyzer for AggregateRatingValidator {
                 .unwrap_or(5.0);
 
             // ARAT001: ratingValue > bestRating
-            if let Some(rating_value) = ar
-                .get("ratingValue")
-                .and_then(Self::parse_f64)
-            {
+            if let Some(rating_value) = ar.get("ratingValue").and_then(Self::parse_f64) {
                 if rating_value > best_rating {
                     findings.push(Finding {
                         severity: Severity::Error,
@@ -1522,19 +1540,9 @@ impl Analyzer for ResourceCountAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
-        let js_count = ctx
-            .page
-            .scripts
-            .iter()
-            .filter(|s| s.src.is_some())
-            .count();
+        let js_count = ctx.page.scripts.iter().filter(|s| s.src.is_some()).count();
 
-        let css_count = ctx
-            .page
-            .styles
-            .iter()
-            .filter(|s| s.href.is_some())
-            .count();
+        let css_count = ctx.page.styles.iter().filter(|s| s.href.is_some()).count();
 
         let image_count = ctx.page.images.len();
 
@@ -1626,7 +1634,12 @@ impl CriticalResourceAnalyzer {
             let examples = if blocking.len() > 3 {
                 format!(
                     "{}, \u{2026}",
-                    blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                    blocking
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             } else {
                 blocking.join(", ")
@@ -1670,7 +1683,12 @@ impl CriticalResourceAnalyzer {
             let examples = if blocking.len() > 3 {
                 format!(
                     "{}, \u{2026}",
-                    blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ")
+                    blocking
+                        .iter()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             } else {
                 blocking.join(", ")
@@ -1786,11 +1804,21 @@ impl Analyzer for CriticalResourceAnalyzer {
 // =========================================================================
 
 pub struct ImageAspectRatioValidator;
-impl Default for ImageAspectRatioValidator { fn default() -> Self { Self } }
-impl ImageAspectRatioValidator { pub fn new() -> Self { Self } }
+impl Default for ImageAspectRatioValidator {
+    fn default() -> Self {
+        Self
+    }
+}
+impl ImageAspectRatioValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for ImageAspectRatioValidator {
-    fn name(&self) -> &str { "image-aspect-ratio" }
+    fn name(&self) -> &str {
+        "image-aspect-ratio"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
@@ -1799,7 +1827,19 @@ impl Analyzer for ImageAspectRatioValidator {
                 if w > 0 && h > 0 {
                     let ratio = w as f64 / h as f64;
                     if ratio > 3.0 || ratio < 0.33 {
-                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Images, code: "IMGAR001".to_string(), title: "Unusual image aspect ratio".to_string(), description: format!("Image {} has unusual aspect ratio {:.2}:1.", img.src, ratio), url: url.clone(), recommendation: "Check if the image dimensions are correct.".to_string() });
+                        findings.push(Finding {
+                            severity: Severity::Warning,
+                            category: IssueCategory::Images,
+                            code: "IMGAR001".to_string(),
+                            title: "Unusual image aspect ratio".to_string(),
+                            description: format!(
+                                "Image {} has unusual aspect ratio {:.2}:1.",
+                                img.src, ratio
+                            ),
+                            url: url.clone(),
+                            recommendation: "Check if the image dimensions are correct."
+                                .to_string(),
+                        });
                     }
                 }
             }
@@ -1813,17 +1853,38 @@ impl Analyzer for ImageAspectRatioValidator {
 // =========================================================================
 
 pub struct ImageFileSizeValidator;
-impl Default for ImageFileSizeValidator { fn default() -> Self { Self } }
-impl ImageFileSizeValidator { pub fn new() -> Self { Self } }
+impl Default for ImageFileSizeValidator {
+    fn default() -> Self {
+        Self
+    }
+}
+impl ImageFileSizeValidator {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for ImageFileSizeValidator {
-    fn name(&self) -> &str { "image-file-size" }
+    fn name(&self) -> &str {
+        "image-file-size"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         for img in &ctx.page.images {
             if img.src.starts_with("data:") {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Images, code: "IMGFS001".to_string(), title: "Inline data URI image".to_string(), description: format!("Image {} uses a data URI which increases page size.", img.src), url: url.clone(), recommendation: "Use external image files instead of data URIs.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Images,
+                    code: "IMGFS001".to_string(),
+                    title: "Inline data URI image".to_string(),
+                    description: format!(
+                        "Image {} uses a data URI which increases page size.",
+                        img.src
+                    ),
+                    url: url.clone(),
+                    recommendation: "Use external image files instead of data URIs.".to_string(),
+                });
             }
         }
         findings
@@ -1835,21 +1896,52 @@ impl Analyzer for ImageFileSizeValidator {
 // =========================================================================
 
 pub struct ScriptAnalyzer;
-impl Default for ScriptAnalyzer { fn default() -> Self { Self } }
-impl ScriptAnalyzer { pub fn new() -> Self { Self } }
+impl Default for ScriptAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl ScriptAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for ScriptAnalyzer {
-    fn name(&self) -> &str { "script-analysis" }
+    fn name(&self) -> &str {
+        "script-analysis"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let scripts = &ctx.page.scripts;
         if scripts.len() > 20 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "SCRIPT001".to_string(), title: "Excessive script count".to_string(), description: format!("Page has {} scripts. Consider bundling or lazy-loading.", scripts.len()), url: url.clone(), recommendation: "Reduce script count by bundling, code-splitting, or lazy-loading.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "SCRIPT001".to_string(),
+                title: "Excessive script count".to_string(),
+                description: format!(
+                    "Page has {} scripts. Consider bundling or lazy-loading.",
+                    scripts.len()
+                ),
+                url: url.clone(),
+                recommendation: "Reduce script count by bundling, code-splitting, or lazy-loading."
+                    .to_string(),
+            });
         }
         let blocking = scripts.iter().filter(|s| !s.r#async && !s.defer).count();
         if blocking > 3 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "SCRIPT002".to_string(), title: "Multiple blocking scripts".to_string(), description: format!("{} scripts are render-blocking.", blocking), url: url.clone(), recommendation: "Add async or defer attributes to non-critical scripts.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "SCRIPT002".to_string(),
+                title: "Multiple blocking scripts".to_string(),
+                description: format!("{} scripts are render-blocking.", blocking),
+                url: url.clone(),
+                recommendation: "Add async or defer attributes to non-critical scripts."
+                    .to_string(),
+            });
         }
         findings
     }
@@ -1860,17 +1952,35 @@ impl Analyzer for ScriptAnalyzer {
 // =========================================================================
 
 pub struct StylesheetAnalyzer;
-impl Default for StylesheetAnalyzer { fn default() -> Self { Self } }
-impl StylesheetAnalyzer { pub fn new() -> Self { Self } }
+impl Default for StylesheetAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl StylesheetAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for StylesheetAnalyzer {
-    fn name(&self) -> &str { "stylesheet-analysis" }
+    fn name(&self) -> &str {
+        "stylesheet-analysis"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let styles = &ctx.page.styles;
         if styles.len() > 10 {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "STYLE001".to_string(), title: "Excessive stylesheet count".to_string(), description: format!("Page has {} stylesheets. Consider bundling.", styles.len()), url: url.clone(), recommendation: "Bundle CSS files to reduce HTTP requests.".to_string() });
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "STYLE001".to_string(),
+                title: "Excessive stylesheet count".to_string(),
+                description: format!("Page has {} stylesheets. Consider bundling.", styles.len()),
+                url: url.clone(),
+                recommendation: "Bundle CSS files to reduce HTTP requests.".to_string(),
+            });
         }
         findings
     }
@@ -1881,17 +1991,35 @@ impl Analyzer for StylesheetAnalyzer {
 // =========================================================================
 
 pub struct FormAnalyzer;
-impl Default for FormAnalyzer { fn default() -> Self { Self } }
-impl FormAnalyzer { pub fn new() -> Self { Self } }
+impl Default for FormAnalyzer {
+    fn default() -> Self {
+        Self
+    }
+}
+impl FormAnalyzer {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 impl Analyzer for FormAnalyzer {
-    fn name(&self) -> &str { "form-analysis" }
+    fn name(&self) -> &str {
+        "form-analysis"
+    }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         for form in &ctx.page.forms {
             if form.action.is_none() {
-                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FORM001".to_string(), title: "Form missing action URL".to_string(), description: "A form element has no action attribute.".to_string(), url: url.clone(), recommendation: "Add a valid action URL to the form.".to_string() });
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Content,
+                    code: "FORM001".to_string(),
+                    title: "Form missing action URL".to_string(),
+                    description: "A form element has no action attribute.".to_string(),
+                    url: url.clone(),
+                    recommendation: "Add a valid action URL to the form.".to_string(),
+                });
             }
             if form.method.to_uppercase() == "GET" && form.has_search_input {
                 // Search forms using GET is normal; just informational
@@ -1900,7 +2028,6 @@ impl Analyzer for FormAnalyzer {
         findings
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -2624,22 +2751,28 @@ mod tests {
     fn test_resource_size_estimated_large_page() {
         let mut page = make_page("https://example.com");
         // Add many resources to push total over 5MB
-        page.images = vec![ExtractedImage {
-            src: format!("https://example.com/img{}.jpg", 1),
-            alt: "Img".to_string(),
-            width: Some(100),
-            height: Some(100),
-            has_alt: true,
-            is_lazy_loaded: false,
-            aria_hidden: false,
-        }; 40];
-        page.scripts = vec![ScriptInfo {
-            src: Some("https://example.com/app.js".to_string()),
-            r#async: true,
-            defer: false,
-            script_type: None,
-            has_integrity: false,
-        }; 30];
+        page.images = vec![
+            ExtractedImage {
+                src: format!("https://example.com/img{}.jpg", 1),
+                alt: "Img".to_string(),
+                width: Some(100),
+                height: Some(100),
+                has_alt: true,
+                is_lazy_loaded: false,
+                aria_hidden: false,
+            };
+            40
+        ];
+        page.scripts = vec![
+            ScriptInfo {
+                src: Some("https://example.com/app.js".to_string()),
+                r#async: true,
+                defer: false,
+                script_type: None,
+                has_integrity: false,
+            };
+            30
+        ];
 
         let ctx = AnalysisContext {
             page: &page,
@@ -3138,26 +3271,42 @@ impl Analyzer for ImageDimensionMissingAnalyzer {
 pub struct ImageLazyLoadAnalyzerV2;
 
 impl Default for ImageLazyLoadAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ImageLazyLoadAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ImageLazyLoadAnalyzerV2 {
-    fn name(&self) -> &str { "image-lazy-load-v2" }
+    fn name(&self) -> &str {
+        "image-lazy-load-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if ctx.page.images.is_empty() { return findings; }
-        let non_lazy: Vec<&str> = ctx.page.images.iter()
+        if ctx.page.images.is_empty() {
+            return findings;
+        }
+        let non_lazy: Vec<&str> = ctx
+            .page
+            .images
+            .iter()
             .filter(|img| !img.is_lazy_loaded)
             .map(|img| img.src.as_str())
             .collect();
         if !non_lazy.is_empty() && non_lazy.len() > 3 {
-            let examples = non_lazy.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            let examples = non_lazy
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Performance,
@@ -3179,26 +3328,45 @@ impl Analyzer for ImageLazyLoadAnalyzerV2 {
 pub struct ScriptLoadAnalyzerV2;
 
 impl Default for ScriptLoadAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ScriptLoadAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for ScriptLoadAnalyzerV2 {
-    fn name(&self) -> &str { "script-load-v2" }
+    fn name(&self) -> &str {
+        "script-load-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let blocking: Vec<&str> = ctx.page.scripts.iter()
+        let blocking: Vec<&str> = ctx
+            .page
+            .scripts
+            .iter()
             .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
-            .filter(|s| s.script_type.as_deref().map(|t| t != "application/ld+json").unwrap_or(true))
+            .filter(|s| {
+                s.script_type
+                    .as_deref()
+                    .map(|t| t != "application/ld+json")
+                    .unwrap_or(true)
+            })
             .map(|s| s.src.as_deref().unwrap_or(""))
             .collect();
         if !blocking.is_empty() {
-            let examples = blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            let examples = blocking
+                .iter()
+                .take(3)
+                .cloned()
+                .collect::<Vec<_>>()
+                .join(", ");
             findings.push(Finding {
                 severity: Severity::Critical,
                 category: IssueCategory::Performance,
@@ -3220,26 +3388,41 @@ impl Analyzer for ScriptLoadAnalyzerV2 {
 pub struct FontDisplayAnalyzerV2;
 
 impl Default for FontDisplayAnalyzerV2 {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl FontDisplayAnalyzerV2 {
-    pub fn new() -> Self { Self }
+    pub fn new() -> Self {
+        Self
+    }
 }
 
 impl Analyzer for FontDisplayAnalyzerV2 {
-    fn name(&self) -> &str { "font-display-v2" }
+    fn name(&self) -> &str {
+        "font-display-v2"
+    }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         let body = ctx.body.unwrap_or("");
         let font_extensions = [".woff2", ".woff", ".ttf", ".otf", ".eot"];
-        let total_fonts: usize = ctx.page.styles.iter()
+        let total_fonts: usize = ctx
+            .page
+            .styles
+            .iter()
             .filter_map(|s| s.href.as_ref())
-            .filter(|href| { let lower = href.to_lowercase(); font_extensions.iter().any(|ext| lower.contains(ext)) })
+            .filter(|href| {
+                let lower = href.to_lowercase();
+                font_extensions.iter().any(|ext| lower.contains(ext))
+            })
             .count()
-            + font_extensions.iter().map(|ext| body.matches(ext).count()).sum::<usize>();
+            + font_extensions
+                .iter()
+                .map(|ext| body.matches(ext).count())
+                .sum::<usize>();
         if total_fonts > 0 {
             let has_font_display = body.contains("font-display:");
             if !has_font_display {
@@ -3267,7 +3450,7 @@ impl Analyzer for FontDisplayAnalyzerV2 {
 mod new_media_tests {
     use super::*;
     use crate::meta::MetaTags;
-    use crate::parser::{ParsedPage, ScriptInfo, StyleInfo, ExtractedImage};
+    use crate::parser::{ExtractedImage, ParsedPage, ScriptInfo, StyleInfo};
 
     fn make_page(url: &str) -> ParsedPage {
         ParsedPage {
@@ -3358,7 +3541,10 @@ mod new_media_tests {
             has_integrity: false,
         });
         let ctx = make_ctx(&page, Some(200), None);
-        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "THIRDPARTY001"));
+        assert!(ThirdPartyResourceAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "THIRDPARTY001"));
     }
 
     #[test]
@@ -3370,7 +3556,10 @@ mod new_media_tests {
 
     #[test]
     fn test_third_party_name() {
-        assert_eq!(ThirdPartyResourceAnalyzer::new().name(), "third-party-resources");
+        assert_eq!(
+            ThirdPartyResourceAnalyzer::new().name(),
+            "third-party-resources"
+        );
     }
 
     #[test]
@@ -3411,7 +3600,10 @@ mod new_media_tests {
             .collect();
         let ctx = make_ctx(&page, Some(200), None);
         // 10 external / 10 total = 100%
-        assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "THIRDPARTY001"));
+        assert!(ThirdPartyResourceAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "THIRDPARTY001"));
     }
 
     #[test]
@@ -3455,7 +3647,10 @@ mod new_media_tests {
             })
             .collect();
         let ctx = make_ctx(&page, Some(200), Some("<html></html>"));
-        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "BLOCKSTYLE001"));
+        assert!(BlockingStyleAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BLOCKSTYLE001"));
     }
 
     #[test]
@@ -3494,7 +3689,10 @@ mod new_media_tests {
             <link rel="stylesheet" href="/d.css">
         </head></html>"#;
         let ctx = make_ctx(&page, Some(200), Some(body));
-        assert!(BlockingStyleAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "BLOCKSTYLE001"));
+        assert!(BlockingStyleAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "BLOCKSTYLE001"));
     }
 
     // ImageDimensionMissingAnalyzer tests
@@ -3512,7 +3710,9 @@ mod new_media_tests {
             aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
-        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ImageDimensionMissingAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -3528,7 +3728,10 @@ mod new_media_tests {
             aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
-        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGDIM001"));
+        assert!(ImageDimensionMissingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "IMGDIM001"));
     }
 
     #[test]
@@ -3544,19 +3747,27 @@ mod new_media_tests {
             aria_hidden: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
-        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "IMGDIM001"));
+        assert!(ImageDimensionMissingAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "IMGDIM001"));
     }
 
     #[test]
     fn test_image_dim_no_images() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, Some(200), None);
-        assert!(ImageDimensionMissingAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ImageDimensionMissingAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_image_dim_name() {
-        assert_eq!(ImageDimensionMissingAnalyzer::new().name(), "image-dimension-missing");
+        assert_eq!(
+            ImageDimensionMissingAnalyzer::new().name(),
+            "image-dimension-missing"
+        );
     }
 
     #[test]

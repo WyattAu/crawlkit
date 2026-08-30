@@ -998,17 +998,14 @@ impl StorageBackend for PgStorage {
                 target_url: row.try_get("target_url")?,
                 start_time: row.try_get("start_time")?,
                 end_time: row.try_get("end_time")?,
-                pages_crawled: row.try_get::<Option<i64>, _>("pages_crawled")?.unwrap_or(0) as usize,
+                pages_crawled: row.try_get::<Option<i64>, _>("pages_crawled")?.unwrap_or(0)
+                    as usize,
                 total_issues: row.try_get::<Option<i64>, _>("total_issues")?.unwrap_or(0) as usize,
             })
         })
     }
 
-    fn get_top_issues(
-        &self,
-        crawl_id: &str,
-        limit: usize,
-    ) -> Result<Vec<TopIssue>, StorageError> {
+    fn get_top_issues(&self, crawl_id: &str, limit: usize) -> Result<Vec<TopIssue>, StorageError> {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
 
@@ -1046,10 +1043,7 @@ impl StorageBackend for PgStorage {
         })
     }
 
-    fn get_crux_metrics_for_crawl(
-        &self,
-        crawl_id: &str,
-    ) -> Result<Vec<CruxMetrics>, StorageError> {
+    fn get_crux_metrics_for_crawl(&self, crawl_id: &str) -> Result<Vec<CruxMetrics>, StorageError> {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
 
@@ -1463,10 +1457,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(retrieved.has_structured_data, Some(true));
-        assert_eq!(
-            retrieved.schema_types.as_deref(),
-            Some("Article,WebPage")
-        );
+        assert_eq!(retrieved.schema_types.as_deref(), Some("Article,WebPage"));
         assert_eq!(retrieved.viewport_ok, Some(true));
         assert_eq!(retrieved.has_csp, Some(true));
         assert_eq!(retrieved.has_hsts, Some(false));

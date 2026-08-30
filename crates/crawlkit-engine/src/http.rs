@@ -320,9 +320,7 @@ async fn dns_pin_check(url: &Url) -> Result<(), CrawlError> {
     let socket_addr = format!("{host}:0");
     let addrs = tokio::net::lookup_host(&socket_addr)
         .await
-        .map_err(|e| {
-            CrawlError::Internal(format!("DNS resolution failed for {host}: {e}"))
-        })?;
+        .map_err(|e| CrawlError::Internal(format!("DNS resolution failed for {host}: {e}")))?;
     for addr in addrs {
         if is_private_ip(addr.ip()) {
             return Err(CrawlError::Internal(format!(

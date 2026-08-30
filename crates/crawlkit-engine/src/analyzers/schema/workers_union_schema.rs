@@ -31,7 +31,12 @@ impl Analyzer for WorkersUnionSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for WorkersUnionSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the workers union name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the workers union name.".to_string(),
                 });
             }
         }
@@ -50,7 +54,6 @@ impl Analyzer for WorkersUnionSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -112,89 +115,110 @@ mod tests {
     }
 
     #[test]
-fn test_workersunion_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WorkersUnion".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WorkersUnion"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WUNION001"));
-}
-
-
-    #[test]
-fn test_workersunion_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WorkersUnion".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WorkersUnion",
-            "name": "Steel Workers Union"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_workersunion_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WorkersUnion".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WorkersUnion"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WUNION001"));
+    }
 
     #[test]
-fn test_workersunion_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_workersunion_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_workersunion_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WorkersUnion".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WorkersUnion",
+                "name": "Steel Workers Union"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_workersunion_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WorkersUnion".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WorkersUnion",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WUNION001"));
-}
-
+    fn test_workersunion_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_workersunion_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_workersunion_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_workersunion_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WorkersUnion".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WorkersUnion",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WUNION001"));
+    }
+
+    #[test]
+    fn test_workersunion_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WorkersUnion".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WorkersUnion",
+                    "name": "Good Union"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WorkersUnion".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WorkersUnion"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WUNION001"));
+    }
+
+    #[test]
+    fn test_workersunion_both_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("WorkersUnion".to_string()),
             data: serde_json::json!({
@@ -202,68 +226,38 @@ fn test_workersunion_multiple() {
                 "@type": "WorkersUnion",
                 "name": "Good Union"
             }),
-        },
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("WorkersUnion".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "WorkersUnion"
-            }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WUNION001"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_workersunion_both_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WorkersUnion".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WorkersUnion",
-            "name": "Good Union"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_workersunion_with_other_schema() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("WorkersUnion".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "WorkersUnion"
-            }),
-        },
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Organization".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Organization",
-                "name": "Org"
-            }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
-    // Only WorkersUnion finding, not Organization
-    assert_eq!(findings.len(), 1);
-    assert!(findings.iter().any(|f| f.code == "WUNION001"));
-}
-
-
+    fn test_workersunion_with_other_schema() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WorkersUnion".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WorkersUnion"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Organization".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Organization",
+                    "name": "Org"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkersUnionSchemaValidator::new().analyze(&ctx);
+        // Only WorkersUnion finding, not Organization
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().any(|f| f.code == "WUNION001"));
+    }
 }

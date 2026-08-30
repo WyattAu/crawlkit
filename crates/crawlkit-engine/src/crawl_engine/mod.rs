@@ -222,7 +222,9 @@ impl Default for CrawlEngineConfig {
             force: false,
             allow_http: false,
             plugin_dirs: Vec::new(),
-            post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(&CrawlConfig::default()),
+            post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(
+                &CrawlConfig::default(),
+            ),
             queue: None,
             crux_api_key: None,
             previous_crawl_id: None,
@@ -332,7 +334,11 @@ impl CrawlEngine {
     /// Create a new crawl engine from an Arc-wrapped storage, sharing ownership.
     pub fn new_shared(config: CrawlEngineConfig, storage: Arc<dyn StorageBackend>) -> Self {
         let queue = Self::resolve_queue(&config);
-        Self { config, storage, queue }
+        Self {
+            config,
+            storage,
+            queue,
+        }
     }
 
     /// Create a new crawl engine, returning an error if storage creation fails.
@@ -457,7 +463,13 @@ impl CrawlEngine {
 
         // Seed, incremental history, and sitemap URLs into the queue.
         let mut known_sitemap_urls = self
-            .prefill_queue(&self.queue, &seed_url, &crawl_id, &robots_cache, &sitemap_cache)
+            .prefill_queue(
+                &self.queue,
+                &seed_url,
+                &crawl_id,
+                &robots_cache,
+                &sitemap_cache,
+            )
             .await;
 
         // Crawl plugins: loaded once per crawl from the configured dirs
@@ -497,9 +509,7 @@ impl CrawlEngine {
             coordinator: if cfg.distributed_mode {
                 let instance_id = cfg.instance_id.unwrap_or(0);
                 let instance_count = cfg.instance_count.unwrap_or(1);
-                let strategy = cfg
-                    .partition_strategy
-                    .unwrap_or(PartitionStrategy::Hash);
+                let strategy = cfg.partition_strategy.unwrap_or(PartitionStrategy::Hash);
                 Some(CrawlCoordinator::new(instance_id, instance_count, strategy))
             } else {
                 None
@@ -715,14 +725,16 @@ impl CrawlEngine {
         let cfg = &self.config;
 
         // Seed the queue
-        queue.push(QueueEntry {
-            url: seed_url.clone(),
-            canonical_url: seed_url.clone(),
-            depth: 0,
-            priority: Priority::HIGH,
-            discovered_at: chrono::Utc::now(),
-            referrer: None,
-        }).unwrap();
+        queue
+            .push(QueueEntry {
+                url: seed_url.clone(),
+                canonical_url: seed_url.clone(),
+                depth: 0,
+                priority: Priority::HIGH,
+                discovered_at: chrono::Utc::now(),
+                referrer: None,
+            })
+            .unwrap();
 
         // Incremental mode: seed from the previous crawl's page set so pages
         // that are reachable only through link extraction still get
@@ -756,14 +768,16 @@ impl CrawlEngine {
                     let count = prev_urls.len();
                     for url_str in &prev_urls {
                         if let Ok(url) = Url::parse(url_str) {
-                            queue.push(QueueEntry {
-                                url: url.clone(),
-                                canonical_url: url,
-                                depth: 0,
-                                priority: Priority::HIGHEST,
-                                discovered_at: chrono::Utc::now(),
-                                referrer: None,
-                            }).unwrap();
+                            queue
+                                .push(QueueEntry {
+                                    url: url.clone(),
+                                    canonical_url: url,
+                                    depth: 0,
+                                    priority: Priority::HIGHEST,
+                                    discovered_at: chrono::Utc::now(),
+                                    referrer: None,
+                                })
+                                .unwrap();
                         }
                     }
                     tracing::info!(
@@ -786,14 +800,16 @@ impl CrawlEngine {
                 for entry in &entries {
                     if known_sitemap_urls.insert(entry.url.clone()) {
                         if let Ok(url) = Url::parse(&entry.url) {
-                            queue.push(QueueEntry {
-                                url: url.clone(),
-                                canonical_url: url,
-                                depth: 0,
-                                priority: Priority::HIGHEST,
-                                discovered_at: chrono::Utc::now(),
-                                referrer: None,
-                            }).unwrap();
+                            queue
+                                .push(QueueEntry {
+                                    url: url.clone(),
+                                    canonical_url: url,
+                                    depth: 0,
+                                    priority: Priority::HIGHEST,
+                                    discovered_at: chrono::Utc::now(),
+                                    referrer: None,
+                                })
+                                .unwrap();
                         }
                     }
                 }
@@ -982,24 +998,19 @@ impl CrawlEngine {
 
     /// Fetch CrUX field data for all crawled pages and update their CWV
     /// columns. Batches by unique origin to minimize API calls.
-    async fn populate_crux_field_data(
-        &self,
-        client: &crate::CruxClient,
-        crawl_id: &str,
-    ) {
+    async fn populate_crux_field_data(&self, client: &crate::CruxClient, crawl_id: &str) {
         use std::collections::HashMap;
 
         let storage = Arc::clone(&self.storage);
         let crawl_id_owned = crawl_id.to_string();
-        let pages = tokio::task::spawn_blocking(move || {
-            storage.get_pages(&crawl_id_owned, 100_000)
-        })
-        .await
-        .unwrap_or_else(|e| {
-            tracing::warn!(error = %e, "Failed to fetch pages for CrUX");
-            Ok(Vec::new())
-        })
-        .unwrap_or_default();
+        let pages =
+            tokio::task::spawn_blocking(move || storage.get_pages(&crawl_id_owned, 100_000))
+                .await
+                .unwrap_or_else(|e| {
+                    tracing::warn!(error = %e, "Failed to fetch pages for CrUX");
+                    Ok(Vec::new())
+                })
+                .unwrap_or_default();
 
         if pages.is_empty() {
             return;
@@ -1070,10 +1081,7 @@ impl CrawlEngine {
     }
 
     /// Set post-crawl analyzers to run after the crawl loop completes.
-    pub fn with_post_crawl_analyzers(
-        mut self,
-        registry: PostCrawlAnalyzerRegistry,
-    ) -> Self {
+    pub fn with_post_crawl_analyzers(mut self, registry: PostCrawlAnalyzerRegistry) -> Self {
         self.config.post_crawl_analyzers = registry;
         self
     }
@@ -1154,8 +1162,8 @@ mod tests {
         // encrypt_field with an enabled-but-uninitialized manager falls back
         // to plaintext (encrypt fails on missing key). Full crypto roundtrip
         // is covered by encryption.rs tests.
-        use crate::encryption::{EncryptionAlgorithm, EncryptionConfig, KeySource};
         use crate::crawl_engine::pipeline::encrypt_field;
+        use crate::encryption::{EncryptionAlgorithm, EncryptionConfig, KeySource};
         let manager = crate::EncryptionManager::new(EncryptionConfig {
             enabled: true,
             key_source: KeySource::EnvVar("TEST_CRAWL_KEY_MISSING".to_string()),

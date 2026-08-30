@@ -61,11 +61,7 @@ pub async fn access_log_middleware(
         .and_then(|v| v.split(',').next())
         .map(str::trim)
         .filter(|s| !s.is_empty())
-        .or_else(|| {
-            headers
-                .get("x-real-ip")
-                .and_then(|v| v.to_str().ok())
-        })
+        .or_else(|| headers.get("x-real-ip").and_then(|v| v.to_str().ok()))
         .map(str::to_string);
 
     // Extract user identity from request extensions (set by auth middleware).

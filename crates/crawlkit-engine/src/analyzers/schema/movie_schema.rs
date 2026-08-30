@@ -31,7 +31,12 @@ impl Analyzer for MovieSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,8 +45,7 @@ impl Analyzer for MovieSchemaValidator {
                     description: "A Movie structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the movie title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the movie title.".to_string(),
                 });
             }
 
@@ -55,12 +59,16 @@ impl Analyzer for MovieSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"director\" with the movie director."
-                        .to_string(),
+                    recommendation: "Add \"director\" with the movie director.".to_string(),
                 });
             }
 
-            if data.get("dateCreated").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("dateCreated")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Schema,
@@ -70,8 +78,7 @@ impl Analyzer for MovieSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"dateCreated\" with the movie release date."
-                        .to_string(),
+                    recommendation: "Add \"dateCreated\" with the movie release date.".to_string(),
                 });
             }
         }
@@ -79,7 +86,6 @@ impl Analyzer for MovieSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -141,139 +147,130 @@ mod tests {
     }
 
     #[test]
-fn test_movie_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "director": "Spielberg"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MOVIE001"));
-}
-
-
-    #[test]
-fn test_movie_missing_director() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "name": "E.T."
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MOVIE002"));
-}
-
+    fn test_movie_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie",
+                "director": "Spielberg"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOVIE001"));
+    }
 
     #[test]
-fn test_movie_missing_datecreated() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "name": "E.T.",
-            "director": "Spielberg"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MOVIE003"));
-}
-
+    fn test_movie_missing_director() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie",
+                "name": "E.T."
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOVIE002"));
+    }
 
     #[test]
-fn test_movie_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "name": "E.T.",
-            "director": "Spielberg",
-            "dateCreated": "1982-06-11"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_movie_missing_datecreated() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie",
+                "name": "E.T.",
+                "director": "Spielberg"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOVIE003"));
+    }
 
     #[test]
-fn test_movie_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_movie_non_movie_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_movie_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie",
+                "name": "E.T.",
+                "director": "Spielberg",
+                "dateCreated": "1982-06-11"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_movie_all_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 3);
-}
-
+    fn test_movie_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_movie_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Movie".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Movie",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = MovieSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "MOVIE001"));
-}
+    fn test_movie_non_movie_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_movie_all_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 3);
+    }
 
+    #[test]
+    fn test_movie_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Movie".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Movie",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = MovieSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "MOVIE001"));
+    }
 }

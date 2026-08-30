@@ -11,120 +11,115 @@ pub mod http_analyzers;
 pub mod media_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
 pub mod post_crawl_analyzers;
+/// Schema.org validators, one per type.
+pub mod schema;
 /// Security and accessibility analyzers for headers, mobile-friendliness, and WCAG compliance.
 pub mod security_analyzers;
 /// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
 pub mod seo_analyzers;
-/// Schema.org validators, one per type.
-pub mod schema;
 /// Social media analyzers for Open Graph, Twitter Cards, and social sharing metadata.
 pub mod social_analyzers;
 /// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
 pub mod v2_analyzers;
 
+pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 pub use content_analyzers::{
     ArticleAuthorValidator, ArticleDatePublishedValidator, ArticleHeadlineValidator,
-    BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer, CanonicalChainValidator,
-    ContentFreshnessScorer, ContentLanguageValidator, ContentStructureAnalyzer, ContentThinAnalyzer,
-    ContentQualityAnalyzer, ContentTopicCoverageAnalyzer, CourseNameValidator,
-    DuplicateContentDetector, EnhancedReadabilityAnalyzer,
-    EntityAnalyzer, EntityLinkingAnalyzer, ExternalLinkQualityAnalyzer, JsonLdContextValidator,
-    JsonLdTypeValidator, JsonLdValidator, InternalLinkDepthAnalyzerV2, JobPostingTitleValidator,
-    KeywordDensityAnalyzer, ArticleQualityAnalyzer, ContentDepthAnalyzer, HeadingCoverageAnalyzer, KeywordProminenceAnalyzer, ContentFreshnessSignalAnalyzer, MetaRobotsValidationAnalyzer, CanonicalConsistencyAnalyzer, HreflangNetworkValidator, ContentReadabilityScorer, PageImportanceAnalyzer,
-    MetaDescriptionLengthAnalyzer, MetaRobotsValidator,
+    ArticleQualityAnalyzer, BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer,
+    CanonicalChainValidator, CanonicalConsistencyAnalyzer, ContentDepthAnalyzer,
+    ContentFreshnessScorer, ContentFreshnessSignalAnalyzer, ContentLanguageValidator,
+    ContentQualityAnalyzer, ContentReadabilityScorer, ContentStructureAnalyzer,
+    ContentThinAnalyzer, ContentTopicCoverageAnalyzer, CourseNameValidator,
+    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer,
+    ExternalLinkQualityAnalyzer, HeadingCoverageAnalyzer, HreflangNetworkValidator,
+    InternalLinkDepthAnalyzerV2, JobPostingTitleValidator, JsonLdContextValidator,
+    JsonLdTypeValidator, JsonLdValidator, KeywordDensityAnalyzer, KeywordProminenceAnalyzer,
+    MetaDescriptionLengthAnalyzer, MetaRobotsValidationAnalyzer, MetaRobotsValidator,
     MicrodataValidator, MobileFriendlinessScoreAnalyzer, OpenGraphVideoUrlValidator,
-    OrganizationNameValidator, PageSpeedScoreAnalyzer, PersonNameValidator, RdfaValidator,
-    RecipeNameValidator, SchemaIdReferenceValidator,
-    SchemaNestingDepthValidator, StructuredDataValidator, TableOfContentsAnalyzer,
-    TitleLengthAnalyzer, TwitterPlayerStreamValidator,
+    OrganizationNameValidator, PageImportanceAnalyzer, PageSpeedScoreAnalyzer, PersonNameValidator,
+    RdfaValidator, RecipeNameValidator, SchemaIdReferenceValidator, SchemaNestingDepthValidator,
+    StructuredDataValidator, TableOfContentsAnalyzer, TitleLengthAnalyzer,
+    TwitterPlayerStreamValidator,
 };
-pub use schema::*;
 pub use http_analyzers::{
-    CacheHeaderAnalyzer, CompressionAnalyzer, HttpVersionAnalyzer, HttpStatusAnalyzer,
+    CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, HttpVersionAnalyzer,
     RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
     ServerHeaderAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
 pub use media_analyzers::{
-    AggregateRatingValidator, AsyncScriptAnalyzer, BlockingStyleAnalyzer,
-    ConnectionAnalyzer, CriticalResourceAnalyzer,
-    EcommerceSignalsAnalyzer, FontDisplayAnalyzer, FontDisplayAnalyzerV2, FormAnalyzer, ImageAnalyzer,
-    ImageAspectRatioValidator, ImageDimensionMissingAnalyzer,
+    AggregateRatingValidator, AsyncScriptAnalyzer, BlockingStyleAnalyzer, ConnectionAnalyzer,
+    CriticalResourceAnalyzer, EcommerceSignalsAnalyzer, FontDisplayAnalyzer, FontDisplayAnalyzerV2,
+    FormAnalyzer, ImageAnalyzer, ImageAspectRatioValidator, ImageDimensionMissingAnalyzer,
     ImageFileSizeValidator, ImageInfo, ImageLazyLoadAnalyzer, ImageLazyLoadAnalyzerV2,
-    PreloadHintAnalyzer, PricingSchemaValidator, ProductVariantAnalyzer,
-    ResourceCountAnalyzer, ResourceSizeAnalyzer, ScriptAnalyzer, ScriptLoadAnalyzerV2,
-    StylesheetAnalyzer, ThirdPartyResourceAnalyzer,
+    PreloadHintAnalyzer, PricingSchemaValidator, ProductVariantAnalyzer, ResourceCountAnalyzer,
+    ResourceSizeAnalyzer, ScriptAnalyzer, ScriptLoadAnalyzerV2, StylesheetAnalyzer,
+    ThirdPartyResourceAnalyzer,
 };
+pub use post_crawl_analyzers::{
+    build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
+    PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
+};
+pub use schema::*;
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AriaLabelAnalyzer, AriaRolesAnalyzer, AriaRolesAnalyzerV2,
-    AriaRequiredAttributesAnalyzer,
-    CertificateTransparencyAnalyzer,
-    ColorContrastAnalyzer, ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer,
-    ContentTypeSniffingAnalyzer,
-    ContentSecurityPolicyAnalyzer, ContentSecurityPolicyAnalyzerV2, CorsMisconfigurationAnalyzer, CookieAnalyzer,
-    CookieHttpOnlyFlagValidator, CookieSecureFlagValidator,
-    CrossOriginIsolationAnalyzer, CrossOriginIsolationAnalyzerV2,
-    CrossOriginOpenerPolicyAnalyzerV2,
-    CrossOriginResourcePolicyAnalyzer, CspDirectiveValidator, DnsRebindingAnalyzer, ExpectCTAnalyzer,
-    FeaturePolicyAnalyzer,
-    FocusManagementAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
+    AccessibilityAnalyzer, AnchorTextGenericAnalyzer, AriaLabelAnalyzer, AriaLandmarksAnalyzer,
+    AriaRequiredAttributesAnalyzer, AriaRolesAnalyzer, AriaRolesAnalyzerV2,
+    CertificateTransparencyAnalyzer, ColorContrastAnalyzer, ColorContrastLinkAnalyzer,
+    ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzer, ContentSecurityPolicyAnalyzerV2,
+    ContentTypeSniffingAnalyzer, CookieAnalyzer, CookieHttpOnlyFlagValidator,
+    CookieSecureFlagValidator, CookieSecurityFlagAnalyzer, CorsMisconfigurationAnalyzer,
+    CorsPolicyAnalyzer, CrossOriginIsolationAnalyzer, CrossOriginIsolationAnalyzerV2,
+    CrossOriginIsolationDeepAnalyzer, CrossOriginOpenerPolicyAnalyzerV2,
+    CrossOriginResourcePolicyAnalyzer, CspDirectiveAnalyzer, CspDirectiveValidator,
+    DnsRebindingAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer, FocusManagementAnalyzer,
+    FocusManagementDeepAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
     FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
-    HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer,
-    AnchorTextGenericAnalyzer,
-    HstsPreloadAnalyzer, HstsPreloadListValidator,
-    ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer,
-    LanguageAttributeAnalyzerV2,
-    LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer, LandmarkRegionsAnalyzer, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    MixedContentAnalyzer, MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
+    FormLabelsDeepAnalyzer, HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer,
+    HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer, HstsPreloadAnalyzer, HstsPreloadListValidator,
+    HstsPreloadReadinessAnalyzer, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
+    ImageAltTextAnalyzer, ImageAltTextDeepAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer,
+    LandmarkNavAnalyzer, LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2,
+    LanguageAttributesDeepAnalyzer, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2,
+    LinkTextAnalyzer, LinkTextQualityAnalyzer, MixedContentAnalyzer, MixedContentDetectionAnalyzer,
+    MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
     MobileFriendlinessChecker, PermissionPolicyAnalyzer, PermissionsPolicyAnalyzerV3,
-    ReferrerPolicyAnalyzer, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer, SkipLinkAnalyzer, SriAnalyzer,
+    PermissionsPolicyDeepAnalyzer, ReferrerPolicyAnalyzer, ReferrerPolicyAnalyzerV2,
+    ReferrerPolicyDeepAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer, SriAnalyzer,
     StrictTransportSecurityAnalyzer, StrictTransportSecurityAnalyzerV3,
-    SubresourceIntegrityAnalyzer,
-    TableAccessibilityAnalyzer, TableAccessibilityAnalyzerV2, TableCaptionAnalyzer, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
-    TabindexAnalyzer, TabindexAnalyzerV2,
-    XContentTypeOptionsAnalyzer, XContentTypeOptionsAnalyzerV2, XSSProtectionAnalyzer, XFrameOptionsAnalyzer, XFrameOptionsAnalyzerV2,
-    XPermittedCrossDomainPoliciesAnalyzer,
-    CspDirectiveAnalyzer, CorsPolicyAnalyzer, CookieSecurityFlagAnalyzer, MixedContentDetectionAnalyzer,
-    HstsPreloadReadinessAnalyzer, XContentTypeOptionsDeepAnalyzer, ReferrerPolicyDeepAnalyzer,
-    XFrameOptionsDeepAnalyzer, PermissionsPolicyDeepAnalyzer, CrossOriginIsolationDeepAnalyzer,
-    AriaLandmarksAnalyzer, HeadingHierarchyDeepAnalyzer, FormLabelsDeepAnalyzer, TableAccessibilityDeepAnalyzer,
-    LinkTextQualityAnalyzer, ImageAltTextDeepAnalyzer, FocusManagementDeepAnalyzer, LanguageAttributesDeepAnalyzer,
+    SubresourceIntegrityAnalyzer, TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer,
+    TableAccessibilityAnalyzerV2, TableAccessibilityDeepAnalyzer, TableCaptionAnalyzer,
+    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzer,
+    XContentTypeOptionsAnalyzerV2, XContentTypeOptionsDeepAnalyzer, XFrameOptionsAnalyzer,
+    XFrameOptionsAnalyzerV2, XFrameOptionsDeepAnalyzer, XPermittedCrossDomainPoliciesAnalyzer,
+    XSSProtectionAnalyzer,
 };
 pub use seo_analyzers::{
-    AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer,
-    CanonicalSelfReferenceAnalyzerV2, CanonicalUrlAnalyzerV2, CanonicalUrlValidator, CharsetValidator,
-    ContentQualityAnalyzerV2, ExternalLinkAnalyzerV2, ExternalLinkAuthorityAnalyzer, ExternalNofollowUnderuseValidator,
-    HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
-    HreflangReciprocalAnalyzerV2, HreflangValidatorV3,
-    HreflangSelfReferenceValidator,
-    HreflangValidator,
-    InternalLinkAnchorAnalyzer, InternalLinkAnchorTextDiversityAnalyzer, InternalLinkAnalyzerV2, InternalLinkTopicalAnalyzer,
-    InternalNofollowOveruseValidator,
-    InternationalSeoAnalyzer, KeywordAnalyzer, KeywordAnalyzerV2,
-    LanguageAttributeAnalyzer, LinkAnalyzer, LinkAnalyzerV2, LinkInfo,
-    MetaDescriptionAnalyzerV3, MetaDescriptionLengthAnalyzerV2, MetaDescriptionPixelWidthAnalyzer, MetaTagAnalyzer,
-    MixedProtocolRedirectValidator, MobileViewportAnalyzer,
-    OpenSearchDescriptionValidator, OpenSearchValidator,
-    PaginationAnalyzer, PaginationDepthValidator, PaginationLinkAnalyzer,
-    RedirectLoopDetector, RobotsMetaAnalyzer, RobotsTxtAnalyzerV2, RobotsTxtCoverageAnalyzerV2, RobotsTxtDirectivesAnalyzer,
-    RobotsTxtSizeValidator, SitemapAnalyzer, SitemapAnalyzerV2, SitemapCoverageAnalyzerV2, SitemapEntry, SitemapUrlAnalyzer,
-    SitemapXmlSizeValidator, TitleAnalyzerV3, TitleKeywordAnalyzer, TitlePixelWidthAnalyzer,
-    WikipediaLinkAnalyzer, WordCountAnalyzer, WordCountAnalyzerV2,
-    TitleAnalysisDeepAnalyzer, MetaDescriptionDeepAnalyzer, CanonicalValidationDeepAnalyzer,
-    SitemapCoverageDeepAnalyzer, RobotsTxtAnalysisDeepAnalyzer, InternalLinkQualityAnalyzer,
-    ExternalLinkAuthorityDeepAnalyzer,
+    AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalSelfReferenceAnalyzerV2,
+    CanonicalUrlAnalyzerV2, CanonicalUrlValidator, CanonicalValidationDeepAnalyzer,
+    CharsetValidator, ContentQualityAnalyzerV2, ExternalLinkAnalyzerV2,
+    ExternalLinkAuthorityAnalyzer, ExternalLinkAuthorityDeepAnalyzer,
+    ExternalNofollowUnderuseValidator, HeadingHierarchyAnalyzer, HreflangConsistencyAnalyzer,
+    HreflangReciprocalAnalyzerV2, HreflangSelfReferenceValidator, HreflangValidator,
+    HreflangValidatorV3, InternalLinkAnalyzerV2, InternalLinkAnchorAnalyzer,
+    InternalLinkAnchorTextDiversityAnalyzer, InternalLinkQualityAnalyzer,
+    InternalLinkTopicalAnalyzer, InternalNofollowOveruseValidator, InternationalSeoAnalyzer,
+    KeywordAnalyzer, KeywordAnalyzerV2, LanguageAttributeAnalyzer, LinkAnalyzer, LinkAnalyzerV2,
+    LinkInfo, MetaDescriptionAnalyzerV3, MetaDescriptionDeepAnalyzer,
+    MetaDescriptionLengthAnalyzerV2, MetaDescriptionPixelWidthAnalyzer, MetaTagAnalyzer,
+    MixedProtocolRedirectValidator, MobileViewportAnalyzer, OpenSearchDescriptionValidator,
+    OpenSearchValidator, PaginationAnalyzer, PaginationDepthValidator, PaginationLinkAnalyzer,
+    RedirectLoopDetector, RobotsMetaAnalyzer, RobotsTxtAnalysisDeepAnalyzer, RobotsTxtAnalyzerV2,
+    RobotsTxtCoverageAnalyzerV2, RobotsTxtDirectivesAnalyzer, RobotsTxtSizeValidator,
+    SitemapAnalyzer, SitemapAnalyzerV2, SitemapCoverageAnalyzerV2, SitemapCoverageDeepAnalyzer,
+    SitemapEntry, SitemapUrlAnalyzer, SitemapXmlSizeValidator, TitleAnalysisDeepAnalyzer,
+    TitleAnalyzerV3, TitleKeywordAnalyzer, TitlePixelWidthAnalyzer, WikipediaLinkAnalyzer,
+    WordCountAnalyzer, WordCountAnalyzerV2,
 };
 pub use social_analyzers::{
     OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphSiteNameValidator,
-    OpenGraphUrlValidator, OpenGraphVideoAnalyzer,
-    SocialMediaAnalyzer, SocialPreviewOptimizer, TwitterCardTypeAnalyzer,
-    TwitterPlayerValidator, TwitterSiteAnalyzer,
-};
-pub use post_crawl_analyzers::{
-    build_post_crawl_registry, CannibalizationDetector, CrawlData,
-    PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
+    OpenGraphUrlValidator, OpenGraphVideoAnalyzer, SocialMediaAnalyzer, SocialPreviewOptimizer,
+    TwitterCardTypeAnalyzer, TwitterPlayerValidator, TwitterSiteAnalyzer,
 };
 pub use v2_analyzers::*;
-pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 
 /// Check if a URL path is a utility/page that should be excluded from analysis.
 fn is_utility_page(url: &str) -> bool {
@@ -326,10 +321,10 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
-    /// Manages a collection of [`Analyzer`] implementations and runs them
-    /// in parallel using rayon. The default registry includes 423 analyzers
-    /// covering HTTP, SEO, content, links, images, security, accessibility,
-    /// social media, AI-specific checks, and structured data validation.
+/// Manages a collection of [`Analyzer`] implementations and runs them
+/// in parallel using rayon. The default registry includes 423 analyzers
+/// covering HTTP, SEO, content, links, images, security, accessibility,
+/// social media, AI-specific checks, and structured data validation.
 ///
 /// # Examples
 ///
@@ -1280,7 +1275,9 @@ impl AnalyzerRegistry {
         if include_wasm {
             analyzers.push(Box::new(crate::wasm_analyzers::WasmPatternAnalyzer::new()));
             analyzers.push(Box::new(crate::wasm_analyzers::WasmRuntimeAnalyzer::new()));
-            analyzers.push(Box::new(crate::wasm_analyzers::WasmPerformanceAnalyzer::new()));
+            analyzers.push(Box::new(
+                crate::wasm_analyzers::WasmPerformanceAnalyzer::new(),
+            ));
         }
         #[cfg(not(feature = "full"))]
         let _ = include_wasm;

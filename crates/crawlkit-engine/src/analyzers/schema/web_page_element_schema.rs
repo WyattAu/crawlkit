@@ -31,7 +31,12 @@ impl Analyzer for WebPageElementSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for WebPageElementSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the element name or label."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the element name or label.".to_string(),
                 });
             }
         }
@@ -50,7 +54,6 @@ impl Analyzer for WebPageElementSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -112,157 +115,148 @@ mod tests {
     }
 
     #[test]
-fn test_webpageelement_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPageElement".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WebPageElement"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WELEM001"));
-}
-
-
-    #[test]
-fn test_webpageelement_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPageElement".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WebPageElement",
-            "name": "Sidebar"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_webpageelement_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPageElement".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPageElement"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WELEM001"));
+    }
 
     #[test]
-fn test_webpageelement_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_webpageelement_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WebPage"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_webpageelement_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPageElement".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WebPageElement",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WELEM001"));
-}
-
-
-    #[test]
-fn test_webpageelement_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_webpageelement_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("WebPageElement".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "WebPageElement",
-                "name": "Good Element"
+                "name": "Sidebar"
             }),
-        },
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("WebPageElement".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "WebPageElement"
-            }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WELEM001"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_webpageelement_both_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPageElement".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "WebPageElement",
-            "name": "Header"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_webpageelement_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_webpageelement_with_other_schema() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("WebPageElement".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "WebPageElement"
-            }),
-        },
-        StructuredData {
+    fn test_webpageelement_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("WebPage".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
-                "@type": "WebPage",
-                "name": "Page"
+                "@type": "WebPage"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 1);
-    assert!(findings.iter().any(|f| f.code == "WELEM001"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_webpageelement_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPageElement".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPageElement",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WELEM001"));
+    }
 
+    #[test]
+    fn test_webpageelement_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPageElement".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPageElement",
+                    "name": "Good Element"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPageElement".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPageElement"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WELEM001"));
+    }
+
+    #[test]
+    fn test_webpageelement_both_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPageElement".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "WebPageElement",
+                "name": "Header"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_webpageelement_with_other_schema() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPageElement".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPageElement"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("WebPage".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "WebPage",
+                    "name": "Page"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WebPageElementSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().any(|f| f.code == "WELEM001"));
+    }
 }

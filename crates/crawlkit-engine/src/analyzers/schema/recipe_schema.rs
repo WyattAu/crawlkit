@@ -86,7 +86,6 @@ impl Analyzer for RecipeSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -147,105 +146,98 @@ mod tests {
     }
 
     #[test]
-fn test_recipe_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RECIPE001"));
-}
-
-
-    #[test]
-fn test_recipe_missing_cook_time() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Cake"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RECIPE002"));
-}
-
+    fn test_recipe_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RECIPE001"));
+    }
 
     #[test]
-fn test_recipe_missing_ingredients() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Cake",
-            "cookTime": "PT30M"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RECIPE003"));
-}
-
+    fn test_recipe_missing_cook_time() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Cake"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RECIPE002"));
+    }
 
     #[test]
-fn test_recipe_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Cake",
-            "cookTime": "PT30M",
-            "recipeIngredient": ["flour", "sugar"]
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_recipe_missing_ingredients() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Cake",
+                "cookTime": "PT30M"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RECIPE003"));
+    }
 
     #[test]
-fn test_recipe_missing_all() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RECIPE001"));
-    assert!(findings.iter().any(|f| f.code == "RECIPE002"));
-    assert!(findings.iter().any(|f| f.code == "RECIPE003"));
-}
-
+    fn test_recipe_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Cake",
+                "cookTime": "PT30M",
+                "recipeIngredient": ["flour", "sugar"]
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_recipe_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_recipe_missing_all() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RECIPE001"));
+        assert!(findings.iter().any(|f| f.code == "RECIPE002"));
+        assert!(findings.iter().any(|f| f.code == "RECIPE003"));
+    }
 
-
+    #[test]
+    fn test_recipe_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

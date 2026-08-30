@@ -461,7 +461,10 @@ impl CrawlRun<'_> {
 
 /// Encrypt one field value for storage, hex-encoded and `enc:`-prefixed.
 /// Falls back to the plaintext value if encryption fails.
-pub(crate) fn encrypt_field(encryption: &EncryptionManager, value: Option<String>) -> Option<String> {
+pub(crate) fn encrypt_field(
+    encryption: &EncryptionManager,
+    value: Option<String>,
+) -> Option<String> {
     value.map(|v| {
         encryption
             .encrypt(v.as_bytes())

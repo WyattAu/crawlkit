@@ -79,7 +79,6 @@ impl Analyzer for ProductReviewValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -140,159 +139,150 @@ mod tests {
     }
 
     #[test]
-fn test_prev_missing_review_rating() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget",
-            "review": {
-                "@type": "Review",
-                "author": {"@type": "Person", "name": "John"}
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PREV001"));
-}
-
-
-    #[test]
-fn test_prev_missing_author() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget",
-            "review": {
-                "@type": "Review",
-                "reviewRating": {"@type": "Rating", "ratingValue": 5}
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PREV002"));
-}
-
+    fn test_prev_missing_review_rating() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "review": {
+                    "@type": "Review",
+                    "author": {"@type": "Person", "name": "John"}
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PREV001"));
+    }
 
     #[test]
-fn test_prev_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget",
-            "review": {
-                "@type": "Review"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PREV001"));
-    assert!(findings.iter().any(|f| f.code == "PREV002"));
-}
-
-
-    #[test]
-fn test_prev_valid_review() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget",
-            "review": {
-                "@type": "Review",
-                "author": {"@type": "Person", "name": "John"},
-                "reviewRating": {"@type": "Rating", "ratingValue": 5}
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_prev_missing_author() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "review": {
+                    "@type": "Review",
+                    "reviewRating": {"@type": "Rating", "ratingValue": 5}
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PREV002"));
+    }
 
     #[test]
-fn test_prev_no_reviews() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_prev_multiple_reviews() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget",
-            "review": [
-                {"@type": "Review"},
-                {"@type": "Review"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 4);
-}
-
+    fn test_prev_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "review": {
+                    "@type": "Review"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PREV001"));
+        assert!(findings.iter().any(|f| f.code == "PREV002"));
+    }
 
     #[test]
-fn test_prev_non_product_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": "Test"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_prev_valid_review() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "review": {
+                    "@type": "Review",
+                    "author": {"@type": "Person", "name": "John"},
+                    "reviewRating": {"@type": "Rating", "ratingValue": 5}
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_prev_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = ProductReviewValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_prev_no_reviews() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_prev_multiple_reviews() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget",
+                "review": [
+                    {"@type": "Review"},
+                    {"@type": "Review"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 4);
+    }
 
+    #[test]
+    fn test_prev_non_product_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_prev_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = ProductReviewValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

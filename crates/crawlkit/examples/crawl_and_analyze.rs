@@ -31,11 +31,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         response_time: Some(result.response_time),
         redirect_chain: &[],
         robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
     };
 
     let findings = registry.analyze(&ctx);

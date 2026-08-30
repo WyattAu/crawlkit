@@ -1,6 +1,6 @@
 use crate::analyzers::*;
-use crate::parser::{ParsedPage, ScriptInfo, StyleInfo};
 use crate::meta::MetaTags;
+use crate::parser::{ParsedPage, ScriptInfo, StyleInfo};
 
 fn make_page(url: &str) -> ParsedPage {
     ParsedPage {

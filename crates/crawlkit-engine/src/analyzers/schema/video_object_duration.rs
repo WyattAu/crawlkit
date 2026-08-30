@@ -25,9 +25,7 @@ impl VideoObjectDurationValidator {
         }
         let has_t = trimmed.contains('T');
         let has_time = trimmed.contains('H') || trimmed.contains('M') || trimmed.contains('S');
-        let has_date = trimmed.contains('Y')
-            || trimmed.contains('M')
-            || trimmed.contains('D');
+        let has_date = trimmed.contains('Y') || trimmed.contains('M') || trimmed.contains('D');
         // Must have at least one time component after T, or date components
         if has_t && has_time {
             return true;
@@ -84,8 +82,9 @@ impl Analyzer for VideoObjectDurationValidator {
                                      Search engines require PT format (e.g., PT1H30M)."
                                 ),
                                 url: url.clone(),
-                                recommendation: "Use ISO 8601 duration format: P[n]Y[n]M[n]DT[n]H[n]M[n]S."
-                                    .to_string(),
+                                recommendation:
+                                    "Use ISO 8601 duration format: P[n]Y[n]M[n]DT[n]H[n]M[n]S."
+                                        .to_string(),
                             });
                         }
                     }
@@ -161,7 +160,10 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "VIDDUR001"));
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "VIDDUR001"));
     }
 
     #[test]
@@ -172,7 +174,9 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": "PT1H30M"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -183,7 +187,10 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": "90 minutes"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "VIDDUR002"));
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "VIDDUR002"));
     }
 
     #[test]
@@ -194,7 +201,10 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": ""}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "VIDDUR002"));
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "VIDDUR002"));
     }
 
     #[test]
@@ -205,13 +215,17 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "headline": "Test"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -222,7 +236,9 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": "PT2H"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -233,7 +249,9 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": "PT30S"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -244,11 +262,16 @@ mod tests {
             r#type: Some("VideoObject".to_string()),
             data: serde_json::json!({"@type": "VideoObject", "name": "Test", "duration": "P1D"}),
         }];
-        assert!(VideoObjectDurationValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(VideoObjectDurationValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_name() {
-        assert_eq!(VideoObjectDurationValidator::new().name(), "video-object-duration");
+        assert_eq!(
+            VideoObjectDurationValidator::new().name(),
+            "video-object-duration"
+        );
     }
 }

@@ -31,7 +31,12 @@ impl Analyzer for WearableSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,12 +46,16 @@ impl Analyzer for WearableSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the wearable device name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the wearable device name.".to_string(),
                 });
             }
 
-            if data.get("deviceType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("deviceType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -66,7 +75,6 @@ impl Analyzer for WearableSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -128,148 +136,139 @@ mod tests {
     }
 
     #[test]
-fn test_wearable_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Wearable".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Wearable"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WEAR001"));
-}
-
-
-    #[test]
-fn test_wearable_missing_devicetype() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Wearable".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Wearable",
-            "name": "FitBand Pro"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WEAR002"));
-}
-
-
-    #[test]
-fn test_wearable_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Wearable".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Wearable",
-            "name": "FitBand Pro",
-            "deviceType": "FitnessTracker"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_wearable_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_wearable_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_wearable_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Wearable".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Wearable"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_wearable_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Wearable".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Wearable",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WEAR001"));
-}
-
-
-    #[test]
-fn test_wearable_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Wearable".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Wearable",
-                "name": "Good Device",
-                "deviceType": "Smartwatch"
-            }),
-        },
-        StructuredData {
+    fn test_wearable_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Wearable".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Wearable"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WearableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WEAR001"));
-    assert!(findings.iter().any(|f| f.code == "WEAR002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEAR001"));
+    }
 
+    #[test]
+    fn test_wearable_missing_devicetype() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Wearable".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Wearable",
+                "name": "FitBand Pro"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEAR002"));
+    }
 
+    #[test]
+    fn test_wearable_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Wearable".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Wearable",
+                "name": "FitBand Pro",
+                "deviceType": "FitnessTracker"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wearable_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wearable_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_wearable_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Wearable".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Wearable"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_wearable_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Wearable".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Wearable",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEAR001"));
+    }
+
+    #[test]
+    fn test_wearable_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Wearable".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Wearable",
+                    "name": "Good Device",
+                    "deviceType": "Smartwatch"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Wearable".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Wearable"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WearableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WEAR001"));
+        assert!(findings.iter().any(|f| f.code == "WEAR002"));
+    }
 }

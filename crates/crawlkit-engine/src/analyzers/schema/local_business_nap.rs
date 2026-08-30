@@ -16,20 +16,55 @@ impl LocalBusinessNapAnalyzer {
     }
 
     const LOCAL_BUSINESS_TYPES: &[&str] = &[
-        "LocalBusiness", "Store", "Restaurant", "MedicalBusiness",
-        "FinancialService", "TravelAgency", "AutoBodyShop", "AutoDealer",
-        "AutoPartsStore", "AutoRental", "AutoRepair", "Bakery", "BarOrPub",
-        "BeautySalon", "Brewery", "CafeOrCoffeeShop", "Cemetery",
-        "ChildCare", "Dentist", "EmploymentAgency", "EntertainmentBusiness",
-        "FoodEstablishment", "GardenStore",
-        "GovernmentOffice", "HealthAndBeautyBusiness", "HomeAndConstructionBusiness",
-        "InsuranceAgency", "InternetCafe", "LegalService", "Library",
-        "LodgingBusiness", "MovingCompany",
-        "MusicStore", "OfficeEquipmentStore", "OutletStore", "PawnShop",
-        "PetStore", "Physician", "Plumber", "RealEstateAgent",
-        "RecyclingCenter", "SelfStorage", "ShoeStore", "ShoppingCenter",
-        "SportingGoodsStore", "TattooParlor", "TelevisionStation",
-        "ToyStore", "WholesaleStore",
+        "LocalBusiness",
+        "Store",
+        "Restaurant",
+        "MedicalBusiness",
+        "FinancialService",
+        "TravelAgency",
+        "AutoBodyShop",
+        "AutoDealer",
+        "AutoPartsStore",
+        "AutoRental",
+        "AutoRepair",
+        "Bakery",
+        "BarOrPub",
+        "BeautySalon",
+        "Brewery",
+        "CafeOrCoffeeShop",
+        "Cemetery",
+        "ChildCare",
+        "Dentist",
+        "EmploymentAgency",
+        "EntertainmentBusiness",
+        "FoodEstablishment",
+        "GardenStore",
+        "GovernmentOffice",
+        "HealthAndBeautyBusiness",
+        "HomeAndConstructionBusiness",
+        "InsuranceAgency",
+        "InternetCafe",
+        "LegalService",
+        "Library",
+        "LodgingBusiness",
+        "MovingCompany",
+        "MusicStore",
+        "OfficeEquipmentStore",
+        "OutletStore",
+        "PawnShop",
+        "PetStore",
+        "Physician",
+        "Plumber",
+        "RealEstateAgent",
+        "RecyclingCenter",
+        "SelfStorage",
+        "ShoeStore",
+        "ShoppingCenter",
+        "SportingGoodsStore",
+        "TattooParlor",
+        "TelevisionStation",
+        "ToyStore",
+        "WholesaleStore",
     ];
 }
 
@@ -57,8 +92,7 @@ impl Analyzer for LocalBusinessNapAnalyzer {
                     title: "LocalBusiness schema missing telephone".to_string(),
                     description: format!(
                         "A {} schema is missing the \"telephone\" property. Phone numbers are \
-                         essential for NAP consistency and local SEO."
-                    ,
+                         essential for NAP consistency and local SEO.",
                         schema_type
                     ),
                     url: url.clone(),
@@ -80,8 +114,7 @@ impl Analyzer for LocalBusinessNapAnalyzer {
                     description: format!(
                         "A {} schema is missing \"openingHours\" or \
                          \"openingHoursSpecification\". Business hours help customers know when \
-                         to visit."
-                    ,
+                         to visit.",
                         schema_type
                     ),
                     url: url.clone(),
@@ -96,7 +129,6 @@ impl Analyzer for LocalBusinessNapAnalyzer {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -158,177 +190,173 @@ mod tests {
     }
 
     #[test]
-fn test_nap_missing_telephone() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "address": {"@type": "PostalAddress"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP001"));
-}
-
-
-    #[test]
-fn test_nap_missing_opening_hours() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP002"));
-}
-
+    fn test_nap_missing_telephone() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "address": {"@type": "PostalAddress"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NAP001"));
+    }
 
     #[test]
-fn test_nap_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHours": "Mo-Fr 09:00-17:00"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_nap_missing_all() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "NAP001"));
-    assert!(findings.iter().any(|f| f.code == "NAP002"));
-}
-
+    fn test_nap_missing_opening_hours() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NAP002"));
+    }
 
     #[test]
-fn test_nap_non_local_business_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_nap_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
-}
-
+    fn test_nap_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHours": "Mo-Fr 09:00-17:00"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_nap_restaurant_subtype() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Restaurant".to_string()),
-        data: serde_json::json!({"@type": "Restaurant"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "NAP001"));
-    assert!(findings.iter().any(|f| f.code == "NAP002"));
-}
-
-
-    #[test]
-fn test_nap_opening_hours_specification_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHoursSpecification": [{"@type": "OpeningHoursSpecification", "dayOfWeek": "Monday", "opens": "09:00", "closes": "17:00"}]}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!LocalBusinessNapAnalyzer::new().analyze(&ctx).iter().any(|f| f.code == "NAP002"));
-}
-
-
-    #[test]
-fn test_nap_telephone_present_no_opening_hours() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "NAP001"));
-    assert!(findings.iter().any(|f| f.code == "NAP002"));
-}
-
-
-    #[test]
-fn test_nap_multiple_businesses() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_nap_missing_all() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness"}),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_non_local_business_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nap_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(LocalBusinessNapAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_nap_restaurant_subtype() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({"@type": "Restaurant"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_opening_hours_specification_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("LocalBusiness".to_string()),
-            data: serde_json::json!({"@type": "LocalBusiness"}),
-        },
-    ];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert_eq!(findings.iter().filter(|f| f.code == "NAP001").count(), 2);
-    assert_eq!(findings.iter().filter(|f| f.code == "NAP002").count(), 2);
-}
-
-
-    #[test]
-fn test_nap_store_subtype() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Store".to_string()),
-        data: serde_json::json!({"@type": "Store"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "NAP001"));
-    assert!(findings.iter().any(|f| f.code == "NAP002"));
-}
-
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555", "openingHoursSpecification": [{"@type": "OpeningHoursSpecification", "dayOfWeek": "Monday", "opens": "09:00", "closes": "17:00"}]}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!LocalBusinessNapAnalyzer::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "NAP002"));
+    }
 
     #[test]
-fn test_nap_restaurant_with_both_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Restaurant".to_string()),
-        data: serde_json::json!({
-            "@type": "Restaurant",
-            "name": "Pizza Place",
-            "telephone": "+1-555-123-4567",
-            "openingHours": "Mo-Su 11:00-22:00"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_nap_telephone_present_no_opening_hours() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({"@type": "LocalBusiness", "name": "My Shop", "telephone": "+1-555-555-5555"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
 
+    #[test]
+    fn test_nap_multiple_businesses() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("LocalBusiness".to_string()),
+                data: serde_json::json!({"@type": "LocalBusiness"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("LocalBusiness".to_string()),
+                data: serde_json::json!({"@type": "LocalBusiness"}),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert_eq!(findings.iter().filter(|f| f.code == "NAP001").count(), 2);
+        assert_eq!(findings.iter().filter(|f| f.code == "NAP002").count(), 2);
+    }
 
+    #[test]
+    fn test_nap_store_subtype() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Store".to_string()),
+            data: serde_json::json!({"@type": "Store"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "NAP001"));
+        assert!(findings.iter().any(|f| f.code == "NAP002"));
+    }
+
+    #[test]
+    fn test_nap_restaurant_with_both_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Restaurant".to_string()),
+            data: serde_json::json!({
+                "@type": "Restaurant",
+                "name": "Pizza Place",
+                "telephone": "+1-555-123-4567",
+                "openingHours": "Mo-Su 11:00-22:00"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LocalBusinessNapAnalyzer::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

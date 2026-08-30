@@ -293,7 +293,10 @@ pub fn trend_to_markdown(analysis: &TrendAnalysis) -> String {
 
     md.push_str("## Pages Trend\n\n");
     for point in &analysis.pages_trend {
-        md.push_str(&format!("- `{}`: {:.0} pages\n", point.timestamp, point.value));
+        md.push_str(&format!(
+            "- `{}`: {:.0} pages\n",
+            point.timestamp, point.value
+        ));
     }
     md.push('\n');
 
@@ -326,7 +329,12 @@ mod tests {
         }
     }
 
-    fn make_snapshot(crawl_id: &str, days_offset: i64, pages: usize, issues: usize) -> CrawlSnapshot {
+    fn make_snapshot(
+        crawl_id: &str,
+        days_offset: i64,
+        pages: usize,
+        issues: usize,
+    ) -> CrawlSnapshot {
         CrawlSnapshot {
             crawl_id: crawl_id.to_string(),
             timestamp: Utc
@@ -360,7 +368,10 @@ mod tests {
         let snapshots = vec![make_snapshot("c1", 0, 100, 10)];
         let result = analyze_trends(snapshots);
         assert!(result.is_err());
-        assert!(matches!(result.unwrap_err(), TrendError::InsufficientData(1)));
+        assert!(matches!(
+            result.unwrap_err(),
+            TrendError::InsufficientData(1)
+        ));
     }
 
     #[test]

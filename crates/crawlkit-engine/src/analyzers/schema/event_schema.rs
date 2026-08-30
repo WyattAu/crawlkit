@@ -84,7 +84,6 @@ impl Analyzer for EventSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -145,43 +144,45 @@ mod tests {
     }
 
     #[test]
-fn test_event_missing_start_date() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Event".to_string()),
-        data: serde_json::json!({"@type": "Event", "name": "Concert"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(EventSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "EVENT001"));
-}
-
-
-    #[test]
-fn test_event_missing_location() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Event".to_string()),
-        data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2025-06-01T19:00:00Z"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(EventSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "EVENT002"));
-}
-
+    fn test_event_missing_start_date() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Concert"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(EventSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "EVENT001"));
+    }
 
     #[test]
-fn test_event_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Event".to_string()),
-        data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2025-06-01T19:00:00Z", "location": {"@type": "Place", "name": "Venue"}, "organizer": {"@type": "Organization", "name": "Org"}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = EventSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_event_missing_location() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2025-06-01T19:00:00Z"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(EventSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "EVENT002"));
+    }
 
-
+    #[test]
+    fn test_event_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2025-06-01T19:00:00Z", "location": {"@type": "Place", "name": "Venue"}, "organizer": {"@type": "Organization", "name": "Org"}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = EventSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

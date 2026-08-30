@@ -53,8 +53,11 @@ impl Analyzer for LocalBusinessNpiValidator {
                     if let Some(s) = id.as_str() {
                         s.len() == 10 && s.chars().all(|c| c.is_ascii_digit())
                     } else if let Some(obj) = id.as_object() {
-                        obj.values()
-                            .any(|v| v.as_str().is_some_and(|s| s.len() == 10 && s.chars().all(|c| c.is_ascii_digit())))
+                        obj.values().any(|v| {
+                            v.as_str().is_some_and(|s| {
+                                s.len() == 10 && s.chars().all(|c| c.is_ascii_digit())
+                            })
+                        })
                     } else {
                         false
                     }
@@ -147,7 +150,10 @@ mod tests {
             r#type: Some("Physician".to_string()),
             data: serde_json::json!({"@type": "Physician", "name": "Dr. Smith", "medicalSpecialty": "Cardiology"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "NPI001"));
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "NPI001"));
     }
 
     #[test]
@@ -158,7 +164,9 @@ mod tests {
             r#type: Some("Physician".to_string()),
             data: serde_json::json!({"@type": "Physician", "name": "Dr. Smith", "medicalSpecialty": "Cardiology", "npi": "1234567890"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -169,7 +177,9 @@ mod tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Store"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -180,7 +190,10 @@ mod tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Clinic", "availableService": "Checkup"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "NPI001"));
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "NPI001"));
     }
 
     #[test]
@@ -191,7 +204,9 @@ mod tests {
             r#type: Some("Restaurant".to_string()),
             data: serde_json::json!({"@type": "Restaurant", "name": "Cafe"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -202,18 +217,26 @@ mod tests {
             r#type: Some("Dentist".to_string()),
             data: serde_json::json!({"@type": "Dentist", "name": "Dr. Jones", "medicalSpecialty": "Dentistry"}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "NPI001"));
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "NPI001"));
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_name() {
-        assert_eq!(LocalBusinessNpiValidator::new().name(), "local-business-npi");
+        assert_eq!(
+            LocalBusinessNpiValidator::new().name(),
+            "local-business-npi"
+        );
     }
 
     #[test]
@@ -224,7 +247,9 @@ mod tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Clinic", "medicalSpecialty": "General", "identifier": {"npi": "9876543210"}}),
         }];
-        assert!(LocalBusinessNpiValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(LocalBusinessNpiValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]

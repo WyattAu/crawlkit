@@ -205,7 +205,11 @@ pub fn generate_insights(findings: &[Finding], pages: &[PageData]) -> Vec<Insigh
 }
 
 /// Like [`generate_insights`] but with a configurable maximum output count.
-pub fn generate_insights_with_limit(findings: &[Finding], pages: &[PageData], max_insights: usize) -> Vec<Insight> {
+pub fn generate_insights_with_limit(
+    findings: &[Finding],
+    pages: &[PageData],
+    max_insights: usize,
+) -> Vec<Insight> {
     if findings.is_empty() || pages.is_empty() {
         return Vec::new();
     }
@@ -215,14 +219,16 @@ pub fn generate_insights_with_limit(findings: &[Finding], pages: &[PageData], ma
     // 1. Group findings by code
     let mut groups: HashMap<String, FindingGroup> = HashMap::new();
     for finding in findings {
-        let entry = groups.entry(finding.code.clone()).or_insert_with(|| FindingGroup {
-            code: finding.code.clone(),
-            title: finding.title.clone(),
-            description: finding.description.clone(),
-            recommendation: finding.recommendation.clone(),
-            severity: finding.severity,
-            affected_urls: Vec::new(),
-        });
+        let entry = groups
+            .entry(finding.code.clone())
+            .or_insert_with(|| FindingGroup {
+                code: finding.code.clone(),
+                title: finding.title.clone(),
+                description: finding.description.clone(),
+                recommendation: finding.recommendation.clone(),
+                severity: finding.severity,
+                affected_urls: Vec::new(),
+            });
         if !entry.affected_urls.contains(&finding.url) {
             entry.affected_urls.push(finding.url.clone());
         }
@@ -311,7 +317,7 @@ fn code_root(code: &str) -> String {
 #[allow(clippy::vec_init_then_push)]
 mod tests {
     use super::*;
-    use crate::storage::{IssueCategory, Issue, PageData, Severity};
+    use crate::storage::{Issue, IssueCategory, PageData, Severity};
     use chrono::Utc;
     use url::Url;
 
@@ -421,11 +427,7 @@ mod tests {
 
     #[test]
     fn test_empty_pages_returns_empty() {
-        let findings = vec![finding(
-            "SEO001",
-            Severity::Error,
-            "https://example.com",
-        )];
+        let findings = vec![finding("SEO001", Severity::Error, "https://example.com")];
         let insights = generate_insights(&findings, &[]);
         assert!(insights.is_empty());
     }
@@ -433,11 +435,7 @@ mod tests {
     #[test]
     fn test_single_finding() {
         let pages = vec![test_page("https://example.com")];
-        let findings = vec![finding(
-            "SEO001",
-            Severity::Error,
-            "https://example.com",
-        )];
+        let findings = vec![finding("SEO001", Severity::Error, "https://example.com")];
         let insights = generate_insights(&findings, &pages);
         assert_eq!(insights.len(), 1);
         assert_eq!(insights[0].finding_codes, vec!["SEO001"]);
@@ -468,7 +466,13 @@ mod tests {
 
         // Error on 10% of pages -> 75 * 0.1 = 7.5
         let findings: Vec<Finding> = (0..10)
-            .map(|i| finding("SEO001", Severity::Error, &format!("https://example.com/p{i}")))
+            .map(|i| {
+                finding(
+                    "SEO001",
+                    Severity::Error,
+                    &format!("https://example.com/p{i}"),
+                )
+            })
             .collect();
         let insights = generate_insights(&findings, &pages);
         assert!((insights[0].impact_score - 7.5).abs() < 0.01);
@@ -483,10 +487,18 @@ mod tests {
         let mut findings = Vec::new();
         // SEO001: Warning on 5 pages -> 50 * 0.5 = 25
         for i in 0..5 {
-            findings.push(finding("SEO001", Severity::Warning, &format!("https://example.com/p{i}")));
+            findings.push(finding(
+                "SEO001",
+                Severity::Warning,
+                &format!("https://example.com/p{i}"),
+            ));
         }
         // SEC001: Critical on 1 page -> 100 * 0.1 = 10
-        findings.push(finding("SEC001", Severity::Critical, "https://example.com/p0"));
+        findings.push(finding(
+            "SEC001",
+            Severity::Critical,
+            "https://example.com/p0",
+        ));
 
         let insights = generate_insights(&findings, &pages);
         assert_eq!(insights.len(), 2);
@@ -503,8 +515,16 @@ mod tests {
 
         let mut findings = Vec::new();
         // Both have same severity (Warning = 50), same prevalence (1/10 = 0.1) -> impact 5.0
-        findings.push(finding("CONTENT001", Severity::Warning, "https://example.com/p0")); // Significant
-        findings.push(finding("HTTP001", Severity::Warning, "https://example.com/p1")); // Quick
+        findings.push(finding(
+            "CONTENT001",
+            Severity::Warning,
+            "https://example.com/p0",
+        )); // Significant
+        findings.push(finding(
+            "HTTP001",
+            Severity::Warning,
+            "https://example.com/p1",
+        )); // Quick
 
         let insights = generate_insights(&findings, &pages);
         assert_eq!(insights.len(), 2);
@@ -570,10 +590,18 @@ mod tests {
         let mut findings = Vec::new();
         // Different codes produce separate insights
         for i in 0..5 {
-            findings.push(finding("META001", Severity::Warning, &format!("https://example.com/p{i}")));
+            findings.push(finding(
+                "META001",
+                Severity::Warning,
+                &format!("https://example.com/p{i}"),
+            ));
         }
         for i in 5..8 {
-            findings.push(finding("META002", Severity::Error, &format!("https://example.com/p{i}")));
+            findings.push(finding(
+                "META002",
+                Severity::Error,
+                &format!("https://example.com/p{i}"),
+            ));
         }
 
         let insights = generate_insights(&findings, &pages);
@@ -635,7 +663,13 @@ mod tests {
             .collect();
 
         let findings: Vec<Finding> = (0..5)
-            .map(|i| finding(&format!("SEO{i:03}"), Severity::Info, &format!("https://example.com/p{i}")))
+            .map(|i| {
+                finding(
+                    &format!("SEO{i:03}"),
+                    Severity::Info,
+                    &format!("https://example.com/p{i}"),
+                )
+            })
             .collect();
 
         let insights = generate_insights(&findings, &pages);
@@ -654,7 +688,13 @@ mod tests {
             .collect();
 
         let findings: Vec<Finding> = (0..10)
-            .map(|i| finding(&format!("SEC{i:03}"), Severity::Critical, &format!("https://example.com/p{i}")))
+            .map(|i| {
+                finding(
+                    &format!("SEC{i:03}"),
+                    Severity::Critical,
+                    &format!("https://example.com/p{i}"),
+                )
+            })
             .collect();
 
         let insights = generate_insights(&findings, &pages);

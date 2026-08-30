@@ -37,13 +37,15 @@ impl Analyzer for JobPostingSalaryValidator {
                     category: IssueCategory::Schema,
                     code: "JSAL001".to_string(),
                     title: "JobPosting missing baseSalary".to_string(),
-                    description: "A JobPosting structured data block is missing the \"baseSalary\" \
+                    description:
+                        "A JobPosting structured data block is missing the \"baseSalary\" \
                                   property."
-                        .to_string(),
+                            .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"baseSalary\" with a MonetaryAmount or QuantitativeValue \
+                    recommendation:
+                        "Add \"baseSalary\" with a MonetaryAmount or QuantitativeValue \
                                      to show salary information in search results."
-                        .to_string(),
+                            .to_string(),
                 });
             }
 
@@ -67,7 +69,6 @@ impl Analyzer for JobPostingSalaryValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -129,157 +130,148 @@ mod tests {
     }
 
     #[test]
-fn test_jsal_missing_base_salary() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JSAL001"));
-}
-
-
-    #[test]
-fn test_jsal_missing_employment_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer",
-            "baseSalary": {
-                "@type": "MonetaryAmount",
-                "currency": "USD",
-                "value": {"@type": "QuantitativeValue", "value": 100000}
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JSAL002"));
-}
-
+    fn test_jsal_missing_base_salary() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JSAL001"));
+    }
 
     #[test]
-fn test_jsal_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer",
-            "baseSalary": {
-                "@type": "MonetaryAmount",
-                "currency": "USD",
-                "value": {"@type": "QuantitativeValue", "value": 100000}
-            },
-            "employmentType": "FULL_TIME"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_jsal_missing_employment_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer",
+                "baseSalary": {
+                    "@type": "MonetaryAmount",
+                    "currency": "USD",
+                    "value": {"@type": "QuantitativeValue", "value": 100000}
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JSAL002"));
+    }
 
     #[test]
-fn test_jsal_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_jsal_non_job_posting_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_jsal_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer",
+                "baseSalary": {
+                    "@type": "MonetaryAmount",
+                    "currency": "USD",
+                    "value": {"@type": "QuantitativeValue", "value": 100000}
+                },
+                "employmentType": "FULL_TIME"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_jsal_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
+    fn test_jsal_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_jsal_with_salary_no_employment_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer",
-            "baseSalary": {
-                "@type": "MonetaryAmount",
-                "currency": "USD",
-                "value": {"@type": "QuantitativeValue", "value": 100000}
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "JSAL001"));
-    assert!(findings.iter().any(|f| f.code == "JSAL002"));
-}
-
+    fn test_jsal_non_job_posting_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_jsal_with_employment_type_no_salary() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("JobPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "JobPosting",
-            "title": "Software Engineer",
-            "employmentType": "FULL_TIME"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = JobPostingSalaryValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "JSAL001"));
-    assert!(!findings.iter().any(|f| f.code == "JSAL002"));
-}
+    fn test_jsal_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
 
+    #[test]
+    fn test_jsal_with_salary_no_employment_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer",
+                "baseSalary": {
+                    "@type": "MonetaryAmount",
+                    "currency": "USD",
+                    "value": {"@type": "QuantitativeValue", "value": 100000}
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "JSAL001"));
+        assert!(findings.iter().any(|f| f.code == "JSAL002"));
+    }
 
+    #[test]
+    fn test_jsal_with_employment_type_no_salary() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("JobPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "JobPosting",
+                "title": "Software Engineer",
+                "employmentType": "FULL_TIME"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = JobPostingSalaryValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "JSAL001"));
+        assert!(!findings.iter().any(|f| f.code == "JSAL002"));
+    }
 }

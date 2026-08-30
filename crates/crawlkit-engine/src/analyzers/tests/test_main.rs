@@ -2331,8 +2331,7 @@ fn test_mobile_optimal_viewport() {
 #[test]
 fn test_mobile_user_scalable_no() {
     let mut page = make_page("https://example.com");
-    page.meta.viewport =
-        Some("width=device-width, initial-scale=1, user-scalable=no".to_string());
+    page.meta.viewport = Some("width=device-width, initial-scale=1, user-scalable=no".to_string());
     let ctx = make_ctx(&page, Some(200));
     let findings = MobileFriendlinessChecker::new().analyze(&ctx);
     assert!(findings.iter().any(|f| f.code == "MOB004"));
@@ -2341,8 +2340,7 @@ fn test_mobile_user_scalable_no() {
 #[test]
 fn test_mobile_maximum_scale_restricted() {
     let mut page = make_page("https://example.com");
-    page.meta.viewport =
-        Some("width=device-width, initial-scale=1, maximum-scale=1.0".to_string());
+    page.meta.viewport = Some("width=device-width, initial-scale=1, maximum-scale=1.0".to_string());
     let ctx = make_ctx(&page, Some(200));
     let findings = MobileFriendlinessChecker::new().analyze(&ctx);
     assert!(findings.iter().any(|f| f.code == "MOB005"));
@@ -3506,9 +3504,8 @@ fn test_iseo_valid_hreflang_with_xdefault() {
 
 #[test]
 fn test_iseo_locale_detection_from_url() {
-    let locale = InternationalSeoAnalyzer::detect_locale_from_url(
-        "https://example.com/de/products/widget",
-    );
+    let locale =
+        InternationalSeoAnalyzer::detect_locale_from_url("https://example.com/de/products/widget");
     assert_eq!(locale, Some("de".to_string()));
 }
 

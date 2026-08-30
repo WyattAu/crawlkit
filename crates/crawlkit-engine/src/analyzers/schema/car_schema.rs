@@ -31,7 +31,12 @@ impl Analyzer for CarSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,12 +45,16 @@ impl Analyzer for CarSchemaValidator {
                     description: "A Car structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the car name or description."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the car name or description.".to_string(),
                 });
             }
 
-            if data.get("model").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("model")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -54,8 +63,7 @@ impl Analyzer for CarSchemaValidator {
                     description: "A Car structured data block is missing the \"model\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"model\" with the car model name."
-                        .to_string(),
+                    recommendation: "Add \"model\" with the car model name.".to_string(),
                 });
             }
 
@@ -69,8 +77,7 @@ impl Analyzer for CarSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"manufacturer\" with the car manufacturer."
-                        .to_string(),
+                    recommendation: "Add \"manufacturer\" with the car manufacturer.".to_string(),
                 });
             }
         }
@@ -78,7 +85,6 @@ impl Analyzer for CarSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -140,142 +146,133 @@ mod tests {
     }
 
     #[test]
-fn test_car_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car",
-            "model": "Model 3",
-            "manufacturer": "Tesla"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "CAR001"));
-}
-
-
-    #[test]
-fn test_car_missing_model() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car",
-            "name": "Electric Sedan"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "CAR002"));
-}
-
+    fn test_car_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car",
+                "model": "Model 3",
+                "manufacturer": "Tesla"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAR001"));
+    }
 
     #[test]
-fn test_car_missing_manufacturer() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car",
-            "name": "Electric Sedan",
-            "model": "Model 3"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "CAR003"));
-}
-
+    fn test_car_missing_model() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car",
+                "name": "Electric Sedan"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAR002"));
+    }
 
     #[test]
-fn test_car_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car",
-            "name": "Electric Sedan",
-            "model": "Model 3",
-            "manufacturer": "Tesla"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_car_missing_manufacturer() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car",
+                "name": "Electric Sedan",
+                "model": "Model 3"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAR003"));
+    }
 
     #[test]
-fn test_car_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_car_non_car_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_car_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car",
+                "name": "Electric Sedan",
+                "model": "Model 3",
+                "manufacturer": "Tesla"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_car_all_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 3);
-}
-
+    fn test_car_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_car_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Car".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Car",
-            "name": "",
-            "model": "Civic",
-            "manufacturer": "Honda"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CarSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "CAR001"));
-}
+    fn test_car_non_car_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_car_all_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 3);
+    }
 
+    #[test]
+    fn test_car_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Car".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Car",
+                "name": "",
+                "model": "Civic",
+                "manufacturer": "Honda"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CarSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "CAR001"));
+    }
 }

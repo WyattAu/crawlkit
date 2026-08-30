@@ -235,8 +235,6 @@ impl Analyzer for ServerHeaderAnalyzer {
     }
 }
 
-
-
 // ---------------------------------------------------------------------------
 // 1. HTTP Status Analyzer
 // ---------------------------------------------------------------------------
@@ -1034,8 +1032,8 @@ impl Analyzer for ResponseSizeAnalyzer {
                 category: IssueCategory::Http,
                 code: "SIZE003".to_string(),
                 title: "Missing Content-Length header".to_string(),
-                description:
-                    "Response has a body but no Content-Length header was found.".to_string(),
+                description: "Response has a body but no Content-Length header was found."
+                    .to_string(),
                 url: url.clone(),
                 recommendation:
                     "Add a Content-Length header to enable caching and bandwidth optimization."
@@ -1105,9 +1103,7 @@ impl Analyzer for TtfbAnalyzer {
                 category: IssueCategory::Performance,
                 code: "TTFB001".to_string(),
                 title: "Slow Time to First Byte (TTFB)".to_string(),
-                description: format!(
-                    "TTFB is {ttfb_ms}ms, exceeding the 600ms threshold."
-                ),
+                description: format!("TTFB is {ttfb_ms}ms, exceeding the 600ms threshold."),
                 url: url.clone(),
                 recommendation:
                     "Improve server response time. Consider CDN, caching, or optimizing backend \
@@ -1175,8 +1171,7 @@ impl Analyzer for CacheHeaderAnalyzer {
         let cache_control = Self::get_header(ctx.headers, "Cache-Control");
         let etag = Self::get_header(ctx.headers, "ETag");
         let last_modified = Self::get_header(ctx.headers, "Last-Modified");
-        let content_type = Self::get_header(ctx.headers, "Content-Type")
-            .or(ctx.content_type);
+        let content_type = Self::get_header(ctx.headers, "Content-Type").or(ctx.content_type);
 
         // CACHE001: No Cache-Control header on cacheable responses
         if cache_control.is_none() {
@@ -1303,8 +1298,7 @@ impl Analyzer for CompressionAnalyzer {
                 description: format!(
                     "This response is {} bytes but has no Content-Encoding header. Compressing \
                      responses with gzip, br, or deflate can significantly reduce transfer size \
-                     and improve load times."
-                ,
+                     and improve load times.",
                     body_size
                 ),
                 url: url.to_string(),
@@ -1323,8 +1317,7 @@ impl Analyzer for CompressionAnalyzer {
                 title: "Unnecessary compression for small response".to_string(),
                 description: format!(
                     "This response is only {} bytes but has Content-Encoding applied. Compressing \
-                     very small responses may add overhead without meaningful benefit."
-                ,
+                     very small responses may add overhead without meaningful benefit.",
                     body_size
                 ),
                 url: url.to_string(),
@@ -1341,8 +1334,8 @@ impl Analyzer for CompressionAnalyzer {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::parser::ParsedPage;
     use crate::meta::MetaTags;
+    use crate::parser::ParsedPage;
 
     fn make_page(url: &str) -> ParsedPage {
         ParsedPage {

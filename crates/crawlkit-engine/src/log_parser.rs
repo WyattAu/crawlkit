@@ -70,7 +70,10 @@ mod tests {
         assert_eq!(entry.url, "/index.html");
         assert_eq!(entry.status, 200);
         assert_eq!(entry.size, 2326);
-        assert_eq!(entry.user_agent, "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)");
+        assert_eq!(
+            entry.user_agent,
+            "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
+        );
     }
 
     #[test]

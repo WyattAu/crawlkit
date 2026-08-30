@@ -246,7 +246,9 @@ fn init_tracing() {
     use tracing_subscriber::Layer;
 
     let use_otel_stdout = std::env::var("OTEL_EXPORTER").ok().as_deref() == Some("stdout");
-    let otel_endpoint = std::env::var("OTEL_ENDPOINT").ok().filter(|e| !e.is_empty());
+    let otel_endpoint = std::env::var("OTEL_ENDPOINT")
+        .ok()
+        .filter(|e| !e.is_empty());
 
     let fmt_layer = tracing_subscriber::fmt::layer().with_filter(
         tracing_subscriber::EnvFilter::try_from_default_env()
@@ -285,10 +287,7 @@ fn init_tracing() {
         let provider = opentelemetry_sdk::trace::SdkTracerProvider::builder()
             .with_resource(
                 opentelemetry_sdk::Resource::builder()
-                    .with_attributes([opentelemetry::KeyValue::new(
-                        "service.name",
-                        "crawlkit-api",
-                    )])
+                    .with_attributes([opentelemetry::KeyValue::new("service.name", "crawlkit-api")])
                     .build(),
             )
             .with_batch_exporter(exporter)

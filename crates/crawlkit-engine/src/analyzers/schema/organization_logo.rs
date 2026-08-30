@@ -76,7 +76,6 @@ impl Analyzer for OrganizationLogoValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -137,145 +136,136 @@ mod tests {
     }
 
     #[test]
-fn test_ologo_missing_logo() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OLOGO001"));
-}
-
-
-    #[test]
-fn test_ologo_valid_logo() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "logo": "https://example.com/logo.png"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_ologo_missing_logo() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OLOGO001"));
+    }
 
     #[test]
-fn test_ologo_invalid_url() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "logo": "/images/logo.png"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OLOGO002"));
-}
-
-
-    #[test]
-fn test_ologo_local_business_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("LocalBusiness".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "LocalBusiness",
-            "name": "My Shop"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OLOGO001"));
-}
-
+    fn test_ologo_valid_logo() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "logo": "https://example.com/logo.png"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_ologo_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_ologo_non_org_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_ologo_invalid_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "logo": "/images/logo.png"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OLOGO002"));
+    }
 
     #[test]
-fn test_ologo_logo_object() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "logo": {
-                "@type": "ImageObject",
-                "url": "https://example.com/logo.png"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_ologo_local_business_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("LocalBusiness".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "LocalBusiness",
+                "name": "My Shop"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OLOGO001"));
+    }
 
     #[test]
-fn test_ologo_empty_logo_string() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "logo": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationLogoValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_ologo_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_ologo_non_org_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_ologo_logo_object() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "logo": {
+                    "@type": "ImageObject",
+                    "url": "https://example.com/logo.png"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_ologo_empty_logo_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "logo": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationLogoValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

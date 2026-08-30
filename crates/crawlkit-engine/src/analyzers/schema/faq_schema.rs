@@ -97,7 +97,6 @@ impl Analyzer for FaqSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -158,145 +157,147 @@ mod tests {
     }
 
     #[test]
-fn test_faq_missing_main_entity() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({"@type": "FAQPage"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "FAQ001"));
-}
-
-
-    #[test]
-fn test_faq_too_few_questions() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": [{"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "FAQ002"));
-}
-
+    fn test_faq_missing_main_entity() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({"@type": "FAQPage"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FAQ001"));
+    }
 
     #[test]
-fn test_faq_question_missing_accepted_answer() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": [
-                {"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}},
-                {"@type": "Question", "name": "Q2"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "FAQ003"));
-}
-
-
-    #[test]
-fn test_faq_valid() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": [
-                {"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}},
-                {"@type": "Question", "name": "Q2", "acceptedAnswer": {"@type": "Answer", "text": "A2"}}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_faq_too_few_questions() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": [{"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FAQ002"));
+    }
 
     #[test]
-fn test_faq_non_faq_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({"@type": "Article", "headline": "News"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_faq_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_faq_main_entity_not_array() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": "not an array"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = FaqSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "FAQ002"));
-}
-
+    fn test_faq_question_missing_accepted_answer() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}},
+                    {"@type": "Question", "name": "Q2"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FAQ003"));
+    }
 
     #[test]
-fn test_faq_empty_main_entity_array() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": []
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(FaqSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "FAQ002"));
-}
-
+    fn test_faq_valid() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {"@type": "Question", "name": "Q1", "acceptedAnswer": {"@type": "Answer", "text": "A1"}},
+                    {"@type": "Question", "name": "Q2", "acceptedAnswer": {"@type": "Answer", "text": "A2"}}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_faq_multiple_questions_missing_answers() {
-    let mut page = make_page("https://example.com/faq");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("FAQPage".to_string()),
-        data: serde_json::json!({
-            "@type": "FAQPage",
-            "mainEntity": [
-                {"@type": "Question", "name": "Q1"},
-                {"@type": "Question", "name": "Q2"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = FaqSchemaValidator::new().analyze(&ctx);
-    let faq003_count = findings.iter().filter(|f| f.code == "FAQ003").count();
-    assert_eq!(faq003_count, 2);
-}
+    fn test_faq_non_faq_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({"@type": "Article", "headline": "News"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_faq_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_faq_main_entity_not_array() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": "not an array"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = FaqSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "FAQ002"));
+    }
+
+    #[test]
+    fn test_faq_empty_main_entity_array() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": []
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(FaqSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "FAQ002"));
+    }
+
+    #[test]
+    fn test_faq_multiple_questions_missing_answers() {
+        let mut page = make_page("https://example.com/faq");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FAQPage".to_string()),
+            data: serde_json::json!({
+                "@type": "FAQPage",
+                "mainEntity": [
+                    {"@type": "Question", "name": "Q1"},
+                    {"@type": "Question", "name": "Q2"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = FaqSchemaValidator::new().analyze(&ctx);
+        let faq003_count = findings.iter().filter(|f| f.code == "FAQ003").count();
+        assert_eq!(faq003_count, 2);
+    }
 }

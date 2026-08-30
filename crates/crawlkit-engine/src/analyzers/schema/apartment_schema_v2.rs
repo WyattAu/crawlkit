@@ -47,8 +47,7 @@ impl Analyzer for ApartmentSchemaValidatorV2 {
                                   \"numberOfRooms\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"numberOfRooms\" with the number of rooms."
-                        .to_string(),
+                    recommendation: "Add \"numberOfRooms\" with the number of rooms.".to_string(),
                 });
             }
         }

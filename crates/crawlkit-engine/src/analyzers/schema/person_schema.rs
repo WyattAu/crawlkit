@@ -70,7 +70,6 @@ impl Analyzer for PersonSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -131,101 +130,94 @@ mod tests {
     }
 
     #[test]
-fn test_person_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERS001"));
-}
-
-
-    #[test]
-fn test_person_missing_same_as() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "John Doe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERS002"));
-}
-
+    fn test_person_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERS001"));
+    }
 
     #[test]
-fn test_person_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "John Doe",
-            "sameAs": ["https://twitter.com/johndoe"]
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_person_missing_same_as() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "John Doe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERS002"));
+    }
 
     #[test]
-fn test_person_missing_both() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERS001"));
-    assert!(findings.iter().any(|f| f.code == "PERS002"));
-}
-
-
-    #[test]
-fn test_person_non_person_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_person_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "John Doe",
+                "sameAs": ["https://twitter.com/johndoe"]
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_person_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = PersonSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_person_missing_both() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERS001"));
+        assert!(findings.iter().any(|f| f.code == "PERS002"));
+    }
 
+    #[test]
+    fn test_person_non_person_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_person_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PersonSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

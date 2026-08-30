@@ -54,10 +54,7 @@ pub enum LlmError {
 
     /// The LLM returned a non-2xx status.
     #[error("LLM API returned status {status}: {body}")]
-    ApiError {
-        status: u16,
-        body: String,
-    },
+    ApiError { status: u16, body: String },
 
     /// The response body could not be parsed.
     #[error("failed to parse LLM response: {0}")]
@@ -290,10 +287,7 @@ pub fn render_prompt(template: &str, vars: &HashMap<String, String>) -> String {
 pub(crate) fn page_vars(page: &crate::storage::PageData) -> HashMap<String, String> {
     let mut m = HashMap::new();
     m.insert("url".into(), page.url.to_string());
-    m.insert(
-        "title".into(),
-        page.title.clone().unwrap_or_default(),
-    );
+    m.insert("title".into(), page.title.clone().unwrap_or_default());
     m.insert(
         "description".into(),
         page.description.clone().unwrap_or_default(),
@@ -302,10 +296,7 @@ pub(crate) fn page_vars(page: &crate::storage::PageData) -> HashMap<String, Stri
         "word_count".into(),
         page.word_count.map_or(String::new(), |c| c.to_string()),
     );
-    m.insert(
-        "status_code".into(),
-        page.status_code.to_string(),
-    );
+    m.insert("status_code".into(), page.status_code.to_string());
     m.insert(
         "canonical".into(),
         page.canonical_url
@@ -345,10 +336,7 @@ impl LlmPostCrawlAnalyzer {
 /// runs in the post-crawl phase where throughput requirements are relaxed.
 fn call_llm_blocking(client: &LlmClient, prompt: &str) -> Option<String> {
     let rt = tokio::runtime::Handle::current();
-    tokio::task::block_in_place(|| {
-        rt.block_on(client.analyze(prompt))
-    })
-    .ok()
+    tokio::task::block_in_place(|| rt.block_on(client.analyze(prompt))).ok()
 }
 
 /// Parse a JSON-formatted LLM response into structured findings.
@@ -368,9 +356,13 @@ fn parse_llm_findings(
         return arr
             .into_iter()
             .map(|o| Finding {
-                severity: o.severity.as_deref().and_then(parse_severity).unwrap_or_else(|| parse_severity(min_severity).unwrap_or(Severity::Info)),
+                severity: o
+                    .severity
+                    .as_deref()
+                    .and_then(parse_severity)
+                    .unwrap_or_else(|| parse_severity(min_severity).unwrap_or(Severity::Info)),
                 category: IssueCategory::Custom(category.to_string()),
-                code: format!("LLM-{:03}",prompt_name.len() as u32 % 900 + 100),
+                code: format!("LLM-{:03}", prompt_name.len() as u32 % 900 + 100),
                 title: o.title,
                 description: o.description,
                 url: url.to_string(),
@@ -506,7 +498,13 @@ mod tests {
         let raw = r#"[
             {"title": "Missing alt", "description": "Image lacks alt text", "severity": "warning", "recommendation": "Add alt"}
         ]"#;
-        let findings = parse_llm_findings(raw, "https://example.com", "img-check", "accessibility", "warning");
+        let findings = parse_llm_findings(
+            raw,
+            "https://example.com",
+            "img-check",
+            "accessibility",
+            "warning",
+        );
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].title, "Missing alt");
         assert_eq!(findings[0].severity, Severity::Warning);
@@ -637,8 +635,7 @@ model = "claude-3"
         let raw = r#"[
             {"title": "Issue", "description": "desc", "severity": "not-a-severity"}
         ]"#;
-        let findings =
-            parse_llm_findings(raw, "https://example.com", "test", "seo", "warning");
+        let findings = parse_llm_findings(raw, "https://example.com", "test", "seo", "warning");
         assert_eq!(findings.len(), 1);
         // Falls back to min_severity
         assert_eq!(findings[0].severity, Severity::Warning);
@@ -647,8 +644,7 @@ model = "claude-3"
     #[test]
     fn test_parse_llm_findings_json_missing_optional_fields() {
         let raw = r#"[{"title": "T", "description": "D"}]"#;
-        let findings =
-            parse_llm_findings(raw, "https://example.com", "test", "ai", "info");
+        let findings = parse_llm_findings(raw, "https://example.com", "test", "ai", "info");
         assert_eq!(findings.len(), 1);
         assert_eq!(findings[0].recommendation, "");
     }
@@ -729,8 +725,7 @@ api_key_env = "MY_CUSTOM_KEY"
 
     #[test]
     fn test_parse_llm_findings_empty_array() {
-        let findings =
-            parse_llm_findings("[]", "https://example.com", "test", "ai", "info");
+        let findings = parse_llm_findings("[]", "https://example.com", "test", "ai", "info");
         assert!(findings.is_empty());
     }
 

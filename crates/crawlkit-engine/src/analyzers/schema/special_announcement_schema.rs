@@ -43,8 +43,7 @@ impl Analyzer for SpecialAnnouncementSchemaValidator {
                                   announcement was published."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"datePosted\" with an ISO 8601 date value."
-                        .to_string(),
+                    recommendation: "Add \"datePosted\" with an ISO 8601 date value.".to_string(),
                 });
             }
 
@@ -70,7 +69,6 @@ impl Analyzer for SpecialAnnouncementSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -132,112 +130,116 @@ mod tests {
     }
 
     #[test]
-fn test_special_announcement_missing_date_posted() {
-    let mut page = make_page("https://example.com/announce");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SpecialAnnouncement".to_string()),
-        data: serde_json::json!({
-            "@type": "SpecialAnnouncement",
-            "category": "https://schema.org/EmergencyAlert"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpecialAnnouncementSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SPEC001"));
-}
-
-
-    #[test]
-fn test_special_announcement_missing_category() {
-    let mut page = make_page("https://example.com/announce");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SpecialAnnouncement".to_string()),
-        data: serde_json::json!({
-            "@type": "SpecialAnnouncement",
-            "datePosted": "2025-01-15"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpecialAnnouncementSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SPEC002"));
-}
-
+    fn test_special_announcement_missing_date_posted() {
+        let mut page = make_page("https://example.com/announce");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SpecialAnnouncement".to_string()),
+            data: serde_json::json!({
+                "@type": "SpecialAnnouncement",
+                "category": "https://schema.org/EmergencyAlert"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpecialAnnouncementSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SPEC001"));
+    }
 
     #[test]
-fn test_special_announcement_valid() {
-    let mut page = make_page("https://example.com/announce");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SpecialAnnouncement".to_string()),
-        data: serde_json::json!({
-            "@type": "SpecialAnnouncement",
-            "datePosted": "2025-01-15",
-            "category": "https://schema.org/EmergencyAlert"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpecialAnnouncementSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_special_announcement_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Event".to_string()),
-        data: serde_json::json!({"@type": "Event", "name": "Concert"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpecialAnnouncementSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_special_announcement_missing_category() {
+        let mut page = make_page("https://example.com/announce");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SpecialAnnouncement".to_string()),
+            data: serde_json::json!({
+                "@type": "SpecialAnnouncement",
+                "datePosted": "2025-01-15"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpecialAnnouncementSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SPEC002"));
+    }
 
     #[test]
-fn test_special_announcement_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpecialAnnouncementSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_special_announcement_missing_all_fields() {
-    let mut page = make_page("https://example.com/announce");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SpecialAnnouncement".to_string()),
-        data: serde_json::json!({"@type": "SpecialAnnouncement"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = SpecialAnnouncementSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SPEC001"));
-    assert!(findings.iter().any(|f| f.code == "SPEC002"));
-}
-
+    fn test_special_announcement_valid() {
+        let mut page = make_page("https://example.com/announce");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SpecialAnnouncement".to_string()),
+            data: serde_json::json!({
+                "@type": "SpecialAnnouncement",
+                "datePosted": "2025-01-15",
+                "category": "https://schema.org/EmergencyAlert"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpecialAnnouncementSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
+    }
 
     #[test]
-fn test_special_announcement_multiple_announcements() {
-    let mut page = make_page("https://example.com/announce");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_special_announcement_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Concert"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpecialAnnouncementSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
+    }
+
+    #[test]
+    fn test_special_announcement_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpecialAnnouncementSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
+    }
+
+    #[test]
+    fn test_special_announcement_missing_all_fields() {
+        let mut page = make_page("https://example.com/announce");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("SpecialAnnouncement".to_string()),
             data: serde_json::json!({"@type": "SpecialAnnouncement"}),
-        },
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("SpecialAnnouncement".to_string()),
-            data: serde_json::json!({"@type": "SpecialAnnouncement"}),
-        },
-    ];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = SpecialAnnouncementSchemaValidator::new().analyze(&ctx);
-    let spec001_count = findings.iter().filter(|f| f.code == "SPEC001").count();
-    let spec002_count = findings.iter().filter(|f| f.code == "SPEC002").count();
-    assert_eq!(spec001_count, 2);
-    assert_eq!(spec002_count, 2);
-}
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SpecialAnnouncementSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPEC001"));
+        assert!(findings.iter().any(|f| f.code == "SPEC002"));
+    }
 
-
+    #[test]
+    fn test_special_announcement_multiple_announcements() {
+        let mut page = make_page("https://example.com/announce");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("SpecialAnnouncement".to_string()),
+                data: serde_json::json!({"@type": "SpecialAnnouncement"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("SpecialAnnouncement".to_string()),
+                data: serde_json::json!({"@type": "SpecialAnnouncement"}),
+            },
+        ];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SpecialAnnouncementSchemaValidator::new().analyze(&ctx);
+        let spec001_count = findings.iter().filter(|f| f.code == "SPEC001").count();
+        let spec002_count = findings.iter().filter(|f| f.code == "SPEC002").count();
+        assert_eq!(spec001_count, 2);
+        assert_eq!(spec002_count, 2);
+    }
 }

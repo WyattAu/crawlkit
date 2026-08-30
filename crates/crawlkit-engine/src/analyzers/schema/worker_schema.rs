@@ -31,7 +31,12 @@ impl Analyzer for WorkerSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,12 +45,16 @@ impl Analyzer for WorkerSchemaValidator {
                     description: "A Worker structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the worker's name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the worker's name.".to_string(),
                 });
             }
 
-            if data.get("jobTitle").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("jobTitle")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -55,8 +64,7 @@ impl Analyzer for WorkerSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"jobTitle\" with the worker's job title."
-                        .to_string(),
+                    recommendation: "Add \"jobTitle\" with the worker's job title.".to_string(),
                 });
             }
         }
@@ -64,7 +72,6 @@ impl Analyzer for WorkerSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -126,148 +133,139 @@ mod tests {
     }
 
     #[test]
-fn test_worker_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Worker".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Worker"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WORKER001"));
-}
-
-
-    #[test]
-fn test_worker_missing_jobtitle() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Worker".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Worker",
-            "name": "Jane Doe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WORKER002"));
-}
-
-
-    #[test]
-fn test_worker_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Worker".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Worker",
-            "name": "Jane Doe",
-            "jobTitle": "Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_worker_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_worker_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_worker_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Worker".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Worker"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_worker_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Worker".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Worker",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WORKER001"));
-}
-
-
-    #[test]
-fn test_worker_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Worker".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Worker",
-                "name": "Good Worker",
-                "jobTitle": "Manager"
-            }),
-        },
-        StructuredData {
+    fn test_worker_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Worker".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Worker"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = WorkerSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "WORKER001"));
-    assert!(findings.iter().any(|f| f.code == "WORKER002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WORKER001"));
+    }
 
+    #[test]
+    fn test_worker_missing_jobtitle() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Worker".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Worker",
+                "name": "Jane Doe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WORKER002"));
+    }
 
+    #[test]
+    fn test_worker_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Worker".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Worker",
+                "name": "Jane Doe",
+                "jobTitle": "Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_worker_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_worker_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_worker_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Worker".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Worker"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_worker_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Worker".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Worker",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WORKER001"));
+    }
+
+    #[test]
+    fn test_worker_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Worker".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Worker",
+                    "name": "Good Worker",
+                    "jobTitle": "Manager"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Worker".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Worker"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = WorkerSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "WORKER001"));
+        assert!(findings.iter().any(|f| f.code == "WORKER002"));
+    }
 }

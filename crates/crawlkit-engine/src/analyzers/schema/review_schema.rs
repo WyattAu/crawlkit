@@ -98,7 +98,6 @@ impl Analyzer for ReviewSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -159,56 +158,60 @@ mod tests {
     }
 
     #[test]
-fn test_review_missing_review_count() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "aggregateRating": {"@type": "AggregateRating", "ratingValue": 4.5}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ReviewSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "REV001"));
-}
-
-
-    #[test]
-fn test_review_rating_out_of_range() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "aggregateRating": {"@type": "AggregateRating", "ratingValue": 6.0, "bestRating": 5, "reviewCount": 100}}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ReviewSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "REV002"));
-}
-
+    fn test_review_missing_review_count() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "aggregateRating": {"@type": "AggregateRating", "ratingValue": 4.5}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ReviewSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REV001"));
+    }
 
     #[test]
-fn test_review_missing_author() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Review".to_string()),
-        data: serde_json::json!({"@type": "Review", "reviewBody": "Great product!"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(ReviewSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "REV003"));
-}
-
+    fn test_review_rating_out_of_range() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "aggregateRating": {"@type": "AggregateRating", "ratingValue": 6.0, "bestRating": 5, "reviewCount": 100}}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ReviewSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REV002"));
+    }
 
     #[test]
-fn test_review_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("AggregateRating".to_string()),
-        data: serde_json::json!({"@type": "AggregateRating", "ratingValue": 4.5, "bestRating": 5, "reviewCount": 100}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = ReviewSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_review_missing_author() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Review".to_string()),
+            data: serde_json::json!({"@type": "Review", "reviewBody": "Great product!"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(ReviewSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "REV003"));
+    }
 
-
+    #[test]
+    fn test_review_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("AggregateRating".to_string()),
+            data: serde_json::json!({"@type": "AggregateRating", "ratingValue": 4.5, "bestRating": 5, "reviewCount": 100}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = ReviewSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

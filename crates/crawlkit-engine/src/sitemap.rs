@@ -292,7 +292,9 @@ fn parse_sitemap_regex(xml: &str) -> Result<SitemapContent, SitemapError> {
         let block = &cap[1];
         if let Some(loc_match) = loc_re().captures(block) {
             let url = loc_match[1].trim().to_string();
-            let lastmod = lastmod_re().captures(block).map(|m| m[1].trim().to_string());
+            let lastmod = lastmod_re()
+                .captures(block)
+                .map(|m| m[1].trim().to_string());
             let changefreq = changefreq_re()
                 .captures(block)
                 .map(|m| m[1].trim().to_string());

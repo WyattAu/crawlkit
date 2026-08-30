@@ -883,14 +883,17 @@ pub fn load_plugin_from_dir(
     let kind = PluginKind::from_manifest(manifest.plugin.kind.as_deref());
 
     match kind {
-        PluginKind::Wasm => WasmPlugin::load_with_config(plugin_dir, config).map(PluginInstance::Wasm),
+        PluginKind::Wasm => {
+            WasmPlugin::load_with_config(plugin_dir, config).map(PluginInstance::Wasm)
+        }
         #[cfg(feature = "wasi-preview2")]
         PluginKind::WasiComponent => {
             wasi_preview2::WasiPlugin::load(plugin_dir, config).map(PluginInstance::Wasi)
         }
         #[cfg(not(feature = "wasi-preview2"))]
         PluginKind::WasiComponent => Err(PluginError::LoadFailed(
-            "WASI Preview 2 support is not enabled (compile with wasi-preview2 feature)".to_string(),
+            "WASI Preview 2 support is not enabled (compile with wasi-preview2 feature)"
+                .to_string(),
         )),
     }
 }

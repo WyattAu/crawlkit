@@ -41,8 +41,7 @@ impl Analyzer for MovieSchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"director\" with the movie director."
-                        .to_string(),
+                    recommendation: "Add \"director\" with the movie director.".to_string(),
                 });
             }
         }

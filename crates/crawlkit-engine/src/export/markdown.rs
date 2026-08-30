@@ -1,8 +1,6 @@
 use crate::storage_trait::StorageBackend;
 
-use super::helpers::{
-    escape_markdown, read_crawl_meta, read_top_issues, ExportError,
-};
+use super::helpers::{escape_markdown, read_crawl_meta, read_top_issues, ExportError};
 
 /// Generate a Markdown summary report.
 pub fn export_markdown(

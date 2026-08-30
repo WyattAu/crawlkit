@@ -31,7 +31,12 @@ impl Analyzer for ActionSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("actionType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("actionType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -64,8 +69,7 @@ impl Analyzer for ActionSchemaValidator {
                                   property. The target defines where the action leads."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"target\" with an EntryPoint or URL string."
-                        .to_string(),
+                    recommendation: "Add \"target\" with an EntryPoint or URL string.".to_string(),
                 });
             }
         }
@@ -73,7 +77,6 @@ impl Analyzer for ActionSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -135,168 +138,42 @@ mod tests {
     }
 
     #[test]
-fn test_action_missing_action_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ACTION001"));
-}
-
-
-    #[test]
-fn test_action_missing_target() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action",
-            "actionType": "BuyAction"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ACTION002"));
-}
-
+    fn test_action_missing_action_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+    }
 
     #[test]
-fn test_action_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action",
-            "actionType": "BuyAction",
-            "target": "https://example.com/buy"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_action_missing_target() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "BuyAction"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
 
     #[test]
-fn test_action_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_action_non_action_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_action_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "ACTION001"));
-    assert!(findings.iter().any(|f| f.code == "ACTION002"));
-}
-
-
-    #[test]
-fn test_action_action_type_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action",
-            "actionType": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ACTION001"));
-}
-
-
-    #[test]
-fn test_action_target_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action",
-            "actionType": "ViewAction",
-            "target": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ACTION002"));
-}
-
-
-    #[test]
-fn test_action_target_as_entry_point() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Action".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Action",
-            "actionType": "BuyAction",
-            "target": {
-                "@type": "EntryPoint",
-                "urlTemplate": "https://example.com/buy"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_action_multiple_actions() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_action_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Action".to_string()),
             data: serde_json::json!({
@@ -305,21 +182,136 @@ fn test_action_multiple_actions() {
                 "actionType": "BuyAction",
                 "target": "https://example.com/buy"
             }),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_non_action_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Action".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Action"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = ActionSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ACTION001"));
-    assert!(findings.iter().any(|f| f.code == "ACTION002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
 
+    #[test]
+    fn test_action_action_type_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+    }
 
+    #[test]
+    fn test_action_target_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "ViewAction",
+                "target": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
+
+    #[test]
+    fn test_action_target_as_entry_point() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Action".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Action",
+                "actionType": "BuyAction",
+                "target": {
+                    "@type": "EntryPoint",
+                    "urlTemplate": "https://example.com/buy"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_action_multiple_actions() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Action".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Action",
+                    "actionType": "BuyAction",
+                    "target": "https://example.com/buy"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Action".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Action"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = ActionSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ACTION001"));
+        assert!(findings.iter().any(|f| f.code == "ACTION002"));
+    }
 }

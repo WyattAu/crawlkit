@@ -216,11 +216,11 @@ fn main() -> Result<()> {
         response_time: Some(Duration::from_millis(850)),
         redirect_chain: &[],
         robots_txt: None,
-            body_size: None,
-            compressed_size: None,
-            server: None,
-            content_type: None,
-            rendered: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
     };
 
     let analyzers: Vec<Box<dyn Analyzer>> = vec![

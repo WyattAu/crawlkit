@@ -101,8 +101,13 @@ impl HtmlParser {
     fn extract_extra_og_tags(document: &Html) -> std::collections::HashMap<String, String> {
         let mut extra = std::collections::HashMap::new();
         let known = [
-            "og:title", "og:description", "og:image", "og:url", "og:type",
-            "og:site_name", "og:locale",
+            "og:title",
+            "og:description",
+            "og:image",
+            "og:url",
+            "og:type",
+            "og:site_name",
+            "og:locale",
         ];
         let selector = match Selector::parse("meta[property^=\"og:\"]") {
             Ok(s) => s,

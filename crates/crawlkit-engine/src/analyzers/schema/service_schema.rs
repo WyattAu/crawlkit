@@ -31,14 +31,20 @@ impl Analyzer for ServiceSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
                     code: "SVC001".to_string(),
                     title: "Service schema missing name".to_string(),
-                    description: "A Service structured data block is missing the \"name\" property."
-                        .to_string(),
+                    description:
+                        "A Service structured data block is missing the \"name\" property."
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"name\" with the service name to the Service schema."
                         .to_string(),
@@ -65,7 +71,6 @@ impl Analyzer for ServiceSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -127,191 +132,180 @@ mod tests {
     }
 
     #[test]
-fn test_service_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SVC001"));
-}
-
-
-    #[test]
-fn test_service_missing_provider() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service",
-            "name": "Web Hosting"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SVC002"));
-}
-
-
-    #[test]
-fn test_service_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service",
-            "name": "Web Hosting",
-            "provider": {"@type": "Organization", "name": "Acme Corp"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "SVC001"));
-    assert!(!findings.iter().any(|f| f.code == "SVC002"));
-}
-
-
-    #[test]
-fn test_service_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_service_non_service_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_service_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "SVC001"));
-    assert!(findings.iter().any(|f| f.code == "SVC002"));
-}
-
-
-    #[test]
-fn test_service_name_empty_string() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SVC001"));
-}
-
-
-    #[test]
-fn test_service_provider_is_string() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service",
-            "name": "Cloud Storage",
-            "provider": "Acme Corp"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "SVC001"));
-    assert!(!findings.iter().any(|f| f.code == "SVC002"));
-}
-
-
-    #[test]
-fn test_service_multiple_services() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Service".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Service",
-                "name": "Valid Service",
-                "provider": {"@type": "Organization", "name": "Corp"}
-            }),
-        },
-        StructuredData {
+    fn test_service_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Service".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Service"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SVC001"));
-    assert!(findings.iter().any(|f| f.code == "SVC002"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+    }
 
     #[test]
-fn test_service_name_only_no_provider() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Service".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Service",
-            "name": "SEO Audit"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ServiceSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "SVC001"));
-    assert!(findings.iter().any(|f| f.code == "SVC002"));
-}
+    fn test_service_missing_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Web Hosting"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
 
+    #[test]
+    fn test_service_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Web Hosting",
+                "provider": {"@type": "Organization", "name": "Acme Corp"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(!findings.iter().any(|f| f.code == "SVC002"));
+    }
 
+    #[test]
+    fn test_service_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_service_non_service_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_service_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_name_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+    }
+
+    #[test]
+    fn test_service_provider_is_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "Cloud Storage",
+                "provider": "Acme Corp"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(!findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_multiple_services() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Service".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Service",
+                    "name": "Valid Service",
+                    "provider": {"@type": "Organization", "name": "Corp"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Service".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Service"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
+
+    #[test]
+    fn test_service_name_only_no_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Service".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Service",
+                "name": "SEO Audit"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ServiceSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "SVC001"));
+        assert!(findings.iter().any(|f| f.code == "SVC002"));
+    }
 }

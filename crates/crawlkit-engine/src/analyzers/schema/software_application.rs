@@ -73,7 +73,6 @@ impl Analyzer for SoftwareApplicationValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -134,129 +133,132 @@ mod tests {
     }
 
     #[test]
-fn test_software_missing_operating_system() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({
-            "@type": "SoftwareApplication",
-            "name": "My App",
-            "applicationCategory": "https://schema.org/GameApplication",
-            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT001"));
-}
-
-
-    #[test]
-fn test_software_missing_offers() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({
-            "@type": "SoftwareApplication",
-            "name": "My App",
-            "operatingSystem": "Windows"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT002"));
-}
-
+    fn test_software_missing_operating_system() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({
+                "@type": "SoftwareApplication",
+                "name": "My App",
+                "applicationCategory": "https://schema.org/GameApplication",
+                "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SoftwareApplicationValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SOFT001"));
+    }
 
     #[test]
-fn test_software_valid() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({
-            "@type": "SoftwareApplication",
-            "name": "My App",
-            "operatingSystem": "Windows",
-            "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_software_non_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({"@type": "Product", "name": "Widget"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_software_missing_offers() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({
+                "@type": "SoftwareApplication",
+                "name": "My App",
+                "operatingSystem": "Windows"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SoftwareApplicationValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SOFT002"));
+    }
 
     #[test]
-fn test_software_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_software_offers_array_with_price() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({
-            "@type": "SoftwareApplication",
-            "name": "My App",
-            "operatingSystem": "iOS",
-            "applicationCategory": "https://schema.org/GameApplication",
-            "offers": [{"@type": "Offer", "price": "2.99", "priceCurrency": "USD"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT003"));
-}
-
+    fn test_software_valid() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({
+                "@type": "SoftwareApplication",
+                "name": "My App",
+                "operatingSystem": "Windows",
+                "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_software_offers_array_without_price() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({
-            "@type": "SoftwareApplication",
-            "name": "My App",
-            "operatingSystem": "Android",
-            "offers": [{"@type": "Offer", "availability": "https://schema.org/InStock"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(!SoftwareApplicationValidator::new().analyze(&ctx).iter().any(|f| f.code == "SOFT002"));
-}
-
+    fn test_software_non_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product", "name": "Widget"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_software_missing_all_fields() {
-    let mut page = make_page("https://example.com/app");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("SoftwareApplication".to_string()),
-        data: serde_json::json!({"@type": "SoftwareApplication"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = SoftwareApplicationValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SOFT001"));
-    assert!(findings.iter().any(|f| f.code == "SOFT002"));
-}
+    fn test_software_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SoftwareApplicationValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_software_offers_array_with_price() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({
+                "@type": "SoftwareApplication",
+                "name": "My App",
+                "operatingSystem": "iOS",
+                "applicationCategory": "https://schema.org/GameApplication",
+                "offers": [{"@type": "Offer", "price": "2.99", "priceCurrency": "USD"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!SoftwareApplicationValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SOFT003"));
+    }
 
+    #[test]
+    fn test_software_offers_array_without_price() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({
+                "@type": "SoftwareApplication",
+                "name": "My App",
+                "operatingSystem": "Android",
+                "offers": [{"@type": "Offer", "availability": "https://schema.org/InStock"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(!SoftwareApplicationValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SOFT002"));
+    }
+
+    #[test]
+    fn test_software_missing_all_fields() {
+        let mut page = make_page("https://example.com/app");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("SoftwareApplication".to_string()),
+            data: serde_json::json!({"@type": "SoftwareApplication"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SoftwareApplicationValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SOFT001"));
+        assert!(findings.iter().any(|f| f.code == "SOFT002"));
+    }
 }

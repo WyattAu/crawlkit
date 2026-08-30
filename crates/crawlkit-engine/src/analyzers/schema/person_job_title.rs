@@ -67,7 +67,6 @@ impl Analyzer for PersonJobTitleValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -128,145 +127,136 @@ mod tests {
     }
 
     #[test]
-fn test_pjob_missing_job_title() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PJOB001"));
-}
-
-
-    #[test]
-fn test_pjob_missing_works_for() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe",
-            "jobTitle": "Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PJOB002"));
-}
-
+    fn test_pjob_missing_job_title() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PJOB001"));
+    }
 
     #[test]
-fn test_pjob_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe",
-            "jobTitle": "Engineer",
-            "worksFor": {"@type": "Organization", "name": "Acme Corp"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_pjob_missing_works_for() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe",
+                "jobTitle": "Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PJOB002"));
+    }
 
     #[test]
-fn test_pjob_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_pjob_non_person_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_pjob_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe",
+                "jobTitle": "Engineer",
+                "worksFor": {"@type": "Organization", "name": "Acme Corp"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_pjob_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
+    fn test_pjob_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_pjob_with_member_of() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe",
-            "jobTitle": "Engineer",
-            "memberOf": {"@type": "Organization", "name": "Acme Corp"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_pjob_non_person_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_pjob_with_job_title_no_works_for() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane Doe",
-            "jobTitle": "Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PersonJobTitleValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "PJOB001"));
-    assert!(findings.iter().any(|f| f.code == "PJOB002"));
-}
+    fn test_pjob_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
 
+    #[test]
+    fn test_pjob_with_member_of() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe",
+                "jobTitle": "Engineer",
+                "memberOf": {"@type": "Organization", "name": "Acme Corp"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_pjob_with_job_title_no_works_for() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane Doe",
+                "jobTitle": "Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PersonJobTitleValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "PJOB001"));
+        assert!(findings.iter().any(|f| f.code == "PJOB002"));
+    }
 }

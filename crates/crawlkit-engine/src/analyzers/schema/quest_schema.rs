@@ -31,7 +31,12 @@ impl Analyzer for QuestSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,12 +45,16 @@ impl Analyzer for QuestSchemaValidator {
                     description: "A Quest structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the quest title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the quest title.".to_string(),
                 });
             }
 
-            if data.get("questType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("questType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -56,8 +65,7 @@ impl Analyzer for QuestSchemaValidator {
                                   side quest, tutorial)."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"questType\" to classify the quest."
-                        .to_string(),
+                    recommendation: "Add \"questType\" to classify the quest.".to_string(),
                 });
             }
         }
@@ -65,7 +73,6 @@ impl Analyzer for QuestSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -127,188 +134,177 @@ mod tests {
     }
 
     #[test]
-fn test_quest_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "QUEST001"));
-}
-
-
-    #[test]
-fn test_quest_missing_quest_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest",
-            "name": "Find the Dragon"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "QUEST002"));
-}
-
-
-    #[test]
-fn test_quest_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest",
-            "name": "Find the Dragon",
-            "questType": "Main Quest"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_quest_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_quest_non_quest_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Game".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Game"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_quest_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "QUEST001"));
-    assert!(findings.iter().any(|f| f.code == "QUEST002"));
-}
-
-
-    #[test]
-fn test_quest_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "QUEST001"));
-}
-
-
-    #[test]
-fn test_quest_quest_type_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest",
-            "name": "Defeat Boss",
-            "questType": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "QUEST002"));
-}
-
-
-    #[test]
-fn test_quest_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Quest".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Quest",
-                "name": "Tutorial",
-                "questType": "Tutorial"
-            }),
-        },
-        StructuredData {
+    fn test_quest_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Quest".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Quest"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "QUEST001"));
-    assert!(findings.iter().any(|f| f.code == "QUEST002"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+    }
 
     #[test]
-fn test_quest_name_only_no_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Quest".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Quest",
-            "name": "Collect Gems"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = QuestSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "QUEST001"));
-    assert!(findings.iter().any(|f| f.code == "QUEST002"));
-}
+    fn test_quest_missing_quest_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Find the Dragon"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
 
+    #[test]
+    fn test_quest_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Find the Dragon",
+                "questType": "Main Quest"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_quest_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_quest_non_quest_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Game".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Game"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_quest_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+    }
+
+    #[test]
+    fn test_quest_quest_type_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Defeat Boss",
+                "questType": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Quest".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Quest",
+                    "name": "Tutorial",
+                    "questType": "Tutorial"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Quest".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Quest"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
+
+    #[test]
+    fn test_quest_name_only_no_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Quest".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Quest",
+                "name": "Collect Gems"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = QuestSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "QUEST001"));
+        assert!(findings.iter().any(|f| f.code == "QUEST002"));
+    }
 }

@@ -367,12 +367,7 @@ impl UrlQueue {
 
 impl crate::queue_trait::Queue for UrlQueue {
     fn push(&self, entry: QueueEntry) -> Result<bool, crate::queue_trait::QueueError> {
-        let added = self.push_with_referrer(
-            entry.url,
-            entry.depth,
-            entry.priority,
-            entry.referrer,
-        );
+        let added = self.push_with_referrer(entry.url, entry.depth, entry.priority, entry.referrer);
         Ok(added)
     }
 

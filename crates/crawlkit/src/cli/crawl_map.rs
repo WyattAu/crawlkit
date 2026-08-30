@@ -5,12 +5,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 /// Generate a visual crawl map SVG from existing crawl data.
-pub fn run(
-    crawl_path: &Path,
-    output: &Path,
-    color_by: &str,
-    max_nodes: usize,
-) -> Result<()> {
+pub fn run(crawl_path: &Path, output: &Path, color_by: &str, max_nodes: usize) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner()

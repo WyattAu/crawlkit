@@ -31,7 +31,12 @@ impl Analyzer for MusicRecordingSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for MusicRecordingSchemaValidator {
                                   \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the recording title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the recording title.".to_string(),
                 });
             }
         }
@@ -132,14 +136,18 @@ mod tests {
             data: serde_json::json!({"@type": "MusicRecording", "name": "Bohemian Rhapsody"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(MusicRecordingSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(MusicRecordingSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_musicrec_no_structured_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert!(MusicRecordingSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(MusicRecordingSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -151,7 +159,9 @@ mod tests {
             data: serde_json::json!({"@type": "MusicAlbum"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(MusicRecordingSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(MusicRecordingSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -210,7 +220,9 @@ mod tests {
             data: serde_json::json!({"@type": "MusicRecording", "name": "Song", "byArtist": "Artist"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(MusicRecordingSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(MusicRecordingSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]

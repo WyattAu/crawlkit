@@ -31,7 +31,12 @@ impl Analyzer for BrandSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -40,12 +45,16 @@ impl Analyzer for BrandSchemaValidator {
                     description: "A Brand structured data block is missing the \"name\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the brand name."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the brand name.".to_string(),
                 });
             }
 
-            if data.get("url").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Schema,
@@ -54,8 +63,7 @@ impl Analyzer for BrandSchemaValidator {
                     description: "A Brand structured data block is missing the \"url\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"url\" with the brand website URL."
-                        .to_string(),
+                    recommendation: "Add \"url\" with the brand website URL.".to_string(),
                 });
             }
         }
@@ -63,7 +71,6 @@ impl Analyzer for BrandSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -125,189 +132,178 @@ mod tests {
     }
 
     #[test]
-fn test_brand_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "BRAND001"));
-}
-
-
-    #[test]
-fn test_brand_missing_url() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand",
-            "name": "Acme"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "BRAND002"));
-}
-
-
-    #[test]
-fn test_brand_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand",
-            "name": "Acme",
-            "url": "https://acme.com"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_brand_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_brand_non_brand_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_brand_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "BRAND001"));
-    assert!(findings.iter().any(|f| f.code == "BRAND002"));
-}
-
-
-    #[test]
-fn test_brand_name_empty_string() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "BRAND001"));
-}
-
-
-    #[test]
-fn test_brand_url_empty_string() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand",
-            "name": "Acme",
-            "url": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "BRAND002"));
-}
-
-
-    #[test]
-fn test_brand_multiple_brands() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Brand".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Brand",
-                "name": "GoodBrand",
-                "url": "https://good.com"
-            }),
-        },
-        StructuredData {
+    fn test_brand_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Brand".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Brand"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "BRAND001"));
-    assert!(findings.iter().any(|f| f.code == "BRAND002"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+    }
 
     #[test]
-fn test_brand_name_only_no_url() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Brand".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Brand",
-            "name": "SuperBrand"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = BrandSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "BRAND001"));
-    assert!(findings.iter().any(|f| f.code == "BRAND002"));
-}
+    fn test_brand_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
 
+    #[test]
+    fn test_brand_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme",
+                "url": "https://acme.com"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_brand_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_brand_non_brand_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_brand_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_name_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+    }
+
+    #[test]
+    fn test_brand_url_empty_string() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "Acme",
+                "url": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_multiple_brands() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Brand".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Brand",
+                    "name": "GoodBrand",
+                    "url": "https://good.com"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Brand".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Brand"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
+
+    #[test]
+    fn test_brand_name_only_no_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Brand".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Brand",
+                "name": "SuperBrand"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = BrandSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "BRAND001"));
+        assert!(findings.iter().any(|f| f.code == "BRAND002"));
+    }
 }

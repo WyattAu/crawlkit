@@ -132,14 +132,18 @@ mod tests {
             data: serde_json::json!({"@type": "ResearchProject", "about": "Machine Learning"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_rproj_v2_no_structured_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -151,7 +155,9 @@ mod tests {
             data: serde_json::json!({"@type": "Product"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -183,7 +189,9 @@ mod tests {
             data: serde_json::json!({"@type": "ResearchProject", "about": {"@type": "Thing", "name": "AI"}}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -209,7 +217,10 @@ mod tests {
             data: serde_json::json!({"@type": "ResearchProject"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).len(), 1);
+        assert_eq!(
+            ResearchProjectSchemaValidatorV2::new().analyze(&ctx).len(),
+            1
+        );
     }
 
     #[test]
@@ -221,7 +232,9 @@ mod tests {
             data: serde_json::json!({"@type": "ResearchProject", "about": "Quantum Computing"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -233,6 +246,8 @@ mod tests {
             data: serde_json::json!({"@type": "ResearchProject", "about": ["AI", "ML"]}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(ResearchProjectSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(ResearchProjectSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 }

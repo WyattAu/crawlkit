@@ -31,14 +31,20 @@ impl Analyzer for PlaylistSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
                     code: "PLAYLIST001".to_string(),
                     title: "Playlist schema missing name".to_string(),
-                    description: "A Playlist structured data block is missing the \"name\" property."
-                        .to_string(),
+                    description:
+                        "A Playlist structured data block is missing the \"name\" property."
+                            .to_string(),
                     url: url.clone(),
                     recommendation: "Add \"name\" with the playlist title.".to_string(),
                 });
@@ -58,7 +64,8 @@ impl Analyzer for PlaylistSchemaValidator {
                 });
             }
 
-            if data.get("numTracks").is_none() && data.get("track").is_none()
+            if data.get("numTracks").is_none()
+                && data.get("track").is_none()
                 && data.get("numberOfItems").is_none()
             {
                 findings.push(Finding {
@@ -66,11 +73,11 @@ impl Analyzer for PlaylistSchemaValidator {
                     category: IssueCategory::Schema,
                     code: "PLAYLIST003".to_string(),
                     title: "Playlist schema missing track information".to_string(),
-                    description: "The Playlist has no track or numberOfItems property."
-                        .to_string(),
+                    description: "The Playlist has no track or numberOfItems property.".to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"track\" or \"numberOfItems\" to describe playlist content."
-                        .to_string(),
+                    recommendation:
+                        "Add \"track\" or \"numberOfItems\" to describe playlist content."
+                            .to_string(),
                 });
             }
         }
@@ -143,7 +150,10 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist"}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PLAYLIST001"));
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PLAYLIST001"));
     }
 
     #[test]
@@ -154,7 +164,10 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": "My List", "numberOfItems": 0}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PLAYLIST002"));
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PLAYLIST002"));
     }
 
     #[test]
@@ -165,7 +178,10 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": "My List"}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PLAYLIST003"));
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PLAYLIST003"));
     }
 
     #[test]
@@ -176,7 +192,9 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": "My List", "numberOfItems": 5}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -187,13 +205,17 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product"}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_playlist_no_data() {
         let page = make_page("https://example.com");
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -204,7 +226,9 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": "My List", "track": [{"@type": "MusicRecording"}]}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -228,7 +252,10 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": ""}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PLAYLIST001"));
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PLAYLIST001"));
     }
 
     #[test]
@@ -239,6 +266,8 @@ mod tests {
             r#type: Some("Playlist".to_string()),
             data: serde_json::json!({"@type": "Playlist", "name": "My List", "numTracks": 10}),
         }];
-        assert!(PlaylistSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(PlaylistSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 }

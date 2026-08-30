@@ -59,8 +59,9 @@ impl Analyzer for ItemListSchemaValidator {
                                               \"itemListElement\" that is not an array."
                                     .to_string(),
                                 url: url.clone(),
-                                recommendation: "Change itemListElement to an array of ListItem objects."
-                                    .to_string(),
+                                recommendation:
+                                    "Change itemListElement to an array of ListItem objects."
+                                        .to_string(),
                             });
                         }
                         Some(arr) if arr.is_empty() => {
@@ -73,8 +74,9 @@ impl Analyzer for ItemListSchemaValidator {
                                               \"itemListElement\" array."
                                     .to_string(),
                                 url: url.clone(),
-                                recommendation: "Populate the itemListElement array with ListItem objects."
-                                    .to_string(),
+                                recommendation:
+                                    "Populate the itemListElement array with ListItem objects."
+                                        .to_string(),
                             });
                         }
                         _ => {}
@@ -86,7 +88,6 @@ impl Analyzer for ItemListSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -148,188 +149,177 @@ mod tests {
     }
 
     #[test]
-fn test_itemlist_missing_item_list_element() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
-}
-
-
-    #[test]
-fn test_itemlist_item_list_element_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            "itemListElement": []
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST002"));
-}
-
-
-    #[test]
-fn test_itemlist_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Item 1"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "ITEMLIST001"));
-    assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
-}
-
-
-    #[test]
-fn test_itemlist_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_itemlist_non_itemlist_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("BreadcrumbList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "BreadcrumbList"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_itemlist_both_issues() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    // Missing itemListElement entirely fires only ITEMLIST001
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
-    assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
-}
-
-
-    #[test]
-fn test_itemlist_multiple_itemlists() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("ItemList".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "ItemList",
-                "itemListElement": [{"@type": "ListItem", "position": 1}]
-            }),
-        },
-        StructuredData {
+    fn test_itemlist_missing_item_list_element() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("ItemList".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "ItemList"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
 
     #[test]
-fn test_itemlist_null_item_list_element() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            "itemListElement": null
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
-}
-
-
-    #[test]
-fn test_itemlist_item_list_element_string_instead_of_array() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            "itemListElement": "not-an-array"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
-}
-
+    fn test_itemlist_item_list_element_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": []
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
 
     #[test]
-fn test_itemlist_single_item_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("ItemList".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "ItemList",
-            "itemListElement": [
-                {"@type": "ListItem", "position": 1, "name": "Only Item"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ItemListSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_itemlist_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "Item 1"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST001"));
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
 
+    #[test]
+    fn test_itemlist_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_itemlist_non_itemlist_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BreadcrumbList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "BreadcrumbList"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_itemlist_both_issues() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        // Missing itemListElement entirely fires only ITEMLIST001
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+        assert!(!findings.iter().any(|f| f.code == "ITEMLIST002"));
+    }
+
+    #[test]
+    fn test_itemlist_multiple_itemlists() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("ItemList".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "ItemList",
+                    "itemListElement": [{"@type": "ListItem", "position": 1}]
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("ItemList".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "ItemList"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_null_item_list_element() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": null
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_item_list_element_string_instead_of_array() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": "not-an-array"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ITEMLIST001"));
+    }
+
+    #[test]
+    fn test_itemlist_single_item_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("ItemList".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "ItemList",
+                "itemListElement": [
+                    {"@type": "ListItem", "position": 1, "name": "Only Item"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ItemListSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

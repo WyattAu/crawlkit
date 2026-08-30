@@ -128,7 +128,10 @@ mod tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2020-06-15T19:00"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "EVENTPAST001"));
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "EVENTPAST001"));
     }
 
     #[test]
@@ -139,7 +142,9 @@ mod tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "2030-06-15T19:00"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -150,7 +155,9 @@ mod tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Concert"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -161,7 +168,9 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "startDate": "2020-01-01"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -173,7 +182,9 @@ mod tests {
             data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": ""}),
         }];
         // Empty string - no year to parse
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -184,7 +195,10 @@ mod tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "1999-12-31T23:59"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "EVENTPAST001"));
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "EVENTPAST001"));
     }
 
     #[test]
@@ -195,7 +209,9 @@ mod tests {
     #[test]
     fn test_event_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -206,7 +222,9 @@ mod tests {
             r#type: Some("Event".to_string()),
             data: serde_json::json!({"@type": "Event", "name": "Concert", "startDate": "abcd-06-15"}),
         }];
-        assert!(EventStartDateValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(EventStartDateValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]

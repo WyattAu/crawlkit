@@ -26,21 +26,16 @@ pub fn run(
     };
 
     if !db_file.exists() {
-        return Err(anyhow::anyhow!(
-            "Database not found: {}",
-            db_file.display()
-        ));
+        return Err(anyhow::anyhow!("Database not found: {}", db_file.display()));
     }
 
-    let storage =
-        Storage::new(&db_file).with_context(|| format!("Failed to open database: {}", db_file.display()))?;
+    let storage = Storage::new(&db_file)
+        .with_context(|| format!("Failed to open database: {}", db_file.display()))?;
 
     // If no crawl IDs provided, auto-discover from the database
     let ids_to_use = if crawl_ids.is_empty() {
         pb.set_message("Discovering crawl snapshots...");
-        let all_crawls = storage
-            .list_crawls()
-            .context("Failed to list crawls")?;
+        let all_crawls = storage.list_crawls().context("Failed to list crawls")?;
         if all_crawls.is_empty() {
             return Err(anyhow::anyhow!("No crawls found in database"));
         }
@@ -56,10 +51,7 @@ pub fn run(
         ));
     }
 
-    pb.set_message(format!(
-        "Loading {} snapshots...",
-        ids_to_use.len()
-    ));
+    pb.set_message(format!("Loading {} snapshots...", ids_to_use.len()));
 
     let mut snapshots = Vec::new();
     for crawl_id in &ids_to_use {
@@ -103,9 +95,7 @@ pub fn run(
 
     pb.finish_with_message(format!(
         "Trend analysis: {} snapshots, direction={:?}, avg_health={:.1}",
-        analysis.summary.snapshot_count,
-        analysis.direction,
-        analysis.summary.avg_health_score,
+        analysis.summary.snapshot_count, analysis.direction, analysis.summary.avg_health_score,
     ));
 
     if let Some(out) = output {

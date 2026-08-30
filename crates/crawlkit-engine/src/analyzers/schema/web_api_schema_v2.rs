@@ -31,7 +31,12 @@ impl Analyzer for WebAPISchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("documentation").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("documentation")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for WebAPISchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"documentation\" with a URL to the API docs."
-                        .to_string(),
+                    recommendation: "Add \"documentation\" with a URL to the API docs.".to_string(),
                 });
             }
         }

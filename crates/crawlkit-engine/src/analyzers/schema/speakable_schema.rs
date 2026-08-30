@@ -83,7 +83,6 @@ impl Analyzer for SpeakableSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -144,129 +143,126 @@ mod tests {
     }
 
     #[test]
-fn test_speakable_missing_xpath() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": {"cssSelector": ".intro"}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SPEAK001"));
-}
-
-
-    #[test]
-fn test_speakable_missing_css_selector() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": {"xpath": ["/html/body/h1"]}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "SPEAK002"));
-}
-
+    fn test_speakable_missing_xpath() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": {"cssSelector": ".intro"}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SPEAK001"));
+    }
 
     #[test]
-fn test_speakable_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": {"xpath": ["/html/body/h1"], "cssSelector": ".intro"}
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_speakable_no_speakable_property() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({"@type": "WebPage", "name": "Home"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_speakable_missing_css_selector() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": {"xpath": ["/html/body/h1"]}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "SPEAK002"));
+    }
 
     #[test]
-fn test_speakable_array_form() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": [
-                {"xpath": ["/html/body/h1"]},
-                {"cssSelector": ".intro"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = SpeakableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SPEAK002"));
-}
-
+    fn test_speakable_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": {"xpath": ["/html/body/h1"], "cssSelector": ".intro"}
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_speakable_array_form_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": [{"@type": "SpeakableSpecification"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = SpeakableSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "SPEAK001"));
-    assert!(findings.iter().any(|f| f.code == "SPEAK002"));
-}
-
+    fn test_speakable_no_speakable_property() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({"@type": "WebPage", "name": "Home"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
     #[test]
-fn test_speakable_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_speakable_array_form() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": [
+                    {"xpath": ["/html/body/h1"]},
+                    {"cssSelector": ".intro"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SpeakableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPEAK002"));
+    }
 
     #[test]
-fn test_speakable_array_form_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("WebPage".to_string()),
-        data: serde_json::json!({
-            "@type": "WebPage",
-            "speakable": [
-                {"xpath": ["/html/body/h1"], "cssSelector": ".intro"},
-                {"xpath": ["/html/body/p"], "cssSelector": "main"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
-}
+    fn test_speakable_array_form_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": [{"@type": "SpeakableSpecification"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = SpeakableSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "SPEAK001"));
+        assert!(findings.iter().any(|f| f.code == "SPEAK002"));
+    }
 
+    #[test]
+    fn test_speakable_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_speakable_array_form_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("WebPage".to_string()),
+            data: serde_json::json!({
+                "@type": "WebPage",
+                "speakable": [
+                    {"xpath": ["/html/body/h1"], "cssSelector": ".intro"},
+                    {"xpath": ["/html/body/p"], "cssSelector": "main"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(SpeakableSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 }

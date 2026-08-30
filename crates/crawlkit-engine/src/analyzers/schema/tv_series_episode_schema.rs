@@ -41,8 +41,7 @@ impl Analyzer for TVSeriesEpisodeSchemaValidator {
                                   \"episodeNumber\" property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"episodeNumber\" with the episode number."
-                        .to_string(),
+                    recommendation: "Add \"episodeNumber\" with the episode number.".to_string(),
                 });
             }
         }
@@ -132,14 +131,18 @@ mod tests {
             data: serde_json::json!({"@type": "TVEpisode", "name": "Pilot", "episodeNumber": 1}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(TVSeriesEpisodeSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(TVSeriesEpisodeSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_tvep_no_structured_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert!(TVSeriesEpisodeSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(TVSeriesEpisodeSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -151,7 +154,9 @@ mod tests {
             data: serde_json::json!({"@type": "TVSeries"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(TVSeriesEpisodeSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(TVSeriesEpisodeSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -183,7 +188,9 @@ mod tests {
             data: serde_json::json!({"@type": "TVEpisode", "episodeNumber": 0}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(TVSeriesEpisodeSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(TVSeriesEpisodeSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -195,7 +202,9 @@ mod tests {
             data: serde_json::json!({"@type": "TVEpisode", "episodeNumber": "S01E01"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(TVSeriesEpisodeSchemaValidator::new().analyze(&ctx).is_empty());
+        assert!(TVSeriesEpisodeSchemaValidator::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]

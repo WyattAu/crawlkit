@@ -158,7 +158,10 @@ mod tests {
                 let coord = CrawlCoordinator::new(id, 4, PartitionStrategy::Hash);
                 if coord.should_process(url) {
                     let prev = domain_map.insert(url.clone(), id);
-                    assert!(prev.is_none(), "URL {url} was already assigned to instance {prev:?}, now assigned to {id}");
+                    assert!(
+                        prev.is_none(),
+                        "URL {url} was already assigned to instance {prev:?}, now assigned to {id}"
+                    );
                 }
             }
         }

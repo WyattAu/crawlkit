@@ -54,8 +54,7 @@ impl Analyzer for ProductAvailabilityValidator {
             if let Some(offers) = data.get("offers") {
                 let availability_missing = match offers {
                     serde_json::Value::Array(arr) => {
-                        arr.iter()
-                            .any(|o| o.get("availability").is_none())
+                        arr.iter().any(|o| o.get("availability").is_none())
                     }
                     serde_json::Value::Object(_) => offers.get("availability").is_none(),
                     _ => true,
@@ -147,7 +146,10 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget"}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PRODAVAIL001"));
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PRODAVAIL001"));
     }
 
     #[test]
@@ -158,7 +160,10 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "price": "10"}}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PRODAVAIL001"));
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PRODAVAIL001"));
     }
 
     #[test]
@@ -169,7 +174,9 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": {"@type": "Offer", "availability": "InStock"}}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -180,7 +187,9 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article"}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -194,7 +203,10 @@ mod tests {
                 {"@type": "Offer", "availability": "InStock"}
             ]}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PRODAVAIL001"));
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PRODAVAIL001"));
     }
 
     #[test]
@@ -208,18 +220,25 @@ mod tests {
                 {"@type": "Offer", "availability": "OutOfStock"}
             ]}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_name() {
-        assert_eq!(ProductAvailabilityValidator::new().name(), "product-availability");
+        assert_eq!(
+            ProductAvailabilityValidator::new().name(),
+            "product-availability"
+        );
     }
 
     #[test]
@@ -230,7 +249,10 @@ mod tests {
             r#type: Some("Product".to_string()),
             data: serde_json::json!({"@type": "Product", "name": "Widget", "offers": "not an object"}),
         }];
-        assert!(ProductAvailabilityValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "PRODAVAIL001"));
+        assert!(ProductAvailabilityValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "PRODAVAIL001"));
     }
 
     #[test]

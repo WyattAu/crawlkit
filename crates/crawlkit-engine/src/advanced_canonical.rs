@@ -198,18 +198,18 @@ impl Analyzer for UrlFormatValidator {
         if let Some(path_start) = url.find("://") {
             let path = &url[path_start + 3..];
             if path != path.to_lowercase() && !path.contains('%') {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Seo,
-                code: "URL002".to_string(),
-                title: "Uppercase characters in URL".to_string(),
-                description: "URL path contains uppercase characters. URLs are \
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "URL002".to_string(),
+                    title: "Uppercase characters in URL".to_string(),
+                    description: "URL path contains uppercase characters. URLs are \
                      case-sensitive and should be consistent."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Use lowercase characters in URL paths for consistency."
-                    .to_string(),
-            });
+                        .to_string(),
+                    url: url.clone(),
+                    recommendation: "Use lowercase characters in URL paths for consistency."
+                        .to_string(),
+                });
             }
         }
 
@@ -288,13 +288,9 @@ impl Analyzer for CanonicalChainDetector {
         // CANCH002: Canonical URL points to non-indexable page
         let body_lower = ctx.body.unwrap_or("").to_lowercase();
         let is_noindex = body_lower.contains("noindex")
-            || ctx
-                .headers
-                .iter()
-                .any(|(k, v)| {
-                    k.to_lowercase() == "x-robots-tag"
-                        && v.to_lowercase().contains("noindex")
-                });
+            || ctx.headers.iter().any(|(k, v)| {
+                k.to_lowercase() == "x-robots-tag" && v.to_lowercase().contains("noindex")
+            });
 
         if canonical_str != url && is_noindex {
             findings.push(Finding {
@@ -357,7 +353,11 @@ impl Analyzer for HreflangReciprocalValidator {
         for tag in hreflang_tags {
             let tag_url = normalize_url(tag.url.as_str());
             if tag_url != normalize_url(url) {
-                let has_link_back = ctx.page.links.iter().any(|l| normalize_url(&l.href) == tag_url);
+                let has_link_back = ctx
+                    .page
+                    .links
+                    .iter()
+                    .any(|l| normalize_url(&l.href) == tag_url);
                 if !has_link_back {
                     findings.push(Finding {
                         severity: Severity::Warning,
@@ -531,8 +531,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_cross_domain() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://other-domain.com/page").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://other-domain.com/page").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CANCH001"));
@@ -541,8 +540,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_same_domain() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/other-page").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/other-page").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "CANCH001"));
@@ -551,8 +549,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_noindex_with_different_canonical() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/canonical").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/canonical").unwrap());
         let ctx = make_ctx_with_body(
             &page,
             Some(200),
@@ -578,8 +575,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_noindex_via_header() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/canonical").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/canonical").unwrap());
         let headers = vec![("X-Robots-Tag".to_string(), "noindex".to_string())];
         let ctx = make_ctx_with_headers(&page, Some(200), &headers);
         let findings = CanonicalChainDetector::new().analyze(&ctx);
@@ -589,8 +585,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_indexable_with_different_canonical() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/canonical").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/canonical").unwrap());
         let ctx = make_ctx_with_body(
             &page,
             Some(200),
@@ -603,8 +598,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_www_vs_non_www() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://www.example.com/page").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://www.example.com/page").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "CANCH001"));
@@ -613,8 +607,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_no_body() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/canonical").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/canonical").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "CANCH002"));
@@ -623,8 +616,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_http_vs_https() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("http://example.com/page").unwrap());
+        page.meta.canonical = Some(url::Url::parse("http://example.com/page").unwrap());
         let ctx = make_ctx(&page, Some(200));
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "CANCH001"));
@@ -633,8 +625,7 @@ mod tests {
     #[test]
     fn test_canonical_chain_empty_noindex() {
         let mut page = make_page("https://example.com/page");
-        page.meta.canonical =
-            Some(url::Url::parse("https://example.com/canonical").unwrap());
+        page.meta.canonical = Some(url::Url::parse("https://example.com/canonical").unwrap());
         let ctx = make_ctx_with_body(&page, Some(200), "<html><body></body></html>");
         let findings = CanonicalChainDetector::new().analyze(&ctx);
         assert!(!findings.iter().any(|f| f.code == "CANCH002"));
@@ -880,6 +871,10 @@ mod tests {
         // HREFR001 should not appear (all links are present).
         // Other findings (e.g., HREFR002 for duplicate lang) are acceptable.
         let hrefr001_count = findings.iter().filter(|f| f.code == "HREFR001").count();
-        assert_eq!(hrefr001_count, 0, "unexpected HREFR001 findings: {:?}", findings);
+        assert_eq!(
+            hrefr001_count, 0,
+            "unexpected HREFR001 findings: {:?}",
+            findings
+        );
     }
 }

@@ -31,7 +31,12 @@ impl Analyzer for PlanSchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("description").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("description")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for PlanSchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"description\" with details about the plan."
-                        .to_string(),
+                    recommendation: "Add \"description\" with details about the plan.".to_string(),
                 });
             }
         }

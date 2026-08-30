@@ -31,7 +31,12 @@ impl Analyzer for PermitSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("permitNumber").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("permitNumber")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -56,8 +61,7 @@ impl Analyzer for PermitSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"issuedBy\" with the issuing authority."
-                        .to_string(),
+                    recommendation: "Add \"issuedBy\" with the issuing authority.".to_string(),
                 });
             }
         }
@@ -65,7 +69,6 @@ impl Analyzer for PermitSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -127,148 +130,139 @@ mod tests {
     }
 
     #[test]
-fn test_permit_missing_permitnumber() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Permit".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Permit"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERMIT001"));
-}
-
-
-    #[test]
-fn test_permit_missing_issuedby() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Permit".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Permit",
-            "permitNumber": "P-12345"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERMIT002"));
-}
-
-
-    #[test]
-fn test_permit_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Permit".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Permit",
-            "permitNumber": "P-12345",
-            "issuedBy": {"@type": "GovernmentOrganization", "name": "City Hall"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_permit_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_permit_non_permit_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_permit_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Permit".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Permit"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_permit_number_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Permit".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Permit",
-            "permitNumber": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERMIT001"));
-}
-
-
-    #[test]
-fn test_permit_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Permit".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Permit",
-                "permitNumber": "P-1",
-                "issuedBy": {"@type": "GovernmentOrganization"}
-            }),
-        },
-        StructuredData {
+    fn test_permit_missing_permitnumber() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Permit".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Permit"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = PermitSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "PERMIT001"));
-    assert!(findings.iter().any(|f| f.code == "PERMIT002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERMIT001"));
+    }
 
+    #[test]
+    fn test_permit_missing_issuedby() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Permit".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Permit",
+                "permitNumber": "P-12345"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERMIT002"));
+    }
 
+    #[test]
+    fn test_permit_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Permit".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Permit",
+                "permitNumber": "P-12345",
+                "issuedBy": {"@type": "GovernmentOrganization", "name": "City Hall"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_permit_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_permit_non_permit_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_permit_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Permit".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Permit"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
+
+    #[test]
+    fn test_permit_number_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Permit".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Permit",
+                "permitNumber": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERMIT001"));
+    }
+
+    #[test]
+    fn test_permit_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Permit".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Permit",
+                    "permitNumber": "P-1",
+                    "issuedBy": {"@type": "GovernmentOrganization"}
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Permit".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Permit"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = PermitSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "PERMIT001"));
+        assert!(findings.iter().any(|f| f.code == "PERMIT002"));
+    }
 }

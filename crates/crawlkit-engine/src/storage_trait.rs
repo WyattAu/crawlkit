@@ -143,17 +143,10 @@ pub trait StorageBackend: Send + Sync {
 
     /// Get the top issues for a crawl, ordered by severity rank (critical
     /// first) then by number of affected pages descending.
-    fn get_top_issues(
-        &self,
-        crawl_id: &str,
-        limit: usize,
-    ) -> Result<Vec<TopIssue>, StorageError>;
+    fn get_top_issues(&self, crawl_id: &str, limit: usize) -> Result<Vec<TopIssue>, StorageError>;
 
     /// Get CrUX field metrics for all pages in a crawl.
-    fn get_crux_metrics_for_crawl(
-        &self,
-        crawl_id: &str,
-    ) -> Result<Vec<CruxMetrics>, StorageError>;
+    fn get_crux_metrics_for_crawl(&self, crawl_id: &str) -> Result<Vec<CruxMetrics>, StorageError>;
 
     /// Release any resources held by the backend (connections, caches, etc.).
     fn finish(&self) -> Result<(), StorageError>;

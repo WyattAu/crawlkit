@@ -31,7 +31,12 @@ impl Analyzer for InvoiceSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("accountId").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("accountId")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,12 +46,16 @@ impl Analyzer for InvoiceSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"accountId\" with the account identifier."
-                        .to_string(),
+                    recommendation: "Add \"accountId\" with the account identifier.".to_string(),
                 });
             }
 
-            if data.get("dueDate").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("dueDate")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -66,7 +75,6 @@ impl Analyzer for InvoiceSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -128,126 +136,43 @@ mod tests {
     }
 
     #[test]
-fn test_invoice_missing_accountid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Invoice".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Invoice",
-            "dueDate": "2024-01-15"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "INV001"));
-}
-
-
-    #[test]
-fn test_invoice_missing_duedate() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Invoice".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Invoice",
-            "accountId": "INV-001"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "INV002"));
-}
-
+    fn test_invoice_missing_accountid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Invoice".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Invoice",
+                "dueDate": "2024-01-15"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "INV001"));
+    }
 
     #[test]
-fn test_invoice_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Invoice".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Invoice",
-            "accountId": "INV-001",
-            "dueDate": "2024-01-15"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_invoice_missing_duedate() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Invoice".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Invoice",
+                "accountId": "INV-001"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "INV002"));
+    }
 
     #[test]
-fn test_invoice_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_invoice_non_invoice_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_invoice_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Invoice".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Invoice"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-}
-
-
-    #[test]
-fn test_invoice_accountid_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Invoice".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Invoice",
-            "accountId": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "INV001"));
-}
-
-
-    #[test]
-fn test_invoice_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
+    fn test_invoice_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Invoice".to_string()),
             data: serde_json::json!({
@@ -256,21 +181,95 @@ fn test_invoice_multiple() {
                 "accountId": "INV-001",
                 "dueDate": "2024-01-15"
             }),
-        },
-        StructuredData {
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_invoice_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_invoice_non_invoice_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_invoice_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Invoice".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Invoice"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = InvoiceSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "INV001"));
-    assert!(findings.iter().any(|f| f.code == "INV002"));
-}
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+    }
 
+    #[test]
+    fn test_invoice_accountid_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Invoice".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Invoice",
+                "accountId": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "INV001"));
+    }
 
+    #[test]
+    fn test_invoice_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Invoice".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Invoice",
+                    "accountId": "INV-001",
+                    "dueDate": "2024-01-15"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Invoice".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Invoice"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = InvoiceSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "INV001"));
+        assert!(findings.iter().any(|f| f.code == "INV002"));
+    }
 }

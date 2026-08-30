@@ -69,7 +69,6 @@ impl Analyzer for CourseSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -130,84 +129,78 @@ mod tests {
     }
 
     #[test]
-fn test_course_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Course".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Course"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CourseSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COURSE001"));
-}
-
-
-    #[test]
-fn test_course_missing_provider() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Course".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Course",
-            "name": "Rust 101"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CourseSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COURSE002"));
-}
-
+    fn test_course_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Course"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CourseSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COURSE001"));
+    }
 
     #[test]
-fn test_course_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Course".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Course",
-            "name": "Rust 101",
-            "provider": {"@type": "Organization", "name": "Acme U"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CourseSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_course_missing_provider() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Course",
+                "name": "Rust 101"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CourseSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COURSE002"));
+    }
 
     #[test]
-fn test_course_missing_both() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Course".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Course"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = CourseSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COURSE001"));
-    assert!(findings.iter().any(|f| f.code == "COURSE002"));
-}
-
+    fn test_course_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Course",
+                "name": "Rust 101",
+                "provider": {"@type": "Organization", "name": "Acme U"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CourseSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_course_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = CourseSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_course_missing_both() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Course".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Course"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = CourseSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "COURSE001"));
+        assert!(findings.iter().any(|f| f.code == "COURSE002"));
+    }
 
-
+    #[test]
+    fn test_course_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = CourseSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

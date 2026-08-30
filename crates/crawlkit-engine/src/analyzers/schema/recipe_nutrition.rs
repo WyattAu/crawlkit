@@ -70,7 +70,6 @@ impl Analyzer for RecipeNutritionValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -131,150 +130,141 @@ mod tests {
     }
 
     #[test]
-fn test_rnut_missing_nutrition() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RNUT001"));
-}
-
-
-    #[test]
-fn test_rnut_missing_calories() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake",
-            "nutrition": {"@type": "NutritionInformation"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RNUT002"));
-}
-
+    fn test_rnut_missing_nutrition() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RNUT001"));
+    }
 
     #[test]
-fn test_rnut_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake",
-            "nutrition": {
-                "@type": "NutritionInformation",
-                "calories": "240 calories"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_rnut_missing_calories() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake",
+                "nutrition": {"@type": "NutritionInformation"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RNUT002"));
+    }
 
     #[test]
-fn test_rnut_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_rnut_non_recipe_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product",
-            "name": "Widget"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_rnut_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake",
+                "nutrition": {
+                    "@type": "NutritionInformation",
+                    "calories": "240 calories"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_rnut_empty_nutrition_object() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake",
-            "nutrition": {}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RNUT002"));
-}
-
+    fn test_rnut_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_rnut_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 1);
-    assert!(findings.iter().any(|f| f.code == "RNUT001"));
-}
-
+    fn test_rnut_non_recipe_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product",
+                "name": "Widget"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_rnut_nutrition_with_other_fields() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Recipe".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Recipe",
-            "name": "Chocolate Cake",
-            "nutrition": {
-                "@type": "NutritionInformation",
-                "fatContent": "10g",
-                "proteinContent": "5g"
-            }
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = RecipeNutritionValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "RNUT002"));
-}
+    fn test_rnut_empty_nutrition_object() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake",
+                "nutrition": {}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RNUT002"));
+    }
 
+    #[test]
+    fn test_rnut_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 1);
+        assert!(findings.iter().any(|f| f.code == "RNUT001"));
+    }
 
+    #[test]
+    fn test_rnut_nutrition_with_other_fields() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Recipe".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Recipe",
+                "name": "Chocolate Cake",
+                "nutrition": {
+                    "@type": "NutritionInformation",
+                    "fatContent": "10g",
+                    "proteinContent": "5g"
+                }
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = RecipeNutritionValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "RNUT002"));
+    }
 }

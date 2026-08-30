@@ -230,9 +230,8 @@ pub(crate) fn read_plugin_manifest(
     plugin_dir: &std::path::Path,
 ) -> Result<PluginManifest, super::PluginError> {
     let manifest_path = plugin_dir.join("crawlkit-plugin.toml");
-    let manifest_str = std::fs::read_to_string(&manifest_path).map_err(|e| {
-        super::PluginError::ManifestParse(format!("Failed to read manifest: {e}"))
-    })?;
+    let manifest_str = std::fs::read_to_string(&manifest_path)
+        .map_err(|e| super::PluginError::ManifestParse(format!("Failed to read manifest: {e}")))?;
     toml::from_str(&manifest_str)
         .map_err(|e| super::PluginError::ManifestParse(format!("Invalid manifest: {e}")))
 }

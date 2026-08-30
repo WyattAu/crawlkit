@@ -1,6 +1,6 @@
 use crate::http::HttpClient;
-use crate::storage_trait::StorageBackend;
 use crate::queue::QueueEntry;
+use crate::storage_trait::StorageBackend;
 use std::sync::Arc;
 use std::time::Duration;
 

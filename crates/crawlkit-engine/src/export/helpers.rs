@@ -260,10 +260,7 @@ pub(super) fn read_links_grouped_by_page(
         std::collections::HashMap::new();
     for (source_url, targets) in links_map {
         if let Some(page_id) = url_to_page_id.get(&source_url) {
-            grouped
-                .entry(page_id.clone())
-                .or_default()
-                .extend(targets);
+            grouped.entry(page_id.clone()).or_default().extend(targets);
         }
     }
     // Canonical ordering: sorted link lists for byte-identical exports.

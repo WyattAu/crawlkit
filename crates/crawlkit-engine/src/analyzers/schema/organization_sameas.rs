@@ -40,9 +40,7 @@ impl Analyzer for OrganizationSameAsValidator {
                     vec![s.as_str()]
                 }
                 Some(serde_json::Value::Array(arr)) => {
-                    arr.iter()
-                        .filter_map(|v| v.as_str())
-                        .collect()
+                    arr.iter().filter_map(|v| v.as_str()).collect()
                 }
                 _ => continue,
             };
@@ -135,7 +133,9 @@ mod tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Org", "sameAs": "https://twitter.com/org"}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -146,7 +146,10 @@ mod tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Org", "sameAs": "not a url"}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "ORSAMEAS001"));
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "ORSAMEAS001"));
     }
 
     #[test]
@@ -160,7 +163,9 @@ mod tests {
                 "https://facebook.com/org"
             ]}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -174,7 +179,10 @@ mod tests {
                 "not valid"
             ]}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "ORSAMEAS001"));
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "ORSAMEAS001"));
     }
 
     #[test]
@@ -185,7 +193,10 @@ mod tests {
             r#type: Some("LocalBusiness".to_string()),
             data: serde_json::json!({"@type": "LocalBusiness", "name": "Store", "sameAs": "bad url"}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "ORSAMEAS001"));
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "ORSAMEAS001"));
     }
 
     #[test]
@@ -196,7 +207,9 @@ mod tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Org"}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
@@ -207,18 +220,25 @@ mod tests {
             r#type: Some("Article".to_string()),
             data: serde_json::json!({"@type": "Article", "sameAs": "bad"}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_no_structured_data() {
         let page = make_page("https://example.com");
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_name() {
-        assert_eq!(OrganizationSameAsValidator::new().name(), "organization-sameas");
+        assert_eq!(
+            OrganizationSameAsValidator::new().name(),
+            "organization-sameas"
+        );
     }
 
     #[test]
@@ -229,7 +249,9 @@ mod tests {
             r#type: Some("Organization".to_string()),
             data: serde_json::json!({"@type": "Organization", "name": "Org", "sameAs": 12345}),
         }];
-        assert!(OrganizationSameAsValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(OrganizationSameAsValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]

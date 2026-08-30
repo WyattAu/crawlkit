@@ -31,7 +31,12 @@ impl Analyzer for ActionSchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("actionType").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("actionType")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,

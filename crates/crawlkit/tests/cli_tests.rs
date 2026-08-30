@@ -18,15 +18,11 @@ fn version_flag_exits_zero_and_shows_version() {
 
 #[test]
 fn help_flag_exits_zero_and_shows_subcommands() {
-    crawlkit_cmd()
-        .arg("--help")
-        .assert()
-        .success()
-        .stdout(
-            predicate::str::contains("crawl")
-                .and(predicate::str::contains("compare"))
-                .and(predicate::str::contains("report")),
-        );
+    crawlkit_cmd().arg("--help").assert().success().stdout(
+        predicate::str::contains("crawl")
+            .and(predicate::str::contains("compare"))
+            .and(predicate::str::contains("report")),
+    );
 }
 
 #[test]
@@ -35,10 +31,7 @@ fn crawl_help_exits_zero_and_shows_flags() {
         .args(["crawl", "--help"])
         .assert()
         .success()
-        .stdout(
-            predicate::str::contains("--max-pages")
-                .and(predicate::str::contains("--timeout")),
-        );
+        .stdout(predicate::str::contains("--max-pages").and(predicate::str::contains("--timeout")));
 }
 
 #[test]
@@ -51,18 +44,12 @@ fn compare_help_exits_zero() {
 
 #[test]
 fn report_help_exits_zero() {
-    crawlkit_cmd()
-        .args(["report", "--help"])
-        .assert()
-        .success();
+    crawlkit_cmd().args(["report", "--help"]).assert().success();
 }
 
 #[test]
 fn crawl_no_args_exits_nonzero() {
-    crawlkit_cmd()
-        .arg("crawl")
-        .assert()
-        .failure();
+    crawlkit_cmd().arg("crawl").assert().failure();
 }
 
 #[test]

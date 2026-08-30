@@ -31,7 +31,12 @@ impl Analyzer for FoodEstablishmentSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -115,54 +120,106 @@ mod tests {
     }
 
     fn make_ctx<'a>(page: &'a crate::parser::ParsedPage) -> AnalysisContext<'a> {
-        AnalysisContext { page, body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }
+        AnalysisContext {
+            page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
     }
 
     #[test]
     fn test_food_missing_name() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment"}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FOOD001"));
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment"}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FOOD001"));
     }
 
     #[test]
     fn test_food_missing_address() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FOOD002"));
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FOOD002"));
     }
 
     #[test]
     fn test_food_missing_cuisine() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe", "address": {"@type": "PostalAddress"}}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FOOD003"));
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe", "address": {"@type": "PostalAddress"}}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FOOD003"));
     }
 
     #[test]
     fn test_food_valid() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe", "address": {"@type": "PostalAddress"}, "servesCuisine": "Italian"}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe", "address": {"@type": "PostalAddress"}, "servesCuisine": "Italian"}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_food_non_food_ignored() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("Product".to_string()), data: serde_json::json!({"@type": "Product"}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({"@type": "Product"}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_food_no_data() {
         let page = make_page("https://example.com");
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).is_empty());
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .is_empty());
     }
 
     #[test]
     fn test_food_all_issues() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment"}),
+        }];
         let findings = FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page));
         assert_eq!(findings.len(), 3);
     }
@@ -170,7 +227,11 @@ mod tests {
     #[test]
     fn test_food_name_only_missing_two() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}) }];
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}),
+        }];
         let findings = FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page));
         assert!(findings.iter().any(|f| f.code == "FOOD002"));
         assert!(findings.iter().any(|f| f.code == "FOOD003"));
@@ -180,16 +241,31 @@ mod tests {
     #[test]
     fn test_food_empty_name() {
         let mut page = make_page("https://example.com");
-        page.structured_data = vec![StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": ""}) }];
-        assert!(FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page)).iter().any(|f| f.code == "FOOD001"));
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("FoodEstablishment".to_string()),
+            data: serde_json::json!({"@type": "FoodEstablishment", "name": ""}),
+        }];
+        assert!(FoodEstablishmentSchemaValidator::new()
+            .analyze(&make_ctx(&page))
+            .iter()
+            .any(|f| f.code == "FOOD001"));
     }
 
     #[test]
     fn test_food_multiple_establishments() {
         let mut page = make_page("https://example.com");
         page.structured_data = vec![
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment"}) },
-            StructuredData { context: Some("https://schema.org".to_string()), r#type: Some("FoodEstablishment".to_string()), data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}) },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("FoodEstablishment".to_string()),
+                data: serde_json::json!({"@type": "FoodEstablishment"}),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("FoodEstablishment".to_string()),
+                data: serde_json::json!({"@type": "FoodEstablishment", "name": "Cafe"}),
+            },
         ];
         let findings = FoodEstablishmentSchemaValidator::new().analyze(&make_ctx(&page));
         assert!(findings.iter().filter(|f| f.code == "FOOD001").count() >= 1);

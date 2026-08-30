@@ -96,7 +96,6 @@ impl Analyzer for ArticleSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -157,159 +156,149 @@ mod tests {
     }
 
     #[test]
-fn test_article_missing_headline() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "author": "John"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART001"));
-}
-
-
-    #[test]
-fn test_article_missing_date_published() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": "Test",
-            "author": "John"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART002"));
-}
-
+    fn test_article_missing_headline() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "author": "John"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART001"));
+    }
 
     #[test]
-fn test_article_missing_author() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": "Test",
-            "datePublished": "2024-01-01"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART003"));
-}
-
-
-    #[test]
-fn test_article_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article",
-            "headline": "Test",
-            "datePublished": "2024-01-01",
-            "author": "John"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_article_missing_date_published() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test",
+                "author": "John"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART002"));
+    }
 
     #[test]
-fn test_article_missing_all_three() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Article".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Article"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART001"));
-    assert!(findings.iter().any(|f| f.code == "ART002"));
-    assert!(findings.iter().any(|f| f.code == "ART003"));
-}
-
-
-    #[test]
-fn test_article_news_article_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("NewsArticle".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "NewsArticle"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART001"));
-}
-
+    fn test_article_missing_author() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test",
+                "datePublished": "2024-01-01"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART003"));
+    }
 
     #[test]
-fn test_article_blog_posting_type() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("BlogPosting".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "BlogPosting"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ART001"));
-    assert!(findings.iter().any(|f| f.code == "ART003"));
-}
-
-
-    #[test]
-fn test_article_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_article_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article",
+                "headline": "Test",
+                "datePublished": "2024-01-01",
+                "author": "John"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_article_non_article_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Product".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Product"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = ArticleSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_article_missing_all_three() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Article".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Article"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART001"));
+        assert!(findings.iter().any(|f| f.code == "ART002"));
+        assert!(findings.iter().any(|f| f.code == "ART003"));
+    }
 
+    #[test]
+    fn test_article_news_article_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("NewsArticle".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "NewsArticle"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART001"));
+    }
 
+    #[test]
+    fn test_article_blog_posting_type() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("BlogPosting".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "BlogPosting"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ART001"));
+        assert!(findings.iter().any(|f| f.code == "ART003"));
+    }
+
+    #[test]
+    fn test_article_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_article_non_article_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Product".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Product"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = ArticleSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

@@ -31,7 +31,12 @@ impl Analyzer for WorkerSchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("jobTitle").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("jobTitle")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for WorkerSchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"jobTitle\" with the worker's job title."
-                        .to_string(),
+                    recommendation: "Add \"jobTitle\" with the worker's job title.".to_string(),
                 });
             }
         }

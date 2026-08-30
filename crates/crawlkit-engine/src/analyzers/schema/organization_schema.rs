@@ -85,7 +85,6 @@ impl Analyzer for OrganizationSchemaValidator {
     }
 }
 
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -146,123 +145,115 @@ mod tests {
     }
 
     #[test]
-fn test_org_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "url": "https://example.com"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ORG001"));
-}
-
-
-    #[test]
-fn test_org_missing_url() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ORG002"));
-}
-
+    fn test_org_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "url": "https://example.com"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ORG001"));
+    }
 
     #[test]
-fn test_org_missing_logo() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "url": "https://example.com"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ORG003"));
-}
-
+    fn test_org_missing_url() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ORG002"));
+    }
 
     #[test]
-fn test_org_all_present() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization",
-            "name": "Acme Corp",
-            "url": "https://example.com",
-            "logo": "https://example.com/logo.png"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_org_missing_logo() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "url": "https://example.com"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ORG003"));
+    }
 
     #[test]
-fn test_org_missing_all() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Organization".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Organization"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "ORG001"));
-    assert!(findings.iter().any(|f| f.code == "ORG002"));
-    assert!(findings.iter().any(|f| f.code == "ORG003"));
-}
-
-
-    #[test]
-fn test_org_non_org_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
+    fn test_org_all_present() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization",
+                "name": "Acme Corp",
+                "url": "https://example.com",
+                "logo": "https://example.com/logo.png"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
     #[test]
-fn test_org_no_schema_no_findings() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = OrganizationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_org_missing_all() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Organization".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Organization"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "ORG001"));
+        assert!(findings.iter().any(|f| f.code == "ORG002"));
+        assert!(findings.iter().any(|f| f.code == "ORG003"));
+    }
 
+    #[test]
+    fn test_org_non_org_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_org_no_schema_no_findings() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = OrganizationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

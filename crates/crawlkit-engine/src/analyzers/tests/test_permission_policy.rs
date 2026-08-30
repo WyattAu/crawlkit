@@ -1,6 +1,6 @@
 use crate::analyzers::*;
-use crate::parser::ParsedPage;
 use crate::meta::MetaTags;
+use crate::parser::ParsedPage;
 
 fn make_page(url: &str) -> ParsedPage {
     ParsedPage {
@@ -64,10 +64,7 @@ fn test_perm_no_header() {
 
 #[test]
 fn test_perm_camera_not_restricted() {
-    let headers = vec![(
-        "Permissions-Policy".to_string(),
-        "camera=*".to_string(),
-    )];
+    let headers = vec![("Permissions-Policy".to_string(), "camera=*".to_string())];
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
@@ -76,10 +73,7 @@ fn test_perm_camera_not_restricted() {
 
 #[test]
 fn test_perm_microphone_not_restricted() {
-    let headers = vec![(
-        "Permissions-Policy".to_string(),
-        "microphone=*".to_string(),
-    )];
+    let headers = vec![("Permissions-Policy".to_string(), "microphone=*".to_string())];
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
@@ -88,10 +82,7 @@ fn test_perm_microphone_not_restricted() {
 
 #[test]
 fn test_perm_camera_restricted() {
-    let headers = vec![(
-        "Permissions-Policy".to_string(),
-        "camera=()".to_string(),
-    )];
+    let headers = vec![("Permissions-Policy".to_string(), "camera=()".to_string())];
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);
@@ -163,10 +154,7 @@ fn test_perm_no_issue_when_feature_not_mentioned() {
 
 #[test]
 fn test_perm_empty_policy_value() {
-    let headers = vec![(
-        "Permissions-Policy".to_string(),
-        "".to_string(),
-    )];
+    let headers = vec![("Permissions-Policy".to_string(), "".to_string())];
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = PermissionPolicyAnalyzer::new().analyze(&ctx);

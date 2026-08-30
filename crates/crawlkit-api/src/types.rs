@@ -16,9 +16,9 @@ use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
 use crawlkit_engine::storage_trait::StorageBackend;
+use crawlkit_engine::AccessLogger;
 use crawlkit_engine::AuditTrail;
 use crawlkit_engine::CrawlConfig;
-use crawlkit_engine::AccessLogger;
 
 use crate::auth;
 use crate::oidc::OidcManager;

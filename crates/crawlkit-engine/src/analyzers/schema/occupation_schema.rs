@@ -31,7 +31,12 @@ impl Analyzer for OccupationSchemaValidator {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for OccupationSchemaValidator {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the occupation title."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the occupation title.".to_string(),
                 });
             }
 
@@ -72,7 +76,6 @@ impl Analyzer for OccupationSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -134,189 +137,178 @@ mod tests {
     }
 
     #[test]
-fn test_occupation_missing_name() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OCCUP001"));
-}
-
-
-    #[test]
-fn test_occupation_missing_occupational_category() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation",
-            "name": "Software Engineer"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OCCUP002"));
-}
-
-
-    #[test]
-fn test_occupation_valid() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation",
-            "name": "Software Engineer",
-            "occupationalCategory": "15-1252.00"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_occupation_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_occupation_non_occupation_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Person".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Person",
-            "name": "Jane"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
-
-
-    #[test]
-fn test_occupation_both_missing() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation"
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert_eq!(findings.len(), 2);
-    assert!(findings.iter().any(|f| f.code == "OCCUP001"));
-    assert!(findings.iter().any(|f| f.code == "OCCUP002"));
-}
-
-
-    #[test]
-fn test_occupation_name_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation",
-            "name": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OCCUP001"));
-}
-
-
-    #[test]
-fn test_occupation_category_empty() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation",
-            "name": "Doctor",
-            "occupationalCategory": ""
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OCCUP002"));
-}
-
-
-    #[test]
-fn test_occupation_multiple() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![
-        StructuredData {
-            context: Some("https://schema.org".to_string()),
-            r#type: Some("Occupation".to_string()),
-            data: serde_json::json!({
-                "@context": "https://schema.org",
-                "@type": "Occupation",
-                "name": "Engineer",
-                "occupationalCategory": "17-2000"
-            }),
-        },
-        StructuredData {
+    fn test_occupation_missing_name() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
             context: Some("https://schema.org".to_string()),
             r#type: Some("Occupation".to_string()),
             data: serde_json::json!({
                 "@context": "https://schema.org",
                 "@type": "Occupation"
             }),
-        },
-    ];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "OCCUP001"));
-    assert!(findings.iter().any(|f| f.code == "OCCUP002"));
-}
-
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+    }
 
     #[test]
-fn test_occupation_category_as_object() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Occupation".to_string()),
-        data: serde_json::json!({
-            "@context": "https://schema.org",
-            "@type": "Occupation",
-            "name": "Nurse",
-            "occupationalCategory": {"@type": "CategoryCode", "codeValue": "29-1141"}
-        }),
-    }];
-    let ctx = make_ctx(&page, None);
-    let findings = OccupationSchemaValidator::new().analyze(&ctx);
-    assert!(findings.is_empty());
-}
+    fn test_occupation_missing_occupational_category() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Software Engineer"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
 
+    #[test]
+    fn test_occupation_valid() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Software Engineer",
+                "occupationalCategory": "15-1252.00"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 
+    #[test]
+    fn test_occupation_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_occupation_non_occupation_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Person".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Person",
+                "name": "Jane"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
+
+    #[test]
+    fn test_occupation_both_missing() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation"
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert_eq!(findings.len(), 2);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_name_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+    }
+
+    #[test]
+    fn test_occupation_category_empty() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Doctor",
+                "occupationalCategory": ""
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_multiple() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Occupation".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Occupation",
+                    "name": "Engineer",
+                    "occupationalCategory": "17-2000"
+                }),
+            },
+            StructuredData {
+                context: Some("https://schema.org".to_string()),
+                r#type: Some("Occupation".to_string()),
+                data: serde_json::json!({
+                    "@context": "https://schema.org",
+                    "@type": "Occupation"
+                }),
+            },
+        ];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "OCCUP001"));
+        assert!(findings.iter().any(|f| f.code == "OCCUP002"));
+    }
+
+    #[test]
+    fn test_occupation_category_as_object() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Occupation".to_string()),
+            data: serde_json::json!({
+                "@context": "https://schema.org",
+                "@type": "Occupation",
+                "name": "Nurse",
+                "occupationalCategory": {"@type": "CategoryCode", "codeValue": "29-1141"}
+            }),
+        }];
+        let ctx = make_ctx(&page, None);
+        let findings = OccupationSchemaValidator::new().analyze(&ctx);
+        assert!(findings.is_empty());
+    }
 }

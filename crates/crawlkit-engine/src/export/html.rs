@@ -25,10 +25,7 @@ use super::helpers::{
 /// assert!(html.contains("<!DOCTYPE html>"));
 /// assert!(html.contains("Crawl Report"));
 /// ```
-pub fn export_html(
-    storage: &dyn StorageBackend,
-    crawl_id: &str,
-) -> Result<String, ExportError> {
+pub fn export_html(storage: &dyn StorageBackend, crawl_id: &str) -> Result<String, ExportError> {
     let stats = storage.get_stats(crawl_id)?;
     let meta = read_crawl_meta(storage, crawl_id)?;
     let top_issues = read_top_issues(storage, crawl_id, 20)?;

@@ -561,10 +561,7 @@ pub async fn run_crawl_task_with_monitoring(
             if let Some(ref monitoring) = output.monitoring {
                 if monitoring.alert_triggered {
                     super::webhooks::fire_monitoring_webhooks(
-                        &state,
-                        &crawl_id,
-                        &tenant_id,
-                        monitoring,
+                        &state, &crawl_id, &tenant_id, monitoring,
                     );
                 }
             }

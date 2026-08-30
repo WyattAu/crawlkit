@@ -501,10 +501,7 @@ impl Storage {
         ];
         for col in new_columns {
             if !columns.contains(&col.to_string()) {
-                conn.execute(
-                    &format!("ALTER TABLE pages ADD COLUMN {} TEXT", col),
-                    [],
-                )?;
+                conn.execute(&format!("ALTER TABLE pages ADD COLUMN {} TEXT", col), [])?;
             }
         }
 
@@ -557,9 +554,7 @@ impl Storage {
 
         // Collect IDs to delete (foreign keys handle cascading).
         let crawl_ids: Vec<String> = {
-            let mut stmt = conn.prepare(
-                "SELECT id FROM crawls WHERE start_time < ?1",
-            )?;
+            let mut stmt = conn.prepare("SELECT id FROM crawls WHERE start_time < ?1")?;
             let ids = stmt
                 .query_map(params![cutoff_rfc], |row| row.get::<_, String>(0))?
                 .collect::<Result<Vec<_>, _>>()?;
@@ -578,10 +573,22 @@ impl Storage {
             // enabled). We issue explicit deletes for tables that reference
             // `crawls(id)` directly to guarantee cleanup even if a child
             // table lacks a cascade.
-            tx.execute("DELETE FROM links WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM findings WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM images WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM schemas WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute(
+                "DELETE FROM links WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM findings WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM images WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM schemas WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
             tx.execute("DELETE FROM crux_metrics WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
             tx.execute("DELETE FROM pages WHERE crawl_id = ?1", params![crawl_id])?;
             tx.execute("DELETE FROM crawls WHERE id = ?1", params![crawl_id])?;
@@ -614,7 +621,9 @@ impl Storage {
                  WHERE c.start_time < ?1 AND (p.tenant_id = ?2 OR p.tenant_id IS NULL)",
             )?;
             let ids = stmt
-                .query_map(params![cutoff_rfc, tenant_id], |row| row.get::<_, String>(0))?
+                .query_map(params![cutoff_rfc, tenant_id], |row| {
+                    row.get::<_, String>(0)
+                })?
                 .collect::<Result<Vec<_>, _>>()?;
             ids
         };
@@ -627,10 +636,22 @@ impl Storage {
         // Delete in a transaction for atomicity.
         let tx = conn.unchecked_transaction()?;
         for crawl_id in &crawl_ids {
-            tx.execute("DELETE FROM links WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM findings WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM images WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
-            tx.execute("DELETE FROM schemas WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
+            tx.execute(
+                "DELETE FROM links WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM findings WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM images WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
+            tx.execute(
+                "DELETE FROM schemas WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)",
+                params![crawl_id],
+            )?;
             tx.execute("DELETE FROM crux_metrics WHERE page_id IN (SELECT id FROM pages WHERE crawl_id = ?1)", params![crawl_id])?;
             tx.execute("DELETE FROM pages WHERE crawl_id = ?1", params![crawl_id])?;
             tx.execute("DELETE FROM crawls WHERE id = ?1", params![crawl_id])?;
@@ -1294,9 +1315,7 @@ impl Storage {
     /// Returns `(crawl_id, start_time_rfc3339)` tuples.
     pub fn list_crawls(&self) -> Result<Vec<(String, String)>, StorageError> {
         let conn = self.conn.lock();
-        let mut stmt = conn.prepare(
-            "SELECT id, start_time FROM crawls ORDER BY start_time ASC",
-        )?;
+        let mut stmt = conn.prepare("SELECT id, start_time FROM crawls ORDER BY start_time ASC")?;
         let rows = stmt
             .query_map([], |row| {
                 Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
@@ -1767,10 +1786,7 @@ impl crate::storage_trait::StorageBackend for Storage {
         Ok(rows)
     }
 
-    fn get_crux_metrics_for_crawl(
-        &self,
-        crawl_id: &str,
-    ) -> Result<Vec<CruxMetrics>, StorageError> {
+    fn get_crux_metrics_for_crawl(&self, crawl_id: &str) -> Result<Vec<CruxMetrics>, StorageError> {
         Storage::get_crux_metrics_for_crawl(self, crawl_id)
     }
 
@@ -1797,8 +1813,9 @@ impl crate::storage_trait::StorageBackend for Storage {
         target_crawl_id: &str,
     ) -> Result<crate::compare::CrawlDiff, StorageError> {
         let conn = self.conn();
-        crate::compare::compare_same_db(&conn, baseline_crawl_id, target_crawl_id)
-            .map_err(|e| StorageError::Database(rusqlite::Error::InvalidParameterName(e.to_string())))
+        crate::compare::compare_same_db(&conn, baseline_crawl_id, target_crawl_id).map_err(|e| {
+            StorageError::Database(rusqlite::Error::InvalidParameterName(e.to_string()))
+        })
     }
 }
 

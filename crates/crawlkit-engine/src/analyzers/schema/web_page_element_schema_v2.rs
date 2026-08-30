@@ -31,7 +31,12 @@ impl Analyzer for WebPageElementSchemaValidatorV2 {
             }
             let data = &sd.data;
 
-            if data.get("name").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+            if data
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .is_empty()
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
@@ -41,8 +46,7 @@ impl Analyzer for WebPageElementSchemaValidatorV2 {
                                   property."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"name\" with the element name or label."
-                        .to_string(),
+                    recommendation: "Add \"name\" with the element name or label.".to_string(),
                 });
             }
         }
@@ -132,14 +136,18 @@ mod tests {
             data: serde_json::json!({"@type": "WebPageElement", "name": "Sidebar"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(WebPageElementSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(WebPageElementSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
     fn test_welem_v2_no_structured_data() {
         let page = make_page("https://example.com");
         let ctx = make_ctx(&page, None);
-        assert!(WebPageElementSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(WebPageElementSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -151,7 +159,9 @@ mod tests {
             data: serde_json::json!({"@type": "WebPage"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(WebPageElementSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(WebPageElementSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]
@@ -210,7 +220,10 @@ mod tests {
             data: serde_json::json!({"@type": "WebPageElement"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert_eq!(WebPageElementSchemaValidatorV2::new().analyze(&ctx).len(), 1);
+        assert_eq!(
+            WebPageElementSchemaValidatorV2::new().analyze(&ctx).len(),
+            1
+        );
     }
 
     #[test]
@@ -222,7 +235,9 @@ mod tests {
             data: serde_json::json!({"@type": "WebPageElement", "name": "Main Header"}),
         }];
         let ctx = make_ctx(&page, None);
-        assert!(WebPageElementSchemaValidatorV2::new().analyze(&ctx).is_empty());
+        assert!(WebPageElementSchemaValidatorV2::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     #[test]

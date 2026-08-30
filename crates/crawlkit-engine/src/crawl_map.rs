@@ -1,4 +1,10 @@
-#![allow(clippy::unwrap_used, clippy::needless_return, clippy::manual_contains, clippy::unnecessary_to_owned, clippy::needless_range_loop)]
+#![allow(
+    clippy::unwrap_used,
+    clippy::needless_return,
+    clippy::manual_contains,
+    clippy::unnecessary_to_owned,
+    clippy::needless_range_loop
+)]
 
 //! Visual crawl map generator producing SVG output from link graphs.
 //!
@@ -350,7 +356,11 @@ pub fn generate_svg(
             svg,
             r#"<text x="{:.1}" y="{:.1}" class="node-label">{}</text>"#,
             node.x,
-            if ty < 20.0 { node.y + node.radius + 14.0 } else { ty },
+            if ty < 20.0 {
+                node.y + node.radius + 14.0
+            } else {
+                ty
+            },
             label,
         )
         .unwrap();
@@ -373,10 +383,7 @@ pub fn generate_svg(
             vec!["#3b82f6", "#6366f1", "#8b5cf6", "#a855f7", "#d946ef"],
             vec!["Depth 0", "Depth 1", "Depth 2", "Depth 3", "Depth 4+"],
         ),
-        ColorScheme::Popularity => (
-            vec!["#4ade80", "#facc15"],
-            vec!["High links", "Low links"],
-        ),
+        ColorScheme::Popularity => (vec!["#4ade80", "#facc15"], vec!["High links", "Low links"]),
     };
     for (j, (c, l)) in entries.iter().zip(labels.iter()).enumerate() {
         let lx = 80.0 + j as f64 * 120.0;
@@ -596,8 +603,7 @@ mod tests {
         let links = vec![(0, 1), (1, 2), (2, 3), (3, 4)];
 
         // Record initial state
-        let initial_positions: Vec<(f64, f64)> =
-            nodes.iter().map(|n| (n.x, n.y)).collect();
+        let initial_positions: Vec<(f64, f64)> = nodes.iter().map(|n| (n.x, n.y)).collect();
 
         force_directed_layout(&mut nodes, &links, 100);
 
@@ -607,8 +613,16 @@ mod tests {
 
         // All nodes should be within bounds
         for node in &nodes {
-            assert!(node.x >= 60.0 && node.x <= 1140.0, "x out of bounds: {}", node.x);
-            assert!(node.y >= 60.0 && node.y <= 840.0, "y out of bounds: {}", node.y);
+            assert!(
+                node.x >= 60.0 && node.x <= 1140.0,
+                "x out of bounds: {}",
+                node.x
+            );
+            assert!(
+                node.y >= 60.0 && node.y <= 840.0,
+                "y out of bounds: {}",
+                node.y
+            );
         }
     }
 
@@ -628,8 +642,16 @@ mod tests {
         force_directed_layout(&mut nodes, &links, 50);
 
         for node in &nodes {
-            assert!(node.x >= 60.0 && node.x <= 1140.0, "x out of bounds: {}", node.x);
-            assert!(node.y >= 60.0 && node.y <= 840.0, "y out of bounds: {}", node.y);
+            assert!(
+                node.x >= 60.0 && node.x <= 1140.0,
+                "x out of bounds: {}",
+                node.x
+            );
+            assert!(
+                node.y >= 60.0 && node.y <= 840.0,
+                "y out of bounds: {}",
+                node.y
+            );
         }
     }
 

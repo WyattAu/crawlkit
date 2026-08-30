@@ -59,8 +59,7 @@ impl Analyzer for HowToSchemaValidator {
                                   how-to procedure."
                         .to_string(),
                     url: url.clone(),
-                    recommendation: "Add \"step\" with an array of HowToStep objects."
-                        .to_string(),
+                    recommendation: "Add \"step\" with an array of HowToStep objects.".to_string(),
                 });
                 continue;
             };
@@ -101,7 +100,6 @@ impl Analyzer for HowToSchemaValidator {
         findings
     }
 }
-
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
@@ -163,168 +161,166 @@ mod tests {
     }
 
     #[test]
-fn test_howto_missing_name() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "step": [{"@type": "HowToStep", "name": "Step 1", "text": "Do this"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "HOWTO001"));
-}
-
-
-    #[test]
-fn test_howto_missing_step() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake a cake"
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "HOWTO002"));
-}
-
+    fn test_howto_missing_name() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "step": [{"@type": "HowToStep", "name": "Step 1", "text": "Do this"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HOWTO001"));
+    }
 
     #[test]
-fn test_howto_step_missing_name_and_text() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake",
-            "step": [{"@type": "HowToStep"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).iter().any(|f| f.code == "HOWTO003"));
-}
-
-
-    #[test]
-fn test_howto_step_missing_name() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake",
-            "step": [{"@type": "HowToStep", "text": "Do this"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = HowToSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "HOWTO003"));
-    assert!(!findings.iter().any(|f| f.code == "HOWTO001"));
-}
-
+    fn test_howto_missing_step() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake a cake"
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HOWTO002"));
+    }
 
     #[test]
-fn test_howto_step_missing_text() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake",
-            "step": [{"@type": "HowToStep", "name": "Step 1"}]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = HowToSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "HOWTO003"));
-    assert!(!findings.iter().any(|f| f.code == "HOWTO001"));
-}
-
-
-    #[test]
-fn test_howto_valid() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake a cake",
-            "step": [
-                {"@type": "HowToStep", "name": "Prep", "text": "Preheat oven"},
-                {"@type": "HowToStep", "name": "Bake", "text": "Put in oven"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_howto_step_missing_name_and_text() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake",
+                "step": [{"@type": "HowToStep"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .any(|f| f.code == "HOWTO003"));
+    }
 
     #[test]
-fn test_howto_non_howto_type_ignored() {
-    let mut page = make_page("https://example.com");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("Event".to_string()),
-        data: serde_json::json!({"@type": "Event", "name": "Concert"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
-
-    #[test]
-fn test_howto_no_structured_data() {
-    let page = make_page("https://example.com");
-    let ctx = make_ctx(&page, Some(200));
-    assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
-}
-
+    fn test_howto_step_missing_name() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake",
+                "step": [{"@type": "HowToStep", "text": "Do this"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HowToSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HOWTO003"));
+        assert!(!findings.iter().any(|f| f.code == "HOWTO001"));
+    }
 
     #[test]
-fn test_howto_multiple_steps_missing_properties() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({
-            "@type": "HowTo",
-            "name": "How to bake",
-            "step": [
-                {"@type": "HowToStep", "text": "Step 1"},
-                {"@type": "HowToStep", "name": "Step 2"}
-            ]
-        }),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = HowToSchemaValidator::new().analyze(&ctx);
-    let howto003_count = findings.iter().filter(|f| f.code == "HOWTO003").count();
-    assert_eq!(howto003_count, 2);
-}
-
+    fn test_howto_step_missing_text() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake",
+                "step": [{"@type": "HowToStep", "name": "Step 1"}]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HowToSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HOWTO003"));
+        assert!(!findings.iter().any(|f| f.code == "HOWTO001"));
+    }
 
     #[test]
-fn test_howto_missing_all_fields() {
-    let mut page = make_page("https://example.com/howto");
-    page.structured_data = vec![StructuredData {
-        context: Some("https://schema.org".to_string()),
-        r#type: Some("HowTo".to_string()),
-        data: serde_json::json!({"@type": "HowTo"}),
-    }];
-    let ctx = make_ctx(&page, Some(200));
-    let findings = HowToSchemaValidator::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "HOWTO001"));
-    assert!(findings.iter().any(|f| f.code == "HOWTO002"));
-}
+    fn test_howto_valid() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake a cake",
+                "step": [
+                    {"@type": "HowToStep", "name": "Prep", "text": "Preheat oven"},
+                    {"@type": "HowToStep", "name": "Bake", "text": "Put in oven"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_howto_non_howto_type_ignored() {
+        let mut page = make_page("https://example.com");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("Event".to_string()),
+            data: serde_json::json!({"@type": "Event", "name": "Concert"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
+    }
 
+    #[test]
+    fn test_howto_no_structured_data() {
+        let page = make_page("https://example.com");
+        let ctx = make_ctx(&page, Some(200));
+        assert!(HowToSchemaValidator::new().analyze(&ctx).is_empty());
+    }
+
+    #[test]
+    fn test_howto_multiple_steps_missing_properties() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({
+                "@type": "HowTo",
+                "name": "How to bake",
+                "step": [
+                    {"@type": "HowToStep", "text": "Step 1"},
+                    {"@type": "HowToStep", "name": "Step 2"}
+                ]
+            }),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HowToSchemaValidator::new().analyze(&ctx);
+        let howto003_count = findings.iter().filter(|f| f.code == "HOWTO003").count();
+        assert_eq!(howto003_count, 2);
+    }
+
+    #[test]
+    fn test_howto_missing_all_fields() {
+        let mut page = make_page("https://example.com/howto");
+        page.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".to_string()),
+            r#type: Some("HowTo".to_string()),
+            data: serde_json::json!({"@type": "HowTo"}),
+        }];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = HowToSchemaValidator::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "HOWTO001"));
+        assert!(findings.iter().any(|f| f.code == "HOWTO002"));
+    }
 }

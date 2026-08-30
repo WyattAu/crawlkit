@@ -71,6 +71,18 @@ pub struct PluginIndexEntry {
     pub wasm_hash: String,
     pub signature: String,
     pub signed_by: String,
+    /// Average user rating (0.0–5.0).
+    #[serde(default)]
+    pub rating: Option<f64>,
+    /// Number of ratings submitted.
+    #[serde(default)]
+    pub rating_count: Option<u32>,
+    /// Whether the plugin has been verified by the registry maintainer.
+    #[serde(default)]
+    pub verified: bool,
+    /// ISO 8601 timestamp of the last update.
+    #[serde(default)]
+    pub last_updated: Option<String>,
 }
 
 /// Parse an index document. Entry order is preserved.

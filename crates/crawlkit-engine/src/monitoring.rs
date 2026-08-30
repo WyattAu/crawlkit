@@ -1,4 +1,37 @@
-use crate::compare::CrawlDiff;
+use crate::compare::{CrawlDiff, ChangeKind};
+
+/// Severity level for a monitoring alert.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize, serde::Deserialize)]
+pub enum AlertSeverity {
+    /// Minor change: new page added, title tweak, small content drift.
+    Info,
+    /// Significant change: large content removal, status code change among
+    /// success codes, multiple CWV regressions.
+    Warning,
+    /// Breaking change: page now 4xx/5xx, page removed, content dropped >50%.
+    Critical,
+}
+
+impl std::fmt::Display for AlertSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AlertSeverity::Info => write!(f, "info"),
+            AlertSeverity::Warning => write!(f, "warning"),
+            AlertSeverity::Critical => write!(f, "critical"),
+        }
+    }
+}
+
+/// A single alert item produced by monitoring delta analysis.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AlertDetail {
+    /// URL the alert pertains to.
+    pub url: String,
+    /// Severity of this alert.
+    pub severity: AlertSeverity,
+    /// Human-readable description.
+    pub message: String,
+}
 
 /// Result of analyzing a crawl delta for monitoring purposes.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -13,6 +46,48 @@ pub struct MonitoringResult {
     pub cwv_regressions: usize,
     /// Whether the alert threshold was exceeded.
     pub alert_triggered: bool,
+    /// Overall severity of the monitoring result (worst of all alerts).
+    pub overall_severity: AlertSeverity,
+    /// Per-URL alert details with severity classification.
+    pub alerts: Vec<AlertDetail>,
+    /// All affected URLs (union of added, removed, changed).
+    pub changed_urls: Vec<String>,
+}
+
+/// Classify a status code transition into an [`AlertSeverity`].
+fn classify_status_change(from: u16, to: u16) -> AlertSeverity {
+    let from_success = (200..300).contains(&from);
+    let to_error = to >= 400;
+    if from_success && to_error {
+        AlertSeverity::Critical
+    } else if from != to {
+        AlertSeverity::Warning
+    } else {
+        AlertSeverity::Info
+    }
+}
+
+/// Classify a content (word count) change into an [`AlertSeverity`].
+fn classify_content_change(from: Option<usize>, to: Option<usize>) -> AlertSeverity {
+    match (from, to) {
+        (Some(f), Some(t)) => {
+            let diff = (f as isize - t as isize).unsigned_abs();
+            let pct = if f > 0 {
+                diff as f64 / f as f64
+            } else {
+                return AlertSeverity::Warning;
+            };
+            if pct > 0.50 {
+                AlertSeverity::Critical
+            } else if pct > 0.20 {
+                AlertSeverity::Warning
+            } else {
+                AlertSeverity::Info
+            }
+        }
+        (Some(_), None) | (None, Some(_)) => AlertSeverity::Warning,
+        _ => AlertSeverity::Info,
+    }
 }
 
 /// Analyze a [`CrawlDiff`] and produce a [`MonitoringResult`].
@@ -49,12 +124,109 @@ pub fn analyze_crawl_delta(diff: &CrawlDiff, threshold: usize) -> MonitoringResu
         total >= threshold
     };
 
+    // Build per-URL alerts with severity classification.
+    let mut alerts: Vec<AlertDetail> = Vec::new();
+
+    for entry in &diff.added {
+        alerts.push(AlertDetail {
+            url: entry.url.clone(),
+            severity: AlertSeverity::Info,
+            message: "New page detected".to_string(),
+        });
+    }
+
+    for entry in &diff.removed {
+        alerts.push(AlertDetail {
+            url: entry.url.clone(),
+            severity: AlertSeverity::Critical,
+            message: "Page removed".to_string(),
+        });
+    }
+
+    for entry in &diff.status_changes {
+        if let ChangeKind::StatusChanged { from, to } = &entry.change {
+            let severity = classify_status_change(*from, *to);
+            alerts.push(AlertDetail {
+                url: entry.url.clone(),
+                severity,
+                message: format!("Status code changed: {from} -> {to}"),
+            });
+        }
+    }
+
+    for entry in &diff.title_changes {
+        alerts.push(AlertDetail {
+            url: entry.url.clone(),
+            severity: AlertSeverity::Info,
+            message: "Page title changed".to_string(),
+        });
+    }
+
+    for entry in &diff.content_changes {
+        if let ChangeKind::ContentChanged { from, to } = &entry.change {
+            let severity = classify_content_change(*from, *to);
+            alerts.push(AlertDetail {
+                url: entry.url.clone(),
+                severity,
+                message: format!(
+                    "Content changed: {} -> {} words",
+                    from.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                    to.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                ),
+            });
+        }
+    }
+
+    for entry in &diff.size_changes {
+        if let ChangeKind::SizeChanged { from, to } = &entry.change {
+            alerts.push(AlertDetail {
+                url: entry.url.clone(),
+                severity: AlertSeverity::Warning,
+                message: format!(
+                    "Body size changed: {} -> {} bytes",
+                    from.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                    to.map(|v| v.to_string()).unwrap_or_else(|| "?".into()),
+                ),
+            });
+        }
+    }
+
+    for cwv in &diff.cwv_changes {
+        if cwv.regression {
+            alerts.push(AlertDetail {
+                url: cwv.url.clone(),
+                severity: AlertSeverity::Warning,
+                message: format!(
+                    "CWV regression: {} {:.2} -> {:.2}",
+                    cwv.metric_name,
+                    cwv.old_value.unwrap_or(0.0),
+                    cwv.new_value.unwrap_or(0.0),
+                ),
+            });
+        }
+    }
+
+    let overall_severity = alerts
+        .iter()
+        .map(|a| a.severity)
+        .max()
+        .unwrap_or(AlertSeverity::Info);
+
+    let mut all_urls: Vec<String> = changed_urls.into_iter().cloned().collect();
+    all_urls.extend(diff.added.iter().map(|e| e.url.clone()));
+    all_urls.extend(diff.removed.iter().map(|e| e.url.clone()));
+    all_urls.sort();
+    all_urls.dedup();
+
     MonitoringResult {
         new_pages,
         removed_pages,
         changed_pages,
         cwv_regressions,
         alert_triggered,
+        overall_severity,
+        alerts,
+        changed_urls: all_urls,
     }
 }
 
@@ -86,6 +258,9 @@ mod tests {
         assert_eq!(result.removed_pages, 0);
         assert_eq!(result.changed_pages, 0);
         assert_eq!(result.cwv_regressions, 0);
+        assert_eq!(result.overall_severity, AlertSeverity::Info);
+        assert!(result.alerts.is_empty());
+        assert!(result.changed_urls.is_empty());
     }
 
     #[test]
@@ -105,6 +280,9 @@ mod tests {
         let result = analyze_crawl_delta(&diff, 5);
         assert!(!result.alert_triggered);
         assert_eq!(result.new_pages, 1);
+        assert_eq!(result.alerts.len(), 1);
+        assert_eq!(result.alerts[0].severity, AlertSeverity::Info);
+        assert!(result.changed_urls.contains(&"https://example.com/new".to_string()));
     }
 
     #[test]
@@ -143,7 +321,6 @@ mod tests {
     #[test]
     fn test_analyze_changed_pages_deduplicated() {
         let mut diff = empty_diff();
-        // Same URL has both a status change and a title change
         diff.status_changes.push(DiffEntry {
             url: "https://example.com/page".into(),
             change: ChangeKind::StatusChanged { from: 200, to: 301 },
@@ -156,7 +333,8 @@ mod tests {
             },
         });
         let result = analyze_crawl_delta(&diff, 1);
-        assert_eq!(result.changed_pages, 1); // deduplicated
+        assert_eq!(result.changed_pages, 1);
+        assert!(result.changed_urls.contains(&"https://example.com/page".to_string()));
     }
 
     #[test]
@@ -174,7 +352,7 @@ mod tests {
             metric_name: "CLS".into(),
             old_value: Some(0.1),
             new_value: Some(0.05),
-            regression: false, // improvement, not regression
+            regression: false,
         });
         let result = analyze_crawl_delta(&diff, 1);
         assert_eq!(result.cwv_regressions, 1);
@@ -206,12 +384,117 @@ mod tests {
             new_value: Some(200.0),
             regression: true,
         });
-        // total = 1 + 1 + 1 + 1 = 4
         let result = analyze_crawl_delta(&diff, 4);
         assert!(result.alert_triggered);
         assert_eq!(result.new_pages, 1);
         assert_eq!(result.removed_pages, 1);
         assert_eq!(result.changed_pages, 1);
         assert_eq!(result.cwv_regressions, 1);
+        assert!(result.alerts.len() >= 4);
+    }
+
+    #[test]
+    fn test_severity_classification_status_change() {
+        assert_eq!(classify_status_change(200, 404), AlertSeverity::Critical);
+        assert_eq!(classify_status_change(200, 500), AlertSeverity::Critical);
+        assert_eq!(classify_status_change(200, 301), AlertSeverity::Warning);
+        assert_eq!(classify_status_change(301, 302), AlertSeverity::Warning);
+        assert_eq!(classify_status_change(200, 200), AlertSeverity::Info);
+    }
+
+    #[test]
+    fn test_severity_classification_content_change() {
+        assert_eq!(classify_content_change(Some(1000), Some(400)), AlertSeverity::Critical);
+        assert_eq!(classify_content_change(Some(1000), Some(700)), AlertSeverity::Warning);
+        assert_eq!(classify_content_change(Some(1000), Some(950)), AlertSeverity::Info);
+        assert_eq!(classify_content_change(Some(1000), None), AlertSeverity::Warning);
+        assert_eq!(classify_content_change(None, Some(500)), AlertSeverity::Warning);
+    }
+
+    #[test]
+    fn test_overall_severity_is_worst() {
+        let mut diff = empty_diff();
+        diff.added.push(DiffEntry {
+            url: "https://example.com/new".into(),
+            change: ChangeKind::Added,
+        });
+        diff.removed.push(DiffEntry {
+            url: "https://example.com/removed".into(),
+            change: ChangeKind::Removed,
+        });
+        diff.status_changes.push(DiffEntry {
+            url: "https://example.com/broken".into(),
+            change: ChangeKind::StatusChanged { from: 200, to: 404 },
+        });
+        let result = analyze_crawl_delta(&diff, 0);
+        assert_eq!(result.overall_severity, AlertSeverity::Critical);
+    }
+
+    #[test]
+    fn test_removed_page_is_critical() {
+        let mut diff = empty_diff();
+        diff.removed.push(DiffEntry {
+            url: "https://example.com/gone".into(),
+            change: ChangeKind::Removed,
+        });
+        let result = analyze_crawl_delta(&diff, 0);
+        let removed_alert = result.alerts.iter().find(|a| a.url.contains("gone")).unwrap();
+        assert_eq!(removed_alert.severity, AlertSeverity::Critical);
+        assert_eq!(result.overall_severity, AlertSeverity::Critical);
+    }
+
+    #[test]
+    fn test_changed_urls_deduplication() {
+        let mut diff = empty_diff();
+        diff.status_changes.push(DiffEntry {
+            url: "https://example.com/page".into(),
+            change: ChangeKind::StatusChanged { from: 200, to: 301 },
+        });
+        diff.title_changes.push(DiffEntry {
+            url: "https://example.com/page".into(),
+            change: ChangeKind::TitleChanged {
+                from: Some("Old".into()),
+                to: Some("New".into()),
+            },
+        });
+        diff.added.push(DiffEntry {
+            url: "https://example.com/page".into(),
+            change: ChangeKind::Added,
+        });
+        let result = analyze_crawl_delta(&diff, 0);
+        let count = result
+            .changed_urls
+            .iter()
+            .filter(|u| **u == "https://example.com/page")
+            .count();
+        assert_eq!(count, 1, "changed_urls should deduplicate");
+    }
+
+    #[test]
+    fn test_content_change_critical_severity() {
+        let mut diff = empty_diff();
+        diff.content_changes.push(DiffEntry {
+            url: "https://example.com/gutted".into(),
+            change: ChangeKind::ContentChanged {
+                from: Some(1000),
+                to: Some(100),
+            },
+        });
+        let result = analyze_crawl_delta(&diff, 0);
+        let alert = result.alerts.iter().find(|a| a.url.contains("gutted")).unwrap();
+        assert_eq!(alert.severity, AlertSeverity::Critical);
+    }
+
+    #[test]
+    fn test_alert_severity_display() {
+        assert_eq!(AlertSeverity::Info.to_string(), "info");
+        assert_eq!(AlertSeverity::Warning.to_string(), "warning");
+        assert_eq!(AlertSeverity::Critical.to_string(), "critical");
+    }
+
+    #[test]
+    fn test_alert_severity_ord() {
+        assert!(AlertSeverity::Info < AlertSeverity::Warning);
+        assert!(AlertSeverity::Warning < AlertSeverity::Critical);
     }
 }

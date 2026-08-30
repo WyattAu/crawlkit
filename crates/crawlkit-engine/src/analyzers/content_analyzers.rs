@@ -4457,6 +4457,448 @@ impl Analyzer for CourseProviderValidatorV2 {
     }
 }
 
+// =========================================================================
+// ArticleQualityAnalyzer
+// =========================================================================
+
+pub struct ArticleQualityAnalyzer;
+
+impl Default for ArticleQualityAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ArticleQualityAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ArticleQualityAnalyzer {
+    fn name(&self) -> &str { "article-quality" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let type_str = sd.r#type.as_deref().unwrap_or("");
+            if !matches!(type_str, "Article" | "NewsArticle" | "BlogPosting" | "ScholarlyArticle") {
+                continue;
+            }
+            let data = &sd.data;
+            if data.get("headline").and_then(|v| v.as_str()).unwrap_or("").is_empty() {
+                findings.push(Finding { severity: Severity::Error, category: IssueCategory::Schema, code: "ARTQUAL001".to_string(), title: "Article schema missing headline".to_string(), description: "An Article structured data block is missing the required \"headline\" property.".to_string(), url: url.clone(), recommendation: "Add \"headline\" with a concise article title.".to_string() });
+            }
+            if data.get("author").is_none() {
+                findings.push(Finding { severity: Severity::Error, category: IssueCategory::Schema, code: "ARTQUAL002".to_string(), title: "Article schema missing author".to_string(), description: "An Article structured data block is missing the required \"author\" property.".to_string(), url: url.clone(), recommendation: "Add \"author\" with a Person or Organization object.".to_string() });
+            }
+            if data.get("datePublished").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ARTQUAL003".to_string(), title: "Article schema missing datePublished".to_string(), description: "An Article structured data block is missing the \"datePublished\" property.".to_string(), url: url.clone(), recommendation: "Add \"datePublished\" with an ISO 8601 date.".to_string() });
+            }
+            if data.get("image").is_none() && data.get("thumbnailUrl").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "ARTQUAL004".to_string(), title: "Article schema missing image".to_string(), description: "An Article structured data block has neither \"image\" nor \"thumbnailUrl\".".to_string(), url: url.clone(), recommendation: "Add \"image\" to enable rich snippet images.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ContentDepthAnalyzer
+// =========================================================================
+
+pub struct ContentDepthAnalyzer;
+
+impl Default for ContentDepthAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ContentDepthAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ContentDepthAnalyzer {
+    fn name(&self) -> &str { "content-depth" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let word_count = ctx.page.word_count;
+        let heading_count = ctx.page.headings.len();
+
+        if word_count == 0 {
+            return findings;
+        }
+
+        if heading_count == 0 && word_count > 100 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CDEPTH001".to_string(), title: "Content missing headings".to_string(), description: format!("Page has {word_count} words but no headings. Headings improve content scannability and SEO."), url: url.clone(), recommendation: "Add H1-H6 headings to structure the content.".to_string() });
+        }
+
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count == 0 && word_count > 50 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CDEPTH002".to_string(), title: "Missing H1 heading".to_string(), description: "Page has no H1 heading. The H1 should describe the main topic.".to_string(), url: url.clone(), recommendation: "Add exactly one H1 heading with the main topic.".to_string() });
+        }
+        if h1_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CDEPTH003".to_string(), title: "Multiple H1 headings".to_string(), description: format!("Page has {h1_count} H1 headings. Best practice is to have exactly one H1."), url: url.clone(), recommendation: "Use exactly one H1 heading per page.".to_string() });
+        }
+
+        if word_count > 50 && heading_count > 0 {
+            let ratio = word_count as f64 / heading_count as f64;
+            if ratio > 300.0 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Content, code: "CDEPTH004".to_string(), title: "Low heading density".to_string(), description: format!("Average {ratio:.0} words per heading. Consider adding more subheadings for better scannability."), url: url.clone(), recommendation: "Add H2/H3 subheadings every 200-300 words.".to_string() });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// HeadingCoverageAnalyzer
+// =========================================================================
+
+pub struct HeadingCoverageAnalyzer;
+
+impl Default for HeadingCoverageAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl HeadingCoverageAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HeadingCoverageAnalyzer {
+    fn name(&self) -> &str { "heading-coverage" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() {
+            return findings;
+        }
+
+        let levels: Vec<u8> = ctx.page.headings.iter().map(|h| h.level).collect();
+        let max_level = levels.iter().copied().max().unwrap_or(0);
+        if max_level > 0 {
+            let has_h1 = levels.contains(&1);
+            if !has_h1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "HCOV001".to_string(), title: "Heading hierarchy missing H1".to_string(), description: "Headings exist but no H1 is present.".to_string(), url: url.clone(), recommendation: "Add an H1 heading as the first heading on the page.".to_string() });
+            }
+        }
+
+        let mut prev_level: u8 = 0;
+        for h in &ctx.page.headings {
+            if prev_level > 0 && h.level > prev_level + 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "HCOV002".to_string(), title: "Heading level skipped".to_string(), description: format!("Heading level jumped from H{prev_level} to H{}.", h.level), url: url.clone(), recommendation: format!("Use H{} after H{} for proper hierarchy.", prev_level + 1, prev_level) });
+            }
+            prev_level = h.level;
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// KeywordProminenceAnalyzer
+// =========================================================================
+
+pub struct KeywordProminenceAnalyzer;
+
+impl Default for KeywordProminenceAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl KeywordProminenceAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for KeywordProminenceAnalyzer {
+    fn name(&self) -> &str { "keyword-prominence" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.meta.title.is_none() && ctx.page.meta.description.is_none() {
+            return findings;
+        }
+
+        let title_words: Vec<String> = ctx.page.meta.title.as_deref().unwrap_or("").split_whitespace().map(|w| w.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()).filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str())).collect();
+
+        let desc_words: Vec<String> = ctx.page.meta.description.as_deref().unwrap_or("").split_whitespace().map(|w| w.to_lowercase().chars().filter(|c| c.is_alphanumeric()).collect()).filter(|w: &String| w.len() > 2 && !STOP_WORDS.contains(&w.as_str())).collect();
+
+        if !title_words.is_empty() && !desc_words.is_empty() {
+            let overlap: usize = title_words.iter().filter(|w| desc_words.contains(w)).count();
+            let overlap_ratio = overlap as f64 / title_words.len() as f64;
+            if overlap_ratio < 0.3 && title_words.len() >= 3 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "KWPRO001".to_string(), title: "Low keyword overlap between title and description".to_string(), description: format!("Only {overlap}/{} title keywords appear in the meta description.", title_words.len()), url: url.clone(), recommendation: "Include important keywords in both title and meta description.".to_string() });
+            }
+        }
+
+        let h1_text: String = ctx.page.headings.iter().filter(|h| h.level == 1).map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+        if !h1_text.is_empty() && !title_words.is_empty() {
+            let h1_lower = h1_text.to_lowercase();
+            let title_in_h1: usize = title_words.iter().filter(|w| h1_lower.contains(w.as_str())).count();
+            let ratio = title_in_h1 as f64 / title_words.len() as f64;
+            if ratio < 0.2 && title_words.len() >= 2 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "KWPRO002".to_string(), title: "Title keywords missing from H1".to_string(), description: "Most title keywords are not reflected in the H1 heading.".to_string(), url: url.clone(), recommendation: "Ensure the H1 and title share core keywords for consistency.".to_string() });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentFreshnessSignalAnalyzer
+// =========================================================================
+
+pub struct ContentFreshnessSignalAnalyzer;
+
+impl Default for ContentFreshnessSignalAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ContentFreshnessSignalAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ContentFreshnessSignalAnalyzer {
+    fn name(&self) -> &str { "content-freshness-signal" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has_date_published = ctx.page.structured_data.iter().any(|sd| sd.data.get("datePublished").is_some());
+        let has_date_modified = ctx.page.structured_data.iter().any(|sd| sd.data.get("dateModified").is_some());
+
+        if !has_date_published && !has_date_modified {
+            let lower_url = url.to_lowercase();
+            if lower_url.contains("/blog/") || lower_url.contains("/news/") || lower_url.contains("/article/") || lower_url.contains("/post/") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FRESHSIG001".to_string(), title: "Blog/news content missing date signals".to_string(), description: "Blog or news URL pattern detected but no datePublished or dateModified in structured data.".to_string(), url: url.clone(), recommendation: "Add datePublished and dateModified to Article schema for freshness signals.".to_string() });
+            }
+        }
+
+        if has_date_published && !has_date_modified {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Content, code: "FRESHSIG002".to_string(), title: "Missing dateModified in schema".to_string(), description: "datePublished is present but dateModified is missing. Adding dateModified helps search engines understand content freshness.".to_string(), url: url.clone(), recommendation: "Add \"dateModified\" to the Article schema when content is updated.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MetaRobotsValidationAnalyzer
+// =========================================================================
+
+pub struct MetaRobotsValidationAnalyzer;
+
+impl Default for MetaRobotsValidationAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl MetaRobotsValidationAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for MetaRobotsValidationAnalyzer {
+    fn name(&self) -> &str { "meta-robots-validation" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let robots = match &ctx.page.meta.robots {
+            Some(r) => r,
+            None => return findings,
+        };
+
+        let directives: Vec<String> = robots.split(',').map(|s| s.trim().to_lowercase()).collect();
+
+        if directives.contains(&"noindex".to_string()) && directives.contains(&"index".to_string()) {
+            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "MRVAL001".to_string(), title: "Conflicting noindex and index directives".to_string(), description: "Meta robots contains both noindex and index. Behavior is browser-dependent.".to_string(), url: url.clone(), recommendation: "Use either noindex or index, not both.".to_string() });
+        }
+
+        if directives.contains(&"nofollow".to_string()) && directives.contains(&"follow".to_string()) {
+            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "MRVAL002".to_string(), title: "Conflicting nofollow and follow directives".to_string(), description: "Meta robots contains both nofollow and follow. Behavior is browser-dependent.".to_string(), url: url.clone(), recommendation: "Use either nofollow or follow, not both.".to_string() });
+        }
+
+        if directives.contains(&"noarchive".to_string()) || directives.contains(&"nosnippet".to_string()) {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "MRVAL003".to_string(), title: "Search snippet restriction detected".to_string(), description: format!("Meta robots contains directives that limit search snippet display: {robots}."), url: url.clone(), recommendation: "Remove noarchive/nosnippet unless intentionally hiding content from search results.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CanonicalConsistencyAnalyzer
+// =========================================================================
+
+pub struct CanonicalConsistencyAnalyzer;
+
+impl Default for CanonicalConsistencyAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CanonicalConsistencyAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CanonicalConsistencyAnalyzer {
+    fn name(&self) -> &str { "canonical-consistency" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.as_str();
+            if canonical_str.is_empty() {
+                findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "CANCON001".to_string(), title: "Empty canonical URL".to_string(), description: "A canonical tag is present but has an empty href value.".to_string(), url: url.clone(), recommendation: "Remove the canonical tag or provide a valid URL.".to_string() });
+            } else {
+                if let Ok(page_url) = url::Url::parse(url) {
+                    if canonical.scheme() != page_url.scheme() {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANCON002".to_string(), title: "Canonical URL scheme mismatch".to_string(), description: format!("Canonical uses {} but page uses {}.", canonical.scheme(), page_url.scheme()), url: url.clone(), recommendation: "Canonical URL should use the same scheme as the page.".to_string() });
+                    }
+                    if canonical.host_str() != page_url.host_str() {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANCON003".to_string(), title: "Canonical URL points to different domain".to_string(), description: format!("Canonical host {} differs from page host {}.", canonical.host_str().unwrap_or(""), page_url.host_str().unwrap_or("")), url: url.clone(), recommendation: "Verify cross-domain canonical is intentional.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// HreflangNetworkValidator
+// =========================================================================
+
+pub struct HreflangNetworkValidator;
+
+impl Default for HreflangNetworkValidator {
+    fn default() -> Self { Self::new() }
+}
+
+impl HreflangNetworkValidator {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HreflangNetworkValidator {
+    fn name(&self) -> &str { "hreflang-network" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hreflang_tags = &ctx.page.meta.hreflang;
+
+        if hreflang_tags.len() < 2 {
+            return findings;
+        }
+
+        let langs: Vec<&str> = hreflang_tags.iter().map(|t| t.lang.as_str()).collect();
+        let mut seen = std::collections::HashSet::new();
+        for lang in &langs {
+            if !seen.insert(*lang) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFNET001".to_string(), title: "Duplicate hreflang language".to_string(), description: format!("Hreflang language \"{lang}\" appears multiple times."), url: url.clone(), recommendation: "Each hreflang language should appear exactly once per page.".to_string() });
+            }
+        }
+
+        let has_x_default = langs.contains(&"x-default");
+        if !has_x_default && hreflang_tags.len() > 2 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFNET002".to_string(), title: "Missing x-default in hreflang network".to_string(), description: "Multiple hreflang tags exist but no x-default fallback is defined.".to_string(), url: url.clone(), recommendation: "Add an x-default hreflang tag for users whose language doesn't match.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ContentReadabilityScorer
+// =========================================================================
+
+pub struct ContentReadabilityScorer;
+
+impl Default for ContentReadabilityScorer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ContentReadabilityScorer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ContentReadabilityScorer {
+    fn name(&self) -> &str { "content-readability-scorer" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.word_count == 0 {
+            return findings;
+        }
+
+        let text: String = ctx.page.headings.iter().map(|h| h.text.as_str()).collect::<Vec<_>>().join(" ");
+        if text.trim().is_empty() {
+            return findings;
+        }
+
+        let words: Vec<&str> = text.split_whitespace().collect();
+        let word_count = words.len();
+        let sentence_count = count_sentences(&text);
+        let syllable_count: usize = words.iter().map(|w| count_syllables(w)).sum();
+        let fre = flesch_reading_ease(word_count, sentence_count.max(1), syllable_count);
+
+        if fre < 30.0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CREAD001".to_string(), title: "Very difficult readability".to_string(), description: format!("Flesch Reading Ease score is {fre:.1}/100. Content is very difficult to read."), url: url.clone(), recommendation: "Simplify language, shorten sentences, and use common words.".to_string() });
+        } else if fre < 50.0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Content, code: "CREAD002".to_string(), title: "Fairly difficult readability".to_string(), description: format!("Flesch Reading Ease score is {fre:.1}/100."), url: url.clone(), recommendation: "Consider simplifying for a broader audience.".to_string() });
+        }
+
+        let avg_words_per_sentence = word_count as f64 / sentence_count.max(1) as f64;
+        if avg_words_per_sentence > 25.0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "CREAD003".to_string(), title: "Long average sentence length".to_string(), description: format!("Average sentence length is {avg_words_per_sentence:.1} words. Aim for under 20."), url: url.clone(), recommendation: "Break long sentences into shorter ones.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// PageImportanceAnalyzer
+// =========================================================================
+
+pub struct PageImportanceAnalyzer;
+
+impl Default for PageImportanceAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl PageImportanceAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for PageImportanceAnalyzer {
+    fn name(&self) -> &str { "page-importance" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: usize = ctx.page.links.iter().filter(|l| !l.is_external).count();
+        let external_links: usize = ctx.page.links.iter().filter(|l| l.is_external).count();
+
+        if ctx.page.word_count > 0 && internal_links == 0 && external_links == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Links, code: "PIMP001".to_string(), title: "Page has no links".to_string(), description: "The page contains no internal or external links. Pages without links may be orphaned or poorly connected.".to_string(), url: url.clone(), recommendation: "Add relevant internal and external links to improve navigation and topical authority.".to_string() });
+        }
+
+        if internal_links == 0 && ctx.page.word_count > 200 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Links, code: "PIMP002".to_string(), title: "Content page missing internal links".to_string(), description: "A content-rich page has no internal links to other pages on the site.".to_string(), url: url.clone(), recommendation: "Add internal links to related content to improve site structure and user navigation.".to_string() });
+        }
+
+        if external_links > 20 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Links, code: "PIMP003".to_string(), title: "High number of external links".to_string(), description: format!("Page has {external_links} external links. Too many outbound links can dilute link equity."), url: url.clone(), recommendation: "Review external links and consider nofollowing non-essential ones.".to_string() });
+        }
+
+        findings
+    }
+}
+
 #[cfg(test)]
 mod meta_desc_length_tests {
     use super::*;

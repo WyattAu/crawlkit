@@ -351,6 +351,20 @@ pub fn fire_monitoring_webhooks(
             "changed_pages": monitoring.changed_pages,
             "cwv_regressions": monitoring.cwv_regressions,
             "alert_triggered": monitoring.alert_triggered,
+            "overall_severity": monitoring.overall_severity.to_string(),
+            "changed_urls": monitoring.changed_urls,
+            "alerts": monitoring.alerts.iter().map(|a| serde_json::json!({
+                "url": a.url,
+                "severity": a.severity.to_string(),
+                "message": a.message,
+            })).collect::<Vec<_>>(),
+            "summary": {
+                "total_affected_urls": monitoring.changed_urls.len(),
+                "total_alerts": monitoring.alerts.len(),
+                "critical_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Critical).count(),
+                "warning_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Warning).count(),
+                "info_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Info).count(),
+            },
         },
         "timestamp": Utc::now().to_rfc3339(),
     });

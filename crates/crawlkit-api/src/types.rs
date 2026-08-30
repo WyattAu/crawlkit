@@ -618,8 +618,31 @@ pub struct MarketplacePlugin {
     pub tags: Vec<String>,
     pub downloads: u64,
     pub rating: f64,
+    /// Number of ratings submitted for this plugin.
+    pub rating_count: u32,
+    /// Whether the plugin has been verified by the registry maintainer.
+    pub verified: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// A single plugin rating submission.
+#[derive(Debug, Clone, Deserialize, ToSchema)]
+pub struct PluginRating {
+    /// Rating value between 0.0 and 5.0.
+    pub rating: f64,
+    /// Optional review comment.
+    #[serde(default)]
+    pub comment: Option<String>,
+}
+
+/// Response returned after a successful rating submission.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PluginRatingResponse {
+    pub name: String,
+    pub rating: f64,
+    pub rating_count: u32,
+    pub average_rating: f64,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -639,6 +662,8 @@ pub struct SubmitPluginRequest {
 #[derive(Clone)]
 pub struct MarketplaceState {
     pub plugins: Arc<RwLock<HashMap<String, MarketplacePlugin>>>,
+    /// Per-plugin ratings: plugin_name -> list of rating values.
+    pub ratings: Arc<RwLock<HashMap<String, Vec<f64>>>>,
 }
 
 impl Default for MarketplaceState {
@@ -651,6 +676,7 @@ impl MarketplaceState {
     pub fn new() -> Self {
         Self {
             plugins: Arc::new(RwLock::new(HashMap::new())),
+            ratings: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 }

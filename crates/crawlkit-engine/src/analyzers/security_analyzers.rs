@@ -3600,6 +3600,733 @@ impl Analyzer for CertificateTransparencyAnalyzer {
     }
 }
 
+// =========================================================================
+// CspDirectiveAnalyzer
+// =========================================================================
+
+pub struct CspDirectiveAnalyzer;
+
+impl Default for CspDirectiveAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CspDirectiveAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CspDirectiveAnalyzer {
+    fn name(&self) -> &str { "csp-directive-analyzer" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str());
+        let csp = match csp {
+            Some(v) if !v.is_empty() => v,
+            _ => return findings,
+        };
+
+        let directives: Vec<&str> = csp.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+        let directive_names: Vec<&str> = directives.iter().map(|d| d.split_whitespace().next().unwrap_or("")).collect();
+
+        if !directive_names.contains(&"default-src") {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPDIR001".to_string(), title: "CSP missing default-src".to_string(), description: "Content-Security-Policy lacks a default-src directive as fallback.".to_string(), url: url.clone(), recommendation: "Add default-src 'self' as a baseline CSP directive.".to_string() });
+        }
+
+        for &dir in &["script-src", "style-src", "img-src"] {
+            if directive_names.contains(&dir) {
+                let directive = directives.iter().find(|d| d.starts_with(dir)).unwrap();
+                if directive.contains("'unsafe-inline'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPDIR002".to_string(), title: format!("CSP {dir} allows unsafe-inline"), description: format!("{dir} includes 'unsafe-inline', weakening XSS protection."), url: url.clone(), recommendation: format!("Remove 'unsafe-inline' from {dir} and use nonces or hashes.") });
+                }
+                if directive.contains("'unsafe-eval'") {
+                    findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CSPDIR003".to_string(), title: format!("CSP {dir} allows unsafe-eval"), description: format!("{dir} includes 'unsafe-eval', allowing arbitrary code execution."), url: url.clone(), recommendation: format!("Remove 'unsafe-eval' from {dir}.") });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CorsPolicyAnalyzer
+// =========================================================================
+
+pub struct CorsPolicyAnalyzer;
+
+impl Default for CorsPolicyAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CorsPolicyAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CorsPolicyAnalyzer {
+    fn name(&self) -> &str { "cors-policy-analyzer" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let acao = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin")).map(|(_, v)| v.as_str());
+        let acac = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials")).map(|(_, v)| v.as_str());
+
+        if let Some(origin) = acao {
+            if origin == "*" && acac.map(|v| v.eq_ignore_ascii_case("true")).unwrap_or(false) {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CORS001".to_string(), title: "CORS wildcard with credentials".to_string(), description: "Access-Control-Allow-Origin is '*' with Allow-Credentials: true, which browsers reject but indicates misconfiguration.".to_string(), url: url.clone(), recommendation: "Use a specific origin instead of '*' when credentials are allowed.".to_string() });
+            }
+            if origin == "*" {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CORS002".to_string(), title: "CORS allows all origins".to_string(), description: "Access-Control-Allow-Origin is '*', allowing any website to make requests.".to_string(), url: url.clone(), recommendation: "Restrict to specific trusted origins if the resource is sensitive.".to_string() });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CookieSecurityFlagAnalyzer
+// =========================================================================
+
+pub struct CookieSecurityFlagAnalyzer;
+
+impl Default for CookieSecurityFlagAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CookieSecurityFlagAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CookieSecurityFlagAnalyzer {
+    fn name(&self) -> &str { "cookie-security-flag-analyzer" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") {
+                continue;
+            }
+            let lower = v.to_lowercase();
+            let cookie_name = v.split('=').next().unwrap_or("cookie").to_string();
+
+            if !lower.contains("secure") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC001".to_string(), title: format!("Cookie '{cookie_name}' missing Secure flag"), description: "A Set-Cookie header lacks the Secure flag, allowing transmission over HTTP.".to_string(), url: url.clone(), recommendation: "Add the Secure flag to all cookies.".to_string() });
+            }
+            if !lower.contains("httponly") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC002".to_string(), title: format!("Cookie '{cookie_name}' missing HttpOnly flag"), description: "A Set-Cookie header lacks the HttpOnly flag, making it accessible to JavaScript.".to_string(), url: url.clone(), recommendation: "Add the HttpOnly flag to prevent XSS cookie theft.".to_string() });
+            }
+            if !lower.contains("samesite") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COOKIESEC003".to_string(), title: format!("Cookie '{cookie_name}' missing SameSite attribute"), description: "A Set-Cookie header lacks the SameSite attribute.".to_string(), url: url.clone(), recommendation: "Add SameSite=Strict or SameSite=Lax.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// MixedContentDetectionAnalyzer
+// =========================================================================
+
+pub struct MixedContentDetectionAnalyzer;
+
+impl Default for MixedContentDetectionAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl MixedContentDetectionAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for MixedContentDetectionAnalyzer {
+    fn name(&self) -> &str { "mixed-content-detection" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") {
+            return findings;
+        }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let http_script = lower.contains("src=\"http://") && lower.contains("<script");
+            let http_img = lower.contains("src=\"http://") && (lower.contains("<img") || lower.contains("background-image"));
+            let http_link = lower.contains("href=\"http://") && lower.contains("<link");
+
+            if http_script {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "MIXCONT001".to_string(), title: "Mixed content: active script".to_string(), description: "HTTPS page loads scripts over HTTP, which can be intercepted and modified.".to_string(), url: url.clone(), recommendation: "Change all script src attributes to use HTTPS.".to_string() });
+            }
+            if http_img {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXCONT002".to_string(), title: "Mixed content: passive image".to_string(), description: "HTTPS page loads images over HTTP.".to_string(), url: url.clone(), recommendation: "Change image sources to use HTTPS.".to_string() });
+            }
+            if http_link {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXCONT003".to_string(), title: "Mixed content: stylesheet/resource".to_string(), description: "HTTPS page loads stylesheets or other resources over HTTP.".to_string(), url: url.clone(), recommendation: "Change resource URLs to use HTTPS.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// HstsPreloadReadinessAnalyzer
+// =========================================================================
+
+pub struct HstsPreloadReadinessAnalyzer;
+
+impl Default for HstsPreloadReadinessAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl HstsPreloadReadinessAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HstsPreloadReadinessAnalyzer {
+    fn name(&self) -> &str { "hsts-preload-readiness" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hsts = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str());
+        let hsts = match hsts {
+            Some(v) => v,
+            None => return findings,
+        };
+
+        let lower = hsts.to_lowercase();
+        if !lower.contains("includesubdomains") {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSPR001".to_string(), title: "HSTS missing includeSubDomains for preload".to_string(), description: "HSTS header lacks includeSubDomains, required for preload list submission.".to_string(), url: url.clone(), recommendation: "Add includeSubDomains to the HSTS header.".to_string() });
+        }
+        if !lower.contains("preload") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSPR002".to_string(), title: "HSTS missing preload directive".to_string(), description: "HSTS header lacks the preload directive for browser preload list inclusion.".to_string(), url: url.clone(), recommendation: "Add preload to the HSTS header.".to_string() });
+        }
+        if let Some(ma_pos) = lower.find("max-age=") {
+            let after = &lower[ma_pos + 8..];
+            let num_str: String = after.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if let Ok(age) = num_str.parse::<u64>() {
+                if age < 31536000 {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSPR003".to_string(), title: "HSTS max-age too low for preload".to_string(), description: format!("max-age is {age}, preload requires at least 31536000 (1 year)."), url: url.clone(), recommendation: "Set max-age to at least 31536000.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// XContentTypeOptionsDeepAnalyzer
+// =========================================================================
+
+pub struct XContentTypeOptionsDeepAnalyzer;
+
+impl Default for XContentTypeOptionsDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl XContentTypeOptionsDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for XContentTypeOptionsDeepAnalyzer {
+    fn name(&self) -> &str { "x-content-type-options-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let xcto = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options")).map(|(_, v)| v.as_str());
+        match xcto {
+            None => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTODEEP001".to_string(), title: "Missing X-Content-Type-Options header".to_string(), description: "No X-Content-Type-Options header found. Without nosniff, browsers may MIME-sniff responses.".to_string(), url: url.clone(), recommendation: "Add X-Content-Type-Options: nosniff.".to_string() });
+            }
+            Some(val) if !val.eq_ignore_ascii_case("nosniff") => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTODEEP002".to_string(), title: "Invalid X-Content-Type-Options value".to_string(), description: format!("X-Content-Type-Options is \"{val}\" but should be \"nosniff\"."), url: url.clone(), recommendation: "Set X-Content-Type-Options to nosniff.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// ReferrerPolicyDeepAnalyzer
+// =========================================================================
+
+pub struct ReferrerPolicyDeepAnalyzer;
+
+impl Default for ReferrerPolicyDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ReferrerPolicyDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ReferrerPolicyDeepAnalyzer {
+    fn name(&self) -> &str { "referrer-policy-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let rp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy")).map(|(_, v)| v.as_str());
+        match rp {
+            None => {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "RPDEEP001".to_string(), title: "Missing Referrer-Policy header".to_string(), description: "No Referrer-Policy header found. Browser default may leak referrer information.".to_string(), url: url.clone(), recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin.".to_string() });
+            }
+            Some(val) if val.eq_ignore_ascii_case("unsafe-url") => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "RPDEEP002".to_string(), title: "Referrer-Policy set to unsafe-url".to_string(), description: "Referrer-Policy is 'unsafe-url', leaking full URL including path and query on cross-origin requests.".to_string(), url: url.clone(), recommendation: "Use strict-origin-when-cross-origin instead of unsafe-url.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// XFrameOptionsDeepAnalyzer
+// =========================================================================
+
+pub struct XFrameOptionsDeepAnalyzer;
+
+impl Default for XFrameOptionsDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl XFrameOptionsDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for XFrameOptionsDeepAnalyzer {
+    fn name(&self) -> &str { "x-frame-options-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let xfo = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options")).map(|(_, v)| v.as_str());
+        let csp_frame = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("").contains("frame-ancestors");
+
+        match xfo {
+            None => {
+                if !csp_frame {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFODEEP001".to_string(), title: "No clickjacking protection".to_string(), description: "Neither X-Frame-Options nor CSP frame-ancestors is set.".to_string(), url: url.clone(), recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors directive.".to_string() });
+                }
+            }
+            Some(val) => {
+                let upper = val.to_uppercase().trim().to_string();
+                if upper != "DENY" && upper != "SAMEORIGIN" {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFODEEP002".to_string(), title: "Invalid X-Frame-Options value".to_string(), description: format!("X-Frame-Options is \"{val}\", must be DENY or SAMEORIGIN."), url: url.clone(), recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// PermissionsPolicyDeepAnalyzer
+// =========================================================================
+
+pub struct PermissionsPolicyDeepAnalyzer;
+
+impl Default for PermissionsPolicyDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl PermissionsPolicyDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for PermissionsPolicyDeepAnalyzer {
+    fn name(&self) -> &str { "permissions-policy-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        match pp {
+            None => {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PERMPDEEP001".to_string(), title: "Missing Permissions-Policy header".to_string(), description: "No Permissions-Policy header found. Browsers may allow access to sensitive APIs.".to_string(), url: url.clone(), recommendation: "Add Permissions-Policy to restrict sensitive browser features.".to_string() });
+            }
+            Some(val) => {
+                let lower = val.to_lowercase();
+                for feature in &["camera", "microphone", "geolocation", "payment"] {
+                    if !lower.contains(feature) {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PERMPDEEP002".to_string(), title: format!("Permissions-Policy missing {feature}"), description: format!("The {feature} feature is not explicitly restricted in Permissions-Policy."), url: url.clone(), recommendation: format!("Add {feature}=() to restrict {feature} access.") });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// CrossOriginIsolationDeepAnalyzer
+// =========================================================================
+
+pub struct CrossOriginIsolationDeepAnalyzer;
+
+impl Default for CrossOriginIsolationDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CrossOriginIsolationDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CrossOriginIsolationDeepAnalyzer {
+    fn name(&self) -> &str { "cross-origin-isolation-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let coep = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy")).map(|(_, v)| v.as_str());
+        let coop = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy")).map(|(_, v)| v.as_str());
+
+        if coep.is_none() {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP001".to_string(), title: "Missing Cross-Origin-Embedder-Policy".to_string(), description: "COEP header is not set, preventing cross-origin isolation.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Embedder-Policy: require-corp for cross-origin isolation.".to_string() });
+        }
+        if coop.is_none() {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP002".to_string(), title: "Missing Cross-Origin-Opener-Policy".to_string(), description: "COOP header is not set.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Opener-Policy: same-origin for cross-origin isolation.".to_string() });
+        }
+
+        if let (Some(coep_val), Some(coop_val)) = (coep, coop) {
+            if coep_val.eq_ignore_ascii_case("require-corp") && coop_val.eq_ignore_ascii_case("same-origin") {
+                // Full cross-origin isolation achieved
+            } else {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP003".to_string(), title: "Partial cross-origin isolation".to_string(), description: format!("COEP={coep_val}, COOP={coop_val}. Full isolation requires COEP=require-corp and COOP=same-origin."), url: url.clone(), recommendation: "Set COEP=require-corp and COOP=same-origin for full cross-origin isolation.".to_string() });
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// AriaLandmarksAnalyzer
+// =========================================================================
+
+pub struct AriaLandmarksAnalyzer;
+
+impl Default for AriaLandmarksAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl AriaLandmarksAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for AriaLandmarksAnalyzer {
+    fn name(&self) -> &str { "aria-landmarks" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if !ctx.page.has_main_landmark {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "ARIALAND001".to_string(), title: "Missing main landmark".to_string(), description: "No <main> or role=\"main\" landmark found.".to_string(), url: url.clone(), recommendation: "Add a main landmark to identify the primary content.".to_string() });
+        }
+        if !ctx.page.has_nav_landmark && ctx.page.links.len() > 3 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "ARIALAND002".to_string(), title: "Missing navigation landmark".to_string(), description: "Multiple links found but no nav landmark.".to_string(), url: url.clone(), recommendation: "Wrap navigation links in <nav> or role=\"nav\".".to_string() });
+        }
+
+        let landmark_count = ctx.page.landmarks.len();
+        if landmark_count > 0 {
+            let mut landmark_types: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+            for lm in &ctx.page.landmarks {
+                *landmark_types.entry(lm.clone()).or_default() += 1;
+            }
+            for (lm_type, count) in &landmark_types {
+                if *count > 1 && lm_type != "navigation" {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "ARIALAND003".to_string(), title: format!("Duplicate landmark: {lm_type}"), description: format!("Landmark '{lm_type}' appears {count} times. Each landmark type should typically appear once."), url: url.clone(), recommendation: "Use unique landmark types or label duplicates with aria-label.".to_string() });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// HeadingHierarchyDeepAnalyzer
+// =========================================================================
+
+pub struct HeadingHierarchyDeepAnalyzer;
+
+impl Default for HeadingHierarchyDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl HeadingHierarchyDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HeadingHierarchyDeepAnalyzer {
+    fn name(&self) -> &str { "heading-hierarchy-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() {
+            return findings;
+        }
+
+        let mut prev_level: u8 = 0;
+        for h in &ctx.page.headings {
+            if prev_level > 0 && h.level > prev_level + 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP001".to_string(), title: "Heading hierarchy skip".to_string(), description: format!("Heading jumped from H{prev_level} to H{}.", h.level), url: url.clone(), recommendation: format!("Use H{} after H{} for proper heading hierarchy.", prev_level + 1, prev_level) });
+            }
+            prev_level = h.level;
+        }
+
+        let first_level = ctx.page.headings[0].level;
+        if first_level != 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP002".to_string(), title: "First heading is not H1".to_string(), description: format!("First heading is H{}, but should be H1 for accessibility.", first_level), url: url.clone(), recommendation: "Start the heading hierarchy with H1.".to_string() });
+        }
+
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HHIERDEEP003".to_string(), title: "Multiple H1 headings".to_string(), description: format!("Page has {h1_count} H1 headings. Screen readers expect a single H1."), url: url.clone(), recommendation: "Use exactly one H1 per page.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// FormLabelsDeepAnalyzer
+// =========================================================================
+
+pub struct FormLabelsDeepAnalyzer;
+
+impl Default for FormLabelsDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl FormLabelsDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for FormLabelsDeepAnalyzer {
+    fn name(&self) -> &str { "form-labels-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let form_count = ctx.page.forms.len();
+        let aria_label_count = ctx.page.aria_label_count;
+
+        if form_count > 0 && aria_label_count == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "FORMLBLDEEP001".to_string(), title: "Forms present but no ARIA labels".to_string(), description: format!("Page has {form_count} form(s) but no ARIA labels detected."), url: url.clone(), recommendation: "Add aria-label or aria-labelledby to form elements for screen readers.".to_string() });
+        }
+
+        if form_count > 3 && aria_label_count < form_count {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLBLDEEP002".to_string(), title: "Insufficient ARIA labels for forms".to_string(), description: format!("Page has {form_count} forms but only {aria_label_count} ARIA labels."), url: url.clone(), recommendation: "Each form should have an aria-label or aria-labelledby attribute.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TableAccessibilityDeepAnalyzer
+// =========================================================================
+
+pub struct TableAccessibilityDeepAnalyzer;
+
+impl Default for TableAccessibilityDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl TableAccessibilityDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for TableAccessibilityDeepAnalyzer {
+    fn name(&self) -> &str { "table-accessibility-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.tables_total == 0 {
+            return findings;
+        }
+
+        let tables_without_headers = ctx.page.tables_total - ctx.page.tables_with_headers;
+        if tables_without_headers > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TABACCDEEP001".to_string(), title: "Tables without headers".to_string(), description: format!("{tables_without_headers}/{} table(s) lack header cells (th).", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th> elements to identify column/row headers in data tables.".to_string() });
+        }
+
+        let tables_without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
+        if tables_without_captions > 0 && ctx.page.tables_total > 1 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TABACCDEEP002".to_string(), title: "Tables missing captions".to_string(), description: format!("{tables_without_captions}/{} table(s) lack <caption> elements.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <caption> elements to describe table purpose for screen readers.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// LinkTextQualityAnalyzer
+// =========================================================================
+
+pub struct LinkTextQualityAnalyzer;
+
+impl Default for LinkTextQualityAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl LinkTextQualityAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for LinkTextQualityAnalyzer {
+    fn name(&self) -> &str { "link-text-quality" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let generic_texts = ["click here", "here", "read more", "learn more", "more", "link", "this"];
+
+        let generic_count: usize = ctx.page.links.iter().filter(|l| {
+            let text_lower = l.text.to_lowercase();
+            generic_texts.iter().any(|g| text_lower == *g)
+        }).count();
+
+        if generic_count > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LINKTQ001".to_string(), title: "Generic link text detected".to_string(), description: format!("{generic_count} link(s) use generic text like 'click here' or 'read more'."), url: url.clone(), recommendation: "Use descriptive link text that indicates the link destination.".to_string() });
+        }
+
+        let empty_text_count = ctx.page.links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        if empty_text_count > 0 {
+            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Accessibility, code: "LINKTQ002".to_string(), title: "Links without accessible text".to_string(), description: format!("{empty_text_count} link(s) have no text or aria-label."), url: url.clone(), recommendation: "Add visible text or aria-label to all links for screen readers.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ImageAltTextDeepAnalyzer
+// =========================================================================
+
+pub struct ImageAltTextDeepAnalyzer;
+
+impl Default for ImageAltTextDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ImageAltTextDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ImageAltTextDeepAnalyzer {
+    fn name(&self) -> &str { "image-alt-text-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let total_images = ctx.page.images.len();
+        if total_images == 0 {
+            return findings;
+        }
+
+        let missing_alt: usize = ctx.page.images.iter().filter(|img| !img.has_alt || img.alt.trim().is_empty()).count();
+        if missing_alt > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "IMGALTDEEP001".to_string(), title: "Images missing alt text".to_string(), description: format!("{missing_alt}/{total_images} image(s) have missing or empty alt text."), url: url.clone(), recommendation: "Add descriptive alt text to all images. Use alt=\"\" for decorative images.".to_string() });
+        }
+
+        let alt_too_long: usize = ctx.page.images.iter().filter(|img| img.alt.len() > 125).count();
+        if alt_too_long > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "IMGALTDEEP002".to_string(), title: "Alt text too long".to_string(), description: format!("{alt_too_long} image(s) have alt text exceeding 125 characters."), url: url.clone(), recommendation: "Keep alt text concise (under 125 characters). Use longdesc for complex images.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// FocusManagementDeepAnalyzer
+// =========================================================================
+
+pub struct FocusManagementDeepAnalyzer;
+
+impl Default for FocusManagementDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl FocusManagementDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for FocusManagementDeepAnalyzer {
+    fn name(&self) -> &str { "focus-management-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Accessibility, code: "FOCUSDEEP001".to_string(), title: "Positive tabindex detected".to_string(), description: "A positive tabindex value disrupts natural tab order.".to_string(), url: url.clone(), recommendation: "Use tabindex=\"0\" or tabindex=\"-1\" instead of positive values.".to_string() });
+        }
+
+        if ctx.page.tabindex_negative_count > 3 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "FOCUSDEEP002".to_string(), title: "Many elements with tabindex=-1".to_string(), description: format!("{} elements have tabindex=\"-1\", removing them from tab order.", ctx.page.tabindex_negative_count), url: url.clone(), recommendation: "Ensure elements with tabindex=-1 are intentionally removed from tab order.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// LanguageAttributesDeepAnalyzer
+// =========================================================================
+
+pub struct LanguageAttributesDeepAnalyzer;
+
+impl Default for LanguageAttributesDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl LanguageAttributesDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for LanguageAttributesDeepAnalyzer {
+    fn name(&self) -> &str { "language-attributes-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if !ctx.page.has_lang_attribute {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANGATTRDEEP001".to_string(), title: "Missing html lang attribute".to_string(), description: "The <html> element lacks a lang attribute, affecting screen reader pronunciation.".to_string(), url: url.clone(), recommendation: "Add lang=\"en\" (or appropriate language code) to the <html> element.".to_string() });
+        }
+
+        if let Some(lang) = &ctx.page.html_lang {
+            if !lang.contains('-') && lang.len() > 2 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANGATTRDEEP002".to_string(), title: "Language code may be too specific".to_string(), description: format!("html lang=\"{lang}\" is unusually long. Standard codes are 2-letter (en) or 4-letter (en-US)."), url: url.clone(), recommendation: "Verify the language code follows BCP 47 format.".to_string() });
+            }
+        }
+
+        if ctx.page.has_lang_attribute && ctx.page.meta.language.is_some() {
+            let html_lang = ctx.page.html_lang.as_deref().unwrap_or("");
+            let meta_lang = ctx.page.meta.language.as_deref().unwrap_or("");
+            let html_base = html_lang.split('-').next().unwrap_or("");
+            let meta_base = meta_lang.split('-').next().unwrap_or("");
+            if !html_base.is_empty() && !meta_base.is_empty() && html_base != meta_base {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANGATTRDEEP003".to_string(), title: "Language mismatch between HTML and meta".to_string(), description: format!("HTML lang is \"{html_lang}\" but meta language is \"{meta_lang}\"."), url: url.clone(), recommendation: "Ensure html lang and meta language are consistent.".to_string() });
+            }
+        }
+
+        findings
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

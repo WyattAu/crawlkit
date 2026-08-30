@@ -1,4 +1,4 @@
-#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains)]
+#![allow(clippy::unwrap_used, clippy::manual_range_contains, clippy::redundant_closure, clippy::collapsible_if, clippy::unnecessary_map_or, clippy::default_constructed_unit_structs, clippy::needless_return, clippy::needless_range_loop, clippy::useless_format, clippy::if_same_then_else, clippy::derivable_impls, clippy::manual_pattern_char_comparison, clippy::manual_contains, clippy::redundant_clone)]
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
@@ -3323,6 +3323,344 @@ impl Analyzer for SitemapUrlAnalyzer {
                                  are in place."
                     .to_string(),
             });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// TitleAnalysisDeepAnalyzer
+// =========================================================================
+
+pub struct TitleAnalysisDeepAnalyzer;
+
+impl Default for TitleAnalysisDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl TitleAnalysisDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for TitleAnalysisDeepAnalyzer {
+    fn name(&self) -> &str { "title-analysis-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let title = match &ctx.page.meta.title {
+            Some(t) if !t.trim().is_empty() => t.trim(),
+            _ => return findings,
+        };
+
+        if title.len() < 20 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLEDEEP001".to_string(), title: "Title too short".to_string(), description: format!("Title is {} characters. Aim for 30-60 characters.", title.len()), url: url.clone(), recommendation: "Expand the title to 30-60 characters with target keywords.".to_string() });
+        }
+        if title.len() > 65 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLEDEEP002".to_string(), title: "Title too long for SERP display".to_string(), description: format!("Title is {} characters. Google typically shows ~60 characters.", title.len()), url: url.clone(), recommendation: "Shorten the title to under 60 characters to avoid truncation in SERPs.".to_string() });
+        }
+
+        let has_brand_separator = title.contains(" | ") || title.contains(" - ") || title.contains(" – ") || title.contains(" — ");
+        if !has_brand_separator && title.len() > 30 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEDEEP003".to_string(), title: "Title missing brand separator".to_string(), description: "Title doesn't contain a common brand separator (|, -, –).".to_string(), url: url.clone(), recommendation: "Consider adding ' | Brand Name' at the end for brand recognition.".to_string() });
+        }
+
+        let words: Vec<&str> = title.split_whitespace().collect();
+        let stop_count = words.iter().filter(|w| STOP_WORDS.contains(&w.to_lowercase().as_str())).count();
+        if words.len() > 3 && stop_count as f64 / words.len() as f64 > 0.5 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEDEEP004".to_string(), title: "Title has many stop words".to_string(), description: format!("{} of {} words are stop words, which may dilute keyword prominence.", stop_count, words.len()), url: url.clone(), recommendation: "Reduce stop words and focus on target keywords in the title.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// MetaDescriptionDeepAnalyzer
+// =========================================================================
+
+pub struct MetaDescriptionDeepAnalyzer;
+
+impl Default for MetaDescriptionDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl MetaDescriptionDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for MetaDescriptionDeepAnalyzer {
+    fn name(&self) -> &str { "meta-description-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let desc = match &ctx.page.meta.description {
+            Some(d) if !d.trim().is_empty() => d.trim(),
+            _ => return findings,
+        };
+
+        if desc.len() < 70 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADEEP001".to_string(), title: "Meta description too short".to_string(), description: format!("Description is {} characters. Aim for 120-155 characters.", desc.len()), url: url.clone(), recommendation: "Expand the meta description to 120-155 characters.".to_string() });
+        }
+        if desc.len() > 160 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADEEP002".to_string(), title: "Meta description too long".to_string(), description: format!("Description is {} characters. Google typically shows ~155 characters.", desc.len()), url: url.clone(), recommendation: "Shorten the meta description to under 155 characters.".to_string() });
+        }
+
+        if desc.contains("\"") || desc.contains("'") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADEEP003".to_string(), title: "Meta description contains quotes".to_string(), description: "Quotes in meta descriptions may cause truncation in SERPs.".to_string(), url: url.clone(), recommendation: "Remove or replace quotes with other punctuation.".to_string() });
+        }
+
+        let words: Vec<&str> = desc.split_whitespace().collect();
+        let unique_words: std::collections::HashSet<String> = words.iter().map(|w| w.to_lowercase()).collect();
+        if words.len() > 5 && unique_words.len() as f64 / (words.len() as f64) < 0.6 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADEEP004".to_string(), title: "Meta description has repetitive words".to_string(), description: "Many repeated words in the meta description reduce its effectiveness.".to_string(), url: url.clone(), recommendation: "Diversify vocabulary in the meta description for better click-through rates.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// CanonicalValidationDeepAnalyzer
+// =========================================================================
+
+pub struct CanonicalValidationDeepAnalyzer;
+
+impl Default for CanonicalValidationDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl CanonicalValidationDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CanonicalValidationDeepAnalyzer {
+    fn name(&self) -> &str { "canonical-validation-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let canonical = match &ctx.page.meta.canonical {
+            Some(c) => c,
+            None => return findings,
+        };
+
+        let canonical_url = canonical.clone();
+
+        if let Ok(page_url) = url::Url::parse(url) {
+            let canonical_path = canonical_url.path();
+            let page_path = page_url.path();
+            if canonical_path != page_path && canonical_url.host_str() == page_url.host_str() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANDEEP001".to_string(), title: "Canonical path mismatch".to_string(), description: format!("Canonical path '{canonical_path}' differs from page path '{page_path}' on the same host."), url: url.clone(), recommendation: "Canonical should point to the same path unless intentionally consolidating pages.".to_string() });
+            }
+
+            let canonical_params: std::collections::HashMap<String, String> = canonical_url.query_pairs().into_owned().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            let page_params: std::collections::HashMap<String, String> = page_url.query_pairs().into_owned().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+            let has_diff = page_params.iter().any(|(k, v)| canonical_params.get(k.as_str()) != Some(v));
+            if has_diff && canonical_params.len() == page_params.len() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANDEEP002".to_string(), title: "Canonical differs by parameters".to_string(), description: "Canonical URL differs from page URL only by query parameters.".to_string(), url: url.clone(), recommendation: "Verify the canonical correctly points to the preferred URL version.".to_string() });
+            }
+        }
+
+        if canonical.as_str().contains('#') {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANDEEP003".to_string(), title: "Canonical URL contains fragment".to_string(), description: "The canonical URL includes a fragment (#) which search engines ignore.".to_string(), url: url.clone(), recommendation: "Remove the fragment from the canonical URL.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// SitemapCoverageDeepAnalyzer
+// =========================================================================
+
+pub struct SitemapCoverageDeepAnalyzer;
+
+impl Default for SitemapCoverageDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl SitemapCoverageDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for SitemapCoverageDeepAnalyzer {
+    fn name(&self) -> &str { "sitemap-coverage-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        if let Some(robots) = ctx.robots_txt {
+            let lower = robots.to_lowercase();
+            if lower.contains("sitemap:") {
+                let sitemap_count = lower.matches("sitemap:").count();
+                if sitemap_count > 5 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPDEEP001".to_string(), title: "Many sitemaps declared in robots.txt".to_string(), description: format!("robots.txt declares {sitemap_count} sitemaps. Consider consolidating."), url: url.clone(), recommendation: "Use a sitemap index file instead of listing many individual sitemaps.".to_string() });
+                }
+            } else {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPDEEP002".to_string(), title: "No sitemap declared in robots.txt".to_string(), description: "robots.txt doesn't reference any sitemap. While not required, sitemaps help discovery.".to_string(), url: url.clone(), recommendation: "Add a Sitemap: directive to robots.txt pointing to your sitemap.xml.".to_string() });
+            }
+        }
+
+        if let Some(body) = ctx.body {
+            if body.contains("rel=\"sitemap\"") || body.contains("rel='sitemap'") {
+                // HTML sitemap link found - good
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// RobotsTxtAnalysisDeepAnalyzer
+// =========================================================================
+
+pub struct RobotsTxtAnalysisDeepAnalyzer;
+
+impl Default for RobotsTxtAnalysisDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl RobotsTxtAnalysisDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for RobotsTxtAnalysisDeepAnalyzer {
+    fn name(&self) -> &str { "robots-txt-analysis-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let robots = match ctx.robots_txt {
+            Some(r) => r,
+            None => return findings,
+        };
+
+        let lower = robots.to_lowercase();
+        if lower.contains("disallow: /") && !lower.contains("disallow: / ") {
+            // Check if there's a blanket disallow for all agents
+            let lines: Vec<&str> = robots.lines().collect();
+            let mut current_agent = "*";
+            for line in &lines {
+                let trimmed = line.trim();
+                if trimmed.to_lowercase().starts_with("user-agent:") {
+                    current_agent = trimmed.split(':').nth(1).unwrap_or("*").trim();
+                }
+                if trimmed.to_lowercase().starts_with("disallow:") && current_agent == "*" {
+                    let path = trimmed.split(':').nth(1).unwrap_or("").trim();
+                    if path == "/" {
+                        findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "ROBOTSDEEP001".to_string(), title: "robots.txt blocks all crawlers".to_string(), description: "A blanket 'Disallow: /' rule blocks all crawlers from the entire site.".to_string(), url: url.clone(), recommendation: "Remove the blanket disallow unless intentionally blocking indexing.".to_string() });
+                    }
+                }
+            }
+        }
+
+        let crawl_delay_lines: Vec<&str> = robots.lines().filter(|l| l.trim().to_lowercase().starts_with("crawl-delay:")).collect();
+        for line in &crawl_delay_lines {
+            let val_str = line.split(':').nth(1).unwrap_or("").trim();
+            if let Ok(delay) = val_str.parse::<f64>() {
+                if delay > 10.0 {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "ROBOTSDEEP002".to_string(), title: "High crawl-delay value".to_string(), description: format!("crawl-delay is {delay} seconds, which may slow indexing significantly."), url: url.clone(), recommendation: "Consider reducing crawl-delay to under 5 seconds.".to_string() });
+                }
+            }
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// InternalLinkQualityAnalyzer
+// =========================================================================
+
+pub struct InternalLinkQualityAnalyzer;
+
+impl Default for InternalLinkQualityAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl InternalLinkQualityAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for InternalLinkQualityAnalyzer {
+    fn name(&self) -> &str { "internal-link-quality" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let internal_links: Vec<&ExtractedLink> = ctx.page.links.iter().filter(|l| !l.is_external).collect();
+        if internal_links.is_empty() {
+            return findings;
+        }
+
+        let self_links: usize = internal_links.iter().filter(|l| l.href == *url).count();
+        if self_links > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ001".to_string(), title: "Page contains self-links".to_string(), description: format!("{self_links} link(s) point to the same page."), url: url.clone(), recommendation: "Remove or nofollow self-referencing internal links.".to_string() });
+        }
+
+        let nofollow_count = internal_links.iter().filter(|l| l.rel.iter().any(|r| r == "nofollow")).count();
+        if nofollow_count > 0 && nofollow_count == internal_links.len() {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTLINKQ002".to_string(), title: "All internal links are nofollowed".to_string(), description: "Every internal link on this page has rel=nofollow, preventing PageRank flow.".to_string(), url: url.clone(), recommendation: "Remove nofollow from internal links to allow link equity flow.".to_string() });
+        }
+
+        let empty_text = internal_links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        if empty_text > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTLINKQ003".to_string(), title: "Internal links with empty anchor text".to_string(), description: format!("{empty_text} internal link(s) have no visible text or aria-label."), url: url.clone(), recommendation: "Add descriptive anchor text to all internal links.".to_string() });
+        }
+
+        findings
+    }
+}
+
+// =========================================================================
+// ExternalLinkAuthorityDeepAnalyzer
+// =========================================================================
+
+pub struct ExternalLinkAuthorityDeepAnalyzer;
+
+impl Default for ExternalLinkAuthorityDeepAnalyzer {
+    fn default() -> Self { Self::new() }
+}
+
+impl ExternalLinkAuthorityDeepAnalyzer {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ExternalLinkAuthorityDeepAnalyzer {
+    fn name(&self) -> &str { "external-link-authority-deep" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+
+        let external_links: Vec<&ExtractedLink> = ctx.page.links.iter().filter(|l| l.is_external).collect();
+        if external_links.is_empty() {
+            return findings;
+        }
+
+        let nofollow_count = external_links.iter().filter(|l| l.rel.iter().any(|r| r == "nofollow")).count();
+        let followed_count = external_links.len() - nofollow_count;
+
+        if followed_count > 10 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTLINKAUTH001".to_string(), title: "Many followed external links".to_string(), description: format!("{followed_count} external link(s) are followed (not nofollowed)."), url: url.clone(), recommendation: "Consider nofollowing non-essential external links to conserve link equity.".to_string() });
+        }
+
+        let empty_text = external_links.iter().filter(|l| l.text.trim().is_empty() && l.aria_label.is_none()).count();
+        if empty_text > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "EXTLINKAUTH002".to_string(), title: "External links with empty anchor text".to_string(), description: format!("{empty_text} external link(s) have no visible text."), url: url.clone(), recommendation: "Add descriptive anchor text to external links.".to_string() });
+        }
+
+        let same_domain_count = external_links.iter().filter(|l| {
+            url::Url::parse(&l.href).ok().and_then(|u| u.host_str().map(|h| h.to_string())).map_or(false, |h| url.contains(&h))
+        }).count();
+        if same_domain_count > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTLINKAUTH003".to_string(), title: "External links pointing to same domain".to_string(), description: format!("{same_domain_count} external link(s) point to the same domain (may be relative URLs misclassified)."), url: url.clone(), recommendation: "Verify these are truly external links, not internal ones.".to_string() });
         }
 
         findings

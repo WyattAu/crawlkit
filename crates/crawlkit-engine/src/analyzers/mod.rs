@@ -28,7 +28,7 @@ pub use content_analyzers::{
     DuplicateContentDetector, EnhancedReadabilityAnalyzer,
     EntityAnalyzer, EntityLinkingAnalyzer, ExternalLinkQualityAnalyzer, JsonLdContextValidator,
     JsonLdTypeValidator, JsonLdValidator, InternalLinkDepthAnalyzerV2, JobPostingTitleValidator,
-    KeywordDensityAnalyzer,
+    KeywordDensityAnalyzer, ArticleQualityAnalyzer, ContentDepthAnalyzer, HeadingCoverageAnalyzer, KeywordProminenceAnalyzer, ContentFreshnessSignalAnalyzer, MetaRobotsValidationAnalyzer, CanonicalConsistencyAnalyzer, HreflangNetworkValidator, ContentReadabilityScorer, PageImportanceAnalyzer,
     MetaDescriptionLengthAnalyzer, MetaRobotsValidator,
     MicrodataValidator, MobileFriendlinessScoreAnalyzer, OpenGraphVideoUrlValidator,
     OrganizationNameValidator, PageSpeedScoreAnalyzer, PersonNameValidator, RdfaValidator,
@@ -81,6 +81,11 @@ pub use security_analyzers::{
     TabindexAnalyzer, TabindexAnalyzerV2,
     XContentTypeOptionsAnalyzer, XContentTypeOptionsAnalyzerV2, XSSProtectionAnalyzer, XFrameOptionsAnalyzer, XFrameOptionsAnalyzerV2,
     XPermittedCrossDomainPoliciesAnalyzer,
+    CspDirectiveAnalyzer, CorsPolicyAnalyzer, CookieSecurityFlagAnalyzer, MixedContentDetectionAnalyzer,
+    HstsPreloadReadinessAnalyzer, XContentTypeOptionsDeepAnalyzer, ReferrerPolicyDeepAnalyzer,
+    XFrameOptionsDeepAnalyzer, PermissionsPolicyDeepAnalyzer, CrossOriginIsolationDeepAnalyzer,
+    AriaLandmarksAnalyzer, HeadingHierarchyDeepAnalyzer, FormLabelsDeepAnalyzer, TableAccessibilityDeepAnalyzer,
+    LinkTextQualityAnalyzer, ImageAltTextDeepAnalyzer, FocusManagementDeepAnalyzer, LanguageAttributesDeepAnalyzer,
 };
 pub use seo_analyzers::{
     AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer,
@@ -102,6 +107,9 @@ pub use seo_analyzers::{
     RobotsTxtSizeValidator, SitemapAnalyzer, SitemapAnalyzerV2, SitemapCoverageAnalyzerV2, SitemapEntry, SitemapUrlAnalyzer,
     SitemapXmlSizeValidator, TitleAnalyzerV3, TitleKeywordAnalyzer, TitlePixelWidthAnalyzer,
     WikipediaLinkAnalyzer, WordCountAnalyzer, WordCountAnalyzerV2,
+    TitleAnalysisDeepAnalyzer, MetaDescriptionDeepAnalyzer, CanonicalValidationDeepAnalyzer,
+    SitemapCoverageDeepAnalyzer, RobotsTxtAnalysisDeepAnalyzer, InternalLinkQualityAnalyzer,
+    ExternalLinkAuthorityDeepAnalyzer,
 };
 pub use social_analyzers::{
     OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphSiteNameValidator,
@@ -702,6 +710,24 @@ impl AnalyzerRegistry {
             Box::new(OccupationSchemaValidatorV2::new()),
             Box::new(ActionSchemaValidatorV2::new()),
             Box::new(PlaybookSchemaValidatorV2::new()),
+            // Schema validators: CreativeWork, Playlist, FoodEstablishment, LodgingBusiness, SportsActivityLocation, CivicStructure
+            Box::new(CreativeWorkSchemaValidator::new()),
+            Box::new(PlaylistSchemaValidator::new()),
+            Box::new(FoodEstablishmentSchemaValidator::new()),
+            Box::new(LodgingBusinessSchemaValidator::new()),
+            Box::new(SportsActivityLocationSchemaValidator::new()),
+            Box::new(CivicStructureSchemaValidator::new()),
+            // Schema validators: Landform, LandmarksOrHistoricalBuildings, TouristAttraction, TouristDestination
+            Box::new(LandformSchemaValidator::new()),
+            Box::new(LandmarksOrHistoricalBuildingsSchemaValidator::new()),
+            Box::new(TouristAttractionSchemaValidator::new()),
+            Box::new(TouristDestinationSchemaValidator::new()),
+            // Schema validators: SportsEvent, EducationalOrganization, NGO, PerformingArtsSeries, BroadcastEvent
+            Box::new(SportsEventSchemaValidator::new()),
+            Box::new(EducationalOrganizationSchemaValidator::new()),
+            Box::new(NGOSchemaValidator::new()),
+            Box::new(PerformingArtsSeriesSchemaValidator::new()),
+            Box::new(BroadcastEventSchemaValidator::new()),
             // Content analyzers: Article author/date/headline, Organization, Person, JobPosting title, Course name, Recipe name
             Box::new(ArticleAuthorValidator::new()),
             Box::new(ArticleDatePublishedValidator::new()),
@@ -746,6 +772,47 @@ impl AnalyzerRegistry {
             Box::new(ImageLazyLoadAnalyzerV2::new()),
             Box::new(ScriptLoadAnalyzerV2::new()),
             Box::new(FontDisplayAnalyzerV2::new()),
+            // Content analyzers: ArticleQuality, ContentDepth, HeadingCoverage, KeywordProminence, etc.
+            Box::new(ArticleQualityAnalyzer::new()),
+            Box::new(ContentDepthAnalyzer::new()),
+            Box::new(HeadingCoverageAnalyzer::new()),
+            Box::new(KeywordProminenceAnalyzer::new()),
+            Box::new(ContentFreshnessSignalAnalyzer::new()),
+            Box::new(MetaRobotsValidationAnalyzer::new()),
+            Box::new(CanonicalConsistencyAnalyzer::new()),
+            Box::new(HreflangNetworkValidator::new()),
+            Box::new(ContentReadabilityScorer::new()),
+            Box::new(PageImportanceAnalyzer::new()),
+            // Security: CSP directive, CORS policy, cookie flags, mixed content detection, HSTS preload readiness
+            Box::new(CspDirectiveAnalyzer::new()),
+            Box::new(CorsPolicyAnalyzer::new()),
+            Box::new(CookieSecurityFlagAnalyzer::new()),
+            Box::new(MixedContentDetectionAnalyzer::new()),
+            Box::new(HstsPreloadReadinessAnalyzer::new()),
+            // Security: X-Content-Type deep, Referrer-Policy deep, X-Frame-Options deep, Permissions-Policy deep, COI deep
+            Box::new(XContentTypeOptionsDeepAnalyzer::new()),
+            Box::new(ReferrerPolicyDeepAnalyzer::new()),
+            Box::new(XFrameOptionsDeepAnalyzer::new()),
+            Box::new(PermissionsPolicyDeepAnalyzer::new()),
+            Box::new(CrossOriginIsolationDeepAnalyzer::new()),
+            // Accessibility: ARIA landmarks, heading hierarchy deep, form labels deep, table accessibility deep
+            Box::new(AriaLandmarksAnalyzer::new()),
+            Box::new(HeadingHierarchyDeepAnalyzer::new()),
+            Box::new(FormLabelsDeepAnalyzer::new()),
+            Box::new(TableAccessibilityDeepAnalyzer::new()),
+            // Accessibility: link text quality, image alt text deep, focus management deep, language attributes deep
+            Box::new(LinkTextQualityAnalyzer::new()),
+            Box::new(ImageAltTextDeepAnalyzer::new()),
+            Box::new(FocusManagementDeepAnalyzer::new()),
+            Box::new(LanguageAttributesDeepAnalyzer::new()),
+            // SEO: title analysis deep, meta description deep, canonical validation deep, sitemap coverage deep, robots.txt deep, internal/external link quality
+            Box::new(TitleAnalysisDeepAnalyzer::new()),
+            Box::new(MetaDescriptionDeepAnalyzer::new()),
+            Box::new(CanonicalValidationDeepAnalyzer::new()),
+            Box::new(SitemapCoverageDeepAnalyzer::new()),
+            Box::new(RobotsTxtAnalysisDeepAnalyzer::new()),
+            Box::new(InternalLinkQualityAnalyzer::new()),
+            Box::new(ExternalLinkAuthorityDeepAnalyzer::new()),
         ];
 
         if include_ai {

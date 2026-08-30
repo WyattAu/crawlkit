@@ -107,6 +107,8 @@ pub async fn submit_plugin(
         tags: input.tags,
         downloads: 0,
         rating: 0.0,
+        rating_count: 0,
+        verified: false,
         created_at: Utc::now().to_rfc3339(),
         updated_at: Utc::now().to_rfc3339(),
     };
@@ -204,5 +206,70 @@ pub async fn test_plugin(
         })))
     } else {
         Err(ApiError::NotFound(format!("Plugin '{name}' not found")))
+    }
+}
+
+/// Submit a rating (0.0–5.0) for a marketplace plugin. Requires
+/// `marketplace:read` (any authenticated user can rate).
+#[utoipa::path(
+    post,
+    path = "/api/v1/marketplace/plugins/{name}/rate",
+    tag = "marketplace",
+    request_body = PluginRating,
+    params(
+        ("name" = String, Path, description = "Plugin name")
+    ),
+    security(
+        ("bearer" = []),
+        ("api_key" = [])
+    ),
+    responses(
+        (status = 200, description = "Rating recorded", body = PluginRatingResponse),
+        (status = 400, description = "Rating out of range", body = ApiErrorBody),
+        (status = 401, description = "Missing or invalid credentials", body = ApiErrorBody),
+        (status = 403, description = "Missing marketplace:read permission", body = ApiErrorBody),
+        (status = 404, description = "Plugin not found", body = ApiErrorBody)
+    )
+)]
+pub async fn rate_plugin(
+    State(state): State<AppState>,
+    Extension(claims): Extension<auth::Claims>,
+    Path(name): Path<String>,
+    Json(rating): Json<PluginRating>,
+) -> Result<Json<PluginRatingResponse>, ApiError> {
+    require_permission(&claims, "marketplace:read")?;
+
+    if rating.rating < 0.0 || rating.rating > 5.0 {
+        return Err(ApiError::BadRequest(
+            "Rating must be between 0.0 and 5.0".to_string(),
+        ));
+    }
+
+    // Verify plugin exists and update its aggregate rating.
+    {
+        let mut plugins = state.marketplace.plugins.write();
+        let plugin = plugins
+            .get_mut(&name)
+            .ok_or_else(|| ApiError::NotFound(format!("Plugin '{name}' not found")))?;
+
+        // Record the individual rating.
+        let mut ratings = state.marketplace.ratings.write();
+        let plugin_ratings = ratings.entry(name.clone()).or_insert_with(Vec::new);
+        plugin_ratings.push(rating.rating);
+
+        // Recompute aggregate.
+        let count = plugin_ratings.len() as u32;
+        let avg = plugin_ratings.iter().sum::<f64>() / plugin_ratings.len() as f64;
+
+        plugin.rating = avg;
+        plugin.rating_count = count;
+        plugin.updated_at = Utc::now().to_rfc3339();
+
+        Ok(Json(PluginRatingResponse {
+            name,
+            rating: rating.rating,
+            rating_count: count,
+            average_rating: avg,
+        }))
     }
 }

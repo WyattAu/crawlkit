@@ -76,6 +76,7 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
             get(get_marketplace_plugin).delete(delete_marketplace_plugin),
         )
         .route("/api/v1/marketplace/plugins/{name}/test", post(test_plugin))
+        .route("/api/v1/marketplace/plugins/{name}/rate", post(rate_plugin))
         .route("/api/v1/sessions", get(list_sessions))
         .route("/api/v1/sessions/revoke", post(revoke_session))
         .layer(axum::middleware::from_fn_with_state(

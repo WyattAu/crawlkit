@@ -35,8 +35,32 @@ jobs:
           cargo bench --workspace -- --output-format bencher | tee baseline.txt
           git checkout HEAD -- crates/crawlkit-engine/benches/
 
+      - name: Capture benchmark environment
+        run: |
+          mkdir -p benchmark-artifacts
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "rustc=$(rustc --version)"
+            echo "cargo=$(cargo --version)"
+            echo "os=$(uname -a)"
+            echo "cpu=$(nproc)"
+            echo "command=cargo bench --workspace -- --output-format bencher"
+          } | tee benchmark-artifacts/metadata.txt
+
       - name: Run benchmarks (PR)
         run: cargo bench --workspace -- --output-format bencher | tee output.txt
+
+      - name: Upload benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-evidence-${{ github.run_id }}
+          path: |
+            benchmark-artifacts/
+            baseline.txt
+            output.txt
+            target/criterion/
+          if-no-files-found: ignore
 
       - name: Compare benchmark results
         run: |

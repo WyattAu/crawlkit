@@ -1,6 +1,6 @@
 #!/bin/bash
 # Pre-commit hook for crawlkit
-# Enforces FAANG/HFT/Defence coding standards
+# Enforces repository quality and security checks; comparison terminology is not certification.
 # All blocking checks must pass before any commit is accepted.
 set -euo pipefail
 
@@ -91,22 +91,14 @@ else
     passed=$((passed + 1))
 fi
 
-# 9. Unsafe code without SAFETY comment (excluding test code and WASM FFI crate)
+# 9. Unsafe code inventory and safety justification
 printf "${CYAN}[%d/${total}]${NC} Unsafe code check ... " "$((passed + failed + warnings + 1))"
-if grep -rn 'unsafe\s*{' --include="*.rs" \
-    --exclude-dir=target --exclude-dir=.git \
-    --exclude='*_test.rs' --exclude='tests.rs' --exclude='native_plugin.rs' \
-    "$REPO_ROOT/crates/crawlkit-engine/src/" \
-    "$REPO_ROOT/crates/crawlkit/src/" \
-    "$REPO_ROOT/crates/crawlkit-api/src/" \
-    2>/dev/null | \
-    grep -v '// SAFETY\|// SAFETY:\|#\[cfg(test)\]\|///\s*# Safety\|mod tests' | \
-    grep -q .; then
-    printf "${RED}FAIL (unsafe code without SAFETY comment)${NC}\n"
-    failed=$((failed + 1))
-else
+if "$REPO_ROOT/scripts/verify-unsafe-inventory.sh" >/dev/null 2>&1; then
     printf "${GREEN}PASS${NC}\n"
     passed=$((passed + 1))
+else
+    printf "${RED}FAIL (unsafe inventory or safety justification)${NC}\n"
+    failed=$((failed + 1))
 fi
 
 # 10. MSRV check -- warn only

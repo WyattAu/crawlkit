@@ -42,6 +42,18 @@ test-integration:
 bench:
     cargo bench --workspace
 
+# Capture benchmark output together with reproducibility metadata
+bench-evidence:
+    bash scripts/capture-benchmark-metadata.sh
+
+# Run deterministic release controls with bounded test parallelism
+release-controls:
+    CRAWLKIT_TEST_THREADS=1 bash scripts/verify-release-controls.sh
+
+# Run contract and security-boundary tests
+contracts:
+    CRAWLKIT_TEST_THREADS=1 bash scripts/verify-contracts.sh
+
 # Run end-to-end throughput benchmark (local TestServer)
 bench-e2e:
     cargo run --release -p crawlkit-engine --example throughput_bench
@@ -75,7 +87,7 @@ pre-commit:
     @echo "All pre-commit checks passed."
 
 # Full quality gate (all checks)
-qa: fmt-check clippy test test-integration deny audit
+qa: fmt-check clippy test test-integration deny audit release-controls
     @cargo test --doc --workspace
     @cargo +1.94.0 check --workspace
     @bash scripts/pre-commit.sh

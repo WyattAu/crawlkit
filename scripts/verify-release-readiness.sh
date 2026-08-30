@@ -42,6 +42,8 @@ ok "VERSION.md = ${VERSION}"
 if grep -qE '^\*\*Current Phase:.*v[0-9]' VERSION.md; then
     grep -qE "^\*\*Current Phase:.*v${VERSION}" VERSION.md \
         || fail "VERSION.md phase header does not reference v${VERSION}"
+else
+    ok "VERSION.md uses a non-versioned roadmap phase header"
 fi
 ok "VERSION.md phase header consistent"
 
@@ -69,17 +71,39 @@ fi
 grep -q 'Sign checksums' .github/workflows/release.yml \
     || fail "release.yml lost the checksums signing step"
 ok "release.yml signs checksums.txt"
+grep -q 'Add SBOM checksums' .github/workflows/release.yml \
+    || fail "release.yml does not cover SBOM files in checksums.txt"
+ok "release.yml covers SBOM checksums"
+grep -q 'test -s checksums.txt' .github/workflows/release.yml \
+    || fail "release.yml does not reject an empty checksum manifest"
+ok "release.yml rejects empty checksum manifests"
+grep -q 'sha256sum -c checksums.txt' .github/workflows/release.yml \
+    || fail "release.yml does not verify aggregated checksums"
+ok "release.yml verifies aggregated checksums"
+grep -q 'Smoke test artifact' .github/workflows/release.yml \
+    || fail "release.yml has no packaged-artifact smoke test"
+ok "release.yml smoke-tests packaged artifacts"
 
 # --- 4. Quality gate -------------------------------------------------------
-echo "-- running quality gate (fmt, clippy, tests) --"
+echo "-- running quality gate (claims, security, fmt, clippy, tests) --"
+scripts/verify-roadmap-baseline.sh
+ok "roadmap and capability claims"
+
+scripts/verify-unsafe-inventory.sh
+ok "unsafe-code inventory"
+
 cargo fmt --all -- --check
 ok "cargo fmt --check"
 
 cargo clippy --workspace --all-targets -- -D warnings
 ok "cargo clippy -D warnings"
 
-cargo test --workspace --lib --bins
-ok "cargo test (lib+bins)"
+CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}" \
+CRAWLKIT_TEST_THREADS="${CRAWLKIT_TEST_THREADS:-1}" bash scripts/verify-contracts.sh
+ok "contract and bounded integration tests"
+
+CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-1}" cargo test --doc --workspace -- --test-threads="${CRAWLKIT_TEST_THREADS:-1}"
+ok "cargo test (documentation)"
 
 # --- 5. Dogfood gate (ADR-009) -------------------------------------------
 # Network-gated: skipped unless DOGFOOD=1. Runs the production-site crawl
@@ -96,7 +120,7 @@ fi
 
 echo
 echo "READY: v${VERSION} is consistent and the quality gate passes."
-echo "Manual steps remaining before tagging:"
-echo "  1. R4 checklist: GPG key + secrets + 'release' environment (see docs/MIGRATION.md era commit message / README)"
+echo "Manual steps remaining before tagging (see docs/RELEASE_ASSURANCE.md):"
+echo "  1. Complete the release-assurance checklist: GPG key + secrets + 'release' environment, dogfood/service-backed checks, artifact and SBOM review"
 echo "  2. git tag v${VERSION} && git push origin v${VERSION}"
 echo "  3. Approve the release environment when CI pauses"

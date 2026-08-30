@@ -25,8 +25,13 @@ jobs:
           targets: wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - name: Run all tests
-        run: cargo test --workspace
+        env:
+          CARGO_BUILD_JOBS: "1"
+          RUST_TEST_THREADS: "1"
+        run: cargo test --workspace -- --test-threads=1
       - name: Run clippy
+        env:
+          CARGO_BUILD_JOBS: "1"
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Security audit
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
@@ -99,6 +104,7 @@ jobs:
           cd target/${{ matrix.target }}/release
           tar czf ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz crawlkit
           cd ../../..
+          test -s target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz
 
       - name: Package (Windows)
         if: matrix.archive == 'zip'
@@ -106,6 +112,16 @@ jobs:
           cd target/${{ matrix.target }}/release
           7z a ../../crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip crawlkit.exe
           cd ../../..
+          test -s target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip
+
+      - name: Smoke test artifact
+        shell: bash
+        run: |
+          if [ "${{ matrix.archive }}" = "tar.gz" ]; then
+            tar -tzf target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.tar.gz | grep -q 'crawlkit$'
+          else
+            7z l target/crawlkit-${{ github.ref_name }}-${{ matrix.target }}.zip | grep -q 'crawlkit.exe'
+          fi
 
       - name: Generate checksum
         shell: bash
@@ -143,9 +159,25 @@ jobs:
       - name: Aggregate checksums
         run: |
           cd artifacts
-          cat */*.sha256 > checksums.txt
+          find . -mindepth 2 -maxdepth 2 -type f -name '*.sha256' -print0 | xargs -0 -r cat > checksums.txt
+          test -s checksums.txt
+          sha256sum -c checksums.txt
           echo "=== Release checksums ==="
           cat checksums.txt
+
+      - name: Generate SBOM
+        run: |
+          mkdir -p sbom
+          cargo install cargo-cyclonedx --locked
+          cargo cyclonedx --format json
+          find crates -name '*.cdx.json' -exec cp {} sbom/ \;
+
+      - name: Add SBOM checksums
+        shell: bash
+        run: |
+          cd artifacts
+          find ../sbom -type f -name '*.cdx.json' -print0 | xargs -0 -r sha256sum >> checksums.txt
+          sort -o checksums.txt checksums.txt
 
       - name: Sign checksums (single signature covers all artifacts + SBOM)
         env:
@@ -157,14 +189,6 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
             --detach-sign --armor checksums.txt
           gpg --verify checksums.txt.asc checksums.txt
-
-      - name: Generate SBOM
-        run: |
-          mkdir -p sbom
-          cargo install cargo-cyclonedx --locked
-          cargo cyclonedx --format json
-          # Workspaces emit one .cdx.json per crate directory — collect them.
-          find crates -name '*.cdx.json' -exec cp {} sbom/ \;
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2

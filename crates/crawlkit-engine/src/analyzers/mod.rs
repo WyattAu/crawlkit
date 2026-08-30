@@ -1142,6 +1142,19 @@ impl AnalyzerRegistry {
             Box::new(SitemapMissingDeepValidator::new()),
             Box::new(RobotsTxtEmptyDeepValidator::new()),
             Box::new(InternalLinksDiversityDeepValidator::new()),
+            // V8 Content Validators (Dataset, HowTo, Recipe)
+            Box::new(DatasetMissingDescriptionValidator::new()),
+            Box::new(DatasetMissingDistributionValidator::new()),
+            Box::new(HowToMissingNameValidator::new()),
+            Box::new(HowToMissingStepValidator::new()),
+            Box::new(RecipeMissingCookTimeValidator::new()),
+            // V8 Security Validators (Permissions-Policy deep)
+            Box::new(PermissionsPolicyPaymentDeepValidator::new()),
+            Box::new(PermissionsPolicyFullscreenDeepValidator::new()),
+            Box::new(PermissionsPolicyXrVrDeepValidator::new()),
+            // V8 SEO Validators (Internal/External links deep)
+            Box::new(InternalLinksDepthDeepValidator::new()),
+            Box::new(ExternalLinksAuthorityScoreDeepValidator::new()),
         ];
 
         if include_ai {

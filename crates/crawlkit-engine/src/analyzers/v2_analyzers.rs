@@ -6225,6 +6225,284 @@ impl Analyzer for InternalLinksDiversityDeepValidator {
     }
 }
 
+// =========================================================================
+// V8 Content Validators (Dataset, HowTo, Recipe deep validators)
+// =========================================================================
+
+pub struct DatasetMissingDescriptionValidator;
+impl Default for DatasetMissingDescriptionValidator { fn default() -> Self { Self::new() } }
+impl DatasetMissingDescriptionValidator { pub fn new() -> Self { Self } }
+impl Analyzer for DatasetMissingDescriptionValidator {
+    fn name(&self) -> &str { "dataset-missing-description-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Dataset" { continue; }
+            match sd.data.get("description") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "DATDESC001".to_string(), title: "Dataset missing description".to_string(), description: "No description in Dataset schema. Description helps search engines understand dataset content.".to_string(), url: url.clone(), recommendation: "Add a description to the Dataset schema.".to_string() });
+                }
+                Some(v) if v.as_str().map_or(false, |s| s.trim().is_empty()) => {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "DATDESC001".to_string(), title: "Dataset missing description".to_string(), description: "Description is empty or whitespace only.".to_string(), url: url.clone(), recommendation: "Add a meaningful description to the Dataset schema.".to_string() });
+                }
+                _ => {}
+            }
+        }
+        findings
+    }
+}
+
+pub struct DatasetMissingDistributionValidator;
+impl Default for DatasetMissingDistributionValidator { fn default() -> Self { Self::new() } }
+impl DatasetMissingDistributionValidator { pub fn new() -> Self { Self } }
+impl Analyzer for DatasetMissingDistributionValidator {
+    fn name(&self) -> &str { "dataset-missing-distribution-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Dataset" { continue; }
+            match sd.data.get("distribution") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "DATDIST001".to_string(), title: "Dataset missing distribution".to_string(), description: "No distribution in Dataset schema.".to_string(), url: url.clone(), recommendation: "Add distribution with DataDownload objects.".to_string() });
+                }
+                Some(v) => {
+                    if let Some(arr) = v.as_array() {
+                        if arr.is_empty() {
+                            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "DATDIST001".to_string(), title: "Dataset has empty distribution".to_string(), description: "Dataset distribution array is empty.".to_string(), url: url.clone(), recommendation: "Add DataDownload objects with contentUrl to distribution.".to_string() });
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct HowToMissingNameValidator;
+impl Default for HowToMissingNameValidator { fn default() -> Self { Self::new() } }
+impl HowToMissingNameValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HowToMissingNameValidator {
+    fn name(&self) -> &str { "howto-missing-name-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HowTo" { continue; }
+            match sd.data.get("name") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HOWNAME001".to_string(), title: "HowTo missing name".to_string(), description: "No name in HowTo schema.".to_string(), url: url.clone(), recommendation: "Add a descriptive name to the HowTo schema.".to_string() });
+                }
+                Some(v) if v.as_str().map_or(false, |s| s.trim().is_empty()) => {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HOWNAME001".to_string(), title: "HowTo missing name".to_string(), description: "Name is empty or whitespace only.".to_string(), url: url.clone(), recommendation: "Add a descriptive name to the HowTo schema.".to_string() });
+                }
+                _ => {}
+            }
+        }
+        findings
+    }
+}
+
+pub struct HowToMissingStepValidator;
+impl Default for HowToMissingStepValidator { fn default() -> Self { Self::new() } }
+impl HowToMissingStepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HowToMissingStepValidator {
+    fn name(&self) -> &str { "howto-missing-step-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HowTo" { continue; }
+            match sd.data.get("step") {
+                None => {
+                    findings.push(Finding { severity: Severity::Error, category: IssueCategory::Schema, code: "HOWSTEP001".to_string(), title: "HowTo missing step".to_string(), description: "No step in HowTo schema.".to_string(), url: url.clone(), recommendation: "Add step array with HowToStep objects.".to_string() });
+                }
+                Some(steps) => {
+                    if let Some(arr) = steps.as_array() {
+                        if arr.is_empty() {
+                            findings.push(Finding { severity: Severity::Error, category: IssueCategory::Schema, code: "HOWSTEP001".to_string(), title: "HowTo has empty step array".to_string(), description: "step array is empty.".to_string(), url: url.clone(), recommendation: "Add HowToStep objects to the step array.".to_string() });
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct RecipeMissingCookTimeValidator;
+impl Default for RecipeMissingCookTimeValidator { fn default() -> Self { Self::new() } }
+impl RecipeMissingCookTimeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RecipeMissingCookTimeValidator {
+    fn name(&self) -> &str { "recipe-missing-cooktime-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Recipe" { continue; }
+            match sd.data.get("cookTime") {
+                None | Some(serde_json::Value::Null) => {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "RECCOOK001".to_string(), title: "Recipe missing cookTime".to_string(), description: "No cookTime in Recipe schema.".to_string(), url: url.clone(), recommendation: "Add cookTime with an ISO 8601 duration value.".to_string() });
+                }
+                Some(v) if v.as_str().map_or(false, |s| s.trim().is_empty()) => {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "RECCOOK001".to_string(), title: "Recipe missing cookTime".to_string(), description: "cookTime is empty or whitespace only.".to_string(), url: url.clone(), recommendation: "Add cookTime with an ISO 8601 duration value.".to_string() });
+                }
+                _ => {}
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V8 Security Validators (Permissions-Policy deep validators)
+// =========================================================================
+
+pub struct PermissionsPolicyPaymentDeepValidator;
+impl Default for PermissionsPolicyPaymentDeepValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyPaymentDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyPaymentDeepValidator {
+    fn name(&self) -> &str { "permissions-policy-payment-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            let lower = val.to_lowercase();
+            if !lower.contains("payment") { return findings; }
+            if lower.trim() == "payment" { return findings; }
+            if lower.contains("payment=()") || lower.contains("payment ()") || lower.contains("payment *") || lower.contains("payment=*") || (lower.contains("payment (self)") && !lower.contains("payment=(self)")) { return findings; }
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPAYDP001".to_string(), title: "Payment API access not explicitly denied".to_string(), description: "Permissions-Policy mentions payment but doesn't explicitly deny it.".to_string(), url: url.clone(), recommendation: "Add payment=() to Permissions-Policy.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyFullscreenDeepValidator;
+impl Default for PermissionsPolicyFullscreenDeepValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyFullscreenDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyFullscreenDeepValidator {
+    fn name(&self) -> &str { "permissions-policy-fullscreen-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            let lower = val.to_lowercase();
+            if !lower.contains("fullscreen") { return findings; }
+            if lower.trim() == "fullscreen" { return findings; }
+            if lower.contains("fullscreen=()") || lower.contains("fullscreen ()") || lower.contains("fullscreen *") || lower.contains("fullscreen=*") { return findings; }
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPFULLDP001".to_string(), title: "Fullscreen API access not explicitly restricted".to_string(), description: "Permissions-Policy mentions fullscreen but doesn't explicitly deny it.".to_string(), url: url.clone(), recommendation: "Consider adding fullscreen=() to Permissions-Policy.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyXrVrDeepValidator;
+impl Default for PermissionsPolicyXrVrDeepValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyXrVrDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyXrVrDeepValidator {
+    fn name(&self) -> &str { "permissions-policy-xr-vr-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            let lower = val.to_lowercase();
+            let directives: Vec<&str> = lower.split(',').map(|s| s.trim()).collect();
+            for dir in &directives {
+                let name = dir.split('=').next().unwrap_or(dir).split('(').next().unwrap_or(dir).trim();
+                if name == "xr-spatial-tracking" || name == "vr" || name == "xr-spatial-tracking *" || name == "vr *" {
+                    let has_value = dir.contains("=()") || dir.contains(" ()") || dir.contains("=*") || dir.contains("= *");
+                    let has_feature_policy_self = dir.contains(" (self)") && !dir.contains("=(self)");
+                    if has_value || has_feature_policy_self || name.ends_with(" *") { continue; }
+                    let bare_keyword = dir.trim() == name;
+                    if bare_keyword { continue; }
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPXRDP001".to_string(), title: format!("{name} API access not explicitly denied"), description: format!("Permissions-Policy mentions {name} but doesn't explicitly deny it."), url: url.clone(), recommendation: format!("Add {name}=() to Permissions-Policy.") });
+                    break;
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V8 SEO Validators (Internal/External links deep validators)
+// =========================================================================
+
+pub struct InternalLinksDepthDeepValidator;
+impl Default for InternalLinksDepthDeepValidator { fn default() -> Self { Self::new() } }
+impl InternalLinksDepthDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InternalLinksDepthDeepValidator {
+    fn name(&self) -> &str { "internal-links-depth-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let internal: Vec<&str> = ctx.page.links.iter().filter(|l| !l.is_external).map(|l| l.href.as_str()).collect();
+        if internal.len() > 5 {
+            let base = url::Url::parse(url).ok();
+            if let Some(base) = base {
+                let base_host = base.host_str().unwrap_or("");
+                let depth_counts: std::collections::HashMap<usize, usize> = internal.iter().filter_map(|href| {
+                    url::Url::parse(href).ok().and_then(|u| {
+                        if u.host_str() == Some(base_host) {
+                            let depth = u.path().trim_matches('/').split('/').filter(|s| !s.is_empty()).count();
+                            Some(depth)
+                        } else {
+                            None
+                        }
+                    })
+                }).fold(std::collections::HashMap::new(), |mut acc, d| { *acc.entry(d).or_insert(0) += 1; acc });
+                let deep_pages: usize = depth_counts.iter().filter(|(&d, _)| d > 4).map(|(_, &c)| c).sum();
+                if deep_pages > internal.len() / 4 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTDEPTH001".to_string(), title: "Many deeply nested internal links".to_string(), description: format!("{}/{} internal links point to URLs with 4+ path segments.", deep_pages, internal.len()), url: url.clone(), recommendation: "Flatten URL structure for important pages.".to_string() });
+                }
+                let max_depth = depth_counts.keys().copied().max().unwrap_or(0);
+                if max_depth > 6 {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "INTDEPTH002".to_string(), title: "Very deep internal link targets".to_string(), description: format!("Deepest internal link has {} path segments.", max_depth), url: url.clone(), recommendation: "Reduce URL depth for better SEO.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct ExternalLinksAuthorityScoreDeepValidator;
+impl Default for ExternalLinksAuthorityScoreDeepValidator { fn default() -> Self { Self::new() } }
+impl ExternalLinksAuthorityScoreDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ExternalLinksAuthorityScoreDeepValidator {
+    fn name(&self) -> &str { "external-links-authority-score-deep-v8" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let external: Vec<&str> = ctx.page.links.iter().filter(|l| l.is_external).map(|l| l.href.as_str()).collect();
+        if external.len() > 3 {
+            let high_authority = ["wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org", "w3.org", "schema.org", "google.com", "developer.mozilla.org"];
+            let low_authority = [".ru", ".cn", ".tk", ".ml", ".xyz", ".top", ".buzz", ".click"];
+            let authority_count = external.iter().filter(|href| high_authority.iter().any(|dom| href.contains(dom))).count();
+            let suspicious_count = external.iter().filter(|href| low_authority.iter().any(|tld| href.contains(tld))).count();
+            if authority_count == 0 && external.len() > 5 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTAUTHDP001".to_string(), title: "No high-authority external links".to_string(), description: format!("{} external links, none to authoritative domains.", external.len()), url: url.clone(), recommendation: "Link to reputable, authoritative sources.".to_string() });
+            }
+            if suspicious_count > 0 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "EXTAUTHDP002".to_string(), title: "Links to low-reputation TLDs".to_string(), description: format!("{}/{} external links point to suspicious TLDs.", suspicious_count, external.len()), url: url.clone(), recommendation: "Review external links to low-reputation TLDs.".to_string() });
+            }
+            let ratio = authority_count as f64 / external.len() as f64;
+            if external.len() > 10 && ratio < 0.1 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "EXTAUTHDP003".to_string(), title: "Low authority link ratio".to_string(), description: format!("{}/{} ({:.0}%) external links are to authoritative sources.", authority_count, external.len(), ratio * 100.0), url: url.clone(), recommendation: "Increase the proportion of links to authoritative domains.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod v2_analyzer_tests {
@@ -6266,6 +6544,10 @@ mod v2_analyzer_tests {
 
     fn make_ctx<'a>(page: &'a crate::parser::ParsedPage, body: Option<&'a str>) -> AnalysisContext<'a> {
         AnalysisContext { page, body, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }
+    }
+
+    fn make_ctx_headers<'a>(page: &'a crate::parser::ParsedPage, headers: &'a [(String, String)]) -> AnalysisContext<'a> {
+        AnalysisContext { page, body: None, status_code: Some(200), headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }
     }
 
     #[test]
@@ -7102,4 +7384,210 @@ mod v2_analyzer_tests {
     fn test_int_links_diversity_deep() { let p = make_page("https://example.com"); assert!(InternalLinksDiversityDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
     #[test]
     fn test_int_links_diversity_low() { let mut p = make_page("https://example.com"); for _ in 0..10 { p.links.push(crate::parser::ExtractedLink { href: "https://example.com/same".into(), text: "same".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }); } let f = InternalLinksDiversityDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "INTDIV001"); }
+
+    // ===== DatasetMissingDescriptionValidator tests =====
+    #[test]
+    fn test_dataset_missing_description() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather"}) }]; let f = DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "DATDESC001"); }
+    #[test]
+    fn test_dataset_with_description() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": "Daily weather data"}) }]; assert!(DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_empty_description() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": ""}) }]; assert!(!DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_non_dataset_ignored() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article"}) }]; assert!(DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_no_structured_data() { let p = make_page("https://example.com"); assert!(DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_multiple_missing() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset"}) }]; let f = DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_dataset_name_whitespace_description() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": "   "}) }]; assert!(!DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_description_null() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": null}) }]; assert!(!DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_description_number() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": 123}) }]; assert!(DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_description_array() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "description": []}) }]; assert!(DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== DatasetMissingDistributionValidator tests =====
+    #[test]
+    fn test_dataset_missing_distribution() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather"}) }]; let f = DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "DATDIST001"); }
+    #[test]
+    fn test_dataset_with_distribution() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "distribution": [{"@type": "DataDownload", "contentUrl": "https://example.com/data.csv"}]}) }]; assert!(DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_empty_distribution() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "distribution": []}) }]; assert!(!DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_non_dataset_ignored_dist() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"@type": "Article"}) }]; assert!(DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_no_structured_data_dist() { let p = make_page("https://example.com"); assert!(DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_multiple_missing_dist() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset"}) }]; let f = DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_dataset_distribution_string() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "distribution": "https://example.com/data.csv"}) }]; assert!(DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_distribution_null() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "distribution": null}) }]; assert!(!DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_dataset_distribution_number() { let mut p = make_page("https://example.com/data"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"@type": "Dataset", "name": "Weather", "distribution": 42}) }]; assert!(DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== HowToMissingNameValidator tests =====
+    #[test]
+    fn test_howto_missing_name_v8() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": []}) }]; let f = HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HOWNAME001"); }
+    #[test]
+    fn test_howto_with_name() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": "How to bake a cake"}) }]; assert!(HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_empty_name() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": ""}) }]; assert!(!HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_non_howto_ignored() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Event".into()), data: serde_json::json!({"@type": "Event"}) }]; assert!(HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_no_structured_data_name() { let p = make_page("https://example.com"); assert!(HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_multiple_missing_name() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo"}) }]; let f = HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_howto_name_whitespace() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": "   "}) }]; assert!(!HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_name_null() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": null}) }]; assert!(!HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_name_number() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": 123}) }]; assert!(HowToMissingNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== HowToMissingStepValidator tests =====
+    #[test]
+    fn test_howto_missing_step_v8() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "name": "How to bake"}) }]; let f = HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HOWSTEP001"); }
+    #[test]
+    fn test_howto_with_step() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": [{"@type": "HowToStep", "name": "Step 1"}]}) }]; assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_empty_step_array() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": []}) }]; assert!(!HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_non_howto_ignored_step() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Event".into()), data: serde_json::json!({"@type": "Event"}) }]; assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_no_structured_data_step() { let p = make_page("https://example.com"); assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_multiple_missing_step() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo"}) }]; let f = HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_howto_step_string() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": "Step 1"}) }]; assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_step_number() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": 3}) }]; assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_step_object() { let mut p = make_page("https://example.com/howto"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"@type": "HowTo", "step": {"@type": "HowToStep", "name": "Step 1"}}) }]; assert!(HowToMissingStepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== RecipeMissingCookTimeValidator tests =====
+    #[test]
+    fn test_recipe_missing_cooktime() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "name": "Pasta"}) }]; let f = RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "RECCOOK001"); }
+    #[test]
+    fn test_recipe_with_cooktime() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "cookTime": "PT30M"}) }]; assert!(RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_empty_cooktime() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "cookTime": ""}) }]; assert!(!RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_non_recipe_ignored() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Product".into()), data: serde_json::json!({"@type": "Product"}) }]; assert!(RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_no_structured_data() { let p = make_page("https://example.com"); assert!(RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_multiple_missing_cooktime() { let mut p = make_page("https://example.com/recipes"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "name": "Pasta"}) }, StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "name": "Soup"}) }]; let f = RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)); assert_eq!(f.len(), 2); }
+    #[test]
+    fn test_recipe_cooktime_whitespace() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "cookTime": "   "}) }]; assert!(!RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_cooktime_number() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "cookTime": 1800}) }]; assert!(RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_recipe_cooktime_null() { let mut p = make_page("https://example.com/recipe"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"@type": "Recipe", "cookTime": null}) }]; assert!(!RecipeMissingCookTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== PermissionsPolicyPaymentDeepValidator tests =====
+    #[test]
+    fn test_pp_payment_missing() { let p = make_page("https://example.com"); assert!(PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_pp_payment_explicit_deny() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "payment=()".into())]; assert!(PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_not_denied() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "payment=(self)".into())]; let f = PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PPAYDP001"); }
+    #[test]
+    fn test_pp_payment_feature_policy() { let p = make_page("https://example.com"); let h = vec![("Feature-Policy".into(), "payment (self)".into())]; assert!(PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_empty_header() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "".into())]; assert!(PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_with_other_policies() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=(), microphone=(), payment=(self)".into())]; assert!(!PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_case_insensitive() { let p = make_page("https://example.com"); let h = vec![("permissions-policy".into(), "Payment=(self)".into())]; assert!(!PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_no_value() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "payment".into())]; assert!(PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_payment_multiple_directives() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=(), payment=(self), microphone=()".into())]; assert!(!PermissionsPolicyPaymentDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    // ===== PermissionsPolicyFullscreenDeepValidator tests =====
+    #[test]
+    fn test_pp_fullscreen_missing() { let p = make_page("https://example.com"); assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_explicit_deny() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "fullscreen=()".into())]; assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_not_restricted() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "fullscreen=(self)".into())]; let f = PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PPFULLDP001"); }
+    #[test]
+    fn test_pp_fullscreen_no_value() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "fullscreen".into())]; assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_empty_header() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "".into())]; assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_case_insensitive() { let p = make_page("https://example.com"); let h = vec![("permissions-policy".into(), "Fullscreen=(self)".into())]; assert!(!PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_multiple_directives() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=(), fullscreen=(self), microphone=()".into())]; assert!(!PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_with_others() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=(), microphone=()".into())]; assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_fullscreen_wildcard() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "fullscreen *".into())]; assert!(PermissionsPolicyFullscreenDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    // ===== PermissionsPolicyXrVrDeepValidator tests =====
+    #[test]
+    fn test_pp_xrvr_missing() { let p = make_page("https://example.com"); assert!(PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_explicit_deny() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "xr-spatial-tracking=(), vr=()".into())]; assert!(PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_not_denied() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "xr-spatial-tracking=(self), vr=(self)".into())]; let f = PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PPXRDP001"); }
+    #[test]
+    fn test_pp_xr_only() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "xr-spatial-tracking=(self)".into())]; assert!(!PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_vr_only() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "vr=(self)".into())]; assert!(!PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_empty_header() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "".into())]; assert!(PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_case_insensitive() { let p = make_page("https://example.com"); let h = vec![("permissions-policy".into(), "XR-Spatial-Tracking=(self), VR=(self)".into())]; assert!(!PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_no_value() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "xr-spatial-tracking, vr".into())]; assert!(PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_feature_policy() { let p = make_page("https://example.com"); let h = vec![("Feature-Policy".into(), "xr-spatial-tracking (self)".into())]; assert!(PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+    #[test]
+    fn test_pp_xrvr_multiple_directives() { let p = make_page("https://example.com"); let h = vec![("Permissions-Policy".into(), "camera=(), xr-spatial-tracking=(self), vr=(self)".into())]; assert!(!PermissionsPolicyXrVrDeepValidator::new().analyze(&make_ctx_headers(&p, &h)).is_empty()); }
+
+    // ===== InternalLinksDepthDeepValidator tests =====
+    #[test]
+    fn test_int_depth_no_links() { let p = make_page("https://example.com"); assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_few_links() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://example.com/about".into(), text: "About".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }]; assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_shallow_links() { let mut p = make_page("https://example.com"); p.links = (0..10).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_deep_links() { let mut p = make_page("https://example.com"); p.links = (0..12).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/a/b/c/d/e/f/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); let f = InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_int_depth_mixed_internal_external() { let mut p = make_page("https://example.com"); let mut links: Vec<crate::parser::ExtractedLink> = (0..12).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/a/b/c/d/e/f/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); links.push(crate::parser::ExtractedLink { href: "https://other.com/deep/page".into(), text: "Ext".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }); p.links = links; let f = InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_int_depth_no_structured_data() { let p = make_page("https://example.com"); assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_multiple_findings() { let mut p = make_page("https://example.com"); p.links = (0..20).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/a/b/c/d/e/f/g/h/i/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); let f = InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_int_depth_empty_links() { let mut p = make_page("https://example.com"); p.links = vec![]; assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_depth_external_only() { let mut p = make_page("https://example.com"); p.links = (0..10).map(|i| crate::parser::ExtractedLink { href: format!("https://other.com/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); assert!(InternalLinksDepthDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== ExternalLinksAuthorityScoreDeepValidator tests =====
+    #[test]
+    fn test_ext_auth_no_links() { let p = make_page("https://example.com"); assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_few_links() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://other.com/page".into(), text: "Link".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }]; assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_with_authority() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Example".into(), text: "Wiki".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }]; assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_no_authority() { let mut p = make_page("https://example.com"); p.links = (0..10).map(|i| crate::parser::ExtractedLink { href: format!("https://random{i}.com/page"), text: format!("Link {i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "EXTAUTHDP001")); }
+    #[test]
+    fn test_ext_auth_suspicious_tld() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://malicious.ru/page".into(), text: "Link".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://another.ru/page".into(), text: "Link2".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://third.xyz/page".into(), text: "Link3".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://fourth.tk/page".into(), text: "Link4".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }]; let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_ext_auth_low_ratio() { let mut p = make_page("https://example.com"); let mut links: Vec<crate::parser::ExtractedLink> = (0..15).map(|i| crate::parser::ExtractedLink { href: format!("https://random{i}.com/page"), text: format!("Link {i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); links.push(crate::parser::ExtractedLink { href: "https://en.wikipedia.org/wiki/Example".into(), text: "Wiki".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }); p.links = links; let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "EXTAUTHDP003")); }
+    #[test]
+    fn test_ext_auth_internal_only() { let mut p = make_page("https://example.com"); p.links = (0..10).map(|i| crate::parser::ExtractedLink { href: format!("https://example.com/page{i}"), text: format!("Link {i}"), rel: vec![], is_external: false, aria_label: None, img_alt: None }).collect(); assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_empty_links() { let mut p = make_page("https://example.com"); p.links = vec![]; assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_ext_auth_mixed_suspicious() { let mut p = make_page("https://example.com"); p.links = (0..5).map(|i| crate::parser::ExtractedLink { href: format!("https://link{i}.xyz/page"), text: format!("Link {i}"), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "EXTAUTHDP002")); }
+    #[test]
+    fn test_ext_auth_high_authority_domains() { let mut p = make_page("https://example.com"); let domains = ["wikipedia.org", "github.com", "stackoverflow.com", "mozilla.org", "w3.org", "schema.org"]; p.links = domains.iter().map(|d| crate::parser::ExtractedLink { href: format!("https://{d}/page"), text: d.to_string(), rel: vec![], is_external: true, aria_label: None, img_alt: None }).collect(); assert!(ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
 }

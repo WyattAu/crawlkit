@@ -1,10 +1,10 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 30 (v6.0.0 Enterprise)
-**Version:** 6.0.0
+**Current Phase:** Phase 31 (v6.3.0 Security Hardening)
+**Version:** 6.3.0
 **Status:** Released
-**Last Updated:** 2026-08-28
+**Last Updated:** 2026-08-30
 **MSRV:** 1.94.0
 
 ---

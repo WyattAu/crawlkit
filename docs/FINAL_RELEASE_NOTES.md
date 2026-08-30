@@ -1,3 +1,5 @@
+> STATUS: Historical release notes — retained for audit context; claims and metrics are not current release evidence.
+
 # crawlkit v2.5.0 Release Notes
 
 ## Release Date

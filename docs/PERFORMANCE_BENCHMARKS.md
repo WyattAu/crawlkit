@@ -1,6 +1,6 @@
 # Performance Benchmarks
 
-This document contains performance benchmarks for crawlkit.
+This document is a benchmark schema and historical reference. Values must not be treated as current product guarantees unless accompanied by a retained raw benchmark artifact, commit, toolchain, workload, sample size and environment record.
 
 ## Test Environment
 
@@ -11,7 +11,11 @@ This document contains performance benchmarks for crawlkit.
 | Storage | NVMe SSD (1TB) |
 | Network | 1Gbps Ethernet |
 | OS | Ubuntu 22.04 LTS |
-| Rust | 1.75.0 |
+| Rust | Historical result; current MSRV is 1.94.0 |
+
+## Historical measurements (not release guarantees)
+
+The tables below are retained for comparison only. They are not normative performance commitments and should be regenerated using the current benchmark harness before being quoted publicly.
 
 ## Crawl Performance
 
@@ -155,6 +159,8 @@ This document contains performance benchmarks for crawlkit.
 | 32 | 500 | 1.5 |
 
 ## Regression Thresholds
+
+Thresholds apply only to repeated measurements from the same benchmark workload and environment. A single noisy run must not be treated as a regression.
 
 | Metric | Threshold | Action |
 |--------|-----------|--------|

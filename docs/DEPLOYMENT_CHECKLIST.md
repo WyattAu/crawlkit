@@ -4,7 +4,7 @@
 
 ### Code Quality
 
-- [ ] All tests passing (470+ Rust, 28 Flutter, 38 React)
+- [ ] Required test suites pass; use the current CI artifacts rather than a manually maintained test count
 - [ ] Zero clippy warnings
 - [ ] Code formatted with rustfmt
 - [ ] Documentation complete
@@ -34,70 +34,55 @@
 
 ## Deployment Steps
 
-### 1. Create Release Branch
+### 1. Run release readiness
 
 ```bash
-git checkout -b release/v2.5.0
+scripts/verify-release-readiness.sh
 ```
 
-### 2. Update Version
+Version changes must be made consistently through the workspace release
+process; do not use the historical version-edit commands below.
+
+### 2. Run Final Tests
 
 ```bash
-# Update Cargo.toml
-sed -i 's/version = "2.4.0"/version = "2.5.0"/' Cargo.toml
+# Rust tests and release controls
+CARGO_BUILD_JOBS=1 CRAWLKIT_TEST_THREADS=1 bash scripts/verify-release-controls.sh
 
-# Update package.json
-sed -i 's/"version": "2.4.0"/"version": "2.5.0"/' dashboard/package.json
+# Dashboard/docs tests, when applicable
+cd dashboard && pnpm test
 ```
 
-### 3. Run Final Tests
-
-```bash
-# Rust tests
-cargo test --workspace
-
-# Flutter tests
-cd mobile && flutter test
-
-# React tests
-cd dashboard && npm test
-```
-
-### 4. Build Release
+### 3. Build Release
 
 ```bash
 # Rust release build
 cargo build --release
 
-# Flutter release build
-cd mobile && flutter build apk --release
-
 # React production build
 cd dashboard && npm run build
 ```
 
-### 5. Create Git Tag
+### 4. Create Git Tag
 
-```bash
-git tag -a v2.5.0 -m "Release v2.5.0"
-git push origin v2.5.0
-```
+Use the reviewed target version and follow the repository's protected release
+process. Do not tag until `verify-release-readiness.sh` passes.
 
-### 6. Publish to crates.io
+### 5. Publish to crates.io
 
 ```bash
 cargo publish -p crawlkit-engine
 cargo publish -p crawlkit-plugin-sdk
 ```
 
-### 7. Deploy Documentation
+### 6. Deploy Documentation
 
 ```bash
 cd web && npm run build
 # Deploy to GitHub Pages
 ```
 
-### 8. Deploy API Server
+### 7. Deploy API Server
 
 ```bash
 # Deploy to production server
@@ -108,7 +93,7 @@ cargo build --release
 sudo systemctl restart crawlkit-api
 ```
 
-### 9. Verify Deployment
+### 8. Verify Deployment
 
 ```bash
 # Health check
@@ -118,7 +103,7 @@ curl https://api.crawlkit.io/health
 curl -H "X-API-Key: <key>" https://api.crawlkit.io/api/v1/crawls
 ```
 
-### 10. Monitor
+### 9. Monitor
 
 ```bash
 # Check metrics
@@ -157,12 +142,9 @@ tail -f /var/log/crawlkit/api.log
 
 ### Immediate Rollback
 
-```bash
-# Revert to previous version
-git checkout v2.4.0
-cargo build --release
-sudo systemctl restart crawlkit-api
-```
+Use the previously verified release artifact and its checksum rather than
+rebuilding arbitrary source from a mutable checkout. Follow the deployment
+platform's approved rollback procedure, then run the health and API smoke tests.
 
 ### Database Rollback
 

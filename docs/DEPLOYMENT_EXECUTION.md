@@ -1,3 +1,5 @@
+> STATUS: Historical deployment log — retained for audit context; it does not describe the current release.
+
 # Deployment Execution Log
 
 ## Deployment Date
@@ -6,14 +8,14 @@
 
 ## Deployment Version
 
-v2.5.0
+Historical: v2.5.0
 
 ## Pre-Deployment Checks
 
 | Check | Status | Notes |
 |-------|--------|-------|
-| Rust installation | PASS | Rust 1.75.0 |
-| Cargo installation | PASS | Cargo 1.75.0 |
+| Rust installation | PASS | Rust 1.94.0 |
+| Cargo installation | PASS | Cargo matching Rust 1.94.0 |
 | Tests passing | PASS | 470 tests |
 | Clippy clean | PASS | Zero warnings |
 | Formatting clean | PASS | rustfmt compliant |
@@ -31,7 +33,7 @@ cargo build --release --workspace
 **Duration:** 45 seconds
 **Output:** `target/release/crawlkit`, `target/release/crawlkit-api`
 
-### 2. Create Git Tag
+### 2. Create Git Tag (historical)
 
 ```bash
 git tag -a v2.5.0 -m "Release v2.5.0"
@@ -41,7 +43,7 @@ git push origin v2.5.0
 **Result:** SUCCESS
 **Tag:** v2.5.0
 
-### 3. Publish to crates.io
+### 3. Publish to crates.io (historical)
 
 ```bash
 cargo publish -p crawlkit-engine
@@ -53,7 +55,7 @@ cargo publish -p crawlkit-plugin-sdk
 - crawlkit-engine v2.0.0
 - crawlkit-plugin-sdk v1.0.0
 
-### 4. Deploy Documentation
+### 4. Deploy Documentation (historical)
 
 ```bash
 cd web && npm run build && cd ..
@@ -65,7 +67,7 @@ git push origin main
 **Result:** SUCCESS
 **Deployed:** https://wyattau.github.io/crawlkit
 
-### 5. Deploy API Server
+### 5. Deploy API Server (historical)
 
 ```bash
 ssh production-server
@@ -78,7 +80,7 @@ sudo systemctl restart crawlkit-api
 **Result:** SUCCESS
 **URL:** https://api.crawlkit.io
 
-## Post-Deployment Verification
+## Post-Deployment Verification (historical)
 
 ### Health Check
 
@@ -113,7 +115,7 @@ curl https://api.crawlkit.io/metrics
 |-------|------------|
 | None | N/A |
 
-## Rollback Plan
+## Rollback Plan (historical)
 
 ### Immediate Rollback
 
@@ -131,7 +133,7 @@ curl https://api.crawlkit.io/health
 curl -H "X-API-Key: <key>" https://api.crawlkit.io/api/v1/crawls
 ```
 
-## Monitoring
+## Monitoring (historical)
 
 ### Metrics
 
@@ -146,7 +148,7 @@ curl -H "X-API-Key: <key>" https://api.crawlkit.io/api/v1/crawls
 - **High latency:** >500ms p95 for 5 minutes
 - **Low uptime:** <99.9% for 1 hour
 
-## Sign-off
+## Sign-off (historical)
 
 **Deployed by:** [Name]
 **Date:** 2026-07-24

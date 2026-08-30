@@ -9,7 +9,7 @@ sandboxed WASM environment for security.
 
 ## Prerequisites
 
-- Rust 1.75+ with `wasm32-unknown-unknown` target
+- Rust 1.94.0 or newer with the `wasm32-unknown-unknown` target
 - crawlkit-plugin-sdk crate
 
 ```bash

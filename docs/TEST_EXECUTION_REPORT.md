@@ -6,7 +6,7 @@ This report documents the test execution for crawlkit v2.5.0.
 
 **Execution Date:** 2026-07-24
 **Duration:** 4 hours
-**Environment:** Ubuntu 22.04, Rust 1.75.0, Node.js 20
+**Environment:** Ubuntu 22.04, Rust 1.94.0+, Node.js 20
 
 ## Test Results
 

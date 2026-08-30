@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Phase 31 (v6.3.0 Security Hardening)
-**Version:** 6.3.0
+**Current Phase:** Roadmap hardening and release assurance
+**Version:** 4.4.1
 **Status:** Released
 **Last Updated:** 2026-08-30
 **MSRV:** 1.94.0
@@ -15,7 +15,7 @@
 |-------|------|--------|------|-----------|
 | -1 | Context Discovery | Complete | 2026-07-23 | domain_analysis.md, applicable_standards.md, capability_requirements.md |
 | 0 | Requirements Engineering | Complete | 2026-07-23 | requirements.md, acceptance_criteria.md |
-| 1 | Deep Testing & Code Quality Audit | Complete | 2026-07-26 | 608 tests passing, 0 clippy warnings, 31 analyzers |
+| 1 | Deep Testing & Code Quality Audit | Complete | 2026-07-26 | Historical audit; counts superseded by current validation |
 | 2 | CI/CD Pipeline Audit & Debugging | Complete | 2026-07-26 | Pinned actions, cargo-deny fixed, MSRV unified |
 | 3 | GUI & UI/UX Evaluation | Complete | 2026-07-26 | Design tokens wired, reduced-motion, unused deps removed |
 | 4 | Documentation Overhaul | Complete | 2026-07-26 | README rewritten, zero emojis, technical precision |
@@ -29,10 +29,10 @@
 - **Rollback Checkpoint:** None
 - **Capability Matrix:** Updated
 - **Traceability:** Initialized
-- **Test Count:** 2015+ passing (engine: 1919, API: 96, integration/doc: additional)
-- **Analyzer Count:** 204 (185 single-page + 19 cross-page)
-- **Clippy Warnings:** 0
-- **Unsafe Code:** Denied (workspace-level); FFI crates override to allow with SAFETY comments
+- **Test Count:** See current CI/test artifacts; counts are not maintained as a release claim
+- **Analyzer Count:** Configuration/version-dependent; see `docs/capabilities.toml`
+- **Clippy Warnings:** 0 in the verified baseline
+- **Unsafe Code:** Denied in ordinary workspace code; scoped FFI exists with safety documentation
 - **Workspace Crates:** 5 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-types)
 - **Client Libraries:** Python 92%, Go 100%, Node.js 100%
 
@@ -53,7 +53,7 @@
 | 0.1.0 | 2026-07-22 | Initial release |
 | 0.1.1 | 2026-07-23 | Phase -1 complete |
 | 0.4.0 | 2026-07-23 | Major release: 28 analyzers, AI/WASM, REST API, cross-platform |
-| 2.0.0 | 2026-07-25 | Full rewrite: 31 analyzers, security hardening, quality gates |
+| 2.0.0 | 2026-07-25 | Full rewrite, security hardening, quality gates |
 | 2.1.0 | 2026-07-26 | Production hardening: rustdoc examples, bug fixes |
 | 2.2.0 | 2026-07-26 | Streaming parser, native plugins, webhooks, schedules, SSO |
 | 2.3.0 | 2026-07-27 | Distributed queue, PostgreSQL backend, Core Web Vitals |
@@ -69,4 +69,4 @@
 
 ---
 
-*Generated: 2026-08-27 | Version: 5.0.0*
+*Historical phase record; current workspace version: 4.4.1*

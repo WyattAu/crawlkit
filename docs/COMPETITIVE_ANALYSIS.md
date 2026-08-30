@@ -1,7 +1,7 @@
 # Competitive Analysis
 
 **Last Updated:** 2026-08-30
-**Methodology:** Feature-by-feature comparison based on official documentation, public benchmarks, and verified product capabilities. All claims include source URLs.
+**Methodology:** Feature-by-feature comparison based primarily on vendor documentation. A source URL demonstrates that a capability is documented; it does not independently verify performance, pricing, completeness, or the absence of a feature. Competitor performance/resource figures are excluded unless independently reproducible under a stated workload.
 
 ---
 
@@ -54,7 +54,7 @@
 | Plugin system | ❌[^sf-plugin] | ❌[^sb-plugin] | ❌[^lumar-plugin] | ❌[^semrush-plugin] | ❌[^oncrawl-plugin] | ❌[^ck-plugin] | ❌[^sps-plugin] | ❌[^np-plugin] | ✅ (WASM, signed)[^ck-plugin] |
 | Export formats | CSV, HTML, JSON[^sf-export] | CSV, JSON, HTML[^sb-export] | CSV, JSON, HTML[^lumar-export] | CSV, HTML[^semrush-export] | CSV, JSON[^oncrawl-export] | CSV, JSON[^ck-export] | CSV, HTML[^sps-export] | CSV, HTML[^np-export] | CSV, JSON, SQLite, HTML, Postgres[^ck-export] |
 | REST API | ❌[^sf-api] | ❌[^sb-api] | ✅[^lumar-api] | ✅[^semrush-api] | ✅[^oncrawl-api] | ✅[^ck-api] | ❌[^sps-api] | ❌[^np-api] | ✅ (axum)[^ck-api] |
-| Analyzer/check count | ~100[^sf-count] | ~40[^sb-count] | ~30[^lumar-count] | ~60[^semrush-count] | ~50[^oncrawl-count] | ~20[^ck-count] | ~50[^sps-count] | 60+[^np-count] | **204**[^ck-count] |
+| Analyzer/check count | ~100[^sf-count] | ~40[^sb-count] | ~30[^lumar-count] | ~60[^semrush-count] | ~50[^oncrawl-count] | ~20[^ck-count] | ~50[^sps-count] | 60+[^np-count] | configuration/version-dependent[^ck-count] |
 | Visual crawl maps | —[^sf-visual] | ✅[^sb-visual] | —[^lumar-visual] | —[^semrush-visual] | —[^oncrawl-visual] | —[^ck-visual] | —[^sps-visual] | —[^np-visual] | ❌ (planned)[^ck-visual] |
 | Observability (OpenTelemetry) | —[^sf-otel] | —[^sb-otel] | —[^lumar-otel] | —[^semrush-otel] | —[^oncrawl-otel] | —[^ck-otel] | —[^sps-otel] | —[^np-otel] | ✅[^ck-otel] |
 
@@ -282,7 +282,7 @@
 [^ck-count]: ~20 monitoring checks — https://www.contentkingapp.com/
 [^sps-count]: ~50 audit checks — https://www.link-assistant.com/
 [^np-count]: 60+ checks — https://netpeaksoftware.com/spider
-[^ck-count]: README.md — 204 analyzers (badge in README)
+[^ck-count]: docs/capabilities.toml — analyzer/check counts are configuration- and version-dependent; no fixed total is published
 [^sf-visual]: Screaming Frog does not generate visual crawl maps — https://www.screamingfrog.co.uk/
 [^sb-visual]: https://sitebulb.com/ — Sitebulb is known for visual crawl maps
 [^lumar-visual]: Lumar does not generate visual crawl maps — https://www.lumar.io/
@@ -310,11 +310,11 @@
 |----------|---------|----------------------|
 | **WASM plugin system** | Signed, content-addressed WASM analyzers with zero-infrastructure marketplace | None — unique to crawlkit |
 | **Security + Accessibility breadth** | SecurityHeaderAnalyzer, SslCertificateValidator, CSP scoring, 16 WCAG 2.1 AA checks | None — no other crawler audits both |
-| **204 analyzers** | Largest analyzer count of any tool in this comparison | Screaming Frog (~100) is closest |
+| **Broad analyzer registry** | Large registry spanning SEO, content, schema, security and accessibility checks | Counts are configuration/version dependent; compare using the generated registry manifest |
 | **Self-hosted OSS** | Apache 2.0, `cargo install`, Docker, standalone binary — no cloud dependency | Screaming Frog, Sitebulb, SEO PS, Netpeak (all proprietary desktop) |
 | **Postgres storage** | First-class Postgres output for CI/CD pipelines and team workflows | None in this comparison |
 | **OpenTelemetry** | Built-in observability traces and metrics | None in this comparison |
-| **Low resource footprint** | 23 MB binary, 3.9 ms startup, 33.6 MB peak RSS on 50 pages | All competitors use more memory |
+| **Self-hosted Rust binary** | Resource usage is workload and build dependent; current figures must come from reproducible benchmark artifacts | Do not compare against competitor memory without matched workloads |
 | **AI crawler accessibility** | AiCrawlerAccessibilityAnalyzer, AiContentStructureAnalyzer — unique emerging category | None |
 
 ---
@@ -357,7 +357,7 @@
 - Free tier limited to 500 URLs [^sf-free]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~100 — broader built-in coverage [^ck-count] [^sf-count]
+- Broad analyzer/check coverage vs ~100 — broader built-in coverage [^ck-count] [^sf-count]
 - Security headers + accessibility — Screaming Frog has neither [^sf-sec] [^sf-a11y]
 - WASM plugin system — extensible without forking [^ck-plugin]
 - Self-hosted OSS vs proprietary desktop [^ck-oss] [^sf-self]
@@ -395,7 +395,7 @@
 - No historical trends [^sb-history]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~40 [^ck-count] [^sb-count]
+- Broad analyzer/check coverage vs ~40 [^ck-count] [^sb-count]
 - Security headers + accessibility [^sb-sec] [^sb-a11y]
 - Cross-platform (Linux, macOS, Windows) [^ck-self]
 - WASM plugins [^ck-plugin]
@@ -431,7 +431,7 @@
 - Smaller analyzer count than peers [^lumar-count]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~30 [^ck-count] [^lumar-count]
+- Broad analyzer/check coverage vs ~30 [^ck-count] [^lumar-count]
 - Self-hosted OSS vs cloud-locked [^ck-self] [^lumar-self]
 - Security headers + accessibility [^lumar-sec] [^lumar-a11y]
 - WASM plugins [^ck-plugin]
@@ -469,7 +469,7 @@
 - No CrUX field data [^semrush-crux]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~60 [^ck-count] [^semrush-count]
+- Broad analyzer/check coverage vs ~60 [^ck-count] [^semrush-count]
 - Self-hosted OSS [^ck-self] [^semrush-self]
 - Security headers + accessibility [^semrush-sec] [^semrush-a11y]
 - WASM plugins [^ck-plugin]
@@ -505,7 +505,7 @@
 - Cloud-only [^oncrawl-self]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~50 [^ck-count] [^oncrawl-count]
+- Broad analyzer/check coverage vs ~50 [^ck-count] [^oncrawl-count]
 - JS rendering [^oncrawl-js]
 - Self-hosted OSS [^ck-self] [^oncrawl-self]
 - Security headers + accessibility [^oncrawl-sec] [^oncrawl-a11y]
@@ -540,7 +540,7 @@
 - Smallest analyzer count (~20) [^ck-count]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~20 [^ck-count]
+- Broad analyzer/check coverage vs ~20 [^ck-count]
 - Self-hosted OSS [^ck-self] [^ck-home]
 - Security headers + accessibility [^ck-sec] [^ck-a11y]
 - CWV metrics [^ck-cwv]
@@ -571,7 +571,7 @@
 - No historical trends [^sps-history]
 
 **What crawlkit does better:**
-- 204 analyzers vs ~50 [^ck-count] [^sps-count]
+- Broad analyzer/check coverage vs ~50 [^ck-count] [^sps-count]
 - JS rendering [^sps-js]
 - Security headers + accessibility [^sps-sec] [^sps-a11y]
 - REST API for automation [^ck-api] [^sps-api]
@@ -611,7 +611,7 @@
 - No historical trends [^np-history]
 
 **What crawlkit does better:**
-- 204 analyzers vs 60+ [^ck-count] [^np-count]
+- Broad analyzer/check coverage vs 60+ [^ck-count] [^np-count]
 - Cross-platform (Linux, macOS, Windows) [^ck-self] [^np-platform]
 - Security headers + accessibility [^np-sec] [^np-a11y]
 - WASM plugins [^ck-plugin]
@@ -633,7 +633,7 @@
 
 ## Sources
 
-All source URLs used in footnotes above:
+All source URLs used in footnotes above. These links support capability statements only; they should not be interpreted as independent validation of pricing, performance, resource usage or negative feature claims:
 
 1. Screaming Frog — https://www.screamingfrog.co.uk/seo-spider/
 2. Sitebulb — https://sitebulb.com/

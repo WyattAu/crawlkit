@@ -1,10 +1,10 @@
 # Contributing to crawlkit
 
-*Version: 2.0.0 | Last updated: 2026-07-25*
+*Version: 4.4.1 | Last reviewed: 2026-08-30*
 
 ## Prerequisites
 
-- Rust 1.75+ (latest stable)
+- Rust 1.94.0 or newer (the repository MSRV)
 - Git
 - `cargo-audit` (optional, for dependency auditing)
 
@@ -17,6 +17,16 @@ cargo build
 cargo test
 ```
 
+### Quality gate
+
+Run the repository gate before submitting changes:
+
+```bash
+just gate
+```
+
+The exact CI workflow is authoritative; local hooks are convenience tooling only.
+
 ### Pre-commit Hook
 
 Install the pre-commit hook to enforce quality gates before each commit:
@@ -26,7 +36,7 @@ cp .git/hooks/pre-commit .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
 ```
 
-The hook executes the following checks sequentially, aborting on first failure:
+The hook may execute the following checks sequentially, aborting on first failure. Keep it aligned with CI; do not treat a local hook as a substitute for CI:
 
 | Check | Command | Purpose |
 |-------|---------|---------|
@@ -44,8 +54,8 @@ The hook executes the following checks sequentially, aborting on first failure:
 | Function length | <= 30 lines | Manual review |
 | Cyclomatic complexity | <= 10 | `cargo clippy` |
 | Cognitive complexity | <= 15 | `cargo clippy` |
-| Test coverage (critical paths) | >= 95% | `cargo tarpaulin` |
-| Test coverage (overall) | >= 90% | `cargo tarpaulin` |
+| Test coverage | CI-enforced floor; see workflow output | `cargo llvm-cov` |
+| Critical-path behavior | Required unit, integration and negative-path tests | Code review + CI |
 | Documentation | 100% public items | `cargo doc` |
 
 ### Naming Conventions
@@ -85,6 +95,8 @@ chore: update dependencies
 ```
 
 ## Pull Request Workflow
+
+Major changes also require an ADR when they alter public APIs/ABIs, storage schemas, trust boundaries, unsafe code, queue semantics, external services or formal capability claims.
 
 ## Hard Rules (enforced by CI and reviewers)
 

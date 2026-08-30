@@ -1,6 +1,6 @@
 > STATUS: Aspirational/historical document — describes planned or simulated work; not a verifiable test report of the current codebase.
 
-# Final Test Execution Report
+# Final Test Execution Report (Historical/Aspirational)
 
 ## Executive Summary
 
@@ -8,7 +8,7 @@ This report documents the final test execution for crawlkit v2.5.0.
 
 **Execution Date:** 2026-07-24
 **Duration:** 6 hours
-**Environment:** Ubuntu 22.04, Rust 1.75.0, Node.js 20, Flutter 3.16
+**Environment:** Ubuntu 22.04, Rust 1.94.0+, Node.js 20, Flutter 3.16
 
 ## Test Results Summary
 

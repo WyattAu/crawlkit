@@ -3,11 +3,11 @@
 [![CI](https://github.com/WyattAu/crawlkit/actions/workflows/ci.yml/badge.svg)](https://github.com/WyattAu/crawlkit/actions)
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.94+-orange.svg)](https://www.rust-lang.org/)
-[![Tests](https://img.shields.io/badge/tests-1807--passing-green.svg)](https://github.com/WyattAu/crawlkit)
-[![Analyzers](https://img.shields.io/badge/analyzers-204-blue.svg)](https://github.com/WyattAu/crawlkit)
+[![Tests](https://img.shields.io/badge/tests-verified_in_CI-green.svg)](https://github.com/WyattAu/crawlkit)
+[![Analyzers](https://img.shields.io/badge/analyzers-registry_verified-blue.svg)](https://github.com/WyattAu/crawlkit)
 [![Clippy](https://img.shields.io/badge/clippy-0--warnings-blue.svg)](https://github.com/WyattAu/crawlkit)
 
-High-performance Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, 31 analyzers, supply chain security auditing, zero clippy warnings.
+Rust web crawler and SEO analysis toolkit. Async HTTP/2 fetching, an extensible analyzer registry, WASM plugins, supply-chain auditing, and zero Clippy warnings in the enforced workspace gate.
 
 ## Architecture
 
@@ -140,8 +140,8 @@ output_dir = "./crawl-results"
 | Metric | Value |
 |--------|-------|
 | Throughput (TestServer, 10 pages) | 301.5 pages/sec |
-| Binary size (release, LTO+strip) | 23 MB |
-| Startup time (median, N=20) | 3.9 ms |
+| Binary size | Workload/toolchain dependent; see the reproducible benchmark artifact |
+| Startup time | Workload/toolchain dependent; see the reproducible benchmark artifact |
 | HTML parse (5 KB) | 610 µs |
 | Full analyzer suite (200 analyzers) | 1.48 ms/page |
 | PageRank (100 nodes, 20 iterations) | 981 µs |
@@ -163,7 +163,7 @@ just bench-e2e
 ## Security Model
 
 - HTTP/2 with TLS via rustls (no OpenSSL dependency)
-- `unsafe_code = "deny"` at workspace level (forbidden in library crates; FFI crates override to `allow` with SAFETY comments)
+- `unsafe_code = "deny"` at workspace level; narrowly scoped unsafe FFI exists in ABI/plugin components and requires documented safety invariants
 - robots.txt compliance by default
 - Rate limiting with configurable delay
 - Content Security Policy header scoring
@@ -231,4 +231,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 Apache License 2.0. See [LICENSE](LICENSE).
 
-*Version: 4.4.1 | Last updated: 2026-08-23*
+*Version: 4.4.1 | Last reviewed: 2026-08-30*

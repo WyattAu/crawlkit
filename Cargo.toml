@@ -3,10 +3,10 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.lints.rust]
-unsafe_code = "deny"           # Zero unsafe in library crates (FFI crates override to allow with SAFETY comments)
+unsafe_code = "deny"           # Core crates deny unsafe; narrowly scoped FFI crates document exceptions
 
 [workspace.lints.clippy]
-# Lints enforced at workspace level — defence-grade enforcement
+# Lints enforced at workspace level
 unwrap_used = "deny"           # Zero unwrap() in production code
 expect_used = "deny"           # Zero expect() in production code (use descriptive errors)
 panic = "deny"                 # Zero panic!() in library code; use error propagation
@@ -25,7 +25,7 @@ edition = "2021"
 rust-version = "1.94.0"
 authors = ["Wyatt Au"]
 license = "Apache-2.0"
-description = "High-performance Rust web crawler and SEO analysis toolkit with 31 analyzers, WASM plugin system, and enterprise features"
+description = "Rust web crawler and SEO analysis toolkit with extensible analyzers and a WASM plugin system"
 repository = "https://github.com/WyattAu/crawlkit"
 homepage = "https://github.com/WyattAu/crawlkit"
 documentation = "https://docs.rs/crawlkit-engine"

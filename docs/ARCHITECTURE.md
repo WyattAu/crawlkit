@@ -47,7 +47,7 @@ crawlkit is a high-performance, Rust-based website crawler designed to surpass c
 ┌─────────────────────────────────────────────────────────────────┐
 │                          CLI Layer                              │
 │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐  │
-│  │  crawl  │ │ compare │ │ report  │ │ export  │ │schedule │  │
+│  │  crawl  │ │ compare │ │ report  │ │backlinks│ │ inspect │  │
 │  └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘ └────┬────┘  │
 └───────┼───────────┼───────────┼───────────┼───────────┼────────┘
         │           │           │           │           │
@@ -154,7 +154,7 @@ The crawler engine is responsible for fetching web pages with full HTTP semantic
 │  │  ┌─────────────────────────────────────────────┐ │  │
 │  │  │ PriorityQueue<UrlEntry>                     │ │  │
 │  │  │  - Priority (depth, importance)             │ │  │
-│  │  │  - Visited set (Bloom filter + hash set)    │ │  │
+│  │  │  - Visited set (bounded/concurrent hash set)│ │  │
 │  │  │  - Per-domain rate tracking                 │ │  │
 │  │  └─────────────────────────────────────────────┘ │  │
 │  └──────────────────────────────────────────────────┘  │
@@ -947,7 +947,7 @@ pub enum ScoreGrade {
 
 1. **Plugin system** — Analyzers are decoupled, testable, and extensible
 2. **Pipeline architecture** — Each stage is independent and composable
-3. **Actor model** — Crawler components communicate via channels
+3. **Completion-driven concurrency** — fetch tasks are bounded by semaphores and drained through `FuturesUnordered`; the implementation is not an actor/channel pipeline
 4. **Repository pattern** — Storage is abstracted behind traits
 
 ---
@@ -1668,7 +1668,7 @@ Distribution Channels:
 
 ```dockerfile
 # Multi-stage build
-FROM rust:1.75 AS builder
+FROM rust:1.94 AS builder
 WORKDIR /app
 COPY . .
 RUN cargo build --release
@@ -1793,7 +1793,7 @@ Programmatic access for integration into CI/CD pipelines, monitoring dashboards,
 │                                                             │
 │  ┌──────────────────────────────────────────────────────┐  │
 │  │  Axum HTTP Server                                    │  │
-│  │  - Bind address: 0.0.0.0:8080 (configurable)        │  │
+│  │  - Bind address: 0.0.0.0:4000 (verify deployment config)│  │
 │  │  - TLS: Optional (via rustls)                        │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                          │                                  │

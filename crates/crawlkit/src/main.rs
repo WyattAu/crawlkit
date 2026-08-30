@@ -143,6 +143,12 @@ async fn main() -> Result<()> {
             format,
             source,
         } => cli::backlinks::run(&crawl, output.as_deref(), &format, source.as_deref()).await,
+        Commands::CrawlMap {
+            crawl,
+            output,
+            color_by,
+            max_nodes,
+        } => cli::crawl_map::run(&crawl, &output, &color_by, max_nodes),
         Commands::Inspect {
             url,
             output,

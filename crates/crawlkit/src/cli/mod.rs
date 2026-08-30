@@ -1,6 +1,7 @@
 pub mod backlinks;
 pub mod compare;
 pub mod crawl;
+pub mod crawl_map;
 pub mod gsc;
 pub mod inspect;
 pub mod log_analyze;
@@ -255,6 +256,25 @@ pub enum Commands {
         /// Fetch external backlinks from a source (ahrefs, gsc, majestic)
         #[arg(long)]
         source: Option<String>,
+    },
+
+    /// Generate a visual crawl map (SVG) from existing crawl data
+    CrawlMap {
+        /// Crawl database path or directory
+        #[arg(short, long)]
+        crawl: PathBuf,
+
+        /// Output file for the SVG map
+        #[arg(short, long)]
+        output: PathBuf,
+
+        /// Color scheme: status, depth, or popularity
+        #[arg(long, default_value = "status")]
+        color_by: String,
+
+        /// Maximum number of pages to include
+        #[arg(long, default_value_t = 200)]
+        max_nodes: usize,
     },
 
     /// Deep single-page analysis: fetch + all analyzers + optional CrUX/GSC

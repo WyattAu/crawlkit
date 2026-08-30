@@ -440,6 +440,11 @@ pub use wasm_analyzers::{WasmPatternAnalyzer, WasmPerformanceAnalyzer, WasmRunti
 #[cfg(feature = "full")]
 pub use web_vitals::{WebVitals, WebVitalsError, WebVitalsMeasurer};
 
+/// Visual crawl map generator producing SVG output from link graphs.
+///
+/// Generates a force-directed layout visualization of crawled pages
+/// and their link relationships, with configurable color schemes.
+pub mod crawl_map;
 /// Declarative custom extraction engine.
 ///
 /// Applies user-defined CSS selector + regex rules to each crawled page,

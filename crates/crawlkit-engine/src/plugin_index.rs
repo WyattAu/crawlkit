@@ -83,6 +83,54 @@ pub struct PluginIndexEntry {
     /// ISO 8601 timestamp of the last update.
     #[serde(default)]
     pub last_updated: Option<String>,
+    /// Verification badge details.
+    #[serde(default)]
+    pub verification: Option<PluginVerification>,
+    /// Download statistics.
+    #[serde(default)]
+    pub stats: Option<PluginStats>,
+    /// Changelog entries (most recent first).
+    #[serde(default)]
+    pub changelog: Vec<PluginChangelog>,
+}
+
+/// Verification badge for a plugin, indicating security review status.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct PluginVerification {
+    /// Whether the plugin has passed security verification.
+    pub verified: bool,
+    /// Identity of the reviewer (e.g. "registry-team", key id).
+    #[serde(default)]
+    pub verified_by: Option<String>,
+    /// ISO 8601 timestamp of when verification was completed.
+    #[serde(default)]
+    pub verified_at: Option<String>,
+    /// Security score from 0 (untrusted) to 100 (fully vetted).
+    #[serde(default)]
+    pub security_score: Option<u32>,
+}
+
+/// Download statistics for a plugin.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct PluginStats {
+    /// Total download count across all versions.
+    pub downloads: u64,
+    /// Downloads in the last 7 days.
+    pub weekly_downloads: u64,
+    /// ISO 8601 timestamp of the most recent download.
+    #[serde(default)]
+    pub last_downloaded: Option<String>,
+}
+
+/// A single changelog entry for a plugin version.
+#[derive(Debug, Clone, Deserialize, serde::Serialize)]
+pub struct PluginChangelog {
+    /// The version this changelog entry describes.
+    pub version: String,
+    /// ISO 8601 date when this version was released.
+    pub date: String,
+    /// Free-form list of changes in this version.
+    pub changes: Vec<String>,
 }
 
 /// Parse an index document. Entry order is preserved.

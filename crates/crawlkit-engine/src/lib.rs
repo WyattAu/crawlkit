@@ -252,7 +252,8 @@ pub use plugin::{
 #[cfg(all(feature = "full", feature = "wasi-preview2"))]
 pub use plugin::WasiPlugin;
 pub use plugin_index::{
-    install_plugin, list_installed_plugins, parse_plugin_index, PluginIndexEntry, PluginIndexError,
+    install_plugin, list_installed_plugins, parse_plugin_index, PluginChangelog, PluginIndexEntry,
+    PluginIndexError, PluginStats, PluginVerification,
 };
 /// PostgreSQL-backed storage for crawl data.
 ///

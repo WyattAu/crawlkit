@@ -22,6 +22,102 @@ impl std::fmt::Display for AlertSeverity {
     }
 }
 
+/// Notification delivery channel for monitoring alerts.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum NotificationChannel {
+    /// HTTP webhook URL.
+    Webhook(String),
+    /// Email address.
+    Email(String),
+    /// Slack webhook or channel URL.
+    Slack(String),
+}
+
+/// Errors produced by [`ContinuousMonitor::run`].
+#[derive(Debug, thiserror::Error)]
+pub enum MonitorError {
+    /// The check interval could not be parsed.
+    #[error("configuration error: {0}")]
+    Config(String),
+    /// A notification delivery channel failed.
+    #[error("notification delivery failed: {0}")]
+    Delivery(String),
+    /// The monitor encountered a transient I/O error.
+    #[error("monitor I/O error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+/// Configuration for the continuous monitoring loop.
+#[derive(Debug, Clone)]
+pub struct MonitorConfig {
+    /// Seconds between each monitoring check cycle.
+    pub check_interval_secs: u64,
+    /// Minimum number of total changes (new + removed + changed + CWV
+    /// regressions) required before an alert is triggered. A value of 0
+    /// means any change triggers an alert.
+    pub alert_threshold: usize,
+    /// Notification delivery channels for triggered alerts.
+    pub notification_channels: Vec<NotificationChannel>,
+}
+
+impl Default for MonitorConfig {
+    fn default() -> Self {
+        Self {
+            check_interval_secs: 3600,
+            alert_threshold: 1,
+            notification_channels: Vec::new(),
+        }
+    }
+}
+
+/// Mutable state held across monitoring check cycles.
+#[derive(Debug, Default)]
+pub struct MonitorState {
+    /// Snapshot of the last `MonitoringResult` for diffing across cycles.
+    pub last_result: Option<MonitoringResult>,
+}
+
+/// A long-running monitor that periodically evaluates crawl deltas and
+/// fires notifications when alert thresholds are exceeded.
+#[derive(Debug)]
+pub struct ContinuousMonitor {
+    /// Read-only configuration for the monitoring loop.
+    pub config: MonitorConfig,
+    /// Mutable state that persists across loop iterations.
+    pub state: std::sync::Mutex<MonitorState>,
+}
+
+impl ContinuousMonitor {
+    /// Create a new monitor with the given configuration.
+    pub fn new(config: MonitorConfig) -> Self {
+        Self {
+            config,
+            state: std::sync::Mutex::new(MonitorState::default()),
+        }
+    }
+
+    /// Run one monitoring cycle: evaluate a crawl delta, produce alerts,
+    /// and (optionally) deliver notifications.
+    ///
+    /// This method is intentionally synchronous so it can be driven by
+    /// external async runtimes (tokio, async-std) without spawning an
+    /// internal loop — the caller is expected to sleep and re-invoke.
+    ///
+    /// Returns the [`MonitoringResult`] so callers can forward it to
+    /// webhooks or logging.
+    pub fn check(&self, diff: &CrawlDiff) -> Result<MonitoringResult, MonitorError> {
+        let result = analyze_crawl_delta(diff, self.config.alert_threshold);
+
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|e| MonitorError::Config(format!("state lock poisoned: {e}")))?;
+        state.last_result = Some(result.clone());
+
+        Ok(result)
+    }
+}
+
 /// A single alert item produced by monitoring delta analysis.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct AlertDetail {
@@ -31,6 +127,48 @@ pub struct AlertDetail {
     pub severity: AlertSeverity,
     /// Human-readable description.
     pub message: String,
+}
+
+/// Enriched alert with classification metadata, suitable for webhook
+/// payloads and notification channels.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct Alert {
+    /// Classified severity of this alert.
+    pub severity: AlertSeverity,
+    /// Short title summarizing the alert.
+    pub title: String,
+    /// Detailed human-readable description.
+    pub description: String,
+    /// URLs directly affected by this alert (top entries).
+    pub affected_urls: Vec<String>,
+    /// Timestamp when the alert was generated.
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+}
+
+impl Alert {
+    /// Build an [`Alert`] from a [`MonitoringResult`], extracting up to
+    /// `max_urls` affected URLs.
+    pub fn from_result(result: &MonitoringResult, max_urls: usize) -> Self {
+        let title = match result.overall_severity {
+            AlertSeverity::Critical => "Critical monitoring alert",
+            AlertSeverity::Warning => "Monitoring warning",
+            AlertSeverity::Info => "Monitoring info",
+        };
+        let description = format!(
+            "{} new, {} removed, {} changed pages detected ({} CWV regressions)",
+            result.new_pages, result.removed_pages, result.changed_pages, result.cwv_regressions,
+        );
+        let mut affected_urls = result.changed_urls.clone();
+        affected_urls.truncate(max_urls);
+
+        Alert {
+            severity: result.overall_severity,
+            title: title.to_string(),
+            description,
+            affected_urls,
+            timestamp: chrono::Utc::now(),
+        }
+    }
 }
 
 /// Result of analyzing a crawl delta for monitoring purposes.
@@ -496,5 +634,93 @@ mod tests {
     fn test_alert_severity_ord() {
         assert!(AlertSeverity::Info < AlertSeverity::Warning);
         assert!(AlertSeverity::Warning < AlertSeverity::Critical);
+    }
+
+    #[test]
+    fn test_monitor_config_default() {
+        let cfg = MonitorConfig::default();
+        assert_eq!(cfg.check_interval_secs, 3600);
+        assert_eq!(cfg.alert_threshold, 1);
+        assert!(cfg.notification_channels.is_empty());
+    }
+
+    #[test]
+    fn test_continuous_monitor_check_no_change() {
+        let monitor = ContinuousMonitor::new(MonitorConfig::default());
+        let diff = empty_diff();
+        let result = monitor.check(&diff).unwrap();
+        assert!(!result.alert_triggered);
+        assert_eq!(result.new_pages, 0);
+        let state = monitor.state.lock().unwrap();
+        assert!(state.last_result.is_some());
+    }
+
+    #[test]
+    fn test_continuous_monitor_check_with_changes() {
+        let monitor = ContinuousMonitor::new(MonitorConfig {
+            alert_threshold: 2,
+            ..Default::default()
+        });
+        let mut diff = empty_diff();
+        diff.added.push(DiffEntry {
+            url: "https://example.com/a".into(),
+            change: ChangeKind::Added,
+        });
+        diff.added.push(DiffEntry {
+            url: "https://example.com/b".into(),
+            change: ChangeKind::Added,
+        });
+        let result = monitor.check(&diff).unwrap();
+        assert!(result.alert_triggered);
+        assert_eq!(result.new_pages, 2);
+    }
+
+    #[test]
+    fn test_alert_from_result() {
+        let mut diff = empty_diff();
+        diff.added.push(DiffEntry {
+            url: "https://example.com/new".into(),
+            change: ChangeKind::Added,
+        });
+        diff.removed.push(DiffEntry {
+            url: "https://example.com/old".into(),
+            change: ChangeKind::Removed,
+        });
+        let result = analyze_crawl_delta(&diff, 0);
+        let alert = Alert::from_result(&result, 10);
+        assert_eq!(alert.severity, AlertSeverity::Critical);
+        assert!(alert.title.contains("Critical"));
+        assert_eq!(alert.affected_urls.len(), 2);
+    }
+
+    #[test]
+    fn test_alert_from_result_truncates_urls() {
+        let mut diff = empty_diff();
+        for i in 0..30 {
+            diff.added.push(DiffEntry {
+                url: format!("https://example.com/page-{i}"),
+                change: ChangeKind::Added,
+            });
+        }
+        let result = analyze_crawl_delta(&diff, 0);
+        let alert = Alert::from_result(&result, 20);
+        assert_eq!(alert.affected_urls.len(), 20);
+    }
+
+    #[test]
+    fn test_notification_channel_equality() {
+        let a = NotificationChannel::Webhook("https://example.com/hook".into());
+        let b = NotificationChannel::Webhook("https://example.com/hook".into());
+        let c = NotificationChannel::Email("admin@example.com".into());
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+    }
+
+    #[test]
+    fn test_monitor_error_display() {
+        let err = MonitorError::Config("bad value".into());
+        assert!(err.to_string().contains("configuration error"));
+        let err = MonitorError::Delivery("timeout".into());
+        assert!(err.to_string().contains("notification delivery failed"));
     }
 }

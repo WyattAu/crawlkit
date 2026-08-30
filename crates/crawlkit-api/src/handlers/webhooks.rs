@@ -342,29 +342,54 @@ pub fn fire_monitoring_webhooks(
         return;
     }
 
+    let alert = crawlkit_engine::monitoring::Alert::from_result(monitoring, 20);
+
+    let critical_count = monitoring
+        .alerts
+        .iter()
+        .filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Critical)
+        .count();
+    let warning_count = monitoring
+        .alerts
+        .iter()
+        .filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Warning)
+        .count();
+    let info_count = monitoring
+        .alerts
+        .iter()
+        .filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Info)
+        .count();
+
     let body = serde_json::json!({
         "event": "monitoring.alert_triggered",
         "crawl_id": crawl_id,
         "monitoring": {
-            "new_pages": monitoring.new_pages,
-            "removed_pages": monitoring.removed_pages,
-            "changed_pages": monitoring.changed_pages,
-            "cwv_regressions": monitoring.cwv_regressions,
+            "severity": monitoring.overall_severity.to_string(),
             "alert_triggered": monitoring.alert_triggered,
-            "overall_severity": monitoring.overall_severity.to_string(),
-            "changed_urls": monitoring.changed_urls,
+            "summary": {
+                "new_pages": monitoring.new_pages,
+                "removed_pages": monitoring.removed_pages,
+                "changed_pages": monitoring.changed_pages,
+                "cwv_regressions": monitoring.cwv_regressions,
+                "total_affected_urls": monitoring.changed_urls.len(),
+                "total_alerts": monitoring.alerts.len(),
+                "critical_count": critical_count,
+                "warning_count": warning_count,
+                "info_count": info_count,
+            },
+            "changed_urls": monitoring.changed_urls.iter().take(20).collect::<Vec<_>>(),
             "alerts": monitoring.alerts.iter().map(|a| serde_json::json!({
                 "url": a.url,
                 "severity": a.severity.to_string(),
                 "message": a.message,
             })).collect::<Vec<_>>(),
-            "summary": {
-                "total_affected_urls": monitoring.changed_urls.len(),
-                "total_alerts": monitoring.alerts.len(),
-                "critical_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Critical).count(),
-                "warning_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Warning).count(),
-                "info_count": monitoring.alerts.iter().filter(|a| a.severity == crawlkit_engine::monitoring::AlertSeverity::Info).count(),
+            "alert": {
+                "title": alert.title,
+                "description": alert.description,
+                "affected_urls": alert.affected_urls,
+                "timestamp": alert.timestamp.to_rfc3339(),
             },
+            "trend_report_url": format!("/api/v1/monitoring/trends/{crawl_id}"),
         },
         "timestamp": Utc::now().to_rfc3339(),
     });

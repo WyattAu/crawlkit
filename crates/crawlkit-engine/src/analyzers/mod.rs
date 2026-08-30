@@ -19,6 +19,8 @@ pub mod seo_analyzers;
 pub mod schema;
 /// Social media analyzers for Open Graph, Twitter Cards, and social sharing metadata.
 pub mod social_analyzers;
+/// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
+pub mod v2_analyzers;
 
 pub use content_analyzers::{
     ArticleAuthorValidator, ArticleDatePublishedValidator, ArticleHeadlineValidator,
@@ -121,6 +123,7 @@ pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData,
     PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
 };
+pub use v2_analyzers::*;
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
 
 /// Check if a URL path is a utility/page that should be excluded from analysis.
@@ -323,10 +326,10 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
-/// Manages a collection of [`Analyzer`] implementations and runs them
-    /// in parallel using rayon. The default registry includes 134 analyzers
-/// covering HTTP, SEO, content, links, images, security, accessibility,
-/// social media, AI-specific checks, and structured data validation.
+    /// Manages a collection of [`Analyzer`] implementations and runs them
+    /// in parallel using rayon. The default registry includes 423 analyzers
+    /// covering HTTP, SEO, content, links, images, security, accessibility,
+    /// social media, AI-specific checks, and structured data validation.
 ///
 /// # Examples
 ///
@@ -813,6 +816,66 @@ impl AnalyzerRegistry {
             Box::new(RobotsTxtAnalysisDeepAnalyzer::new()),
             Box::new(InternalLinkQualityAnalyzer::new()),
             Box::new(ExternalLinkAuthorityDeepAnalyzer::new()),
+            // V2/V3/V4 content score analyzers
+            Box::new(DuplicateContentDetectorV2::new()),
+            Box::new(ContentFreshnessScoreAnalyzer::new()),
+            Box::new(HeadingStructureScoreAnalyzer::new()),
+            Box::new(LinkQualityScoreAnalyzer::new()),
+            Box::new(SchemaCoverageScoreAnalyzer::new()),
+            Box::new(SecurityScoreAnalyzer::new()),
+            Box::new(AccessibilityScoreAnalyzer::new()),
+            // V2 security analyzers
+            Box::new(CspDirectiveAnalyzerV2::new()),
+            Box::new(CorsPolicyAnalyzerV2::new()),
+            Box::new(CookieSecurityFlagAnalyzerV2::new()),
+            Box::new(MixedContentDetectionAnalyzerV2::new()),
+            Box::new(HstsPreloadReadinessAnalyzerV2::new()),
+            Box::new(XContentTypeOptionsDeepAnalyzerV2::new()),
+            Box::new(ReferrerPolicyDeepAnalyzerV2::new()),
+            Box::new(XFrameOptionsDeepAnalyzerV2::new()),
+            Box::new(PermissionsPolicyDeepAnalyzerV2::new()),
+            Box::new(CrossOriginIsolationDeepAnalyzerV2::new()),
+            Box::new(AriaLandmarksAnalyzerV2::new()),
+            Box::new(HeadingHierarchyDeepAnalyzerV2::new()),
+            Box::new(FormLabelsDeepAnalyzerV2::new()),
+            Box::new(TableAccessibilityDeepAnalyzerV2::new()),
+            Box::new(LinkTextQualityAnalyzerV2::new()),
+            Box::new(ImageAltTextDeepAnalyzerV2::new()),
+            Box::new(FocusManagementDeepAnalyzerV2::new()),
+            Box::new(LanguageAttributesDeepAnalyzerV2::new()),
+            Box::new(ColorContrastTextAnalyzerV2::new()),
+            Box::new(ColorContrastLinkAnalyzerV2::new()),
+            Box::new(AnchorTextGenericAnalyzerV2::new()),
+            Box::new(TableCaptionPresenceAnalyzerV2::new()),
+            Box::new(TableHeaderScopeAnalyzerV2::new()),
+            Box::new(FormLabelAssociationAnalyzerV2::new()),
+            Box::new(AriaRequiredAttributesAnalyzerV2::new()),
+            // V2/V3/V4 SEO analyzers
+            Box::new(TitleAnalysisDeepAnalyzerV2::new()),
+            Box::new(MetaDescriptionDeepAnalyzerV2::new()),
+            Box::new(CanonicalValidationDeepAnalyzerV2::new()),
+            Box::new(SitemapCoverageDeepAnalyzerV2::new()),
+            Box::new(RobotsTxtAnalysisDeepAnalyzerV2::new()),
+            Box::new(InternalLinkQualityAnalyzerV2::new()),
+            Box::new(ExternalLinkAuthorityDeepAnalyzerV2::new()),
+            Box::new(TitleLengthQualityAnalyzerV2::new()),
+            Box::new(MetaDescriptionQualityAnalyzerV2::new()),
+            Box::new(InternalLinkAnchorAnalyzerV3::new()),
+            Box::new(WikipediaLinkAnalyzerV3::new()),
+            Box::new(PaginationDepthAnalyzerV2::new()),
+            Box::new(MixedProtocolRedirectValidatorV2::new()),
+            Box::new(InternalNofollowOveruseValidatorV2::new()),
+            Box::new(SitemapXmlSizeValidatorV2::new()),
+            Box::new(RobotsTxtSizeValidatorV2::new()),
+            Box::new(HreflangSelfReferenceValidatorV2::new()),
+            Box::new(OpenSearchDescriptionValidatorV2::new()),
+            Box::new(CanonicalDepthAnalyzerV2::new()),
+            Box::new(MetaDescriptionLengthAnalyzerV3::new()),
+            Box::new(TitleAnalyzerV4::new()),
+            Box::new(CanonicalUrlAnalyzerV3::new()),
+            Box::new(HreflangValidatorV4::new()),
+            Box::new(SitemapAnalyzerV3::new()),
+            Box::new(RobotsTxtAnalyzerV3::new()),
         ];
 
         if include_ai {

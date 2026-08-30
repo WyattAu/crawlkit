@@ -5142,6 +5142,1089 @@ impl Analyzer for LandmarkComplementaryValidator {
     }
 }
 
+// =========================================================================
+// V7 Content Validators (Schema.org type validators, 1-20)
+// =========================================================================
+
+pub struct ApartmentMissingNumberOfRoomsValidator;
+impl Default for ApartmentMissingNumberOfRoomsValidator { fn default() -> Self { Self::new() } }
+impl ApartmentMissingNumberOfRoomsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ApartmentMissingNumberOfRoomsValidator {
+    fn name(&self) -> &str { "apartment-missing-number-of-rooms-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Apartment" { continue; }
+            if sd.data.get("numberOfRooms").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "APTROOM001".to_string(), title: "Apartment missing numberOfRooms".to_string(), description: "No numberOfRooms in Apartment schema.".to_string(), url: url.clone(), recommendation: "Add numberOfRooms to Apartment.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CarMissingModelValidator;
+impl Default for CarMissingModelValidator { fn default() -> Self { Self::new() } }
+impl CarMissingModelValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CarMissingModelValidator {
+    fn name(&self) -> &str { "car-missing-model-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Car" { continue; }
+            if sd.data.get("model").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "CARMODEL001".to_string(), title: "Car missing model".to_string(), description: "No model in Car schema.".to_string(), url: url.clone(), recommendation: "Add model to Car.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CarMissingManufacturerValidator;
+impl Default for CarMissingManufacturerValidator { fn default() -> Self { Self::new() } }
+impl CarMissingManufacturerValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CarMissingManufacturerValidator {
+    fn name(&self) -> &str { "car-missing-manufacturer-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Car" { continue; }
+            if sd.data.get("manufacturer").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "CARMFR001".to_string(), title: "Car missing manufacturer".to_string(), description: "No manufacturer in Car schema.".to_string(), url: url.clone(), recommendation: "Add manufacturer to Car.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MusicAlbumMissingNumberOfTracksValidator;
+impl Default for MusicAlbumMissingNumberOfTracksValidator { fn default() -> Self { Self::new() } }
+impl MusicAlbumMissingNumberOfTracksValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MusicAlbumMissingNumberOfTracksValidator {
+    fn name(&self) -> &str { "music-album-missing-number-of-tracks-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "MusicAlbum" { continue; }
+            if sd.data.get("numberOfTracks").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "MUSTRACKS001".to_string(), title: "MusicAlbum missing numberOfTracks".to_string(), description: "No numberOfTracks in MusicAlbum schema.".to_string(), url: url.clone(), recommendation: "Add numberOfTracks to MusicAlbum.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TVSeriesMissingNumberOfEpisodesValidator;
+impl Default for TVSeriesMissingNumberOfEpisodesValidator { fn default() -> Self { Self::new() } }
+impl TVSeriesMissingNumberOfEpisodesValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TVSeriesMissingNumberOfEpisodesValidator {
+    fn name(&self) -> &str { "tv-series-missing-number-of-episodes-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "TVSeries" { continue; }
+            if sd.data.get("numberOfEpisodes").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "TVEPISODES001".to_string(), title: "TVSeries missing numberOfEpisodes".to_string(), description: "No numberOfEpisodes in TVSeries schema.".to_string(), url: url.clone(), recommendation: "Add numberOfEpisodes to TVSeries.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MovieMissingAggregateRatingValidator;
+impl Default for MovieMissingAggregateRatingValidator { fn default() -> Self { Self::new() } }
+impl MovieMissingAggregateRatingValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MovieMissingAggregateRatingValidator {
+    fn name(&self) -> &str { "movie-missing-aggregate-rating-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Movie" { continue; }
+            if sd.data.get("aggregateRating").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "MOVRATING001".to_string(), title: "Movie missing aggregateRating".to_string(), description: "No aggregateRating in Movie schema.".to_string(), url: url.clone(), recommendation: "Add aggregateRating to Movie.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct GovernmentServiceMissingServiceAreaValidator;
+impl Default for GovernmentServiceMissingServiceAreaValidator { fn default() -> Self { Self::new() } }
+impl GovernmentServiceMissingServiceAreaValidator { pub fn new() -> Self { Self } }
+impl Analyzer for GovernmentServiceMissingServiceAreaValidator {
+    fn name(&self) -> &str { "government-service-missing-service-area-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "GovernmentService" { continue; }
+            if sd.data.get("serviceArea").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "GOVSERVICE001".to_string(), title: "GovernmentService missing serviceArea".to_string(), description: "No serviceArea in GovernmentService schema.".to_string(), url: url.clone(), recommendation: "Add serviceArea to GovernmentService.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HealthPlanMissingHealthPlanIdValidator;
+impl Default for HealthPlanMissingHealthPlanIdValidator { fn default() -> Self { Self::new() } }
+impl HealthPlanMissingHealthPlanIdValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HealthPlanMissingHealthPlanIdValidator {
+    fn name(&self) -> &str { "health-plan-missing-health-plan-id-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HealthPlan" { continue; }
+            if sd.data.get("healthPlanId").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HPID001".to_string(), title: "HealthPlan missing healthPlanId".to_string(), description: "No healthPlanId in HealthPlan schema.".to_string(), url: url.clone(), recommendation: "Add healthPlanId to HealthPlan.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct InvoiceMissingPaymentStatusValidator;
+impl Default for InvoiceMissingPaymentStatusValidator { fn default() -> Self { Self::new() } }
+impl InvoiceMissingPaymentStatusValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InvoiceMissingPaymentStatusValidator {
+    fn name(&self) -> &str { "invoice-missing-payment-status-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Invoice" { continue; }
+            if sd.data.get("paymentStatus").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "INVSTATUS001".to_string(), title: "Invoice missing paymentStatus".to_string(), description: "No paymentStatus in Invoice schema.".to_string(), url: url.clone(), recommendation: "Add paymentStatus to Invoice.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermitMissingValidFromValidator;
+impl Default for PermitMissingValidFromValidator { fn default() -> Self { Self::new() } }
+impl PermitMissingValidFromValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermitMissingValidFromValidator {
+    fn name(&self) -> &str { "permit-missing-valid-from-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Permit" { continue; }
+            if sd.data.get("validFrom").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PERMFROM001".to_string(), title: "Permit missing validFrom".to_string(), description: "No validFrom in Permit schema.".to_string(), url: url.clone(), recommendation: "Add validFrom to Permit.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PlanMissingBenefitsValidator;
+impl Default for PlanMissingBenefitsValidator { fn default() -> Self { Self::new() } }
+impl PlanMissingBenefitsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PlanMissingBenefitsValidator {
+    fn name(&self) -> &str { "plan-missing-benefits-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Plan" { continue; }
+            if sd.data.get("benefits").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "PLANBEN001".to_string(), title: "Plan missing benefits".to_string(), description: "No benefits in Plan schema.".to_string(), url: url.clone(), recommendation: "Add benefits to Plan.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ResearchProjectMissingFundingRecognizerValidator;
+impl Default for ResearchProjectMissingFundingRecognizerValidator { fn default() -> Self { Self::new() } }
+impl ResearchProjectMissingFundingRecognizerValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ResearchProjectMissingFundingRecognizerValidator {
+    fn name(&self) -> &str { "research-project-missing-funding-recognizer-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "ResearchProject" { continue; }
+            if sd.data.get("funder").is_none() && sd.data.get("funding").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "RPFUND001".to_string(), title: "ResearchProject missing funding info".to_string(), description: "No funder or funding in ResearchProject schema.".to_string(), url: url.clone(), recommendation: "Add funder or funding to ResearchProject.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ScheduleMissingRepeatFrequencyValidator;
+impl Default for ScheduleMissingRepeatFrequencyValidator { fn default() -> Self { Self::new() } }
+impl ScheduleMissingRepeatFrequencyValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ScheduleMissingRepeatFrequencyValidator {
+    fn name(&self) -> &str { "schedule-missing-repeat-frequency-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Schedule" { continue; }
+            if sd.data.get("repeatFrequency").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "SCHEDFREQ001".to_string(), title: "Schedule missing repeatFrequency".to_string(), description: "No repeatFrequency in Schedule schema.".to_string(), url: url.clone(), recommendation: "Add repeatFrequency to Schedule.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TripMissingDepartureTimeValidator;
+impl Default for TripMissingDepartureTimeValidator { fn default() -> Self { Self::new() } }
+impl TripMissingDepartureTimeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TripMissingDepartureTimeValidator {
+    fn name(&self) -> &str { "trip-missing-departure-time-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Trip" { continue; }
+            if sd.data.get("departureTime").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "TRIPDEP001".to_string(), title: "Trip missing departureTime".to_string(), description: "No departureTime in Trip schema.".to_string(), url: url.clone(), recommendation: "Add departureTime to Trip.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WorkersUnionMissingMemberCountValidator;
+impl Default for WorkersUnionMissingMemberCountValidator { fn default() -> Self { Self::new() } }
+impl WorkersUnionMissingMemberCountValidator { pub fn new() -> Self { Self } }
+impl Analyzer for WorkersUnionMissingMemberCountValidator {
+    fn name(&self) -> &str { "workers-union-missing-member-count-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WorkersUnion" { continue; }
+            if sd.data.get("memberCount").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "WUMEMBER001".to_string(), title: "WorkersUnion missing memberCount".to_string(), description: "No memberCount in WorkersUnion schema.".to_string(), url: url.clone(), recommendation: "Add memberCount to WorkersUnion.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WebAPIDocumentationMissingValidator;
+impl Default for WebAPIDocumentationMissingValidator { fn default() -> Self { Self::new() } }
+impl WebAPIDocumentationMissingValidator { pub fn new() -> Self { Self } }
+impl Analyzer for WebAPIDocumentationMissingValidator {
+    fn name(&self) -> &str { "web-api-documentation-missing-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WebAPI" { continue; }
+            if sd.data.get("documentation").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "WAPIDOCS001".to_string(), title: "WebAPI missing documentation".to_string(), description: "No documentation in WebAPI schema.".to_string(), url: url.clone(), recommendation: "Add documentation URL to WebAPI.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WearableMissingBatteryLifeValidator;
+impl Default for WearableMissingBatteryLifeValidator { fn default() -> Self { Self::new() } }
+impl WearableMissingBatteryLifeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for WearableMissingBatteryLifeValidator {
+    fn name(&self) -> &str { "wearable-missing-battery-life-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Wearable" && t != "WearableMeasurement" { continue; }
+            if sd.data.get("batteryLife").is_none() && sd.data.get("batteryCharge").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "WEARBATT001".to_string(), title: "Wearable missing battery info".to_string(), description: "No batteryLife or batteryCharge in Wearable schema.".to_string(), url: url.clone(), recommendation: "Add batteryLife or batteryCharge to Wearable.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WebPageElementMissingAccessibleNameValidator;
+impl Default for WebPageElementMissingAccessibleNameValidator { fn default() -> Self { Self::new() } }
+impl WebPageElementMissingAccessibleNameValidator { pub fn new() -> Self { Self } }
+impl Analyzer for WebPageElementMissingAccessibleNameValidator {
+    fn name(&self) -> &str { "web-page-element-missing-accessible-name-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "WebPageElement" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "WPELACC001".to_string(), title: "WebPageElement missing name".to_string(), description: "No name in WebPageElement schema.".to_string(), url: url.clone(), recommendation: "Add name to WebPageElement.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct WorkerMissingOccupationValidator;
+impl Default for WorkerMissingOccupationValidator { fn default() -> Self { Self::new() } }
+impl WorkerMissingOccupationValidator { pub fn new() -> Self { Self } }
+impl Analyzer for WorkerMissingOccupationValidator {
+    fn name(&self) -> &str { "worker-missing-occupation-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Worker" { continue; }
+            if sd.data.get("occupation").is_none() && sd.data.get("jobTitle").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "WOCCUP001".to_string(), title: "Worker missing occupation/jobTitle".to_string(), description: "No occupation or jobTitle in Worker schema.".to_string(), url: url.clone(), recommendation: "Add occupation or jobTitle to Worker.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct BookMissingBookFormatValidator;
+impl Default for BookMissingBookFormatValidator { fn default() -> Self { Self::new() } }
+impl BookMissingBookFormatValidator { pub fn new() -> Self { Self } }
+impl Analyzer for BookMissingBookFormatValidator {
+    fn name(&self) -> &str { "book-missing-book-format-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Book" { continue; }
+            if sd.data.get("bookFormat").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "BOOKFMT001".to_string(), title: "Book missing bookFormat".to_string(), description: "No bookFormat in Book schema.".to_string(), url: url.clone(), recommendation: "Add bookFormat to Book.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V7 Security Validators (21-35)
+// =========================================================================
+
+pub struct CspScriptSrcSelfValidator;
+impl Default for CspScriptSrcSelfValidator { fn default() -> Self { Self::new() } }
+impl CspScriptSrcSelfValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspScriptSrcSelfValidator {
+    fn name(&self) -> &str { "csp-script-src-self-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("script-src") {
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSS001".to_string(), title: "CSP script-src missing 'self'".to_string(), description: "script-src directive does not include 'self'.".to_string(), url: url.clone(), recommendation: "Add 'self' to script-src directive.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspStyleSrcSelfValidator;
+impl Default for CspStyleSrcSelfValidator { fn default() -> Self { Self::new() } }
+impl CspStyleSrcSelfValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspStyleSrcSelfValidator {
+    fn name(&self) -> &str { "csp-style-src-self-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("style-src") {
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSTY001".to_string(), title: "CSP style-src missing 'self'".to_string(), description: "style-src directive does not include 'self'.".to_string(), url: url.clone(), recommendation: "Add 'self' to style-src directive.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspConnectSrcAnalysisValidator;
+impl Default for CspConnectSrcAnalysisValidator { fn default() -> Self { Self::new() } }
+impl CspConnectSrcAnalysisValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspConnectSrcAnalysisValidator {
+    fn name(&self) -> &str { "csp-connect-src-analysis-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("connect-src") {
+                if d.contains("*") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPCON001".to_string(), title: "CSP connect-src allows wildcard".to_string(), description: "connect-src directive includes wildcard source.".to_string(), url: url.clone(), recommendation: "Replace '*' with specific origins in connect-src.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspFontSrcAnalysisValidator;
+impl Default for CspFontSrcAnalysisValidator { fn default() -> Self { Self::new() } }
+impl CspFontSrcAnalysisValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspFontSrcAnalysisValidator {
+    fn name(&self) -> &str { "csp-font-src-analysis-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("font-src") {
+                if d.contains("*") {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPFNT001".to_string(), title: "CSP font-src allows wildcard".to_string(), description: "font-src directive includes wildcard source.".to_string(), url: url.clone(), recommendation: "Replace '*' with specific origins in font-src.".to_string() });
+                }
+                break;
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspObjectSrcNoneDeepValidator;
+impl Default for CspObjectSrcNoneDeepValidator { fn default() -> Self { Self::new() } }
+impl CspObjectSrcNoneDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspObjectSrcNoneDeepValidator {
+    fn name(&self) -> &str { "csp-object-src-none-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("object-src") {
+                found = true;
+                if !d.contains("'none'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPOBJ001".to_string(), title: "CSP object-src not set to 'none'".to_string(), description: "object-src should be 'none' to block plugins.".to_string(), url: url.clone(), recommendation: "Set object-src to 'none'.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            let has_default = csp.split(';').any(|d| d.trim().starts_with("default-src"));
+            if !has_default {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPOBJ001".to_string(), title: "CSP missing object-src directive".to_string(), description: "No object-src or default-src directive found.".to_string(), url: url.clone(), recommendation: "Add object-src 'none' to CSP.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CspBaseUriSelfDeepValidator;
+impl Default for CspBaseUriSelfDeepValidator { fn default() -> Self { Self::new() } }
+impl CspBaseUriSelfDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspBaseUriSelfDeepValidator {
+    fn name(&self) -> &str { "csp-base-uri-self-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("base-uri") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPBASE001".to_string(), title: "CSP base-uri missing 'self'".to_string(), description: "base-uri directive does not include 'self'.".to_string(), url: url.clone(), recommendation: "Add 'self' to base-uri directive.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPBASE001".to_string(), title: "CSP missing base-uri directive".to_string(), description: "No base-uri directive found. An attacker could inject a base tag.".to_string(), url: url.clone(), recommendation: "Add base-uri 'self' to CSP.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspFormActionSelfDeepValidator;
+impl Default for CspFormActionSelfDeepValidator { fn default() -> Self { Self::new() } }
+impl CspFormActionSelfDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspFormActionSelfDeepValidator {
+    fn name(&self) -> &str { "csp-form-action-self-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        let mut found = false;
+        for directive in csp.split(';') {
+            let d = directive.trim();
+            if d.starts_with("form-action") {
+                found = true;
+                if !d.contains("'self'") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPFORM001".to_string(), title: "CSP form-action missing 'self'".to_string(), description: "form-action directive does not include 'self'.".to_string(), url: url.clone(), recommendation: "Add 'self' to form-action directive.".to_string() });
+                }
+                break;
+            }
+        }
+        if !found {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPFORM001".to_string(), title: "CSP missing form-action directive".to_string(), description: "No form-action directive found.".to_string(), url: url.clone(), recommendation: "Add form-action 'self' to CSP.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HstsPreloadReadyDeepValidator;
+impl Default for HstsPreloadReadyDeepValidator { fn default() -> Self { Self::new() } }
+impl HstsPreloadReadyDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsPreloadReadyDeepValidator {
+    fn name(&self) -> &str { "hsts-preload-ready-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            let has_isd = lower.contains("includesubdomains");
+            let has_preload = lower.contains("preload");
+            let max_age = lower.find("max-age=").map(|pos| {
+                let after = &lower[pos + 8..];
+                after.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u64>().unwrap_or(0)
+            }).unwrap_or(0);
+            if !has_isd || !has_preload || max_age < 31536000 {
+                let mut missing = Vec::new();
+                if !has_isd { missing.push("includeSubDomains"); }
+                if !has_preload { missing.push("preload"); }
+                if max_age < 31536000 { missing.push("max-age>=31536000"); }
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSPR001".to_string(), title: "HSTS preload readiness incomplete".to_string(), description: format!("Missing: {}.", missing.join(", ")), url: url.clone(), recommendation: "Add includeSubDomains; preload; max-age=31536000.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HstsMaxAgeDeepValidator;
+impl Default for HstsMaxAgeDeepValidator { fn default() -> Self { Self::new() } }
+impl HstsMaxAgeDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsMaxAgeDeepValidator {
+    fn name(&self) -> &str { "hsts-max-age-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            if let Some(pos) = lower.find("max-age=") {
+                let after = &lower[pos + 8..];
+                if let Ok(age) = after.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u64>() {
+                    if age < 31536000 {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSMAX001".to_string(), title: "HSTS max-age below 1 year".to_string(), description: format!("max-age is {age}, recommended >= 31536000 (1 year)."), url: url.clone(), recommendation: "Set max-age to at least 31536000.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieSecureDeepDeepValidator;
+impl Default for CookieSecureDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieSecureDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSecureDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-secure-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let mut cookie_count = 0;
+        let mut insecure_count = 0;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            cookie_count += 1;
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            let is_session = lower.contains("session");
+            if !lower.contains("secure") && !is_session {
+                insecure_count += 1;
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC001".to_string(), title: format!("Cookie '{name}' missing Secure flag"), description: "Non-session cookie transmitted without Secure flag.".to_string(), url: url.clone(), recommendation: "Add Secure flag to cookie.".to_string() });
+            }
+        }
+        if cookie_count > 0 && insecure_count == 0 {
+            // All cookies are fine - no finding needed
+        }
+        findings
+    }
+}
+
+pub struct CookieHttpOnlyDeepDeepValidator;
+impl Default for CookieHttpOnlyDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieHttpOnlyDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieHttpOnlyDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-httponly-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            if !lower.contains("httponly") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIEHTTP001".to_string(), title: format!("Cookie '{name}' missing HttpOnly flag"), description: "Cookie accessible to JavaScript without HttpOnly.".to_string(), url: url.clone(), recommendation: "Add HttpOnly flag to cookie.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieSameSiteDeepDeepValidator;
+impl Default for CookieSameSiteDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CookieSameSiteDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSameSiteDeepDeepValidator {
+    fn name(&self) -> &str { "cookie-samesite-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+            if !lower.contains("samesite") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESAME001".to_string(), title: format!("Cookie '{name}' missing SameSite attribute"), description: "Without SameSite, cookie is vulnerable to CSRF attacks.".to_string(), url: url.clone(), recommendation: "Add SameSite=Strict or SameSite=Lax.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MixedContentIframeDeepValidator;
+impl Default for MixedContentIframeDeepValidator { fn default() -> Self { Self::new() } }
+impl MixedContentIframeDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MixedContentIframeDeepValidator {
+    fn name(&self) -> &str { "mixed-content-iframe-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let http_iframe_count = lower.matches("<iframe").count();
+            let http_in_iframes = body.matches("http://").count();
+            if http_iframe_count > 0 && http_in_iframes > 0 {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "MIXIFRAME001".to_string(), title: "Mixed content in iframes".to_string(), description: format!("Found {http_iframe_count} iframe(s) with HTTP resources on HTTPS page."), url: url.clone(), recommendation: "Change all iframe sources to HTTPS.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CorsWildcardDeepValidator;
+impl Default for CorsWildcardDeepValidator { fn default() -> Self { Self::new() } }
+impl CorsWildcardDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CorsWildcardDeepValidator {
+    fn name(&self) -> &str { "cors-wildcard-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Access-Control-Allow-Origin")).map(|(_, v)| v.as_str()) {
+            if val == "*" {
+                let has_credentials = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("Access-Control-Allow-Credentials") && v.eq_ignore_ascii_case("true"));
+                if has_credentials {
+                    findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CORSWILD001".to_string(), title: "CORS wildcard with credentials".to_string(), description: "Access-Control-Allow-Origin is '*' with Access-Control-Allow-Credentials: true. This is a security vulnerability.".to_string(), url: url.clone(), recommendation: "Use a specific origin instead of '*' when credentials are allowed.".to_string() });
+                } else {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CORSWILD001".to_string(), title: "CORS allows all origins".to_string(), description: "Access-Control-Allow-Origin is set to '*'.".to_string(), url: url.clone(), recommendation: "Consider restricting CORS to specific origins.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct ReferrerPolicyStrictDeepValidator;
+impl Default for ReferrerPolicyStrictDeepValidator { fn default() -> Self { Self::new() } }
+impl ReferrerPolicyStrictDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ReferrerPolicyStrictDeepValidator {
+    fn name(&self) -> &str { "referrer-policy-strict-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy")).map(|(_, v)| v.as_str()) {
+            let lower = val.to_lowercase();
+            let is_strict = lower == "no-referrer" || lower == "same-origin" || lower == "strict-origin" || lower == "strict-origin-when-cross-origin" || lower == "no-referrer-when-downgrade";
+            if !is_strict {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "RPSTRICT001".to_string(), title: "Referrer-Policy not using strict policy".to_string(), description: format!("Current policy is '{val}'. Consider a stricter policy for better privacy."), url: url.clone(), recommendation: "Use no-referrer, same-origin, or strict-origin-when-cross-origin.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// V7 SEO Validators (36-50)
+// =========================================================================
+
+pub struct TitleMissingDeepValidator;
+impl Default for TitleMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleMissingDeepValidator {
+    fn name(&self) -> &str { "title-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match &ctx.page.meta.title {
+            None => {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "TITLEMISS001".to_string(), title: "Missing title tag".to_string(), description: "No title tag found on page.".to_string(), url: url.clone(), recommendation: "Add a unique, descriptive title tag.".to_string() });
+            }
+            Some(title) if title.trim().is_empty() => {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "TITLEMISS001".to_string(), title: "Empty title tag".to_string(), description: "Title tag exists but is empty.".to_string(), url: url.clone(), recommendation: "Add a unique, descriptive title tag.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct TitleKeywordDensityDeepValidator;
+impl Default for TitleKeywordDensityDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleKeywordDensityDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleKeywordDensityDeepValidator {
+    fn name(&self) -> &str { "title-keyword-density-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let (Some(title), Some(desc)) = (&ctx.page.meta.title, &ctx.page.meta.description) {
+            let title_words: Vec<&str> = title.split_whitespace().collect();
+            let desc_words: Vec<&str> = desc.split_whitespace().collect();
+            if !title_words.is_empty() && !desc_words.is_empty() {
+                let overlap = title_words.iter().filter(|tw| desc_words.iter().any(|dw| tw.eq_ignore_ascii_case(dw))).count();
+                let ratio = overlap as f64 / title_words.len() as f64;
+                if ratio < 0.2 && title_words.len() > 2 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEKDEN001".to_string(), title: "Low title-description keyword overlap".to_string(), description: format!("Only {overlap}/{} title words appear in description.", title_words.len()), url: url.clone(), recommendation: "Include key title words in meta description.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct TitleBrandPlacementDeepValidator;
+impl Default for TitleBrandPlacementDeepValidator { fn default() -> Self { Self::new() } }
+impl TitleBrandPlacementDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleBrandPlacementDeepValidator {
+    fn name(&self) -> &str { "title-brand-placement-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            let title_lower = title.to_lowercase();
+            if title_lower.ends_with(" | ") || title_lower.ends_with(" - ") || title_lower.ends_with(" – ") || title_lower.ends_with(" — ") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEBRAND001".to_string(), title: "Title ends with separator".to_string(), description: "Title ends with a brand separator which may indicate brand is at the end.".to_string(), url: url.clone(), recommendation: "Consider placing the brand name at the beginning of the title.".to_string() });
+            }
+            if title.contains(" | ") || title.contains(" - ") {
+                let parts: Vec<&str> = title.splitn(2, |c| c == '|' || c == '-').collect();
+                if parts.len() == 2 {
+                    let first = parts[0].trim();
+                    let second = parts[1].trim();
+                    if first.len() < 5 && second.len() > 20 {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEBRAND001".to_string(), title: "Short brand prefix in title".to_string(), description: format!("Brand '{first}' takes minimal space; primary content is after separator."), url: url.clone(), recommendation: "Ensure the primary keyword appears before the brand in the title.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionMissingDeepValidator;
+impl Default for MetaDescriptionMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionMissingDeepValidator {
+    fn name(&self) -> &str { "meta-description-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match &ctx.page.meta.description {
+            None => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCMISS001".to_string(), title: "Missing meta description".to_string(), description: "No meta description tag found.".to_string(), url: url.clone(), recommendation: "Add a unique, compelling meta description.".to_string() });
+            }
+            Some(desc) if desc.trim().is_empty() => {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCMISS001".to_string(), title: "Empty meta description".to_string(), description: "Meta description tag exists but is empty.".to_string(), url: url.clone(), recommendation: "Add a unique, compelling meta description.".to_string() });
+            }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionTooShortDeepValidator;
+impl Default for MetaDescriptionTooShortDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionTooShortDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionTooShortDeepValidator {
+    fn name(&self) -> &str { "meta-description-too-short-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(desc) = &ctx.page.meta.description {
+            if !desc.is_empty() && desc.len() < 70 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADESSSHORT001".to_string(), title: "Meta description too short".to_string(), description: format!("Description is {} chars, recommended 120-160.", desc.len()), url: url.clone(), recommendation: "Expand meta description to 120-160 characters.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionUniquenessDeepValidator;
+impl Default for MetaDescriptionUniquenessDeepValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionUniquenessDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionUniquenessDeepValidator {
+    fn name(&self) -> &str { "meta-description-uniqueness-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let (Some(title), Some(desc)) = (&ctx.page.meta.title, &ctx.page.meta.description) {
+            if title == desc {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METADESCUNIQ001".to_string(), title: "Meta description identical to title".to_string(), description: "Title and meta description are exactly the same.".to_string(), url: url.clone(), recommendation: "Write a unique meta description that complements the title.".to_string() });
+            }
+            if !desc.is_empty() && title.len() > 10 {
+                let title_lower = title.to_lowercase();
+                let desc_lower = desc.to_lowercase();
+                if title_lower == desc_lower.chars().take(title.len()).collect::<String>() {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METADESCUNIQ001".to_string(), title: "Meta description starts with title".to_string(), description: "Description begins with the exact title text.".to_string(), url: url.clone(), recommendation: "Write a distinct description that adds value beyond the title.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalMissingDeepValidator;
+impl Default for CanonicalMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalMissingDeepValidator {
+    fn name(&self) -> &str { "canonical-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.canonical.is_none() {
+            let is_paginated = url.contains("page=") || url.contains("/page/") || url.contains("?p=");
+            if is_paginated {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANMISS001".to_string(), title: "Missing canonical on paginated page".to_string(), description: "Paginated page has no canonical URL.".to_string(), url: url.clone(), recommendation: "Add a canonical URL pointing to the current paginated URL or the first page.".to_string() });
+            } else {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANMISS001".to_string(), title: "Missing canonical URL".to_string(), description: "No canonical link tag found.".to_string(), url: url.clone(), recommendation: "Add a self-referencing canonical URL.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalSelfReferenceDeepDeepValidator;
+impl Default for CanonicalSelfReferenceDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalSelfReferenceDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalSelfReferenceDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-self-reference-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.as_str();
+            if canonical_str != url {
+                let same_path = canonical.path() == url::Url::parse(url).map(|u| u.path().to_string()).unwrap_or_default();
+                if same_path {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANSELFRF001".to_string(), title: "Canonical has different scheme/host".to_string(), description: format!("Canonical '{}' differs from page URL '{}' in scheme/host.", canonical_str, url), url: url.clone(), recommendation: "Ensure canonical uses the exact same URL as the page.".to_string() });
+                } else {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANSELFRF001".to_string(), title: "Canonical does not self-reference".to_string(), description: format!("Canonical points to '{}', page is '{}'.", canonical_str, url), url: url.clone(), recommendation: "Set canonical to the current page URL.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalChainDeepDeepValidator;
+impl Default for CanonicalChainDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl CanonicalChainDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalChainDeepDeepValidator {
+    fn name(&self) -> &str { "canonical-chain-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let canonical_count = body.matches("rel=\"canonical\"").count() + body.matches("rel='canonical'").count() + body.matches("rel=\u{201c}canonical\u{201d}").count();
+            if canonical_count > 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANCHAIN001".to_string(), title: "Multiple canonical tags".to_string(), description: format!("{canonical_count} canonical tags found in HTML."), url: url.clone(), recommendation: "Use only one canonical tag per page.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangMissingDeepValidator;
+impl Default for HreflangMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangMissingDeepValidator {
+    fn name(&self) -> &str { "hreflang-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.hreflang.is_empty() {
+            let has_html_lang = ctx.page.has_lang_attribute;
+            let has_multilingual_signal = url.contains("/en/") || url.contains("/fr/") || url.contains("/de/") || url.contains("/es/") || url.contains("/ja/");
+            if has_multilingual_signal && !has_html_lang {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFMISS001".to_string(), title: "Missing hreflang on multilingual site".to_string(), description: "URL pattern suggests multilingual content but no hreflang tags found.".to_string(), url: url.clone(), recommendation: "Add hreflang tags for all language variants.".to_string() });
+            } else if !has_multilingual_signal {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFMISS001".to_string(), title: "No hreflang tags".to_string(), description: "No hreflang annotations found on page.".to_string(), url: url.clone(), recommendation: "Add hreflang tags if serving content in multiple languages.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangReciprocalDeepDeepValidator;
+impl Default for HreflangReciprocalDeepDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangReciprocalDeepDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangReciprocalDeepDeepValidator {
+    fn name(&self) -> &str { "hreflang-reciprocal-deep-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.meta.hreflang.is_empty() { return findings; }
+        let mut lang_counts: std::collections::HashMap<String, usize> = std::collections::HashMap::new();
+        for h in &ctx.page.meta.hreflang {
+            *lang_counts.entry(h.lang.clone()).or_insert(0) += 1;
+        }
+        for (lang, count) in &lang_counts {
+            if *count > 1 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFRECIP001".to_string(), title: format!("Duplicate hreflang for '{lang}'"), description: format!("hreflang '{lang}' appears {count} times on the same page."), url: url.clone(), recommendation: "Each language should have only one hreflang tag per page.".to_string() });
+            }
+        }
+        let has_x_default = ctx.page.meta.hreflang.iter().any(|h| h.lang == "x-default");
+        if !has_x_default && ctx.page.meta.hreflang.len() > 1 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFRECIP001".to_string(), title: "Missing x-default hreflang".to_string(), description: "Multiple hreflang tags but no x-default variant.".to_string(), url: url.clone(), recommendation: "Add an x-default hreflang tag for the fallback language.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HreflangXDefaultMissingDeepValidator;
+impl Default for HreflangXDefaultMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl HreflangXDefaultMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangXDefaultMissingDeepValidator {
+    fn name(&self) -> &str { "hreflang-x-default-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.meta.hreflang.is_empty() {
+            let has_x_default = ctx.page.meta.hreflang.iter().any(|h| h.lang == "x-default");
+            if !has_x_default {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFXD001".to_string(), title: "Missing hreflang x-default".to_string(), description: "No x-default hreflang tag found.".to_string(), url: url.clone(), recommendation: "Add an x-default hreflang tag for the fallback/default language.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapMissingDeepValidator;
+impl Default for SitemapMissingDeepValidator { fn default() -> Self { Self::new() } }
+impl SitemapMissingDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapMissingDeepValidator {
+    fn name(&self) -> &str { "sitemap-missing-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let has_sitemap = robots.lines().any(|l| l.to_lowercase().starts_with("sitemap:"));
+            if !has_sitemap {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "SITEMAPMISS001".to_string(), title: "No sitemap in robots.txt".to_string(), description: "robots.txt does not reference any sitemap.".to_string(), url: url.clone(), recommendation: "Add Sitemap: directive to robots.txt.".to_string() });
+            }
+        } else {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPMISS001".to_string(), title: "No robots.txt available".to_string(), description: "Could not fetch robots.txt to check for sitemap reference.".to_string(), url: url.clone(), recommendation: "Ensure robots.txt is accessible and references your sitemap.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct RobotsTxtEmptyDeepValidator;
+impl Default for RobotsTxtEmptyDeepValidator { fn default() -> Self { Self::new() } }
+impl RobotsTxtEmptyDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RobotsTxtEmptyDeepValidator {
+    fn name(&self) -> &str { "robots-txt-empty-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let trimmed = robots.trim();
+            if trimmed.is_empty() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "ROBOTSEMPTY001".to_string(), title: "Empty robots.txt".to_string(), description: "robots.txt file is empty.".to_string(), url: url.clone(), recommendation: "Add at least a User-agent directive to robots.txt.".to_string() });
+            } else {
+                let has_user_agent = trimmed.lines().any(|l| l.to_lowercase().starts_with("user-agent:"));
+                if !has_user_agent {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "ROBOTSEMPTY001".to_string(), title: "robots.txt missing User-agent".to_string(), description: "robots.txt exists but has no User-agent directive.".to_string(), url: url.clone(), recommendation: "Add User-agent: * directive to robots.txt.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct InternalLinksDiversityDeepValidator;
+impl Default for InternalLinksDiversityDeepValidator { fn default() -> Self { Self::new() } }
+impl InternalLinksDiversityDeepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for InternalLinksDiversityDeepValidator {
+    fn name(&self) -> &str { "internal-links-diversity-deep-v7" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let internal: Vec<&crate::parser::ExtractedLink> = ctx.page.links.iter().filter(|l| !l.is_external).collect();
+        if internal.len() < 3 { return findings; }
+        let unique_targets: std::collections::HashSet<&str> = internal.iter().map(|l| l.href.as_str()).collect();
+        let unique_texts: std::collections::HashSet<&str> = internal.iter().map(|l| l.text.trim()).collect();
+        if !unique_targets.is_empty() {
+            let diversity_ratio = unique_targets.len() as f64 / internal.len() as f64;
+            if diversity_ratio < 0.5 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTDIV001".to_string(), title: "Low internal link diversity".to_string(), description: format!("Only {}/{} internal links point to unique targets.", unique_targets.len(), internal.len()), url: url.clone(), recommendation: "Diversify internal link targets to distribute link equity.".to_string() });
+            }
+        }
+        if !unique_texts.is_empty() {
+            let text_diversity = unique_texts.len() as f64 / internal.len() as f64;
+            if text_diversity < 0.3 && internal.len() > 5 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTDIV001".to_string(), title: "Low internal link anchor text diversity".to_string(), description: format!("{}/{} unique anchor texts.", unique_texts.len(), internal.len()), url: url.clone(), recommendation: "Use varied, descriptive anchor text for internal links.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod v2_analyzer_tests {
@@ -5813,4 +6896,210 @@ mod v2_analyzer_tests {
     fn test_landmark_contentinfo_ok() { let mut p = make_page("https://example.com"); p.landmarks = vec!["contentinfo".into()]; assert!(LandmarkContentinfoValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
     #[test]
     fn test_landmark_complementary() { let p = make_page("https://example.com"); let f = LandmarkComplementaryValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    // ===== V7 Content Validators Tests =====
+    #[test]
+    fn test_apt_missing_rooms() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({}) }]; let f = ApartmentMissingNumberOfRoomsValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "APTROOM001"); }
+    #[test]
+    fn test_apt_rooms_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Apartment".into()), data: serde_json::json!({"numberOfRooms": 3}) }]; assert!(ApartmentMissingNumberOfRoomsValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_car_missing_model() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({}) }]; let f = CarMissingModelValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CARMODEL001"); }
+    #[test]
+    fn test_car_model_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({"model": "Civic"}) }]; assert!(CarMissingModelValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_car_missing_manufacturer() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({}) }]; let f = CarMissingManufacturerValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CARMFR001"); }
+    #[test]
+    fn test_car_manufacturer_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Car".into()), data: serde_json::json!({"manufacturer": "Honda"}) }]; assert!(CarMissingManufacturerValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_musicalbum_missing_tracks() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("MusicAlbum".into()), data: serde_json::json!({}) }]; let f = MusicAlbumMissingNumberOfTracksValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "MUSTRACKS001"); }
+    #[test]
+    fn test_musicalbum_tracks_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("MusicAlbum".into()), data: serde_json::json!({"numberOfTracks": 12}) }]; assert!(MusicAlbumMissingNumberOfTracksValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_tvseries_missing_episodes() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("TVSeries".into()), data: serde_json::json!({}) }]; let f = TVSeriesMissingNumberOfEpisodesValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TVEPISODES001"); }
+    #[test]
+    fn test_tvseries_episodes_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("TVSeries".into()), data: serde_json::json!({"numberOfEpisodes": 24}) }]; assert!(TVSeriesMissingNumberOfEpisodesValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_movie_missing_rating() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Movie".into()), data: serde_json::json!({}) }]; let f = MovieMissingAggregateRatingValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "MOVRATING001"); }
+    #[test]
+    fn test_movie_rating_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Movie".into()), data: serde_json::json!({"aggregateRating": {"ratingValue": 8.5}}) }]; assert!(MovieMissingAggregateRatingValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_gov_service_missing_area() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("GovernmentService".into()), data: serde_json::json!({}) }]; let f = GovernmentServiceMissingServiceAreaValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "GOVSERVICE001"); }
+    #[test]
+    fn test_gov_service_area_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("GovernmentService".into()), data: serde_json::json!({"serviceArea": "NYC"}) }]; assert!(GovernmentServiceMissingServiceAreaValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_healthplan_missing_id() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HealthPlan".into()), data: serde_json::json!({}) }]; let f = HealthPlanMissingHealthPlanIdValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HPID001"); }
+    #[test]
+    fn test_healthplan_id_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HealthPlan".into()), data: serde_json::json!({"healthPlanId": "HP-001"}) }]; assert!(HealthPlanMissingHealthPlanIdValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_invoice_missing_status() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Invoice".into()), data: serde_json::json!({}) }]; let f = InvoiceMissingPaymentStatusValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "INVSTATUS001"); }
+    #[test]
+    fn test_invoice_status_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Invoice".into()), data: serde_json::json!({"paymentStatus": "Paid"}) }]; assert!(InvoiceMissingPaymentStatusValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_permit_missing_validfrom() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Permit".into()), data: serde_json::json!({}) }]; let f = PermitMissingValidFromValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PERMFROM001"); }
+    #[test]
+    fn test_permit_validfrom_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Permit".into()), data: serde_json::json!({"validFrom": "2024-01-01"}) }]; assert!(PermitMissingValidFromValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_plan_missing_benefits() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Plan".into()), data: serde_json::json!({}) }]; let f = PlanMissingBenefitsValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "PLANBEN001"); }
+    #[test]
+    fn test_plan_benefits_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Plan".into()), data: serde_json::json!({"benefits": "Health coverage"}) }]; assert!(PlanMissingBenefitsValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_rp_missing_funder() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("ResearchProject".into()), data: serde_json::json!({}) }]; let f = ResearchProjectMissingFundingRecognizerValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "RPFUND001"); }
+    #[test]
+    fn test_rp_funder_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("ResearchProject".into()), data: serde_json::json!({"funder": "NSF"}) }]; assert!(ResearchProjectMissingFundingRecognizerValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_schedule_missing_freq() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Schedule".into()), data: serde_json::json!({}) }]; let f = ScheduleMissingRepeatFrequencyValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "SCHEDFREQ001"); }
+    #[test]
+    fn test_schedule_freq_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Schedule".into()), data: serde_json::json!({"repeatFrequency": "P1W"}) }]; assert!(ScheduleMissingRepeatFrequencyValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_trip_missing_departure() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Trip".into()), data: serde_json::json!({}) }]; let f = TripMissingDepartureTimeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TRIPDEP001"); }
+    #[test]
+    fn test_trip_departure_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Trip".into()), data: serde_json::json!({"departureTime": "2024-06-01T10:00:00"}) }]; assert!(TripMissingDepartureTimeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_wu_missing_count() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WorkersUnion".into()), data: serde_json::json!({}) }]; let f = WorkersUnionMissingMemberCountValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WUMEMBER001"); }
+    #[test]
+    fn test_wu_count_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WorkersUnion".into()), data: serde_json::json!({"memberCount": 500}) }]; assert!(WorkersUnionMissingMemberCountValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_webapi_missing_docs() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebAPI".into()), data: serde_json::json!({}) }]; let f = WebAPIDocumentationMissingValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WAPIDOCS001"); }
+    #[test]
+    fn test_webapi_docs_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebAPI".into()), data: serde_json::json!({"documentation": "https://docs.example.com"}) }]; assert!(WebAPIDocumentationMissingValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_wearable_missing_battery() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Wearable".into()), data: serde_json::json!({}) }]; let f = WearableMissingBatteryLifeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WEARBATT001"); }
+    #[test]
+    fn test_wearable_battery_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Wearable".into()), data: serde_json::json!({"batteryLife": "24h"}) }]; assert!(WearableMissingBatteryLifeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_webpage_element_missing_name() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebPageElement".into()), data: serde_json::json!({}) }]; let f = WebPageElementMissingAccessibleNameValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WPELACC001"); }
+    #[test]
+    fn test_webpage_element_name_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("WebPageElement".into()), data: serde_json::json!({"name": "Header"}) }]; assert!(WebPageElementMissingAccessibleNameValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_worker_missing_occupation() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Worker".into()), data: serde_json::json!({}) }]; let f = WorkerMissingOccupationValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "WOCCUP001"); }
+    #[test]
+    fn test_worker_occupation_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Worker".into()), data: serde_json::json!({"occupation": "Engineer"}) }]; assert!(WorkerMissingOccupationValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_book_missing_format() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({}) }]; let f = BookMissingBookFormatValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "BOOKFMT001"); }
+    #[test]
+    fn test_book_format_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Book".into()), data: serde_json::json!({"bookFormat": "Hardcover"}) }]; assert!(BookMissingBookFormatValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+
+    // ===== V7 Security Validators Tests =====
+    #[test]
+    fn test_csp_ss_self_missing() { let headers = vec![("Content-Security-Policy".into(), "script-src 'none'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspScriptSrcSelfValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPSS001"); }
+    #[test]
+    fn test_csp_ss_self_ok() { let headers = vec![("Content-Security-Policy".into(), "script-src 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspScriptSrcSelfValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_sty_self_missing() { let headers = vec![("Content-Security-Policy".into(), "style-src 'none'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspStyleSrcSelfValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPSTY001"); }
+    #[test]
+    fn test_csp_sty_self_ok() { let headers = vec![("Content-Security-Policy".into(), "style-src 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspStyleSrcSelfValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_connect_wildcard() { let headers = vec![("Content-Security-Policy".into(), "connect-src *".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspConnectSrcAnalysisValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPCON001"); }
+    #[test]
+    fn test_csp_connect_ok() { let headers = vec![("Content-Security-Policy".into(), "connect-src https://api.example.com".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspConnectSrcAnalysisValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_font_wildcard() { let headers = vec![("Content-Security-Policy".into(), "font-src *".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspFontSrcAnalysisValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPFNT001"); }
+    #[test]
+    fn test_csp_font_ok() { let headers = vec![("Content-Security-Policy".into(), "font-src https://fonts.example.com".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspFontSrcAnalysisValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_obj_not_none() { let headers = vec![("Content-Security-Policy".into(), "object-src 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspObjectSrcNoneDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPOBJ001"); }
+    #[test]
+    fn test_csp_obj_none_ok() { let headers = vec![("Content-Security-Policy".into(), "object-src 'none'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspObjectSrcNoneDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_base_uri_missing() { let headers = vec![("Content-Security-Policy".into(), "script-src 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspBaseUriSelfDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPBASE001"); }
+    #[test]
+    fn test_csp_base_uri_ok() { let headers = vec![("Content-Security-Policy".into(), "base-uri 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspBaseUriSelfDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_csp_form_action_missing() { let headers = vec![("Content-Security-Policy".into(), "script-src 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspFormActionSelfDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CSPFORM001"); }
+    #[test]
+    fn test_csp_form_action_ok() { let headers = vec![("Content-Security-Policy".into(), "form-action 'self'".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CspFormActionSelfDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_hsts_preload_ready_incomplete() { let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = HstsPreloadReadyDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "HSTSPR001"); }
+    #[test]
+    fn test_hsts_preload_ready_ok() { let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000; includeSubDomains; preload".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(HstsPreloadReadyDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_hsts_max_age_deep_low() { let headers = vec![("Strict-Transport-Security".into(), "max-age=86400".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = HstsMaxAgeDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "HSTSMAX001"); }
+    #[test]
+    fn test_hsts_max_age_deep_ok() { let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(HstsMaxAgeDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_cookie_secure_deep_missing() { let headers = vec![("Set-Cookie".into(), "token=abc123; HttpOnly".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieSecureDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "COOKIESEC001"); }
+    #[test]
+    fn test_cookie_secure_deep_ok() { let headers = vec![("Set-Cookie".into(), "token=abc123; Secure; HttpOnly".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CookieSecureDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_cookie_httponly_deep_missing() { let headers = vec![("Set-Cookie".into(), "token=abc123; Secure".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieHttpOnlyDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "COOKIEHTTP001"); }
+    #[test]
+    fn test_cookie_httponly_deep_ok() { let headers = vec![("Set-Cookie".into(), "token=abc123; Secure; HttpOnly".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CookieHttpOnlyDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_cookie_samesite_deep_missing() { let headers = vec![("Set-Cookie".into(), "token=abc123; Secure; HttpOnly".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieSameSiteDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "COOKIESAME001"); }
+    #[test]
+    fn test_cookie_samesite_deep_ok() { let headers = vec![("Set-Cookie".into(), "token=abc123; Secure; HttpOnly; SameSite=Strict".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CookieSameSiteDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_mixed_iframe_deep() { let p = make_page("https://example.com"); let body = "<html><body><iframe src=\"http://evil.com/frame\"></iframe></body></html>"; let ctx = AnalysisContext { page: &p, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = MixedContentIframeDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "MIXIFRAME001"); }
+    #[test]
+    fn test_mixed_iframe_deep_ok() { let p = make_page("https://example.com"); let body = "<html><body><iframe src=\"https://safe.com/frame\"></iframe></body></html>"; let ctx = AnalysisContext { page: &p, body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(MixedContentIframeDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_cors_wildcard_deep() { let headers = vec![("Access-Control-Allow-Origin".into(), "*".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CorsWildcardDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CORSWILD001"); }
+    #[test]
+    fn test_cors_wildcard_creds() { let headers = vec![("Access-Control-Allow-Origin".into(), "*".into()), ("Access-Control-Allow-Credentials".into(), "true".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CorsWildcardDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].severity, Severity::Critical); }
+    #[test]
+    fn test_cors_specific_ok() { let headers = vec![("Access-Control-Allow-Origin".into(), "https://example.com".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CorsWildcardDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_rp_strict_unsafe() { let headers = vec![("Referrer-Policy".into(), "unsafe-url".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = ReferrerPolicyStrictDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "RPSTRICT001"); }
+    #[test]
+    fn test_rp_strict_ok() { let headers = vec![("Referrer-Policy".into(), "strict-origin-when-cross-origin".into())]; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(ReferrerPolicyStrictDeepValidator::new().analyze(&ctx).is_empty()); }
+
+    // ===== V7 SEO Validators Tests =====
+    #[test]
+    fn test_title_missing_deep() { let f = TitleMissingDeepValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TITLEMISS001"); }
+    #[test]
+    fn test_title_present_deep() { let mut p = make_page("https://example.com"); p.meta.title = Some("Good Title".into()); assert!(TitleMissingDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_title_keyword_density_deep() { let mut p = make_page("https://example.com"); p.meta.title = Some("Amazing Widgets Online".into()); p.meta.description = Some("Amazing widgets available online today".into()); assert!(TitleKeywordDensityDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_title_keyword_density_low() { let mut p = make_page("https://example.com"); p.meta.title = Some("XYZ Corp Products".into()); p.meta.description = Some("Buy amazing things today".into()); let f = TitleKeywordDensityDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TITLEKDEN001"); }
+    #[test]
+    fn test_title_brand_deep_ok() { let mut p = make_page("https://example.com"); p.meta.title = Some("Acme Corp - Best Products".into()); assert!(TitleBrandPlacementDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_title_brand_deep_short_prefix() { let mut p = make_page("https://example.com"); p.meta.title = Some("Co - Amazing Widgets That Are Really Great And Wonderful".into()); let f = TitleBrandPlacementDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "TITLEBRAND001"); }
+    #[test]
+    fn test_meta_desc_missing_deep() { let f = MetaDescriptionMissingDeepValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "METADESCMISS001"); }
+    #[test]
+    fn test_meta_desc_present_deep() { let mut p = make_page("https://example.com"); p.meta.description = Some("A good description".into()); assert!(MetaDescriptionMissingDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_meta_desc_short_deep() { let mut p = make_page("https://example.com"); p.meta.description = Some("Short".into()); let f = MetaDescriptionTooShortDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "METADESSSHORT001"); }
+    #[test]
+    fn test_meta_desc_short_ok() { let mut p = make_page("https://example.com"); p.meta.description = Some("This is a sufficiently long meta description that should pass the minimum length check for testing purposes.".into()); assert!(MetaDescriptionTooShortDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_meta_desc_unique_deep() { let mut p = make_page("https://example.com"); p.meta.title = Some("Hello World".into()); p.meta.description = Some("Hello World".into()); let f = MetaDescriptionUniquenessDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "METADESCUNIQ001"); }
+    #[test]
+    fn test_meta_desc_unique_ok() { let mut p = make_page("https://example.com"); p.meta.title = Some("Hello World".into()); p.meta.description = Some("A comprehensive description of the page content.".into()); assert!(MetaDescriptionUniquenessDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_canonical_missing_deep() { let f = CanonicalMissingDeepValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CANMISS001"); }
+    #[test]
+    fn test_canonical_present_deep() { let mut p = make_page("https://example.com"); p.meta.canonical = Some(url::Url::parse("https://example.com").unwrap()); assert!(CanonicalMissingDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_canonical_self_ref_deep() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some(url::Url::parse("https://example.com/other").unwrap()); let f = CanonicalSelfReferenceDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "CANSELFRF001"); }
+    #[test]
+    fn test_canonical_self_ok_deep() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some(url::Url::parse("https://example.com/page").unwrap()); assert!(CanonicalSelfReferenceDeepDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_canonical_chain_deep_deep() { let body = "<html><head><link rel=\"canonical\" href=\"https://example.com\"><link rel=\"canonical\" href=\"https://example.com/other\"></head></html>"; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CanonicalChainDeepDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "CANCHAIN001"); }
+    #[test]
+    fn test_canonical_chain_ok_deep() { let body = "<html><head><link rel=\"canonical\" href=\"https://example.com\"></head></html>"; let ctx = AnalysisContext { page: &make_page("https://example.com"), body: Some(body), status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(CanonicalChainDeepDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_hreflang_missing_deep() { let f = HreflangMissingDeepValidator::new().analyze(&make_ctx(&make_page("https://example.com/fr/page"), None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HREFMISS001"); }
+    #[test]
+    fn test_hreflang_present_deep() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: url::Url::parse("https://example.com/en").unwrap() }]; assert!(HreflangMissingDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_hreflang_reciprocal_dup_deep() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "fr".into(), url: url::Url::parse("https://example.com/fr").unwrap() }, crate::meta::HreflangTag { lang: "fr".into(), url: url::Url::parse("https://example.com/fr2").unwrap() }]; let f = HreflangReciprocalDeepDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hreflang_xdefault_missing_deep() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: url::Url::parse("https://example.com/en").unwrap() }]; let f = HreflangXDefaultMissingDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "HREFXD001"); }
+    #[test]
+    fn test_hreflang_xdefault_ok_deep() { let mut p = make_page("https://example.com"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: url::Url::parse("https://example.com/en").unwrap() }, crate::meta::HreflangTag { lang: "x-default".into(), url: url::Url::parse("https://example.com").unwrap() }]; assert!(HreflangXDefaultMissingDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_sitemap_missing_deep() { let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some("User-agent: *\nDisallow: /admin"), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = SitemapMissingDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "SITEMAPMISS001"); }
+    #[test]
+    fn test_sitemap_ok_deep() { let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some("User-agent: *\nSitemap: https://example.com/sitemap.xml"), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(SitemapMissingDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_robots_txt_empty_deep() { let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some(""), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = RobotsTxtEmptyDeepValidator::new().analyze(&ctx); assert!(!f.is_empty()); assert_eq!(f[0].code, "ROBOTSEMPTY001"); }
+    #[test]
+    fn test_robots_txt_ok_deep() { let ctx = AnalysisContext { page: &make_page("https://example.com"), body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some("User-agent: *\nDisallow: /admin"), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(RobotsTxtEmptyDeepValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_int_links_diversity_deep() { let p = make_page("https://example.com"); assert!(InternalLinksDiversityDeepValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_int_links_diversity_low() { let mut p = make_page("https://example.com"); for _ in 0..10 { p.links.push(crate::parser::ExtractedLink { href: "https://example.com/same".into(), text: "same".into(), rel: vec![], is_external: false, aria_label: None, img_alt: None }); } let f = InternalLinksDiversityDeepValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "INTDIV001"); }
 }

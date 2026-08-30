@@ -3131,6 +3131,133 @@ impl Analyzer for ImageDimensionMissingAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Performance: Image Lazy Load V2 — images without lazy loading
+// ---------------------------------------------------------------------------
+
+pub struct ImageLazyLoadAnalyzerV2;
+
+impl Default for ImageLazyLoadAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ImageLazyLoadAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ImageLazyLoadAnalyzerV2 {
+    fn name(&self) -> &str { "image-lazy-load-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.images.is_empty() { return findings; }
+        let non_lazy: Vec<&str> = ctx.page.images.iter()
+            .filter(|img| !img.is_lazy_loaded)
+            .map(|img| img.src.as_str())
+            .collect();
+        if !non_lazy.is_empty() && non_lazy.len() > 3 {
+            let examples = non_lazy.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Performance,
+                code: "IMG-LAZY001".to_string(),
+                title: "Images without lazy loading".to_string(),
+                description: format!("{} image(s) lack loading=\"lazy\": {}. Below-the-fold images should use lazy loading to improve initial page load performance.", non_lazy.len(), examples),
+                url: url.clone(),
+                recommendation: "Add loading=\"lazy\" to below-the-fold images to defer their loading until they are needed.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Performance: Script Load V2 — scripts without async/defer
+// ---------------------------------------------------------------------------
+
+pub struct ScriptLoadAnalyzerV2;
+
+impl Default for ScriptLoadAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ScriptLoadAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ScriptLoadAnalyzerV2 {
+    fn name(&self) -> &str { "script-load-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let blocking: Vec<&str> = ctx.page.scripts.iter()
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| s.script_type.as_deref().map(|t| t != "application/ld+json").unwrap_or(true))
+            .map(|s| s.src.as_deref().unwrap_or(""))
+            .collect();
+        if !blocking.is_empty() {
+            let examples = blocking.iter().take(3).cloned().collect::<Vec<_>>().join(", ");
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Performance,
+                code: "SCRIPT-V2001".to_string(),
+                title: "Scripts without async/defer".to_string(),
+                description: format!("{} external script(s) lack both async and defer, blocking page rendering: {}.", blocking.len(), examples),
+                url: url.clone(),
+                recommendation: "Add the async attribute to independent scripts or defer to scripts that must execute in order.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Performance: Font Display V2 — web fonts without font-display
+// ---------------------------------------------------------------------------
+
+pub struct FontDisplayAnalyzerV2;
+
+impl Default for FontDisplayAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl FontDisplayAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for FontDisplayAnalyzerV2 {
+    fn name(&self) -> &str { "font-display-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let body = ctx.body.unwrap_or("");
+        let font_extensions = [".woff2", ".woff", ".ttf", ".otf", ".eot"];
+        let total_fonts: usize = ctx.page.styles.iter()
+            .filter_map(|s| s.href.as_ref())
+            .filter(|href| { let lower = href.to_lowercase(); font_extensions.iter().any(|ext| lower.contains(ext)) })
+            .count()
+            + font_extensions.iter().map(|ext| body.matches(ext).count()).sum::<usize>();
+        if total_fonts > 0 {
+            let has_font_display = body.contains("font-display:");
+            if !has_font_display {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Performance,
+                    code: "FONT-V2001".to_string(),
+                    title: "Web fonts without font-display".to_string(),
+                    description: format!("Page loads {total_fonts} font file(s) but no font-display property was found. Without font-display:swap, text may be invisible while web fonts load (Flash of Invisible Text)."),
+                    url: url.clone(),
+                    recommendation: "Add font-display:swap to @font-face declarations to ensure text remains visible during font loading.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
 // =========================================================================
 // New media analyzer tests
 // =========================================================================

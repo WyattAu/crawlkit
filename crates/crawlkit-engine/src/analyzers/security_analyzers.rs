@@ -8159,6 +8159,636 @@ impl Analyzer for ColorContrastLinkAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Security: Referrer-Policy V2 — missing header
+// ---------------------------------------------------------------------------
+
+pub struct ReferrerPolicyAnalyzerV2;
+
+impl Default for ReferrerPolicyAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ReferrerPolicyAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ReferrerPolicyAnalyzerV2 {
+    fn name(&self) -> &str { "referrer-policy-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy"));
+        if !has {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "REF-V2001".to_string(),
+                title: "Missing Referrer-Policy header".to_string(),
+                description: "No Referrer-Policy header was found. This header controls how much referrer information is sent with requests.".into(),
+                url: url.clone(),
+                recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin or no-referrer.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: X-Frame-Options V2 — missing header
+// ---------------------------------------------------------------------------
+
+pub struct XFrameOptionsAnalyzerV2;
+
+impl Default for XFrameOptionsAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl XFrameOptionsAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for XFrameOptionsAnalyzerV2 {
+    fn name(&self) -> &str { "x-frame-options-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options"));
+        if !has {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "XFO-V2001".to_string(),
+                title: "Missing X-Frame-Options header".to_string(),
+                description: "No X-Frame-Options header was found. This header prevents clickjacking by controlling frame embedding.".into(),
+                url: url.clone(),
+                recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: CSP V2 — missing script-src
+// ---------------------------------------------------------------------------
+
+pub struct ContentSecurityPolicyAnalyzerV2;
+
+impl Default for ContentSecurityPolicyAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ContentSecurityPolicyAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ContentSecurityPolicyAnalyzerV2 {
+    fn name(&self) -> &str { "content-security-policy-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str());
+        match csp {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "CSP-V2001".to_string(),
+                    title: "CSP missing script-src directive".to_string(),
+                    description: "No Content-Security-Policy header with script-src was found. CSP script-src helps prevent XSS attacks.".into(),
+                    url: url.clone(),
+                    recommendation: "Add Content-Security-Policy with a script-src directive (e.g., script-src 'self').".into(),
+                });
+            }
+            Some(val) => {
+                if !val.contains("script-src") {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Security,
+                        code: "CSP-V2001".to_string(),
+                        title: "CSP missing script-src directive".to_string(),
+                        description: "Content-Security-Policy header is present but does not include a script-src directive.".into(),
+                        url: url.clone(),
+                        recommendation: "Add script-src directive to the Content-Security-Policy header.".into(),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: HSTS V3 — missing includeSubDomains
+// ---------------------------------------------------------------------------
+
+pub struct StrictTransportSecurityAnalyzerV3;
+
+impl Default for StrictTransportSecurityAnalyzerV3 {
+    fn default() -> Self { Self::new() }
+}
+
+impl StrictTransportSecurityAnalyzerV3 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for StrictTransportSecurityAnalyzerV3 {
+    fn name(&self) -> &str { "strict-transport-security-v3" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hsts = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str());
+        match hsts {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Security,
+                    code: "HSTS-V3001".to_string(),
+                    title: "HSTS missing includeSubDomains".to_string(),
+                    description: "No Strict-Transport-Security header with includeSubDomains was found.".into(),
+                    url: url.clone(),
+                    recommendation: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.".into(),
+                });
+            }
+            Some(val) => {
+                if !val.to_lowercase().contains("includesubdomains") {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "HSTS-V3001".to_string(),
+                        title: "HSTS missing includeSubDomains".to_string(),
+                        description: "The Strict-Transport-Security header does not include the includeSubDomains directive.".into(),
+                        url: url.clone(),
+                        recommendation: "Add includeSubDomains to protect all subdomains.".into(),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: X-Content-Type-Options V2 — missing header
+// ---------------------------------------------------------------------------
+
+pub struct XContentTypeOptionsAnalyzerV2;
+
+impl Default for XContentTypeOptionsAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl XContentTypeOptionsAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for XContentTypeOptionsAnalyzerV2 {
+    fn name(&self) -> &str { "x-content-type-options-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options"));
+        if !has {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "XCTO-V2001".to_string(),
+                title: "Missing X-Content-Type-Options header".to_string(),
+                description: "No X-Content-Type-Options header was found. This header prevents MIME-type sniffing.".into(),
+                url: url.clone(),
+                recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: Permissions-Policy V3 — missing camera
+// ---------------------------------------------------------------------------
+
+pub struct PermissionsPolicyAnalyzerV3;
+
+impl Default for PermissionsPolicyAnalyzerV3 {
+    fn default() -> Self { Self::new() }
+}
+
+impl PermissionsPolicyAnalyzerV3 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for PermissionsPolicyAnalyzerV3 {
+    fn name(&self) -> &str { "permissions-policy-v3" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy")).map(|(_, v)| v.as_str());
+        match pp {
+            None => {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Security,
+                    code: "PERM-V3001".to_string(),
+                    title: "Permissions-Policy missing camera restriction".to_string(),
+                    description: "No Permissions-Policy header was found. Without it, the camera API may be accessible by default.".into(),
+                    url: url.clone(),
+                    recommendation: "Add Permissions-Policy header with camera=() to disable camera access if not needed.".into(),
+                });
+            }
+            Some(val) => {
+                let lower = val.to_lowercase();
+                if !lower.contains("camera=()") {
+                    findings.push(Finding {
+                        severity: Severity::Info,
+                        category: IssueCategory::Security,
+                        code: "PERM-V3001".to_string(),
+                        title: "Permissions-Policy missing camera restriction".to_string(),
+                        description: "The Permissions-Policy header does not explicitly restrict camera access.".into(),
+                        url: url.clone(),
+                        recommendation: "Add camera=() to Permissions-Policy to disable camera access if not needed.".into(),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: COEP V2 — missing header
+// ---------------------------------------------------------------------------
+
+pub struct CrossOriginIsolationAnalyzerV2;
+
+impl Default for CrossOriginIsolationAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl CrossOriginIsolationAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CrossOriginIsolationAnalyzerV2 {
+    fn name(&self) -> &str { "cross-origin-isolation-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy"));
+        if !has {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "COEP-V2001".to_string(),
+                title: "Missing Cross-Origin-Embedder-Policy header".to_string(),
+                description: "No Cross-Origin-Embedder-Policy header was found. COEP prevents resources from loading cross-origin without explicit permission.".into(),
+                url: url.clone(),
+                recommendation: "Set Cross-Origin-Embedder-Policy to require-corp for stricter cross-origin isolation.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Security: COOP V2 — missing header
+// ---------------------------------------------------------------------------
+
+pub struct CrossOriginOpenerPolicyAnalyzerV2;
+
+impl Default for CrossOriginOpenerPolicyAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl CrossOriginOpenerPolicyAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CrossOriginOpenerPolicyAnalyzerV2 {
+    fn name(&self) -> &str { "cross-origin-opener-policy-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let has = ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy"));
+        if !has {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Security,
+                code: "COOP-V2001".to_string(),
+                title: "Missing Cross-Origin-Opener-Policy header".to_string(),
+                description: "No Cross-Origin-Opener-Policy header was found. COOP isolates your browsing context from cross-origin popups.".into(),
+                url: url.clone(),
+                recommendation: "Set Cross-Origin-Opener-Policy to same-origin for stricter isolation.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Tabindex V2 — positive tabindex values
+// ---------------------------------------------------------------------------
+
+pub struct TabindexAnalyzerV2;
+
+impl Default for TabindexAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl TabindexAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for TabindexAnalyzerV2 {
+    fn name(&self) -> &str { "tabindex-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.has_positive_tabindex {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TAB-V2001".to_string(),
+                title: "Positive tabindex values found".to_string(),
+                description: "Elements with positive tabindex values alter the natural tab order, which can confuse keyboard users.".into(),
+                url: url.clone(),
+                recommendation: "Use tabindex=\"0\" or tabindex=\"-1\" instead of positive values. Restructure DOM order to achieve the desired tab sequence.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Link Accessibility V2 — links with empty text
+// ---------------------------------------------------------------------------
+
+pub struct LinkAccessibilityAnalyzerV2;
+
+impl Default for LinkAccessibilityAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl LinkAccessibilityAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for LinkAccessibilityAnalyzerV2 {
+    fn name(&self) -> &str { "link-accessibility-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let empty_text_links: Vec<&str> = ctx.page.links.iter()
+            .filter(|l| l.text.trim().is_empty() && l.aria_label.as_deref().unwrap_or("").is_empty())
+            .map(|l| l.href.as_str())
+            .collect();
+        if !empty_text_links.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LINK-V2001".to_string(),
+                title: "Links with empty text".to_string(),
+                description: format!("{} link(s) have no visible text or aria-label: {}.", empty_text_links.len(), empty_text_links.iter().take(3).cloned().collect::<Vec<_>>().join(", ")),
+                url: url.clone(),
+                recommendation: "Add descriptive link text, an aria-label, or an img with alt text inside each link.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Image Accessibility V2 — images missing alt
+// ---------------------------------------------------------------------------
+
+pub struct ImageAccessibilityAnalyzerV2;
+
+impl Default for ImageAccessibilityAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ImageAccessibilityAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ImageAccessibilityAnalyzerV2 {
+    fn name(&self) -> &str { "image-accessibility-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let missing_alt: Vec<&str> = ctx.page.images.iter().filter(|i| !i.has_alt).map(|i| i.src.as_str()).collect();
+        if !missing_alt.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "IMG-V2001".to_string(),
+                title: "Images missing alt attribute".to_string(),
+                description: format!("{} image(s) have no alt attribute: {}.", missing_alt.len(), missing_alt.iter().take(3).cloned().collect::<Vec<_>>().join(", ")),
+                url: url.clone(),
+                recommendation: "Add an alt attribute to every img. Use descriptive text for meaningful images and alt=\"\" for decorative ones.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Form Accessibility V2 — forms without labels
+// ---------------------------------------------------------------------------
+
+pub struct FormAccessibilityAnalyzerV2;
+
+impl Default for FormAccessibilityAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl FormAccessibilityAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for FormAccessibilityAnalyzerV2 {
+    fn name(&self) -> &str { "form-accessibility-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let body = ctx.body.unwrap_or("");
+        let has_labels = body.contains("<label") || body.contains("aria-label");
+        let has_inputs = ctx.page.forms.iter().any(|f| !f.inputs.is_empty());
+        if has_inputs && !has_labels {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "FORM-V2001".to_string(),
+                title: "Forms without labels".to_string(),
+                description: "Form inputs were found but no <label> or aria-label attributes were detected. Labels are essential for screen reader users.".into(),
+                url: url.clone(),
+                recommendation: "Add <label> elements associated via for/id, or use aria-label/aria-labelledby on each input.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Table Accessibility V2 — tables without headers
+// ---------------------------------------------------------------------------
+
+pub struct TableAccessibilityAnalyzerV2;
+
+impl Default for TableAccessibilityAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl TableAccessibilityAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for TableAccessibilityAnalyzerV2 {
+    fn name(&self) -> &str { "table-accessibility-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total > 0 && ctx.page.tables_with_headers == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "TBL-V2001".to_string(),
+                title: "Tables without headers".to_string(),
+                description: format!("{} table(s) found but none have <th> header cells. Screen readers use headers to describe cell relationships.", ctx.page.tables_total),
+                url: url.clone(),
+                recommendation: "Add <th> elements for row and/or column headers in data tables.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: ARIA Roles V2 — roles without names
+// ---------------------------------------------------------------------------
+
+pub struct AriaRolesAnalyzerV2;
+
+impl Default for AriaRolesAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl AriaRolesAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for AriaRolesAnalyzerV2 {
+    fn name(&self) -> &str { "aria-roles-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.aria_role_count > 0 && ctx.page.aria_label_count == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIA-V2001".to_string(),
+                title: "ARIA roles without names".to_string(),
+                description: format!("{} ARIA role(s) found but no aria-label or aria-labelledby attributes. Roles need names for screen reader context.", ctx.page.aria_role_count),
+                url: url.clone(),
+                recommendation: "Add aria-label or aria-labelledby to elements with ARIA roles.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Heading Hierarchy V2 — heading levels skip
+// ---------------------------------------------------------------------------
+
+pub struct HeadingHierarchyAnalyzerV2;
+
+impl Default for HeadingHierarchyAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl HeadingHierarchyAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HeadingHierarchyAnalyzerV2 {
+    fn name(&self) -> &str { "heading-hierarchy-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() { return findings; }
+        let mut prev_level: Option<u8> = None;
+        for heading in &ctx.page.headings {
+            if let Some(prev) = prev_level {
+                if heading.level > prev + 1 {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Accessibility,
+                        code: "HEAD-V2001".to_string(),
+                        title: "Heading levels skip".to_string(),
+                        description: format!("Heading jumps from H{prev} to H{}. Skipping levels breaks the document outline for screen readers.", heading.level),
+                        url: url.clone(),
+                        recommendation: "Use heading levels in sequential order (H1 -> H2 -> H3).".into(),
+                    });
+                    break;
+                }
+            }
+            prev_level = Some(heading.level);
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Accessibility: Language Attribute V2 — missing lang
+// ---------------------------------------------------------------------------
+
+pub struct LanguageAttributeAnalyzerV2;
+
+impl Default for LanguageAttributeAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl LanguageAttributeAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for LanguageAttributeAnalyzerV2 {
+    fn name(&self) -> &str { "language-attribute-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.has_lang_attribute {
+            findings.push(Finding {
+                severity: Severity::Error,
+                category: IssueCategory::Accessibility,
+                code: "LANG-V2001".to_string(),
+                title: "Missing lang attribute".to_string(),
+                description: "No lang attribute was found on the <html> element. Screen readers need this to use the correct pronunciation rules.".into(),
+                url: url.clone(),
+                recommendation: "Add lang=\"en\" (or the appropriate language code) to the <html> element.".into(),
+            });
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod new_analyzer_tests {

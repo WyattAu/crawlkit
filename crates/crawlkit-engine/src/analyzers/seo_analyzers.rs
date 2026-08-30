@@ -7431,6 +7431,503 @@ impl Analyzer for PaginationLinkAnalyzer {
     }
 }
 
+// ---------------------------------------------------------------------------
+// SEO: Meta Description V3 — description too long >165 chars
+// ---------------------------------------------------------------------------
+
+pub struct MetaDescriptionAnalyzerV3;
+
+impl Default for MetaDescriptionAnalyzerV3 {
+    fn default() -> Self { Self::new() }
+}
+
+impl MetaDescriptionAnalyzerV3 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for MetaDescriptionAnalyzerV3 {
+    fn name(&self) -> &str { "meta-description-v3" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(desc) = &ctx.page.meta.description {
+            if desc.len() > 165 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "META-V3001".to_string(),
+                    title: "Meta description too long".to_string(),
+                    description: format!("Meta description is {} characters, exceeding the recommended maximum of 165. Search engines will truncate it.", desc.len()),
+                    url: url.clone(),
+                    recommendation: "Shorten the meta description to 150-165 characters.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Title V3 — title too short <20 chars
+// ---------------------------------------------------------------------------
+
+pub struct TitleAnalyzerV3;
+
+impl Default for TitleAnalyzerV3 {
+    fn default() -> Self { Self::new() }
+}
+
+impl TitleAnalyzerV3 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for TitleAnalyzerV3 {
+    fn name(&self) -> &str { "title-v3" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            if !title.trim().is_empty() && title.len() < 20 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "TITLE-V3001".to_string(),
+                    title: "Title tag too short".to_string(),
+                    description: format!("Title tag is {} characters. Titles under 20 characters may not be descriptive enough for search engine results.", title.len()),
+                    url: url.clone(),
+                    recommendation: "Write a descriptive title of 20-60 characters that accurately describes the page content.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Canonical URL V2 — canonical mismatch with page URL
+// ---------------------------------------------------------------------------
+
+pub struct CanonicalUrlAnalyzerV2;
+
+impl Default for CanonicalUrlAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl CanonicalUrlAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for CanonicalUrlAnalyzerV2 {
+    fn name(&self) -> &str { "canonical-url-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.to_string().trim_end_matches('/').to_lowercase();
+            let page_str = url.trim_end_matches('/').to_lowercase();
+            if canonical_str != page_str {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "CAN-V2001".to_string(),
+                    title: "Canonical URL mismatch".to_string(),
+                    description: format!("Canonical URL ({canonical}) does not match the current page URL ({url})."),
+                    url: url.clone(),
+                    recommendation: "Ensure the canonical URL points to the correct preferred version of this page.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Hreflang V3 — missing x-default
+// ---------------------------------------------------------------------------
+
+pub struct HreflangValidatorV3;
+
+impl Default for HreflangValidatorV3 {
+    fn default() -> Self { Self::new() }
+}
+
+impl HreflangValidatorV3 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for HreflangValidatorV3 {
+    fn name(&self) -> &str { "hreflang-v3" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hreflang = &ctx.page.meta.hreflang;
+        if !hreflang.is_empty() {
+            let has_x_default = hreflang.iter().any(|t| t.lang == "x-default");
+            if !has_x_default {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "HREF-V3001".to_string(),
+                    title: "Hreflang missing x-default".to_string(),
+                    description: "Hreflang tags are present but none specify x-default. The x-default tag tells search engines which URL to show for users whose language doesn't match any other hreflang.".into(),
+                    url: url.clone(),
+                    recommendation: "Add an x-default hreflang tag to specify the fallback URL for unmatched languages.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Sitemap V2 — lastmod format invalid
+// ---------------------------------------------------------------------------
+
+pub struct SitemapAnalyzerV2;
+
+impl Default for SitemapAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl SitemapAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for SitemapAnalyzerV2 {
+    fn name(&self) -> &str { "sitemap-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let body = ctx.body.unwrap_or("");
+        if body.contains("sitemap") {
+            if let Some(pos) = body.find("sitemap") {
+                let after = &body[pos..];
+                if let Some(end) = after.find('"') {
+                    let sitemap_path = &after[..end];
+                    if !sitemap_path.ends_with(".xml") && !sitemap_path.ends_with(".xml.gz") && !sitemap_path.is_empty() {
+                        findings.push(Finding {
+                            severity: Severity::Info,
+                            category: IssueCategory::Seo,
+                            code: "SITEMAP-V2001".to_string(),
+                            title: "Sitemap URL may be invalid".to_string(),
+                            description: format!("Sitemap reference \"{sitemap_path}\" does not end with .xml or .xml.gz. Search engines expect XML sitemaps."),
+                            url: url.clone(),
+                            recommendation: "Ensure the sitemap URL points to a valid XML sitemap file.".into(),
+                        });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Robots.txt V2 — disallows important paths
+// ---------------------------------------------------------------------------
+
+pub struct RobotsTxtAnalyzerV2;
+
+impl Default for RobotsTxtAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl RobotsTxtAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for RobotsTxtAnalyzerV2 {
+    fn name(&self) -> &str { "robots-txt-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let lines: Vec<&str> = robots.lines().collect();
+            let disallowed: Vec<&str> = lines.iter()
+                .filter(|l| l.starts_with("Disallow:") || l.starts_with("disallow:"))
+                .map(|l| l.split(':').nth(1).unwrap_or("").trim())
+                .filter(|p| !p.is_empty())
+                .collect();
+            let important_paths = ["/", "/index.html", "/sitemap.xml"];
+            for imp in important_paths {
+                if disallowed.iter().any(|d| *d == imp) {
+                    findings.push(Finding {
+                        severity: Severity::Warning,
+                        category: IssueCategory::Seo,
+                        code: "ROBOTS-V2001".to_string(),
+                        title: "Robots.txt disallows important path".to_string(),
+                        description: format!("Robots.txt disallows \"{imp}\". This may prevent search engines from crawling important content."),
+                        url: url.clone(),
+                        recommendation: "Review robots.txt Disallow directives to ensure important pages are crawlable.".into(),
+                    });
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Internal Link V2 — links with no anchor text
+// ---------------------------------------------------------------------------
+
+pub struct InternalLinkAnalyzerV2;
+
+impl Default for InternalLinkAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl InternalLinkAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for InternalLinkAnalyzerV2 {
+    fn name(&self) -> &str { "internal-link-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let page_host = url::Url::parse(url).ok().and_then(|u| u.host_str().map(|s| s.to_string()));
+        if let Some(host) = &page_host {
+            let empty_text_internal: Vec<&str> = ctx.page.links.iter()
+                .filter(|l| !l.is_external)
+                .filter(|l| l.href.contains(host) || l.href.starts_with('/'))
+                .filter(|l| l.text.trim().is_empty())
+                .map(|l| l.href.as_str())
+                .collect();
+            if !empty_text_internal.is_empty() {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "INTLINK-V2001".to_string(),
+                    title: "Internal links with no anchor text".to_string(),
+                    description: format!("{} internal link(s) have empty anchor text: {}.", empty_text_internal.len(), empty_text_internal.iter().take(3).cloned().collect::<Vec<_>>().join(", ")),
+                    url: url.clone(),
+                    recommendation: "Add descriptive anchor text to all internal links to help search engines understand the linked content.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: External Link V2 — links to low-authority domains
+// ---------------------------------------------------------------------------
+
+pub struct ExternalLinkAnalyzerV2;
+
+impl Default for ExternalLinkAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ExternalLinkAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ExternalLinkAnalyzerV2 {
+    fn name(&self) -> &str { "external-link-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let low_authority_tlds = [".xyz", ".top", ".buzz", ".club", ".work", ".click"];
+        let suspicious: Vec<&str> = ctx.page.links.iter()
+            .filter(|l| l.is_external)
+            .filter(|l| {
+                let lower = l.href.to_lowercase();
+                low_authority_tlds.iter().any(|tld| lower.contains(tld))
+            })
+            .map(|l| l.href.as_str())
+            .collect();
+        if !suspicious.is_empty() {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "EXTLINK-V2001".to_string(),
+                title: "External links to low-authority domains".to_string(),
+                description: format!("{} external link(s) point to domains with low-authority TLDs: {}.", suspicious.len(), suspicious.iter().take(3).cloned().collect::<Vec<_>>().join(", ")),
+                url: url.clone(),
+                recommendation: "Review external links to ensure they point to reputable domains. Low-authority TLDs may be associated with spam.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Keyword Analyzer V2 — keyword density too high >5%
+// ---------------------------------------------------------------------------
+
+pub struct KeywordAnalyzerV2;
+
+impl Default for KeywordAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl KeywordAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for KeywordAnalyzerV2 {
+    fn name(&self) -> &str { "keyword-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(title) = &ctx.page.meta.title {
+            if !title.trim().is_empty() && ctx.page.word_count > 0 {
+                let title_lower = title.to_lowercase();
+                let title_words: Vec<&str> = title_lower.split_whitespace().collect();
+                if let Some(first_word) = title_words.first() {
+                    if first_word.len() > 3 {
+                        let body_text = ctx.body.unwrap_or("").to_lowercase();
+                        let word_count = ctx.page.word_count.max(1);
+                        let occurrences = body_text.matches(first_word).count();
+                        let density = (occurrences as f64 / word_count as f64) * 100.0;
+                        if density > 5.0 {
+                            findings.push(Finding {
+                                severity: Severity::Warning,
+                                category: IssueCategory::Seo,
+                                code: "KW-V2001".to_string(),
+                                title: "Keyword density too high".to_string(),
+                                description: format!("The keyword \"{first_word}\" appears {occurrences} times ({density:.1}%) in the body text, exceeding the 5% threshold. This may be flagged as keyword stuffing."),
+                                url: url.clone(),
+                                recommendation: "Reduce keyword repetition. Use synonyms and related terms instead of repeating the same keyword.".into(),
+                            });
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Content Quality V2 — readability below grade 8
+// ---------------------------------------------------------------------------
+
+pub struct ContentQualityAnalyzerV2;
+
+impl Default for ContentQualityAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl ContentQualityAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for ContentQualityAnalyzerV2 {
+    fn name(&self) -> &str { "content-quality-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.word_count > 50 && ctx.page.sentence_count > 0 {
+            let mut syllable_count = 0;
+            let body = ctx.body.unwrap_or("");
+            for word in body.split_whitespace() {
+                syllable_count += super::count_syllables(word);
+            }
+            let grade = super::flesch_kincaid_grade(ctx.page.word_count, ctx.page.sentence_count, syllable_count);
+            if grade > 12.0 {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "CQ-V2001".to_string(),
+                    title: "Readability score below grade 8".to_string(),
+                    description: format!("Flesch-Kincaid grade level is {grade:.1}, indicating complex text. Content above grade 12 may be difficult for a general audience to understand."),
+                    url: url.clone(),
+                    recommendation: "Simplify sentence structure and use shorter, more common words to improve readability.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Word Count V2 — word count <100
+// ---------------------------------------------------------------------------
+
+pub struct WordCountAnalyzerV2;
+
+impl Default for WordCountAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl WordCountAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for WordCountAnalyzerV2 {
+    fn name(&self) -> &str { "word-count-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.word_count > 0 && ctx.page.word_count < 100 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Seo,
+                code: "WC-V2001".to_string(),
+                title: "Word count below 100".to_string(),
+                description: format!("Page has only {} words. Pages with very thin content may rank poorly in search results.", ctx.page.word_count),
+                url: url.clone(),
+                recommendation: "Add more substantive content to the page. Aim for at least 300 words for informational pages.".into(),
+            });
+        }
+        findings
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SEO: Link Analyzer V2 — too many external links >50%
+// ---------------------------------------------------------------------------
+
+pub struct LinkAnalyzerV2;
+
+impl Default for LinkAnalyzerV2 {
+    fn default() -> Self { Self::new() }
+}
+
+impl LinkAnalyzerV2 {
+    pub fn new() -> Self { Self }
+}
+
+impl Analyzer for LinkAnalyzerV2 {
+    fn name(&self) -> &str { "link-v2" }
+
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let total_links = ctx.page.links.len();
+        if total_links > 0 {
+            let external_count = ctx.page.links.iter().filter(|l| l.is_external).count();
+            let ratio = external_count as f64 / total_links as f64;
+            if ratio > 0.5 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Seo,
+                    code: "LINK-V2001".to_string(),
+                    title: "Too many external links".to_string(),
+                    description: format!("{external_count} of {total_links} links ({:.0}%) are external, exceeding the 50% threshold. A high ratio of outbound links may dilute PageRank.", ratio * 100.0),
+                    url: url.clone(),
+                    recommendation: "Balance external links with internal links. Ensure the majority of links point to relevant internal pages.".into(),
+                });
+            }
+        }
+        findings
+    }
+}
+
 // =========================================================================
 // New SEO analyzer tests
 // =========================================================================

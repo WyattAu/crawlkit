@@ -1127,6 +1127,1679 @@ impl Analyzer for RobotsTxtAnalyzerV3 {
     }
 }
 
+// =========================================================================
+// Content V5 Analyzers (1-30)
+// =========================================================================
+
+pub struct ArticleWordCountAnalyzer;
+impl Default for ArticleWordCountAnalyzer { fn default() -> Self { Self::new() } }
+impl ArticleWordCountAnalyzer { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleWordCountAnalyzer {
+    fn name(&self) -> &str { "article-word-count-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let is_article = ctx.page.structured_data.iter().any(|sd| sd.r#type.as_deref() == Some("Article") || sd.r#type.as_deref() == Some("BlogPosting"));
+        if !is_article { return findings; }
+        if ctx.page.word_count < 300 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "ARTWC-V5001".to_string(), title: "Article too short".to_string(), description: format!("{} words, recommended 300+.", ctx.page.word_count), url: url.clone(), recommendation: "Expand article to 300+ words.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ArticleAuthorUrlValidator;
+impl Default for ArticleAuthorUrlValidator { fn default() -> Self { Self::new() } }
+impl ArticleAuthorUrlValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleAuthorUrlValidator {
+    fn name(&self) -> &str { "article-author-url-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Article" && t != "BlogPosting" && t != "NewsArticle" { continue; }
+            if let Some(author) = sd.data.get("author") {
+                if author.is_string() { continue; }
+                if let Some(obj) = author.as_object() {
+                    if !obj.contains_key("url") && !obj.contains_key("@id") {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "ARTAUTH-V5001".to_string(), title: "Author missing URL".to_string(), description: "Author object has no url or @id.".to_string(), url: url.clone(), recommendation: "Add url to author object.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct ArticleDateModifiedValidator;
+impl Default for ArticleDateModifiedValidator { fn default() -> Self { Self::new() } }
+impl ArticleDateModifiedValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ArticleDateModifiedValidator {
+    fn name(&self) -> &str { "article-date-modified-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Article" && t != "BlogPosting" && t != "NewsArticle" { continue; }
+            if sd.data.get("dateModified").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Content, code: "ARTMOD-V5001".to_string(), title: "Article missing dateModified".to_string(), description: "No dateModified in structured data.".to_string(), url: url.clone(), recommendation: "Add dateModified to indicate freshness.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct OrganizationUrlValidatorV5;
+impl Default for OrganizationUrlValidatorV5 { fn default() -> Self { Self::new() } }
+impl OrganizationUrlValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for OrganizationUrlValidatorV5 {
+    fn name(&self) -> &str { "organization-url-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Organization") && sd.r#type.as_deref() != Some("LocalBusiness") { continue; }
+            if let Some(org) = sd.data.as_object() {
+                if !org.contains_key("url") && !org.contains_key("@id") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ORGURL-V5001".to_string(), title: "Organization missing URL".to_string(), description: "Organization has no url or @id.".to_string(), url: url.clone(), recommendation: "Add url to Organization schema.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct OrganizationLogoUrlValidator;
+impl Default for OrganizationLogoUrlValidator { fn default() -> Self { Self::new() } }
+impl OrganizationLogoUrlValidator { pub fn new() -> Self { Self } }
+impl Analyzer for OrganizationLogoUrlValidator {
+    fn name(&self) -> &str { "organization-logo-url-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Organization") { continue; }
+            if let Some(logo) = sd.data.get("logo") {
+                if logo.is_string() { continue; }
+                if let Some(obj) = logo.as_object() {
+                    if obj.get("url").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "ORGLOGO-V5001".to_string(), title: "Organization logo missing URL".to_string(), description: "Logo ImageObject has no url.".to_string(), url: url.clone(), recommendation: "Add url to logo ImageObject.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct OrganizationContactValidator;
+impl Default for OrganizationContactValidator { fn default() -> Self { Self::new() } }
+impl OrganizationContactValidator { pub fn new() -> Self { Self } }
+impl Analyzer for OrganizationContactValidator {
+    fn name(&self) -> &str { "organization-contact-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Organization") { continue; }
+            if sd.data.get("contactPoint").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "ORGCONT-V5001".to_string(), title: "Organization missing contactPoint".to_string(), description: "No contactPoint in Organization.".to_string(), url: url.clone(), recommendation: "Add contactPoint with contactType.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PersonUrlValidator;
+impl Default for PersonUrlValidator { fn default() -> Self { Self::new() } }
+impl PersonUrlValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PersonUrlValidator {
+    fn name(&self) -> &str { "person-url-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Person") { continue; }
+            if sd.data.get("url").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "PERSURL-V5001".to_string(), title: "Person missing url".to_string(), description: "Person schema has no url.".to_string(), url: url.clone(), recommendation: "Add url to Person schema.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct JobPostingEmploymentTypeValidator;
+impl Default for JobPostingEmploymentTypeValidator { fn default() -> Self { Self::new() } }
+impl JobPostingEmploymentTypeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for JobPostingEmploymentTypeValidator {
+    fn name(&self) -> &str { "job-posting-employment-type-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let valid_types = ["FULL_TIME", "PART_TIME", "CONTRACT", "TEMPORARY", "INTERN", "VOLUNTEER", "PER_DIEM", "OTHER"];
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("JobPosting") { continue; }
+            if let Some(et) = sd.data.get("employmentType").and_then(|v| v.as_str()) {
+                if !valid_types.contains(&et) {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "JOBEMP-V5001".to_string(), title: "Invalid employmentType".to_string(), description: format!("'{et}' is not a valid Schema.org employmentType."), url: url.clone(), recommendation: "Use one of: FULL_TIME, PART_TIME, CONTRACT, TEMPORARY, INTERN, VOLUNTEER, PER_DIEM, OTHER.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct JobPostingSalaryCurrencyValidator;
+impl Default for JobPostingSalaryCurrencyValidator { fn default() -> Self { Self::new() } }
+impl JobPostingSalaryCurrencyValidator { pub fn new() -> Self { Self } }
+impl Analyzer for JobPostingSalaryCurrencyValidator {
+    fn name(&self) -> &str { "job-posting-salary-currency-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("JobPosting") { continue; }
+            if let Some(salary) = sd.data.get("baseSalary") {
+                if let Some(obj) = salary.as_object() {
+                    if let Some(currency) = obj.get("currency") {
+                        if let Some(c) = currency.as_str() {
+                            if c.len() != 3 || !c.chars().all(|ch| ch.is_ascii_uppercase()) {
+                                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "JOBCURR-V5001".to_string(), title: "Invalid salary currency".to_string(), description: format!("'{c}' is not a valid ISO 4217 code."), url: url.clone(), recommendation: "Use a 3-letter ISO 4217 currency code.".to_string() });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct JobPostingValidThroughValidator;
+impl Default for JobPostingValidThroughValidator { fn default() -> Self { Self::new() } }
+impl JobPostingValidThroughValidator { pub fn new() -> Self { Self } }
+impl Analyzer for JobPostingValidThroughValidator {
+    fn name(&self) -> &str { "job-posting-valid-through-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("JobPosting") { continue; }
+            if sd.data.get("validThrough").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "JOBVT-V5001".to_string(), title: "JobPosting missing validThrough".to_string(), description: "No validThrough date.".to_string(), url: url.clone(), recommendation: "Add validThrough to indicate expiration.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CourseDescriptionValidator;
+impl Default for CourseDescriptionValidator { fn default() -> Self { Self::new() } }
+impl CourseDescriptionValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CourseDescriptionValidator {
+    fn name(&self) -> &str { "course-description-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Course") { continue; }
+            if sd.data.get("description").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "COURSEDESC-V5001".to_string(), title: "Course missing description".to_string(), description: "No description in Course schema.".to_string(), url: url.clone(), recommendation: "Add a description to the Course.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CourseProviderNameValidator;
+impl Default for CourseProviderNameValidator { fn default() -> Self { Self::new() } }
+impl CourseProviderNameValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CourseProviderNameValidator {
+    fn name(&self) -> &str { "course-provider-name-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Course") { continue; }
+            if let Some(provider) = sd.data.get("provider") {
+                if let Some(obj) = provider.as_object() {
+                    if obj.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "COURSEPV-V5001".to_string(), title: "Course provider missing name".to_string(), description: "Provider object has no name.".to_string(), url: url.clone(), recommendation: "Add name to provider.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct RecipePrepTimeValidator;
+impl Default for RecipePrepTimeValidator { fn default() -> Self { Self::new() } }
+impl RecipePrepTimeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RecipePrepTimeValidator {
+    fn name(&self) -> &str { "recipe-prep-time-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Recipe") { continue; }
+            if sd.data.get("prepTime").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "RECIPEPT-V5001".to_string(), title: "Recipe missing prepTime".to_string(), description: "No prepTime in Recipe schema.".to_string(), url: url.clone(), recommendation: "Add prepTime in ISO 8601 format.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct RecipeIngredientsValidator;
+impl Default for RecipeIngredientsValidator { fn default() -> Self { Self::new() } }
+impl RecipeIngredientsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RecipeIngredientsValidator {
+    fn name(&self) -> &str { "recipe-ingredients-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Recipe") { continue; }
+            if let Some(ingredients) = sd.data.get("recipeIngredient") {
+                if let Some(arr) = ingredients.as_array() {
+                    if arr.is_empty() {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "RECIPEING-V5001".to_string(), title: "Recipe has empty ingredients".to_string(), description: "recipeIngredient array is empty.".to_string(), url: url.clone(), recommendation: "List all recipe ingredients.".to_string() });
+                    }
+                }
+            } else {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "RECIPEING-V5002".to_string(), title: "Recipe missing ingredients".to_string(), description: "No recipeIngredient field.".to_string(), url: url.clone(), recommendation: "Add recipeIngredient array.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ProductPriceValidator;
+impl Default for ProductPriceValidator { fn default() -> Self { Self::new() } }
+impl ProductPriceValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ProductPriceValidator {
+    fn name(&self) -> &str { "product-price-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Product") { continue; }
+            if let Some(offers) = sd.data.get("offers") {
+                let check_offer = |offer: &serde_json::Value| {
+                    if let Some(obj) = offer.as_object() {
+                        if obj.get("price").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty())
+                            && obj.get("price").and_then(|v| v.as_f64()).is_none() {
+                            return true;
+                        }
+                        if obj.get("priceCurrency").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                            return true;
+                        }
+                    }
+                    false
+                };
+                if offers.is_object() && check_offer(offers) {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PRODPRICE-V5001".to_string(), title: "Product offer missing price/currency".to_string(), description: "Offer lacks price or priceCurrency.".to_string(), url: url.clone(), recommendation: "Add price and priceCurrency to offer.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct ProductImageValidatorV5;
+impl Default for ProductImageValidatorV5 { fn default() -> Self { Self::new() } }
+impl ProductImageValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for ProductImageValidatorV5 {
+    fn name(&self) -> &str { "product-image-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Product") { continue; }
+            if sd.data.get("image").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                if let Some(img) = sd.data.get("image") {
+                    if img.is_array() && img.as_array().map_or(true, |a| a.is_empty()) {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PRODIMG-V5001".to_string(), title: "Product has empty image array".to_string(), description: "image array is empty.".to_string(), url: url.clone(), recommendation: "Add product images.".to_string() });
+                    }
+                } else {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "PRODIMG-V5002".to_string(), title: "Product missing image".to_string(), description: "No image in Product schema.".to_string(), url: url.clone(), recommendation: "Add an image to the Product.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct BreadcrumbItemCountValidator;
+impl Default for BreadcrumbItemCountValidator { fn default() -> Self { Self::new() } }
+impl BreadcrumbItemCountValidator { pub fn new() -> Self { Self } }
+impl Analyzer for BreadcrumbItemCountValidator {
+    fn name(&self) -> &str { "breadcrumb-item-count-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("BreadcrumbList") { continue; }
+            if let Some(items) = sd.data.get("itemListElement") {
+                if let Some(arr) = items.as_array() {
+                    if arr.len() < 2 {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "BREADCRITM-V5001".to_string(), title: "Breadcrumb has too few items".to_string(), description: format!("{} item(s), recommend 2+.", arr.len()), url: url.clone(), recommendation: "Add more breadcrumb levels.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct BreadcrumbUrlValidator;
+impl Default for BreadcrumbUrlValidator { fn default() -> Self { Self::new() } }
+impl BreadcrumbUrlValidator { pub fn new() -> Self { Self } }
+impl Analyzer for BreadcrumbUrlValidator {
+    fn name(&self) -> &str { "breadcrumb-url-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("BreadcrumbList") { continue; }
+            if let Some(items) = sd.data.get("itemListElement") {
+                if let Some(arr) = items.as_array() {
+                    for item in arr {
+                        if let Some(obj) = item.as_object() {
+                            if let Some(item_url) = obj.get("item").and_then(|v| v.get("@id").or(Some(v))).and_then(|v| v.as_str()) {
+                                if !item_url.starts_with("http://") && !item_url.starts_with("https://") {
+                                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "BREADURL-V5001".to_string(), title: "Breadcrumb has relative URL".to_string(), description: format!("URL '{item_url}' is not absolute."), url: url.clone(), recommendation: "Use absolute URLs in breadcrumbs.".to_string() });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct EventOrganizerValidatorV5;
+impl Default for EventOrganizerValidatorV5 { fn default() -> Self { Self::new() } }
+impl EventOrganizerValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for EventOrganizerValidatorV5 {
+    fn name(&self) -> &str { "event-organizer-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Event") { continue; }
+            if let Some(organizer) = sd.data.get("organizer") {
+                if let Some(obj) = organizer.as_object() {
+                    if obj.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                        findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "EVTORG-V5001".to_string(), title: "Event organizer missing name".to_string(), description: "Organizer has no name.".to_string(), url: url.clone(), recommendation: "Add name to organizer.".to_string() });
+                    }
+                }
+            } else {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "EVTORG-V5002".to_string(), title: "Event missing organizer".to_string(), description: "No organizer in Event schema.".to_string(), url: url.clone(), recommendation: "Add an organizer to the Event.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct EventPerformerValidator;
+impl Default for EventPerformerValidator { fn default() -> Self { Self::new() } }
+impl EventPerformerValidator { pub fn new() -> Self { Self } }
+impl Analyzer for EventPerformerValidator {
+    fn name(&self) -> &str { "event-performer-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            if sd.r#type.as_deref() != Some("Event") { continue; }
+            if sd.data.get("performer").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "EVTPERF-V5001".to_string(), title: "Event missing performer".to_string(), description: "No performer in Event schema.".to_string(), url: url.clone(), recommendation: "Add performer information.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct VideoThumbnailValidator;
+impl Default for VideoThumbnailValidator { fn default() -> Self { Self::new() } }
+impl VideoThumbnailValidator { pub fn new() -> Self { Self } }
+impl Analyzer for VideoThumbnailValidator {
+    fn name(&self) -> &str { "video-thumbnail-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "VideoObject" { continue; }
+            if sd.data.get("thumbnailUrl").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "VIDTHUMB-V5001".to_string(), title: "Video missing thumbnailUrl".to_string(), description: "No thumbnailUrl in VideoObject.".to_string(), url: url.clone(), recommendation: "Add thumbnailUrl for video preview.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct VideoDurationFormatValidator;
+impl Default for VideoDurationFormatValidator { fn default() -> Self { Self::new() } }
+impl VideoDurationFormatValidator { pub fn new() -> Self { Self } }
+impl Analyzer for VideoDurationFormatValidator {
+    fn name(&self) -> &str { "video-duration-format-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "VideoObject" { continue; }
+            if let Some(dur) = sd.data.get("duration").and_then(|v| v.as_str()) {
+                if !dur.starts_with("PT") && !dur.starts_with("P") {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "VIDDURFMT-V5001".to_string(), title: "Video duration not ISO 8601".to_string(), description: format!("'{dur}' is not ISO 8601 duration format."), url: url.clone(), recommendation: "Use ISO 8601 duration (e.g., PT1H30M).".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct SoftwareOffersValidatorV5;
+impl Default for SoftwareOffersValidatorV5 { fn default() -> Self { Self::new() } }
+impl SoftwareOffersValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for SoftwareOffersValidatorV5 {
+    fn name(&self) -> &str { "software-offers-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "SoftwareApplication" { continue; }
+            if sd.data.get("offers").is_none() {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "SOFTOFF-V5001".to_string(), title: "Software missing offers".to_string(), description: "No offers in SoftwareApplication.".to_string(), url: url.clone(), recommendation: "Add offers with price information.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SoftwareScreenshotValidator;
+impl Default for SoftwareScreenshotValidator { fn default() -> Self { Self::new() } }
+impl SoftwareScreenshotValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SoftwareScreenshotValidator {
+    fn name(&self) -> &str { "software-screenshot-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "SoftwareApplication" { continue; }
+            if sd.data.get("screenshot").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "SOFTSS-V5001".to_string(), title: "Software missing screenshot".to_string(), description: "No screenshot in SoftwareApplication.".to_string(), url: url.clone(), recommendation: "Add a screenshot URL.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct FAQAnswerLengthValidator;
+impl Default for FAQAnswerLengthValidator { fn default() -> Self { Self::new() } }
+impl FAQAnswerLengthValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FAQAnswerLengthValidator {
+    fn name(&self) -> &str { "faq-answer-length-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "FAQPage" { continue; }
+            if let Some(entities) = sd.data.get("mainEntity").and_then(|v| v.as_array()) {
+                let mut short_answers = 0;
+                for entity in entities {
+                    if let Some(answer) = entity.get("acceptedAnswer") {
+                        if let Some(text) = answer.get("text").and_then(|v| v.as_str()) {
+                            if text.len() < 50 { short_answers += 1; }
+                        }
+                    }
+                }
+                if short_answers > 0 {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FAQANSLEN-V5001".to_string(), title: "FAQ answers too short".to_string(), description: format!("{short_answers} answer(s) under 50 chars."), url: url.clone(), recommendation: "Provide substantive FAQ answers (50+ chars).".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct HowToNameValidator;
+impl Default for HowToNameValidator { fn default() -> Self { Self::new() } }
+impl HowToNameValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HowToNameValidator {
+    fn name(&self) -> &str { "howto-name-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HowTo" { continue; }
+            if sd.data.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HOWTONAME-V5001".to_string(), title: "HowTo missing name".to_string(), description: "No name in HowTo schema.".to_string(), url: url.clone(), recommendation: "Add a descriptive name to HowTo.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HowToStepDescriptionValidator;
+impl Default for HowToStepDescriptionValidator { fn default() -> Self { Self::new() } }
+impl HowToStepDescriptionValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HowToStepDescriptionValidator {
+    fn name(&self) -> &str { "howto-step-desc-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "HowTo" { continue; }
+            if let Some(steps) = sd.data.get("step") {
+                let step_list = if steps.is_array() { steps.as_array().unwrap() } else { std::slice::from_ref(steps) };
+                let mut missing_desc = 0;
+                for step in step_list {
+                    if step.get("text").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty())
+                        && step.get("name").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                        missing_desc += 1;
+                    }
+                }
+                if missing_desc > 0 {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "HOWTOSTEP-V5001".to_string(), title: "HowTo steps missing description".to_string(), description: format!("{missing_desc} step(s) have no text or name."), url: url.clone(), recommendation: "Add descriptive text to each step.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct DatasetLicenseValidator;
+impl Default for DatasetLicenseValidator { fn default() -> Self { Self::new() } }
+impl DatasetLicenseValidator { pub fn new() -> Self { Self } }
+impl Analyzer for DatasetLicenseValidator {
+    fn name(&self) -> &str { "dataset-license-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Dataset" { continue; }
+            if sd.data.get("license").is_none() {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Schema, code: "DSLICENSE-V5001".to_string(), title: "Dataset missing license".to_string(), description: "No license in Dataset schema.".to_string(), url: url.clone(), recommendation: "Add license information.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct DatasetDistributionValidator;
+impl Default for DatasetDistributionValidator { fn default() -> Self { Self::new() } }
+impl DatasetDistributionValidator { pub fn new() -> Self { Self } }
+impl Analyzer for DatasetDistributionValidator {
+    fn name(&self) -> &str { "dataset-distribution-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for sd in &ctx.page.structured_data {
+            let t = sd.r#type.as_deref().unwrap_or("");
+            if t != "Dataset" { continue; }
+            if let Some(dist) = sd.data.get("distribution") {
+                if let Some(arr) = dist.as_array() {
+                    for d in arr {
+                        if let Some(obj) = d.as_object() {
+                            if obj.get("contentUrl").and_then(|v| v.as_str()).map_or(true, |s| s.is_empty()) {
+                                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Schema, code: "DSDIST-V5001".to_string(), title: "Dataset distribution missing contentUrl".to_string(), description: "Distribution has no contentUrl.".to_string(), url: url.clone(), recommendation: "Add contentUrl to distribution.".to_string() });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// Security V5 Analyzers (31-50)
+// =========================================================================
+
+pub struct CspScriptSrcValidator;
+impl Default for CspScriptSrcValidator { fn default() -> Self { Self::new() } }
+impl CspScriptSrcValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspScriptSrcValidator {
+    fn name(&self) -> &str { "csp-script-src-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        if let Some(directive) = csp.split(';').find(|d| d.trim().starts_with("script-src")) {
+            let value = directive.trim().trim_start_matches("script-src").trim();
+            if value.contains("'unsafe-inline'") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSSRC-V5001".to_string(), title: "CSP script-src allows unsafe-inline".to_string(), description: "unsafe-inline weakens CSP.".to_string(), url: url.clone(), recommendation: "Remove unsafe-inline and use nonces or hashes.".to_string() });
+            }
+            if value.contains("'unsafe-eval'") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSSRC-V5002".to_string(), title: "CSP script-src allows unsafe-eval".to_string(), description: "unsafe-eval allows eval().".to_string(), url: url.clone(), recommendation: "Remove unsafe-eval.".to_string() });
+            }
+            if value.contains("*") && !value.contains("'none'") {
+                findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "CSPSSRC-V5003".to_string(), title: "CSP script-src wildcard".to_string(), description: "Wildcard allows any script source.".to_string(), url: url.clone(), recommendation: "Restrict script-src to specific origins.".to_string() });
+            }
+        } else {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPSSRC-V5004".to_string(), title: "CSP missing script-src".to_string(), description: "No script-src directive.".to_string(), url: url.clone(), recommendation: "Add script-src directive.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspStyleSrcValidator;
+impl Default for CspStyleSrcValidator { fn default() -> Self { Self::new() } }
+impl CspStyleSrcValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspStyleSrcValidator {
+    fn name(&self) -> &str { "csp-style-src-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        if let Some(directive) = csp.split(';').find(|d| d.trim().starts_with("style-src")) {
+            let value = directive.trim().trim_start_matches("style-src").trim();
+            if value.contains("'unsafe-inline'") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPSTYLE-V5001".to_string(), title: "CSP style-src allows unsafe-inline".to_string(), description: "unsafe-inline for styles is common but weakens CSP.".to_string(), url: url.clone(), recommendation: "Consider using nonces or hashes for styles.".to_string() });
+            }
+        } else {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "CSPSTYLE-V5002".to_string(), title: "CSP missing style-src".to_string(), description: "No style-src directive.".to_string(), url: url.clone(), recommendation: "Add style-src directive.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CspFrameAncestorsValidator;
+impl Default for CspFrameAncestorsValidator { fn default() -> Self { Self::new() } }
+impl CspFrameAncestorsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CspFrameAncestorsValidator {
+    fn name(&self) -> &str { "csp-frame-ancestors-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let csp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy")).map(|(_, v)| v.as_str()).unwrap_or("");
+        if csp.is_empty() { return findings; }
+        if !csp.split(';').any(|d| d.trim().starts_with("frame-ancestors")) {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "CSPFRAME-V5001".to_string(), title: "CSP missing frame-ancestors".to_string(), description: "frame-ancestors prevents clickjacking.".to_string(), url: url.clone(), recommendation: "Add frame-ancestors 'none' or 'self'.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HstsMaxAgeValidator;
+impl Default for HstsMaxAgeValidator { fn default() -> Self { Self::new() } }
+impl HstsMaxAgeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsMaxAgeValidator {
+    fn name(&self) -> &str { "hsts-max-age-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let hsts = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str());
+        match hsts {
+            None => { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSMAX-V5001".to_string(), title: "Missing HSTS header".to_string(), description: "No Strict-Transport-Security.".to_string(), url: url.clone(), recommendation: "Add HSTS with max-age >= 31536000.".to_string() }); }
+            Some(val) => {
+                let lower = val.to_lowercase();
+                if let Some(pos) = lower.find("max-age=") {
+                    let after = &lower[pos + 8..];
+                    if let Ok(age) = after.chars().take_while(|c| c.is_ascii_digit()).collect::<String>().parse::<u64>() {
+                        if age < 31536000 {
+                            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSMAX-V5002".to_string(), title: "HSTS max-age too low".to_string(), description: format!("max-age is {age}, recommend 31536000+."), url: url.clone(), recommendation: "Set max-age to at least 31536000.".to_string() });
+                        }
+                    }
+                } else {
+                    findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "HSTSMAX-V5003".to_string(), title: "HSTS missing max-age".to_string(), description: "HSTS header has no max-age.".to_string(), url: url.clone(), recommendation: "Add max-age directive.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct HstsIncludeSubDomainsValidator;
+impl Default for HstsIncludeSubDomainsValidator { fn default() -> Self { Self::new() } }
+impl HstsIncludeSubDomainsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HstsIncludeSubDomainsValidator {
+    fn name(&self) -> &str { "hsts-include-subdomains-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            if !val.to_lowercase().contains("includesubdomains") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSSUB-V5001".to_string(), title: "HSTS missing includeSubDomains".to_string(), description: "Subdomains not covered by HSTS.".to_string(), url: url.clone(), recommendation: "Add includeSubDomains directive.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HstsPreloadValidatorV5;
+impl Default for HstsPreloadValidatorV5 { fn default() -> Self { Self::new() } }
+impl HstsPreloadValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for HstsPreloadValidatorV5 {
+    fn name(&self) -> &str { "hsts-preload-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(val) = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Strict-Transport-Security")).map(|(_, v)| v.as_str()) {
+            if !val.to_lowercase().contains("preload") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "HSTSPRE-V5001".to_string(), title: "HSTS missing preload".to_string(), description: "Domain not in browser preload list.".to_string(), url: url.clone(), recommendation: "Add preload directive.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct XContentTypeOptionsValidatorV5;
+impl Default for XContentTypeOptionsValidatorV5 { fn default() -> Self { Self::new() } }
+impl XContentTypeOptionsValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for XContentTypeOptionsValidatorV5 {
+    fn name(&self) -> &str { "x-content-type-options-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Content-Type-Options")).map(|(_, v)| v.as_str()) {
+            None => { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTO-V5001".to_string(), title: "Missing X-Content-Type-Options".to_string(), description: "Browsers may MIME-sniff responses.".to_string(), url: url.clone(), recommendation: "Add X-Content-Type-Options: nosniff.".to_string() }); }
+            Some(val) if !val.trim().eq_ignore_ascii_case("nosniff") => { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XCTO-V5002".to_string(), title: "Invalid X-Content-Type-Options".to_string(), description: format!("Value '{val}', expected 'nosniff'."), url: url.clone(), recommendation: "Set to nosniff.".to_string() }); }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct ReferrerPolicyValidatorV5;
+impl Default for ReferrerPolicyValidatorV5 { fn default() -> Self { Self::new() } }
+impl ReferrerPolicyValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for ReferrerPolicyValidatorV5 {
+    fn name(&self) -> &str { "referrer-policy-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Referrer-Policy")).map(|(_, v)| v.as_str()) {
+            None => { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "RP-V5001".to_string(), title: "Missing Referrer-Policy".to_string(), description: "No referrer policy set.".to_string(), url: url.clone(), recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin.".to_string() }); }
+            Some(val) if val.eq_ignore_ascii_case("unsafe-url") => { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "RP-V5002".to_string(), title: "Referrer-Policy unsafe-url".to_string(), description: "Leaks full URL path and query.".to_string(), url: url.clone(), recommendation: "Use strict-origin-when-cross-origin.".to_string() }); }
+            Some(val) if val.eq_ignore_ascii_case("no-referrer") => { findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "RP-V5003".to_string(), title: "Referrer-Policy no-referrer".to_string(), description: "No referrer sent at all.".to_string(), url: url.clone(), recommendation: "Consider strict-origin-when-cross-origin.".to_string() }); }
+            _ => {}
+        }
+        findings
+    }
+}
+
+pub struct XFrameOptionsValidatorV5;
+impl Default for XFrameOptionsValidatorV5 { fn default() -> Self { Self::new() } }
+impl XFrameOptionsValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for XFrameOptionsValidatorV5 {
+    fn name(&self) -> &str { "x-frame-options-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let xfo = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("X-Frame-Options")).map(|(_, v)| v.as_str());
+        let csp_frame = ctx.headers.iter().any(|(k, v)| k.eq_ignore_ascii_case("Content-Security-Policy") && v.contains("frame-ancestors"));
+        if xfo.is_none() && !csp_frame {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFO-V5001".to_string(), title: "No clickjacking protection".to_string(), description: "Neither X-Frame-Options nor CSP frame-ancestors.".to_string(), url: url.clone(), recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors.".to_string() });
+        }
+        if let Some(val) = xfo {
+            if !val.eq_ignore_ascii_case("DENY") && !val.eq_ignore_ascii_case("SAMEORIGIN") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "XFO-V5002".to_string(), title: "Invalid X-Frame-Options value".to_string(), description: format!("'{val}' is not DENY or SAMEORIGIN."), url: url.clone(), recommendation: "Use DENY or SAMEORIGIN.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyCameraValidator;
+impl Default for PermissionsPolicyCameraValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyCameraValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyCameraValidator {
+    fn name(&self) -> &str { "permissions-policy-camera-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            if val.contains("camera") && val.contains("camera=()") {
+                // Explicitly denied - good
+            } else if val.contains("camera") && !val.contains("camera=()") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPCAM-V5001".to_string(), title: "Camera access not explicitly denied".to_string(), description: "Permissions-Policy doesn't deny camera.".to_string(), url: url.clone(), recommendation: "Add camera=() to Permissions-Policy.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyMicrophoneValidator;
+impl Default for PermissionsPolicyMicrophoneValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyMicrophoneValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyMicrophoneValidator {
+    fn name(&self) -> &str { "permissions-policy-microphone-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            if val.contains("microphone") && !val.contains("microphone=()") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPMICRO-V5001".to_string(), title: "Microphone access not explicitly denied".to_string(), description: "Permissions-Policy doesn't deny microphone.".to_string(), url: url.clone(), recommendation: "Add microphone=() to Permissions-Policy.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct PermissionsPolicyGeolocationValidator;
+impl Default for PermissionsPolicyGeolocationValidator { fn default() -> Self { Self::new() } }
+impl PermissionsPolicyGeolocationValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PermissionsPolicyGeolocationValidator {
+    fn name(&self) -> &str { "permissions-policy-geolocation-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let pp = ctx.headers.iter().find(|(k, _)| k.eq_ignore_ascii_case("Permissions-Policy") || k.eq_ignore_ascii_case("Feature-Policy")).map(|(_, v)| v.as_str());
+        if let Some(val) = pp {
+            if val.contains("geolocation") && !val.contains("geolocation=()") {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "PPGEO-V5001".to_string(), title: "Geolocation not explicitly denied".to_string(), description: "Permissions-Policy doesn't deny geolocation.".to_string(), url: url.clone(), recommendation: "Add geolocation=() to Permissions-Policy.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CoepValidator;
+impl Default for CoepValidator { fn default() -> Self { Self::new() } }
+impl CoepValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CoepValidator {
+    fn name(&self) -> &str { "coep-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Embedder-Policy")) {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COEP-V5001".to_string(), title: "Missing Cross-Origin-Embedder-Policy".to_string(), description: "COEP prevents loading cross-origin resources.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Embedder-Policy: require-corp.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CoopValidator;
+impl Default for CoopValidator { fn default() -> Self { Self::new() } }
+impl CoopValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CoopValidator {
+    fn name(&self) -> &str { "coop-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.headers.iter().any(|(k, _)| k.eq_ignore_ascii_case("Cross-Origin-Opener-Policy")) {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COOP-V5001".to_string(), title: "Missing Cross-Origin-Opener-Policy".to_string(), description: "COOP controls cross-origin references.".to_string(), url: url.clone(), recommendation: "Add Cross-Origin-Opener-Policy: same-origin.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CookieSecureFlagValidatorV5;
+impl Default for CookieSecureFlagValidatorV5 { fn default() -> Self { Self::new() } }
+impl CookieSecureFlagValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSecureFlagValidatorV5 {
+    fn name(&self) -> &str { "cookie-secure-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            if !lower.contains("secure") {
+                let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESEC-V5001".to_string(), title: format!("Cookie '{name}' missing Secure"), description: "Cookie transmitted over HTTP.".to_string(), url: url.clone(), recommendation: "Add Secure flag.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieHttpOnlyFlagValidatorV5;
+impl Default for CookieHttpOnlyFlagValidatorV5 { fn default() -> Self { Self::new() } }
+impl CookieHttpOnlyFlagValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for CookieHttpOnlyFlagValidatorV5 {
+    fn name(&self) -> &str { "cookie-httponly-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            if !lower.contains("httponly") {
+                let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIEHTTP-V5001".to_string(), title: format!("Cookie '{name}' missing HttpOnly"), description: "Cookie accessible to JavaScript.".to_string(), url: url.clone(), recommendation: "Add HttpOnly flag.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct CookieSameSiteValidator;
+impl Default for CookieSameSiteValidator { fn default() -> Self { Self::new() } }
+impl CookieSameSiteValidator { pub fn new() -> Self { Self } }
+impl Analyzer for CookieSameSiteValidator {
+    fn name(&self) -> &str { "cookie-samesite-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        for (k, v) in ctx.headers {
+            if !k.eq_ignore_ascii_case("set-cookie") { continue; }
+            let lower = v.to_lowercase();
+            if !lower.contains("samesite") {
+                let name = v.split('=').next().unwrap_or("cookie").trim().to_string();
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "COOKIESAME-V5001".to_string(), title: format!("Cookie '{name}' missing SameSite"), description: "Without SameSite, cookie is vulnerable to CSRF.".to_string(), url: url.clone(), recommendation: "Add SameSite=Strict or Lax.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MixedContentScriptValidatorV5;
+impl Default for MixedContentScriptValidatorV5 { fn default() -> Self { Self::new() } }
+impl MixedContentScriptValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for MixedContentScriptValidatorV5 {
+    fn name(&self) -> &str { "mixed-content-script-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let http_scripts = lower.matches("src=\"http://").count() + lower.matches("src='http://").count();
+            if http_scripts > 0 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXSCRIPT-V5001".to_string(), title: format!("{http_scripts} HTTP script(s) on HTTPS page"), description: "Mixed content scripts are blocked by browsers.".to_string(), url: url.clone(), recommendation: "Change script URLs to HTTPS.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MixedContentStylesheetValidator;
+impl Default for MixedContentStylesheetValidator { fn default() -> Self { Self::new() } }
+impl MixedContentStylesheetValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MixedContentStylesheetValidator {
+    fn name(&self) -> &str { "mixed-content-stylesheet-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !url.starts_with("https://") { return findings; }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let http_css = lower.matches("href=\"http://").count() + lower.matches("href='http://").count();
+            if http_css > 0 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "MIXCSS-V5001".to_string(), title: format!("{http_css} HTTP stylesheet(s) on HTTPS page"), description: "Mixed content stylesheets degrade security.".to_string(), url: url.clone(), recommendation: "Change stylesheet URLs to HTTPS.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SriValidator;
+impl Default for SriValidator { fn default() -> Self { Self::new() } }
+impl SriValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SriValidator {
+    fn name(&self) -> &str { "sri-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let _script_count = lower.matches("<script").count();
+            let sri_count = lower.matches("integrity=").count();
+            let external_scripts = ctx.page.scripts.iter().filter(|s| s.src.is_some()).count();
+            if external_scripts > 0 && sri_count == 0 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Security, code: "SRI-V5001".to_string(), title: "No SRI on external scripts".to_string(), description: format!("{external_scripts} external script(s) without integrity."), url: url.clone(), recommendation: "Add integrity attribute to external scripts.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// SEO V5 Analyzers (51-65)
+// =========================================================================
+
+pub struct TitleKeywordPresenceValidator;
+impl Default for TitleKeywordPresenceValidator { fn default() -> Self { Self::new() } }
+impl TitleKeywordPresenceValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleKeywordPresenceValidator {
+    fn name(&self) -> &str { "title-keyword-presence-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let title = match &ctx.page.meta.title { Some(t) if !t.trim().is_empty() => t.trim().to_lowercase(), _ => return findings };
+        if let Some(desc) = &ctx.page.meta.description {
+            let desc_words: Vec<&str> = desc.split_whitespace().filter(|w| w.len() > 3).take(5).collect();
+            let missing: Vec<&str> = desc_words.iter().filter(|w| !title.contains(*w)).copied().collect();
+            if missing.len() > 2 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEKWP-V5001".to_string(), title: "Title missing description keywords".to_string(), description: format!("Title doesn't contain {} description keywords.", missing.len()), url: url.clone(), recommendation: "Include important keywords from description in title.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TitleBrandValidator;
+impl Default for TitleBrandValidator { fn default() -> Self { Self::new() } }
+impl TitleBrandValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TitleBrandValidator {
+    fn name(&self) -> &str { "title-brand-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let title = match &ctx.page.meta.title { Some(t) if !t.trim().is_empty() => t.trim().to_lowercase(), _ => return findings };
+        let org_name = ctx.page.structured_data.iter().find_map(|sd| {
+            if sd.r#type.as_deref() == Some("Organization") || sd.r#type.as_deref() == Some("LocalBusiness") {
+                sd.data.get("name").and_then(|v| v.as_str()).map(|s| s.to_lowercase())
+            } else { None }
+        });
+        if let Some(brand) = org_name {
+            if !brand.is_empty() && !title.contains(&brand) {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "TITLEBRAND-V5001".to_string(), title: "Title missing brand name".to_string(), description: format!("Title doesn't contain brand '{brand}'."), url: url.clone(), recommendation: "Include brand name in title for recognition.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct TitleLengthValidatorV5;
+impl Default for TitleLengthValidatorV5 { fn default() -> Self { Self::new() } }
+impl TitleLengthValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for TitleLengthValidatorV5 {
+    fn name(&self) -> &str { "title-length-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        match &ctx.page.meta.title {
+            None => { findings.push(Finding { severity: Severity::Error, category: IssueCategory::Seo, code: "TITLELEN-V5001".to_string(), title: "Missing title tag".to_string(), description: "No <title> found.".to_string(), url: url.clone(), recommendation: "Add a 30-60 character title.".to_string() }); }
+            Some(t) => {
+                let len = t.len();
+                if len < 30 { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLELEN-V5002".to_string(), title: "Title too short".to_string(), description: format!("{len} chars, aim for 30-60."), url: url.clone(), recommendation: "Expand to 30-60 characters.".to_string() }); }
+                else if len > 60 { findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "TITLELEN-V5003".to_string(), title: "Title may truncate".to_string(), description: format!("{len} chars, Google shows ~60."), url: url.clone(), recommendation: "Shorten to 60 characters.".to_string() }); }
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionKeywordValidator;
+impl Default for MetaDescriptionKeywordValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionKeywordValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionKeywordValidator {
+    fn name(&self) -> &str { "meta-description-keyword-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let desc = match &ctx.page.meta.description { Some(d) if !d.trim().is_empty() => d.trim(), _ => return findings };
+        let title = match &ctx.page.meta.title { Some(t) => t.as_str(), None => "" };
+        if !title.is_empty() {
+            let title_words: Vec<&str> = title.split_whitespace().filter(|w| w.len() > 3).collect();
+            let desc_lower = desc.to_lowercase();
+            let missing: Vec<&str> = title_words.iter().filter(|w| !desc_lower.contains(&w.to_lowercase())).copied().collect();
+            if missing.len() > 1 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "METAKEY-V5001".to_string(), title: "Description missing title keywords".to_string(), description: format!("Description missing {} title keywords.", missing.len()), url: url.clone(), recommendation: "Include title keywords in description.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct MetaDescriptionUniqueValidator;
+impl Default for MetaDescriptionUniqueValidator { fn default() -> Self { Self::new() } }
+impl MetaDescriptionUniqueValidator { pub fn new() -> Self { Self } }
+impl Analyzer for MetaDescriptionUniqueValidator {
+    fn name(&self) -> &str { "meta-description-unique-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let desc = match &ctx.page.meta.description { Some(d) if !d.trim().is_empty() => d.trim().to_lowercase(), _ => return findings };
+        let title = match &ctx.page.meta.title { Some(t) if !t.trim().is_empty() => t.trim().to_lowercase(), _ => return findings };
+        if desc == title {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "METAUNIQ-V5001".to_string(), title: "Description identical to title".to_string(), description: "Description should complement title, not duplicate it.".to_string(), url: url.clone(), recommendation: "Write a unique description that expands on the title.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct CanonicalSelfReferenceValidatorV5;
+impl Default for CanonicalSelfReferenceValidatorV5 { fn default() -> Self { Self::new() } }
+impl CanonicalSelfReferenceValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalSelfReferenceValidatorV5 {
+    fn name(&self) -> &str { "canonical-self-reference-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.as_str();
+            if canonical_str != url {
+                if let Ok(page_url) = url::Url::parse(url) {
+                    if canonical.path() == page_url.path() && canonical.query() == page_url.query() {
+                        // Same path - might be a trailing slash issue, not a real problem
+                    } else {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANSELF-V5001".to_string(), title: "Canonical points to different URL".to_string(), description: format!("Canonical '{}' differs from page URL.", canonical_str), url: url.clone(), recommendation: "Verify canonical points to correct URL.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalChainValidatorV5;
+impl Default for CanonicalChainValidatorV5 { fn default() -> Self { Self::new() } }
+impl CanonicalChainValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalChainValidatorV5 {
+    fn name(&self) -> &str { "canonical-chain-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let canonical_str = canonical.as_str();
+            if let Some(body) = ctx.body {
+                let lower = body.to_lowercase();
+                let canonical_in_body = format!("href=\"{}\"", canonical_str.to_lowercase());
+                if lower.contains(&canonical_in_body) {
+                    // Self-referencing - that's expected
+                } else if canonical_str != url {
+                    // Canonical points elsewhere, which is fine but we can flag chains
+                    if lower.contains("rel=\"canonical\"") {
+                        findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANCHAIN-V5001".to_string(), title: "Canonical points off-page".to_string(), description: format!("Canonical '{}' doesn't match current URL.", canonical_str), url: url.clone(), recommendation: "Ensure no canonical chains exist.".to_string() });
+                    }
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct CanonicalDepthValidatorV5;
+impl Default for CanonicalDepthValidatorV5 { fn default() -> Self { Self::new() } }
+impl CanonicalDepthValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for CanonicalDepthValidatorV5 {
+    fn name(&self) -> &str { "canonical-depth-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(canonical) = &ctx.page.meta.canonical {
+            let depth = canonical.path().trim_matches('/').split('/').filter(|s| !s.is_empty()).count();
+            if depth > 5 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "CANDEPTH-V5001".to_string(), title: "Canonical URL too deep".to_string(), description: format!("{} path segments in canonical URL.", depth), url: url.clone(), recommendation: "Flatten URL structure if possible.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct HreflangReciprocalValidatorV5;
+impl Default for HreflangReciprocalValidatorV5 { fn default() -> Self { Self::new() } }
+impl HreflangReciprocalValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangReciprocalValidatorV5 {
+    fn name(&self) -> &str { "hreflang-reciprocal-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let tags = &ctx.page.meta.hreflang;
+        if tags.is_empty() { return findings; }
+        let has_self = tags.iter().any(|t| t.url.as_str() == *url);
+        if !has_self {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFRECIP-V5001".to_string(), title: "Missing self-referencing hreflang".to_string(), description: "No hreflang tag points to this page.".to_string(), url: url.clone(), recommendation: "Add self-referencing hreflang tag.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HreflangXDefaultValidator;
+impl Default for HreflangXDefaultValidator { fn default() -> Self { Self::new() } }
+impl HreflangXDefaultValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangXDefaultValidator {
+    fn name(&self) -> &str { "hreflang-x-default-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let tags = &ctx.page.meta.hreflang;
+        if tags.is_empty() { return findings; }
+        let has_xd = tags.iter().any(|t| t.lang == "x-default");
+        if !has_xd {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "HREFXD-V5001".to_string(), title: "Missing x-default hreflang".to_string(), description: "No x-default hreflang tag.".to_string(), url: url.clone(), recommendation: "Add x-default hreflang for default language.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HreflangLocaleFormatValidator;
+impl Default for HreflangLocaleFormatValidator { fn default() -> Self { Self::new() } }
+impl HreflangLocaleFormatValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HreflangLocaleFormatValidator {
+    fn name(&self) -> &str { "hreflang-locale-format-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let tags = &ctx.page.meta.hreflang;
+        if tags.is_empty() { return findings; }
+        for tag in tags {
+            if tag.lang == "x-default" { continue; }
+            let lang = &tag.lang;
+            if !lang.contains('-') && !lang.contains('_') && lang.len() > 3 {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "HREFLOCALE-V5001".to_string(), title: "Hreflang missing region".to_string(), description: format!("'{lang}' should include region (e.g., en-US)."), url: url.clone(), recommendation: "Use format like 'en-US' instead of 'en'.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapCoverageValidatorV5;
+impl Default for SitemapCoverageValidatorV5 { fn default() -> Self { Self::new() } }
+impl SitemapCoverageValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapCoverageValidatorV5 {
+    fn name(&self) -> &str { "sitemap-coverage-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(robots) = ctx.robots_txt {
+            let lower = robots.to_lowercase();
+            if !lower.contains("sitemap:") {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "SITEMAPCOV-V5001".to_string(), title: "No sitemap in robots.txt".to_string(), description: "robots.txt has no Sitemap directive.".to_string(), url: url.clone(), recommendation: "Add Sitemap: directive to robots.txt.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapLastmodValidator;
+impl Default for SitemapLastmodValidator { fn default() -> Self { Self::new() } }
+impl SitemapLastmodValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapLastmodValidator {
+    fn name(&self) -> &str { "sitemap-lastmod-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            if body.contains("<urlset") {
+                let lastmod_count = body.matches("<lastmod>").count();
+                let url_count = body.matches("<url>").count();
+                if url_count > 0 && lastmod_count == 0 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPMOD-V5001".to_string(), title: "Sitemap missing lastmod".to_string(), description: "No lastmod dates in sitemap.".to_string(), url: url.clone(), recommendation: "Add lastmod to help crawlers prioritize.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct SitemapPriorityValidator;
+impl Default for SitemapPriorityValidator { fn default() -> Self { Self::new() } }
+impl SitemapPriorityValidator { pub fn new() -> Self { Self } }
+impl Analyzer for SitemapPriorityValidator {
+    fn name(&self) -> &str { "sitemap-priority-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            if body.contains("<urlset") {
+                let priority_count = body.matches("<priority>").count();
+                let url_count = body.matches("<url>").count();
+                if url_count > 0 && priority_count == 0 {
+                    findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "SITEMAPPRI-V5001".to_string(), title: "Sitemap missing priority".to_string(), description: "No priority values in sitemap.".to_string(), url: url.clone(), recommendation: "Add priority to indicate page importance.".to_string() });
+                }
+            }
+        }
+        findings
+    }
+}
+
+pub struct RobotsTxtDisallowValidator;
+impl Default for RobotsTxtDisallowValidator { fn default() -> Self { Self::new() } }
+impl RobotsTxtDisallowValidator { pub fn new() -> Self { Self } }
+impl Analyzer for RobotsTxtDisallowValidator {
+    fn name(&self) -> &str { "robots-txt-disallow-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let robots = match ctx.robots_txt { Some(r) => r, None => return findings };
+        let lower = robots.to_lowercase();
+        if lower.contains("disallow: /") {
+            for line in robots.lines() {
+                let t = line.trim();
+                if t.to_lowercase().starts_with("disallow:") {
+                    let path = t.split(':').nth(1).unwrap_or("").trim();
+                    if path == "/" {
+                        findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "ROBOTSDIS-V5001".to_string(), title: "robots.txt blocks all crawlers".to_string(), description: "Disallow: / blocks everything.".to_string(), url: url.clone(), recommendation: "Remove blanket disallow.".to_string() });
+                        break;
+                    }
+                }
+            }
+        }
+        let disallow_count = lower.lines().filter(|l| l.trim().starts_with("disallow:")).count();
+        if disallow_count > 50 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "ROBOTSDIS-V5002".to_string(), title: "robots.txt has many Disallow rules".to_string(), description: format!("{disallow_count} Disallow rules."), url: url.clone(), recommendation: "Simplify robots.txt rules.".to_string() });
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// Accessibility V5 Analyzers (66-75)
+// =========================================================================
+
+pub struct LandmarkMainValidatorV5;
+impl Default for LandmarkMainValidatorV5 { fn default() -> Self { Self::new() } }
+impl LandmarkMainValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkMainValidatorV5 {
+    fn name(&self) -> &str { "landmark-main-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "main") && !ctx.page.has_main_landmark {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANDMAIN-V5001".to_string(), title: "Missing main landmark".to_string(), description: "No <main> or role='main' found.".to_string(), url: url.clone(), recommendation: "Add a main landmark for primary content.".to_string() });
+        }
+        let main_count = ctx.page.landmarks.iter().filter(|l| l.to_lowercase() == "main").count();
+        if main_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "LANDMAIN-V5002".to_string(), title: "Multiple main landmarks".to_string(), description: format!("{main_count} main landmarks. Only one allowed."), url: url.clone(), recommendation: "Use a single main landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkNavValidatorV5;
+impl Default for LandmarkNavValidatorV5 { fn default() -> Self { Self::new() } }
+impl LandmarkNavValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkNavValidatorV5 {
+    fn name(&self) -> &str { "landmark-nav-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "navigation") && !ctx.page.has_nav_landmark {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANDNAV-V5001".to_string(), title: "Missing navigation landmark".to_string(), description: "No <nav> or role='navigation' found.".to_string(), url: url.clone(), recommendation: "Add a navigation landmark.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct LandmarkBannerValidatorV5;
+impl Default for LandmarkBannerValidatorV5 { fn default() -> Self { Self::new() } }
+impl LandmarkBannerValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for LandmarkBannerValidatorV5 {
+    fn name(&self) -> &str { "landmark-banner-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "banner") {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "LANDBANNER-V5001".to_string(), title: "Missing banner landmark".to_string(), description: "No <header> or role='banner' found.".to_string(), url: url.clone(), recommendation: "Add a banner landmark for site header.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HeadingSkipLevelsValidator;
+impl Default for HeadingSkipLevelsValidator { fn default() -> Self { Self::new() } }
+impl HeadingSkipLevelsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for HeadingSkipLevelsValidator {
+    fn name(&self) -> &str { "heading-skip-levels-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.headings.is_empty() { return findings; }
+        let mut prev_level = 0u8;
+        let mut skip_count = 0;
+        for h in &ctx.page.headings {
+            if prev_level > 0 && h.level > prev_level + 1 {
+                skip_count += 1;
+            }
+            prev_level = h.level;
+        }
+        if skip_count > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HEADSKIP-V5001".to_string(), title: "Heading levels skipped".to_string(), description: format!("{skip_count} heading level skip(s)."), url: url.clone(), recommendation: "Use heading levels sequentially (H1 > H2 > H3).".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct HeadingMultipleH1Validator;
+impl Default for HeadingMultipleH1Validator { fn default() -> Self { Self::new() } }
+impl HeadingMultipleH1Validator { pub fn new() -> Self { Self } }
+impl Analyzer for HeadingMultipleH1Validator {
+    fn name(&self) -> &str { "heading-multiple-h1-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let h1_count = ctx.page.headings.iter().filter(|h| h.level == 1).count();
+        if h1_count == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HEADH1-V5001".to_string(), title: "Missing H1 heading".to_string(), description: "No H1 heading found.".to_string(), url: url.clone(), recommendation: "Add a single H1 heading.".to_string() });
+        } else if h1_count > 1 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "HEADH1-V5002".to_string(), title: "Multiple H1 headings".to_string(), description: format!("{h1_count} H1 headings found."), url: url.clone(), recommendation: "Use only one H1 per page.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FormLabelAssociationValidatorV5;
+impl Default for FormLabelAssociationValidatorV5 { fn default() -> Self { Self::new() } }
+impl FormLabelAssociationValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for FormLabelAssociationValidatorV5 {
+    fn name(&self) -> &str { "form-label-association-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.forms.is_empty() { return findings; }
+        let mut unlabeled = 0;
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                let t = input.input_type.as_deref().unwrap_or("text");
+                if matches!(t, "hidden" | "submit" | "button" | "image" | "reset") { continue; }
+                if !input.has_label && input.aria_label.is_none() && input.aria_labelledby.is_none() {
+                    unlabeled += 1;
+                }
+            }
+        }
+        if unlabeled > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMLBLASSOC-V5001".to_string(), title: "Form inputs without labels".to_string(), description: format!("{unlabeled} input(s) lack associated labels."), url: url.clone(), recommendation: "Associate inputs with <label> elements.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct FormRequiredFieldsValidator;
+impl Default for FormRequiredFieldsValidator { fn default() -> Self { Self::new() } }
+impl FormRequiredFieldsValidator { pub fn new() -> Self { Self } }
+impl Analyzer for FormRequiredFieldsValidator {
+    fn name(&self) -> &str { "form-required-fields-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.forms.is_empty() { return findings; }
+        let mut missing_required = 0;
+        for form in &ctx.page.forms {
+            for input in &form.inputs {
+                if input.required && input.aria_label.is_none() && !input.has_label {
+                    missing_required += 1;
+                }
+            }
+        }
+        if missing_required > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FORMREQ-V5001".to_string(), title: "Required fields missing labels".to_string(), description: format!("{missing_required} required input(s) lack labels."), url: url.clone(), recommendation: "Add labels to required form fields.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableHeadersValidatorV5;
+impl Default for TableHeadersValidatorV5 { fn default() -> Self { Self::new() } }
+impl TableHeadersValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for TableHeadersValidatorV5 {
+    fn name(&self) -> &str { "table-headers-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total == 0 { return findings; }
+        if ctx.page.tables_with_headers == 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TBLHDR-V5001".to_string(), title: "All tables missing headers".to_string(), description: format!("{} table(s) lack <th> headers.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <th> elements to data tables.".to_string() });
+        } else if ctx.page.tables_with_headers < ctx.page.tables_total {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TBLHDR-V5002".to_string(), title: "Some tables missing headers".to_string(), description: format!("{}/{} tables have headers.", ctx.page.tables_with_headers, ctx.page.tables_total), url: url.clone(), recommendation: "Add headers to all data tables.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableCaptionValidatorV5;
+impl Default for TableCaptionValidatorV5 { fn default() -> Self { Self::new() } }
+impl TableCaptionValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for TableCaptionValidatorV5 {
+    fn name(&self) -> &str { "table-caption-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total == 0 { return findings; }
+        if ctx.page.tables_with_captions == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Accessibility, code: "TBLCAPT-V5001".to_string(), title: "Tables missing captions".to_string(), description: format!("{} table(s) lack <caption>.", ctx.page.tables_total), url: url.clone(), recommendation: "Add <caption> to data tables.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct TableScopeValidator;
+impl Default for TableScopeValidator { fn default() -> Self { Self::new() } }
+impl TableScopeValidator { pub fn new() -> Self { Self } }
+impl Analyzer for TableScopeValidator {
+    fn name(&self) -> &str { "table-scope-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.tables_total == 0 { return findings; }
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let th_count = lower.matches("<th").count();
+            let scope_count = lower.matches("scope=\"").count();
+            if th_count > 0 && scope_count == 0 {
+                findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "TBLSCOPE-V5001".to_string(), title: "Table headers missing scope".to_string(), description: format!("{th_count} <th> without scope attribute."), url: url.clone(), recommendation: "Add scope='col' or scope='row'.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+// =========================================================================
+// Performance V5 Analyzers (76-80)
+// =========================================================================
+
+pub struct PreconnectHintValidator;
+impl Default for PreconnectHintValidator { fn default() -> Self { Self::new() } }
+impl PreconnectHintValidator { pub fn new() -> Self { Self } }
+impl Analyzer for PreconnectHintValidator {
+    fn name(&self) -> &str { "preconnect-hint-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let has_preconnect = lower.contains("rel=\"preconnect\"");
+            let external = ctx.page.links.iter().filter(|l| l.is_external).count();
+            if external > 3 && !has_preconnect {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Performance, code: "PRECON-V5001".to_string(), title: "No preconnect hints".to_string(), description: format!("{external} external origins, no preconnect."), url: url.clone(), recommendation: "Add <link rel='preconnect'> for critical origins.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct DnsPrefetchHintValidator;
+impl Default for DnsPrefetchHintValidator { fn default() -> Self { Self::new() } }
+impl DnsPrefetchHintValidator { pub fn new() -> Self { Self } }
+impl Analyzer for DnsPrefetchHintValidator {
+    fn name(&self) -> &str { "dns-prefetch-hint-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if let Some(body) = ctx.body {
+            let lower = body.to_lowercase();
+            let has_prefetch = lower.contains("rel=\"dns-prefetch\"");
+            let external = ctx.page.links.iter().filter(|l| l.is_external).count();
+            if external > 5 && !has_prefetch {
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Performance, code: "DNSPREFETCH-V5001".to_string(), title: "No dns-prefetch hints".to_string(), description: format!("{external} external origins, no dns-prefetch."), url: url.clone(), recommendation: "Add <link rel='dns-prefetch'> for external origins.".to_string() });
+            }
+        }
+        findings
+    }
+}
+
+pub struct ScriptAsyncDeferValidator;
+impl Default for ScriptAsyncDeferValidator { fn default() -> Self { Self::new() } }
+impl ScriptAsyncDeferValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ScriptAsyncDeferValidator {
+    fn name(&self) -> &str { "script-async-defer-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let blocking = ctx.page.scripts.iter().filter(|s| s.src.is_some() && !s.r#async && !s.defer).count();
+        if blocking > 0 {
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Performance, code: "SCRIPTBLK-V5001".to_string(), title: "Blocking scripts detected".to_string(), description: format!("{blocking} external script(s) without async/defer."), url: url.clone(), recommendation: "Add async or defer to external scripts.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ImageLazyLoadingValidatorV5;
+impl Default for ImageLazyLoadingValidatorV5 { fn default() -> Self { Self::new() } }
+impl ImageLazyLoadingValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for ImageLazyLoadingValidatorV5 {
+    fn name(&self) -> &str { "image-lazy-loading-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let total_images = ctx.page.images.len();
+        let lazy_images = ctx.page.images.iter().filter(|i| i.is_lazy_loaded).count();
+        if total_images > 3 && lazy_images == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Performance, code: "IMGLAZY-V5001".to_string(), title: "No lazy loading on images".to_string(), description: format!("{total_images} images without lazy loading."), url: url.clone(), recommendation: "Add loading='lazy' to below-fold images.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ImageModernFormatValidator;
+impl Default for ImageModernFormatValidator { fn default() -> Self { Self::new() } }
+impl ImageModernFormatValidator { pub fn new() -> Self { Self } }
+impl Analyzer for ImageModernFormatValidator {
+    fn name(&self) -> &str { "image-modern-format-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        if ctx.page.images.is_empty() { return findings; }
+        let total = ctx.page.images.len();
+        let modern = ctx.page.images.iter().filter(|i| {
+            let src = i.src.to_lowercase();
+            src.ends_with(".webp") || src.ends_with(".avif") || src.contains(".webp?") || src.contains(".avif?")
+        }).count();
+        if total > 3 && modern == 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Performance, code: "IMGFMT-V5001".to_string(), title: "No modern image formats".to_string(), description: format!("{total} images, none use WebP/AVIF."), url: url.clone(), recommendation: "Use WebP or AVIF for better compression.".to_string() });
+        }
+        findings
+    }
+}
+
+pub struct ImageDimensionsValidatorV5;
+impl Default for ImageDimensionsValidatorV5 { fn default() -> Self { Self::new() } }
+impl ImageDimensionsValidatorV5 { pub fn new() -> Self { Self } }
+impl Analyzer for ImageDimensionsValidatorV5 {
+    fn name(&self) -> &str { "image-dimensions-v5" }
+    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
+        let mut findings = Vec::new();
+        let url = &ctx.page.url;
+        let missing = ctx.page.images.iter().filter(|i| i.width.is_none() || i.height.is_none()).count();
+        if missing > 0 {
+            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Performance, code: "IMGDIM-V5001".to_string(), title: "Images missing dimensions".to_string(), description: format!("{missing} image(s) lack width/height."), url: url.clone(), recommendation: "Add width and height attributes to prevent layout shift.".to_string() });
+        }
+        findings
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod v2_analyzer_tests {
@@ -1290,4 +2963,248 @@ mod v2_analyzer_tests {
     fn test_sitemap_v3() { let f = SitemapAnalyzerV3::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert_eq!(f.len(), 1); }
     #[test]
     fn test_robots_v3() { let f = RobotsTxtAnalyzerV3::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert_eq!(f.len(), 1); }
+
+    // ===== Content V5 Tests =====
+    #[test]
+    fn test_article_word_count_no_sd() { let p = make_page("https://example.com"); assert!(ArticleWordCountAnalyzer::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_article_word_count_short() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({}) }]; p.word_count = 100; let f = ArticleWordCountAnalyzer::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); assert_eq!(f[0].code, "ARTWC-V5001"); }
+    #[test]
+    fn test_article_word_count_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({}) }]; p.word_count = 500; assert!(ArticleWordCountAnalyzer::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_article_author_url_no_url() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"author": {"@type": "Person", "name": "John"}}) }]; let f = ArticleAuthorUrlValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_article_author_url_string() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"author": "John"}) }]; assert!(ArticleAuthorUrlValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_article_date_modified_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("BlogPosting".into()), data: serde_json::json!({}) }]; let f = ArticleDateModifiedValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_article_date_modified_present() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Article".into()), data: serde_json::json!({"dateModified": "2025-01-01"}) }]; assert!(ArticleDateModifiedValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_org_url_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"name": "Acme"}) }]; let f = OrganizationUrlValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_org_url_present() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"url": "https://example.com"}) }]; assert!(OrganizationUrlValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_org_logo_url_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"logo": {"@type": "ImageObject"}}) }]; let f = OrganizationLogoUrlValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_org_logo_string() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"logo": "https://example.com/logo.png"}) }]; assert!(OrganizationLogoUrlValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_org_contact_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({}) }]; let f = OrganizationContactValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_person_url_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Person".into()), data: serde_json::json!({"name": "Jane"}) }]; let f = PersonUrlValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_person_url_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Person".into()), data: serde_json::json!({"url": "https://example.com/jane"}) }]; assert!(PersonUrlValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_job_employment_type_invalid() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({"employmentType": "FULL"}) }]; let f = JobPostingEmploymentTypeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_job_employment_type_valid() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({"employmentType": "FULL_TIME"}) }]; assert!(JobPostingEmploymentTypeValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_job_salary_currency_invalid() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({"baseSalary": {"currency": "US"}}) }]; let f = JobPostingSalaryCurrencyValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_job_valid_through_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("JobPosting".into()), data: serde_json::json!({}) }]; let f = JobPostingValidThroughValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_course_desc_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Course".into()), data: serde_json::json!({}) }]; let f = CourseDescriptionValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_course_provider_name_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Course".into()), data: serde_json::json!({"provider": {"@type": "Organization"}}) }]; let f = CourseProviderNameValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_recipe_prep_time_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({}) }]; let f = RecipePrepTimeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_recipe_ingredients_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({}) }]; let f = RecipeIngredientsValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_recipe_ingredients_empty() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Recipe".into()), data: serde_json::json!({"recipeIngredient": []}) }]; let f = RecipeIngredientsValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_product_price_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Product".into()), data: serde_json::json!({"offers": {"@type": "Offer"}}) }]; let f = ProductPriceValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_product_image_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Product".into()), data: serde_json::json!({}) }]; let f = ProductImageValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_breadcrumb_item_count() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("BreadcrumbList".into()), data: serde_json::json!({"itemListElement": [{"@type": "ListItem"}]}) }]; let f = BreadcrumbItemCountValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_breadcrumb_url_relative() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("BreadcrumbList".into()), data: serde_json::json!({"itemListElement": [{"@type": "ListItem", "item": {"@id": "/about"}}]}) }]; let f = BreadcrumbUrlValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_event_organizer_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Event".into()), data: serde_json::json!({}) }]; let f = EventOrganizerValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_event_organizer_no_name() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Event".into()), data: serde_json::json!({"organizer": {"@type": "Organization"}}) }]; let f = EventOrganizerValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_event_performer_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Event".into()), data: serde_json::json!({}) }]; let f = EventPerformerValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_video_thumbnail_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("VideoObject".into()), data: serde_json::json!({}) }]; let f = VideoThumbnailValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_video_duration_format() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("VideoObject".into()), data: serde_json::json!({"duration": "5min"}) }]; let f = VideoDurationFormatValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_video_duration_iso() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("VideoObject".into()), data: serde_json::json!({"duration": "PT5M"}) }]; assert!(VideoDurationFormatValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_software_offers_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("SoftwareApplication".into()), data: serde_json::json!({}) }]; let f = SoftwareOffersValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_software_screenshot_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("SoftwareApplication".into()), data: serde_json::json!({}) }]; let f = SoftwareScreenshotValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_faq_answer_short() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("FAQPage".into()), data: serde_json::json!({"mainEntity": [{"@type": "Question", "acceptedAnswer": {"@type": "Answer", "text": "Short"}}]}) }]; let f = FAQAnswerLengthValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_faq_answer_ok() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("FAQPage".into()), data: serde_json::json!({"mainEntity": [{"@type": "Question", "acceptedAnswer": {"@type": "Answer", "text": "This is a much longer answer that should be well over the fifty character minimum threshold."}}]}) }]; assert!(FAQAnswerLengthValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_howto_name_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({}) }]; let f = HowToNameValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_howto_step_desc_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("HowTo".into()), data: serde_json::json!({"step": [{"@type": "HowToStep"}]}) }]; let f = HowToStepDescriptionValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_dataset_license_missing() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({}) }]; let f = DatasetLicenseValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_dataset_dist_no_url() { let mut p = make_page("https://example.com"); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Dataset".into()), data: serde_json::json!({"distribution": [{"@type": "DataDownload"}]}) }]; let f = DatasetDistributionValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+
+    // ===== Security V5 Tests =====
+    #[test]
+    fn test_csp_script_src_empty() { assert!(CspScriptSrcValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_csp_script_src_unsafe_inline() { let p = make_page("https://example.com"); let headers = vec![("Content-Security-Policy".into(), "script-src 'unsafe-inline'".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspScriptSrcValidator::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "CSPSSRC-V5001")); }
+    #[test]
+    fn test_csp_script_src_wildcard() { let p = make_page("https://example.com"); let headers = vec![("Content-Security-Policy".into(), "script-src *".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspScriptSrcValidator::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "CSPSSRC-V5003")); }
+    #[test]
+    fn test_csp_script_src_missing() { let p = make_page("https://example.com"); let headers = vec![("Content-Security-Policy".into(), "default-src 'self'".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspScriptSrcValidator::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "CSPSSRC-V5004")); }
+    #[test]
+    fn test_csp_style_src_empty() { assert!(CspStyleSrcValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_csp_frame_ancestors_missing() { let p = make_page("https://example.com"); let headers = vec![("Content-Security-Policy".into(), "script-src 'self'".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CspFrameAncestorsValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hsts_max_age_missing() { let p = make_page("https://example.com"); let f = HstsMaxAgeValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hsts_max_age_low() { let p = make_page("https://example.com"); let headers = vec![("Strict-Transport-Security".into(), "max-age=100".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = HstsMaxAgeValidator::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "HSTSMAX-V5002")); }
+    #[test]
+    fn test_hsts_max_age_ok() { let p = make_page("https://example.com"); let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(HstsMaxAgeValidator::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_hsts_include_subdomains() { let p = make_page("https://example.com"); let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = HstsIncludeSubDomainsValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hsts_preload_missing() { let p = make_page("https://example.com"); let headers = vec![("Strict-Transport-Security".into(), "max-age=31536000; includeSubDomains".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = HstsPreloadValidatorV5::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_xcto_v5_missing() { let f = XContentTypeOptionsValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_xcto_v5_ok() { let p = make_page("https://example.com"); let headers = vec![("X-Content-Type-Options".into(), "nosniff".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; assert!(XContentTypeOptionsValidatorV5::new().analyze(&ctx).is_empty()); }
+    #[test]
+    fn test_rp_v5_missing() { let f = ReferrerPolicyValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_rp_v5_unsafe_url() { let p = make_page("https://example.com"); let headers = vec![("Referrer-Policy".into(), "unsafe-url".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = ReferrerPolicyValidatorV5::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "RP-V5002")); }
+    #[test]
+    fn test_xfo_v5_missing() { let f = XFrameOptionsValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_xfo_v5_invalid() { let p = make_page("https://example.com"); let headers = vec![("X-Frame-Options".into(), "ALLOW".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = XFrameOptionsValidatorV5::new().analyze(&ctx); assert!(f.iter().any(|x| x.code == "XFO-V5002")); }
+    #[test]
+    fn test_pp_camera() { let p = make_page("https://example.com"); let headers = vec![("Permissions-Policy".into(), "camera=(self)".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = PermissionsPolicyCameraValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_pp_microphone() { let p = make_page("https://example.com"); let headers = vec![("Permissions-Policy".into(), "microphone=(self)".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = PermissionsPolicyMicrophoneValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_pp_geolocation() { let p = make_page("https://example.com"); let headers = vec![("Permissions-Policy".into(), "geolocation=(self)".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = PermissionsPolicyGeolocationValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_coep_missing() { let f = CoepValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_coop_missing() { let f = CoopValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_cookie_secure_v5() { let p = make_page("https://example.com"); let headers = vec![("Set-Cookie".into(), "session=abc123; HttpOnly".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieSecureFlagValidatorV5::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_cookie_httponly_v5() { let p = make_page("https://example.com"); let headers = vec![("Set-Cookie".into(), "session=abc123; Secure".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieHttpOnlyFlagValidatorV5::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_cookie_samesite() { let p = make_page("https://example.com"); let headers = vec![("Set-Cookie".into(), "session=abc123; Secure; HttpOnly".into())]; let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &headers, response_time: None, redirect_chain: &[], robots_txt: None, body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = CookieSameSiteValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_mixed_script_v5() { assert!(MixedContentScriptValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_mixed_script_v5_with_content() { let f = MixedContentScriptValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), Some("<script src=\"http://evil.com/x.js\"></script>"))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_mixed_css_v5() { let f = MixedContentStylesheetValidator::new().analyze(&make_ctx(&make_page("https://example.com"), Some("<link href=\"http://evil.com/style.css\" rel=\"stylesheet\">"))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_sri_v5() { let mut p = make_page("https://example.com"); p.scripts = vec![crate::parser::ScriptInfo { src: Some("https://cdn.com/lib.js".into()), r#async: false, defer: false, script_type: None, has_integrity: false }]; let f = SriValidator::new().analyze(&make_ctx(&p, Some("<script src=\"https://cdn.com/lib.js\"></script>"))); assert!(!f.is_empty()); }
+
+    // ===== SEO V5 Tests =====
+    #[test]
+    fn test_title_keyword_v5() { let mut p = make_page("https://example.com"); p.meta.title = Some("Amazing Widgets Online".into()); p.meta.description = Some("Buying amazing widgets online today".into()); assert!(TitleKeywordPresenceValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_title_brand_v5() { let mut p = make_page("https://example.com"); p.meta.title = Some("Best Products".into()); p.structured_data = vec![StructuredData { context: Some("https://schema.org".into()), r#type: Some("Organization".into()), data: serde_json::json!({"name": "Acme Corp"}) }]; let f = TitleBrandValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_title_length_v5_missing() { let f = TitleLengthValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert_eq!(f[0].code, "TITLELEN-V5001"); }
+    #[test]
+    fn test_title_length_v5_short() { let mut p = make_page("https://example.com"); p.meta.title = Some("Hi".into()); let f = TitleLengthValidatorV5::new().analyze(&make_ctx(&p, None)); assert_eq!(f[0].code, "TITLELEN-V5002"); }
+    #[test]
+    fn test_title_length_v5_ok() { let mut p = make_page("https://example.com"); p.meta.title = Some("This is a perfectly normal length title".into()); assert!(TitleLengthValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_meta_keyword_v5() { let mut p = make_page("https://example.com"); p.meta.title = Some("Amazing Widgets".into()); p.meta.description = Some("Buy the best gadgets and gizmos today".into()); let f = MetaDescriptionKeywordValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_meta_unique_v5() { let mut p = make_page("https://example.com"); p.meta.title = Some("Hello World".into()); p.meta.description = Some("Hello World".into()); let f = MetaDescriptionUniqueValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_meta_unique_v5_different() { let mut p = make_page("https://example.com"); p.meta.title = Some("Hello World".into()); p.meta.description = Some("A completely different description about things".into()); assert!(MetaDescriptionUniqueValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_canonical_self_v5_diff() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some(url::Url::parse("https://other.com/different-page").unwrap()); let f = CanonicalSelfReferenceValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_canonical_self_v5_same() { let mut p = make_page("https://example.com/page"); p.meta.canonical = Some(url::Url::parse("https://example.com/page").unwrap()); assert!(CanonicalSelfReferenceValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_canonical_chain_v5() { let mut p = make_page("https://example.com"); p.meta.canonical = Some(url::Url::parse("https://other.com").unwrap()); let f = CanonicalChainValidatorV5::new().analyze(&make_ctx(&p, Some("<html><head><link rel=\"canonical\" href=\"https://other.com\"></head></html>"))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_canonical_depth_v5() { let mut p = make_page("https://example.com"); p.meta.canonical = Some(url::Url::parse("https://example.com/a/b/c/d/e/f").unwrap()); let f = CanonicalDepthValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hreflang_reciprocal_v5() { let mut p = make_page("https://example.com/page"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "fr".into(), url: url::Url::parse("https://example.com/page/fr").unwrap() }]; let f = HreflangReciprocalValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hreflang_xd_v5() { let mut p = make_page("https://example.com/page"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "en".into(), url: url::Url::parse("https://example.com/page/en").unwrap() }]; let f = HreflangXDefaultValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_hreflang_locale_v5() { let mut p = make_page("https://example.com/page"); p.meta.hreflang = vec![crate::meta::HreflangTag { lang: "english".into(), url: url::Url::parse("https://example.com/page/en").unwrap() }]; let f = HreflangLocaleFormatValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_sitemap_coverage_v5() { let robots = "User-agent: *\nDisallow: /admin"; let p = make_page("https://example.com"); let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = SitemapCoverageValidatorV5::new().analyze(&ctx); assert!(!f.is_empty()); }
+    #[test]
+    fn test_sitemap_lastmod_v5() { let body = "<urlset><url><loc>https://example.com</loc></url></urlset>"; let f = SitemapLastmodValidator::new().analyze(&make_ctx(&make_page("https://example.com"), Some(body))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_sitemap_priority_v5() { let body = "<urlset><url><loc>https://example.com</loc></url></urlset>"; let f = SitemapPriorityValidator::new().analyze(&make_ctx(&make_page("https://example.com"), Some(body))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_robots_disallow_v5() { let robots = "User-agent: *\nDisallow: /"; let p = make_page("https://example.com"); let ctx = AnalysisContext { page: &p, body: None, status_code: Some(200), headers: &[], response_time: None, redirect_chain: &[], robots_txt: Some(robots), body_size: None, compressed_size: None, server: None, content_type: None, rendered: None }; let f = RobotsTxtDisallowValidator::new().analyze(&ctx); assert!(!f.is_empty()); }
+
+    // ===== Accessibility V5 Tests =====
+    #[test]
+    fn test_landmark_main_v5_missing() { let f = LandmarkMainValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_landmark_main_v5_ok() { let mut p = make_page("https://example.com"); p.landmarks = vec!["main".into()]; assert!(LandmarkMainValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_landmark_main_v5_multi() { let mut p = make_page("https://example.com"); p.landmarks = vec!["main".into(), "main".into()]; let f = LandmarkMainValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(f.iter().any(|x| x.code == "LANDMAIN-V5002")); }
+    #[test]
+    fn test_landmark_nav_v5_missing() { let f = LandmarkNavValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_landmark_nav_v5_ok() { let mut p = make_page("https://example.com"); p.landmarks = vec!["navigation".into()]; assert!(LandmarkNavValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_landmark_banner_v5_missing() { let f = LandmarkBannerValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_heading_skip_v5() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }, Heading { level: 3, text: "H3".into(), length: 2 }]; let f = HeadingSkipLevelsValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_heading_skip_v5_ok() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1".into(), length: 2 }, Heading { level: 2, text: "H2".into(), length: 2 }]; assert!(HeadingSkipLevelsValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_heading_h1_v5_missing() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 2, text: "H2".into(), length: 2 }]; let f = HeadingMultipleH1Validator::new().analyze(&make_ctx(&p, None)); assert_eq!(f[0].code, "HEADH1-V5001"); }
+    #[test]
+    fn test_heading_h1_v5_multi() { let mut p = make_page("https://example.com"); p.headings = vec![Heading { level: 1, text: "H1a".into(), length: 3 }, Heading { level: 1, text: "H1b".into(), length: 3 }]; let f = HeadingMultipleH1Validator::new().analyze(&make_ctx(&p, None)); assert_eq!(f[0].code, "HEADH1-V5002"); }
+    #[test]
+    fn test_form_label_v5() { assert!(FormLabelAssociationValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_form_required_v5() { assert!(FormRequiredFieldsValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_table_headers_v5_none() { let mut p = make_page("https://example.com"); p.tables_total = 3; p.tables_with_headers = 0; let f = TableHeadersValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_table_headers_v5_partial() { let mut p = make_page("https://example.com"); p.tables_total = 3; p.tables_with_headers = 1; let f = TableHeadersValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_table_headers_v5_ok() { let mut p = make_page("https://example.com"); p.tables_total = 3; p.tables_with_headers = 3; assert!(TableHeadersValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_table_caption_v5() { let mut p = make_page("https://example.com"); p.tables_total = 1; p.tables_with_captions = 0; let f = TableCaptionValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_table_scope_v5() { let body = "<table><tr><th>Name</th><th>Age</th></tr><tr><td>John</td><td>30</td></tr></table>"; let mut p = make_page("https://example.com"); p.tables_total = 1; p.tables_with_headers = 1; let f = TableScopeValidator::new().analyze(&make_ctx(&p, Some(body))); assert!(!f.is_empty()); }
+
+    // ===== Performance V5 Tests =====
+    #[test]
+    fn test_preconnect_v5() { assert!(PreconnectHintValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_preconnect_v5_needed() { let mut p = make_page("https://example.com"); p.links = vec![crate::parser::ExtractedLink { href: "https://a.com".into(), text: "".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://b.com".into(), text: "".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://c.com".into(), text: "".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }, crate::parser::ExtractedLink { href: "https://d.com".into(), text: "".into(), rel: vec![], is_external: true, aria_label: None, img_alt: None }]; let f = PreconnectHintValidator::new().analyze(&make_ctx(&p, Some("<html><head></head><body></body></html>"))); assert!(!f.is_empty()); }
+    #[test]
+    fn test_dns_prefetch_v5() { assert!(DnsPrefetchHintValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_script_async_v5() { assert!(ScriptAsyncDeferValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_script_async_v5_blocking() { let mut p = make_page("https://example.com"); p.scripts = vec![crate::parser::ScriptInfo { src: Some("https://cdn.com/lib.js".into()), r#async: false, defer: false, script_type: None, has_integrity: false }]; let f = ScriptAsyncDeferValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_script_async_v5_ok() { let mut p = make_page("https://example.com"); p.scripts = vec![crate::parser::ScriptInfo { src: Some("https://cdn.com/lib.js".into()), r#async: true, defer: false, script_type: None, has_integrity: false }]; assert!(ScriptAsyncDeferValidator::new().analyze(&make_ctx(&p, None)).is_empty()); }
+    #[test]
+    fn test_image_lazy_v5() { assert!(ImageLazyLoadingValidatorV5::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_image_format_v5() { assert!(ImageModernFormatValidator::new().analyze(&make_ctx(&make_page("https://example.com"), None)).is_empty()); }
+    #[test]
+    fn test_image_format_v5_all_jpg() { let mut p = make_page("https://example.com"); p.images = vec![crate::parser::ExtractedImage { src: "https://example.com/1.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }, crate::parser::ExtractedImage { src: "https://example.com/2.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }, crate::parser::ExtractedImage { src: "https://example.com/3.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }, crate::parser::ExtractedImage { src: "https://example.com/4.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }]; let f = ImageModernFormatValidator::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_image_dims_v5() { let mut p = make_page("https://example.com"); p.images = vec![crate::parser::ExtractedImage { src: "https://example.com/1.jpg".into(), alt: "".into(), has_alt: false, width: None, height: None, is_lazy_loaded: false, aria_hidden: false }]; let f = ImageDimensionsValidatorV5::new().analyze(&make_ctx(&p, None)); assert!(!f.is_empty()); }
+    #[test]
+    fn test_image_dims_v5_ok() { let mut p = make_page("https://example.com"); p.images = vec![crate::parser::ExtractedImage { src: "https://example.com/1.jpg".into(), alt: "".into(), has_alt: false, width: Some(100), height: Some(100), is_lazy_loaded: false, aria_hidden: false }]; assert!(ImageDimensionsValidatorV5::new().analyze(&make_ctx(&p, None)).is_empty()); }
 }

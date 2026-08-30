@@ -5,6 +5,8 @@ use crate::{CrawlConfig, RedirectHop};
 
 /// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
+/// HSTS preload readiness analyzer (extracted from security_analyzers).
+pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
 /// Media and e-commerce analyzers for images, products, and shopping signals.
@@ -41,6 +43,7 @@ pub use content_analyzers::{
     StructuredDataValidator, TableOfContentsAnalyzer, TitleLengthAnalyzer,
     TwitterPlayerStreamValidator,
 };
+pub use hsts_analyzer::HstsPreloadAnalyzer;
 pub use http_analyzers::{
     CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, HttpVersionAnalyzer,
     RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
@@ -74,7 +77,7 @@ pub use security_analyzers::{
     FocusManagementDeepAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
     FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
     FormLabelsDeepAnalyzer, HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer,
-    HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer, HstsPreloadAnalyzer, HstsPreloadListValidator,
+    HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer, HstsPreloadListValidator,
     HstsPreloadReadinessAnalyzer, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
     ImageAltTextAnalyzer, ImageAltTextDeepAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer,
     LandmarkNavAnalyzer, LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2,

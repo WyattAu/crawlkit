@@ -15,6 +15,8 @@ pub mod hsts_analyzer;
 pub mod http_analyzers;
 /// Media and e-commerce analyzers for images, products, and shopping signals.
 pub mod media_analyzers;
+/// Mixed-content and HSTS preload-readiness analyzers extracted from the security monolith.
+pub mod mixed_content_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
 pub mod post_crawl_analyzers;
 /// Schema.org validators, one per type.
@@ -80,6 +82,7 @@ pub use media_analyzers::{
     ResourceSizeAnalyzer, ScriptAnalyzer, ScriptLoadAnalyzerV2, StylesheetAnalyzer,
     ThirdPartyResourceAnalyzer,
 };
+pub use mixed_content_analyzers::{HstsPreloadReadinessAnalyzer, MixedContentDetectionAnalyzer};
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
@@ -94,11 +97,10 @@ pub use security_analyzers::{
     FocusManagementAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
     FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
     HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer,
-    HstsPreloadListValidator, HstsPreloadReadinessAnalyzer, ImageAccessibilityAnalyzer,
-    ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer, LandmarkBannerAnalyzer,
-    LandmarkMainAnalyzer, LandmarkNavAnalyzer, LandmarkRegionsAnalyzer,
-    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2,
-    LinkTextAnalyzer, MixedContentDetectionAnalyzer, MixedContentFormValidator,
+    HstsPreloadListValidator, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
+    ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
+    LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzer,
+    LinkAccessibilityAnalyzerV2, LinkTextAnalyzer, MixedContentFormValidator,
     MixedContentImageValidator, MixedContentScriptValidator, MobileFriendlinessChecker,
     PermissionsPolicyAnalyzerV3, PermissionsPolicyDeepAnalyzer, ReferrerPolicyAnalyzerV2,
     ReferrerPolicyDeepAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer,

@@ -63,6 +63,8 @@ pub mod social_analyzers;
 /// Strict-Transport-Security / COOP / COEP / Feature-Policy / Expect-CT / CT
 /// analyzers (extracted from security_analyzers).
 pub mod sts_analyzers;
+/// Tabindex accessibility analyzer.
+pub mod tabindex_analyzers;
 /// Table accessibility analyzers.
 pub mod table_analyzers;
 /// Table caption accessibility analyzer.
@@ -151,9 +153,9 @@ pub use security_analyzers::{
     LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
     MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
     PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    StrictTransportSecurityAnalyzerV3, TabindexAnalyzer, TabindexAnalyzerV2,
-    TableAccessibilityAnalyzerV2, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
-    XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
+    StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
+    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2,
+    XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,
@@ -193,6 +195,7 @@ pub use sts_analyzers::{
     ExpectCTAnalyzer, FeaturePolicyAnalyzer, PermissionsPolicyAnalyzerNew,
     StrictTransportSecurityAnalyzer, XSSProtectionAnalyzer,
 };
+pub use tabindex_analyzers::TabindexAnalyzer;
 pub use table_analyzers::TableAccessibilityAnalyzer;
 pub use table_caption_analyzers::TableCaptionAnalyzer;
 pub use v2_analyzers::*;

@@ -37,6 +37,8 @@ pub mod http_analyzers;
 pub mod image_accessibility_analyzers;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;
+/// Landmark and heading-level accessibility validators.
+pub mod landmark_heading_validator_analyzers;
 /// HTML language-attribute accessibility analyzers.
 pub mod language_accessibility_analyzers;
 /// Link accessibility analyzers.
@@ -136,6 +138,9 @@ pub use http_analyzers::{
 };
 pub use image_accessibility_analyzers::ImageAccessibilityAnalyzer;
 pub use landmark_analyzers::LandmarkRegionsAnalyzer;
+pub use landmark_heading_validator_analyzers::{
+    HeadingLevelSkipAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
+};
 pub use link_accessibility_analyzers::LinkAccessibilityAnalyzer;
 pub use media_analyzers::{
     AggregateRatingValidator, AsyncScriptAnalyzer, BlockingStyleAnalyzer, ConnectionAnalyzer,
@@ -163,12 +168,11 @@ pub use security_analyzers::{
     ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FocusOrderPositiveTabindexAnalyzer,
     FormAccessibilityAnalyzerV2, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
-    HeadingLevelSkipAnalyzer, ImageAccessibilityAnalyzerV2, LandmarkBannerAnalyzer,
-    LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
-    LinkAccessibilityAnalyzerV2, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
-    SecurityHeaderAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2,
-    TableAccessibilityAnalyzerV2, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
-    XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
+    ImageAccessibilityAnalyzerV2, LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2,
+    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
+    StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
+    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2,
+    XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

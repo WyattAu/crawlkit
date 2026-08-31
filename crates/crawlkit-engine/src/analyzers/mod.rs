@@ -3,6 +3,8 @@ use std::time::Duration;
 use crate::parser::ParsedPage;
 use crate::{CrawlConfig, RedirectHop};
 
+/// Deep accessibility analyzers for landmarks, structure, forms, media, focus, and language.
+pub mod accessibility_deep_analyzers;
 /// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
@@ -36,6 +38,11 @@ pub mod v2_analyzers;
 pub mod x_header_analyzers;
 
 pub use crate::advanced_canonical::{CanonicalChainDetector, HreflangReciprocalValidator};
+pub use accessibility_deep_analyzers::{
+    AriaLandmarksAnalyzer, FocusManagementDeepAnalyzer, FormLabelsDeepAnalyzer,
+    HeadingHierarchyDeepAnalyzer, ImageAltTextDeepAnalyzer, LanguageAttributesDeepAnalyzer,
+    LinkTextQualityAnalyzer, TableAccessibilityDeepAnalyzer,
+};
 pub use content_analyzers::{
     ArticleAuthorValidator, ArticleDatePublishedValidator, ArticleHeadlineValidator,
     ArticleQualityAnalyzer, BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer,
@@ -79,29 +86,27 @@ pub use post_crawl_analyzers::{
 };
 pub use schema::*;
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AnchorTextGenericAnalyzer, AriaLabelAnalyzer, AriaLandmarksAnalyzer,
+    AccessibilityAnalyzer, AnchorTextGenericAnalyzer, AriaLabelAnalyzer,
     AriaRequiredAttributesAnalyzer, AriaRolesAnalyzer, AriaRolesAnalyzerV2, ColorContrastAnalyzer,
     ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzerV2,
     CorsMisconfigurationAnalyzer, CrossOriginIsolationAnalyzerV2, CrossOriginIsolationDeepAnalyzer,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, DnsRebindingAnalyzer,
-    FocusManagementAnalyzer, FocusManagementDeepAnalyzer, FocusOrderAnalyzer,
-    FocusOrderPositiveTabindexAnalyzer, FontSizeAnalyzer, FormAccessibilityAnalyzerV2,
-    FormLabelAnalyzer, FormLabelAssociationAnalyzer, FormLabelsDeepAnalyzer,
-    HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer, HeadingLevelSkipAnalyzer,
-    HeadingOrderAnalyzer, HstsPreloadListValidator, HstsPreloadReadinessAnalyzer,
-    ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer,
-    ImageAltTextDeepAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
-    LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2, LanguageAttributesDeepAnalyzer,
-    LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    LinkTextQualityAnalyzer, MixedContentDetectionAnalyzer, MixedContentFormValidator,
+    FocusManagementAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
+    FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
+    HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer,
+    HstsPreloadListValidator, HstsPreloadReadinessAnalyzer, ImageAccessibilityAnalyzer,
+    ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer, LandmarkBannerAnalyzer,
+    LandmarkMainAnalyzer, LandmarkNavAnalyzer, LandmarkRegionsAnalyzer,
+    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2,
+    LinkTextAnalyzer, MixedContentDetectionAnalyzer, MixedContentFormValidator,
     MixedContentImageValidator, MixedContentScriptValidator, MobileFriendlinessChecker,
     PermissionsPolicyAnalyzerV3, PermissionsPolicyDeepAnalyzer, ReferrerPolicyAnalyzerV2,
     ReferrerPolicyDeepAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer,
     StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer, TabindexAnalyzer,
     TabindexAnalyzerV2, TableAccessibilityAnalyzer, TableAccessibilityAnalyzerV2,
-    TableAccessibilityDeepAnalyzer, TableCaptionAnalyzer, TableCaptionPresenceAnalyzer,
-    TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2, XContentTypeOptionsDeepAnalyzer,
-    XFrameOptionsAnalyzerV2, XFrameOptionsDeepAnalyzer,
+    TableCaptionAnalyzer, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
+    XContentTypeOptionsAnalyzerV2, XContentTypeOptionsDeepAnalyzer, XFrameOptionsAnalyzerV2,
+    XFrameOptionsDeepAnalyzer,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

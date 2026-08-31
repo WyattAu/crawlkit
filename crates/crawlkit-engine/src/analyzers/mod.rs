@@ -22,6 +22,8 @@ pub mod basic_accessibility_analyzers;
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
 pub mod cookies;
+/// CSP directive validator and color contrast analyzers.
+pub mod csp_color_contrast_analyzers;
 /// Deep security-header analyzers extracted from the security monolith.
 pub mod deep_security_header_analyzers;
 /// DNS rebinding, Subresource Integrity, and CORS security analyzers.
@@ -136,6 +138,9 @@ pub use cookies::{
     CookieAnalyzer, CookieHttpOnlyFlagValidator, CookieSecureFlagValidator,
     CookieSecurityFlagAnalyzer,
 };
+pub use csp_color_contrast_analyzers::{
+    ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer, CspDirectiveValidator,
+};
 pub use deep_security_header_analyzers::{
     CrossOriginIsolationDeepAnalyzer, PermissionsPolicyDeepAnalyzer, ReferrerPolicyDeepAnalyzer,
     XContentTypeOptionsDeepAnalyzer, XFrameOptionsDeepAnalyzer,
@@ -182,10 +187,7 @@ pub use post_crawl_analyzers::{
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
 };
 pub use schema::*;
-pub use security_analyzers::{
-    AccessibilityAnalyzer, ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer,
-    CspDirectiveValidator, SecurityHeaderAnalyzer,
-};
+pub use security_analyzers::{AccessibilityAnalyzer, SecurityHeaderAnalyzer};
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,
     PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer, SriAnalyzer, XFrameOptionsAnalyzer,

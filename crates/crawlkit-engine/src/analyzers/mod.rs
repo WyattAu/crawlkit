@@ -5,6 +5,9 @@ use crate::{CrawlConfig, RedirectHop};
 
 /// Deep accessibility analyzers for landmarks, structure, forms, media, focus, and language.
 pub mod accessibility_deep_analyzers;
+/// V2 accessibility analyzers for tabindex, links, images, forms, tables,
+/// ARIA roles, heading hierarchy, and language attributes.
+pub mod accessibility_v2_analyzers;
 /// Accessibility analyzers for color contrast and keyboard focus order.
 pub mod accessibility_visual_analyzers;
 /// ARIA accessibility analyzers.
@@ -97,6 +100,11 @@ pub use accessibility_deep_analyzers::{
     HeadingHierarchyDeepAnalyzer, ImageAltTextDeepAnalyzer, LanguageAttributesDeepAnalyzer,
     LinkTextQualityAnalyzer, TableAccessibilityDeepAnalyzer,
 };
+pub use accessibility_v2_analyzers::{
+    AriaRolesAnalyzerV2, FormAccessibilityAnalyzerV2, HeadingHierarchyAnalyzerV2,
+    ImageAccessibilityAnalyzerV2, LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2,
+    TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
+};
 pub use accessibility_visual_analyzers::{ColorContrastAnalyzer, FocusOrderAnalyzer};
 pub use aria_analyzers::AriaRolesAnalyzer;
 pub use aria_focus_link_validator_analyzers::{
@@ -175,11 +183,8 @@ pub use post_crawl_analyzers::{
 };
 pub use schema::*;
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AriaRolesAnalyzerV2, ColorContrastLinkAnalyzer,
-    ColorContrastTextAnalyzer, CspDirectiveValidator, FormAccessibilityAnalyzerV2,
-    HeadingHierarchyAnalyzerV2, ImageAccessibilityAnalyzerV2, LanguageAttributeAnalyzerV2,
-    LinkAccessibilityAnalyzerV2, SecurityHeaderAnalyzer, TabindexAnalyzerV2,
-    TableAccessibilityAnalyzerV2,
+    AccessibilityAnalyzer, ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer,
+    CspDirectiveValidator, SecurityHeaderAnalyzer,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

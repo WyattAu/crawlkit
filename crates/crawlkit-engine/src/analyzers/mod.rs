@@ -31,6 +31,8 @@ pub mod http_analyzers;
 pub mod image_accessibility_analyzers;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;
+/// HTML language-attribute accessibility analyzers.
+pub mod language_accessibility_analyzers;
 /// Link accessibility analyzers.
 pub mod link_accessibility_analyzers;
 /// Media and e-commerce analyzers for images, products, and shopping signals.

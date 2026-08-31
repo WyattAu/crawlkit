@@ -58,6 +58,8 @@ pub mod security_analyzers;
 /// Security header analyzers: SRI, Permission-Policy, Cross-Origin isolation
 /// (extracted from security_analyzers).
 pub mod security_header_analyzers;
+/// Versioned security-header analyzers extracted from the security monolith.
+pub mod security_header_v2_analyzers;
 /// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
 pub mod seo_analyzers;
 /// Skip-navigation link accessibility analyzer.
@@ -156,8 +158,8 @@ pub use security_analyzers::{
     ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FocusOrderPositiveTabindexAnalyzer,
     FormAccessibilityAnalyzerV2, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
-    HeadingLevelSkipAnalyzer, HstsPreloadListValidator, ImageAccessibilityAnalyzerV2,
-    LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
+    HeadingLevelSkipAnalyzer, ImageAccessibilityAnalyzerV2, LandmarkBannerAnalyzer,
+    LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
     LinkAccessibilityAnalyzerV2, MixedContentFormValidator, MixedContentImageValidator,
     MixedContentScriptValidator, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
     SecurityHeaderAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2,
@@ -167,6 +169,10 @@ pub use security_analyzers::{
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,
     PermissionPolicyAnalyzer, ReferrerPolicyAnalyzer, SriAnalyzer, XFrameOptionsAnalyzer,
+};
+pub use security_header_v2_analyzers::{
+    ContentTypeSniffingAnalyzerV2, HstsPreloadListValidator, StrictTransportSecurityAnalyzerV2,
+    XssProtectionAnalyzerV2,
 };
 pub use seo_analyzers::{
     AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalSelfReferenceAnalyzerV2,

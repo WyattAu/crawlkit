@@ -11,6 +11,8 @@ pub mod accessibility_visual_analyzers;
 pub mod aria_analyzers;
 /// ARIA label accessibility analyzer.
 pub mod aria_label_analyzers;
+/// Basic accessibility analyzers for forms, links, images, and ARIA roles.
+pub mod basic_accessibility_analyzers;
 /// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
@@ -86,6 +88,9 @@ pub use accessibility_deep_analyzers::{
 pub use accessibility_visual_analyzers::{ColorContrastAnalyzer, FocusOrderAnalyzer};
 pub use aria_analyzers::AriaRolesAnalyzer;
 pub use aria_label_analyzers::AriaLabelAnalyzer;
+pub use basic_accessibility_analyzers::{
+    AriaRoleAnalyzer, FormInputLabelAnalyzer, ImageAltTextAnalyzer, LinkTextAnalyzer,
+};
 pub use content_analyzers::{
     ArticleAuthorValidator, ArticleDatePublishedValidator, ArticleHeadlineValidator,
     ArticleQualityAnalyzer, BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer,
@@ -152,13 +157,12 @@ pub use security_analyzers::{
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FocusOrderPositiveTabindexAnalyzer,
     FormAccessibilityAnalyzerV2, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
     HeadingLevelSkipAnalyzer, HstsPreloadListValidator, ImageAccessibilityAnalyzerV2,
-    ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
-    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
-    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
-    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2,
-    XFrameOptionsAnalyzerV2,
+    LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
+    LinkAccessibilityAnalyzerV2, MixedContentFormValidator, MixedContentImageValidator,
+    MixedContentScriptValidator, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
+    SecurityHeaderAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2,
+    TableAccessibilityAnalyzerV2, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
+    XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

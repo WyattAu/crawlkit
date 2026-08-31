@@ -570,6 +570,20 @@ pub enum CrawlError {
     MaxRetriesExceeded(usize),
 }
 
+#[cfg(feature = "retry-backoff")]
+impl retry_backoff::IsRetryable for CrawlError {
+    fn is_retryable(&self) -> bool {
+        match self {
+            #[cfg(feature = "full")]
+            Self::RequestFailed(e) => e.is_timeout() || e.is_connect(),
+            #[cfg(not(feature = "full"))]
+            Self::RequestFailed(_) => false,
+            Self::MaxRetriesExceeded(_) => false,
+            _ => false,
+        }
+    }
+}
+
 /// Configuration for a crawl session.
 ///
 /// Controls the starting URL, crawl limits, politeness settings, and

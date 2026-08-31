@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -169,24 +167,12 @@ impl AuthManager {
 
     /// Verify password.
     pub fn verify_password(&self, password: &str, hash: &str) -> bool {
-        let parsed_hash = match PasswordHash::new(hash) {
-            Ok(h) => h,
-            Err(_) => return false,
-        };
-        Argon2::default()
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok()
+        salting::verify_password(password, hash).unwrap_or(false)
     }
 
     /// Hash a password.
     pub fn hash_password(&self, password: &str) -> Result<String, Argon2Error> {
-        use rand::rngs::OsRng;
-
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| Argon2Error::HashFailed(e.to_string()))?;
-        Ok(hash.to_string())
+        salting::hash_password(password).map_err(|e| Argon2Error::HashFailed(e.to_string()))
     }
 
     /// Generate JWT token.

@@ -9,6 +9,8 @@ pub mod accessibility_deep_analyzers;
 pub mod accessibility_visual_analyzers;
 /// ARIA accessibility analyzers.
 pub mod aria_analyzers;
+/// ARIA label accessibility analyzer.
+pub mod aria_label_analyzers;
 /// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
@@ -75,6 +77,7 @@ pub use accessibility_deep_analyzers::{
 };
 pub use accessibility_visual_analyzers::{ColorContrastAnalyzer, FocusOrderAnalyzer};
 pub use aria_analyzers::AriaRolesAnalyzer;
+pub use aria_label_analyzers::AriaLabelAnalyzer;
 pub use content_analyzers::{
     ArticleAuthorValidator, ArticleDatePublishedValidator, ArticleHeadlineValidator,
     ArticleQualityAnalyzer, BreadcrumbActivePageValidator, BreadcrumbListDepthAnalyzer,
@@ -134,9 +137,9 @@ pub use post_crawl_analyzers::{
 };
 pub use schema::*;
 pub use security_analyzers::{
-    AccessibilityAnalyzer, AnchorTextGenericAnalyzer, AriaLabelAnalyzer,
-    AriaRequiredAttributesAnalyzer, AriaRolesAnalyzerV2, ColorContrastLinkAnalyzer,
-    ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
+    AccessibilityAnalyzer, AnchorTextGenericAnalyzer, AriaRequiredAttributesAnalyzer,
+    AriaRolesAnalyzerV2, ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer,
+    ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FocusOrderPositiveTabindexAnalyzer,
     FormAccessibilityAnalyzerV2, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
     HeadingLevelSkipAnalyzer, HstsPreloadListValidator, ImageAccessibilityAnalyzerV2,

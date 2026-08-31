@@ -68,6 +68,8 @@ pub mod security_analyzers;
 pub mod security_header_analyzers;
 /// Versioned security-header analyzers extracted from the security monolith.
 pub mod security_header_v2_analyzers;
+/// Remaining V2/V3 security-header analyzers.
+pub mod security_header_v3_analyzers;
 /// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
 pub mod seo_analyzers;
 /// Skip-navigation link accessibility analyzer.
@@ -174,12 +176,10 @@ pub use post_crawl_analyzers::{
 pub use schema::*;
 pub use security_analyzers::{
     AccessibilityAnalyzer, AriaRolesAnalyzerV2, ColorContrastLinkAnalyzer,
-    ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
-    CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FormAccessibilityAnalyzerV2,
+    ColorContrastTextAnalyzer, CspDirectiveValidator, FormAccessibilityAnalyzerV2,
     HeadingHierarchyAnalyzerV2, ImageAccessibilityAnalyzerV2, LanguageAttributeAnalyzerV2,
-    LinkAccessibilityAnalyzerV2, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
-    SecurityHeaderAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2,
-    TableAccessibilityAnalyzerV2, XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
+    LinkAccessibilityAnalyzerV2, SecurityHeaderAnalyzer, TabindexAnalyzerV2,
+    TableAccessibilityAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,
@@ -188,6 +188,11 @@ pub use security_header_analyzers::{
 pub use security_header_v2_analyzers::{
     ContentTypeSniffingAnalyzerV2, HstsPreloadListValidator, StrictTransportSecurityAnalyzerV2,
     XssProtectionAnalyzerV2,
+};
+pub use security_header_v3_analyzers::{
+    ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
+    CrossOriginOpenerPolicyAnalyzerV2, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
+    StrictTransportSecurityAnalyzerV3, XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };
 pub use seo_analyzers::{
     AnchorTextDiversityAnalyzer, CanonicalDepthAnalyzer, CanonicalSelfReferenceAnalyzerV2,

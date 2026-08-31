@@ -11,6 +11,8 @@ pub mod content_analyzers;
 pub mod cookies;
 /// Deep security-header analyzers extracted from the security monolith.
 pub mod deep_security_header_analyzers;
+/// Font-size and line-height accessibility analyzers.
+pub mod font_analyzers;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
@@ -75,6 +77,7 @@ pub use deep_security_header_analyzers::{
     CrossOriginIsolationDeepAnalyzer, PermissionsPolicyDeepAnalyzer, ReferrerPolicyDeepAnalyzer,
     XContentTypeOptionsDeepAnalyzer, XFrameOptionsDeepAnalyzer,
 };
+pub use font_analyzers::FontSizeAnalyzer;
 pub use hsts_analyzer::HstsPreloadAnalyzer;
 pub use http_analyzers::{
     CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, HttpVersionAnalyzer,
@@ -104,7 +107,7 @@ pub use security_analyzers::{
     CorsMisconfigurationAnalyzer, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, DnsRebindingAnalyzer,
     FocusManagementAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
-    FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
+    FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
     HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer,
     HstsPreloadListValidator, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
     ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,

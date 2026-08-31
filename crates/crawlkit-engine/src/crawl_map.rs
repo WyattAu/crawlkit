@@ -79,7 +79,7 @@ fn truncate_url(url: &str) -> String {
         if let Some(slash) = path.find('/') {
             let p = &path[slash..];
             if p.len() > 30 {
-                format!("{}…", &p[..29])
+                format!("{}…", p.chars().take(29).collect::<String>())
             } else {
                 p.to_string()
             }

@@ -54,9 +54,17 @@ impl Analyzer for DuplicateContentDetectorV2 {
             let chunk_size = 200;
             let mut seen: std::collections::HashMap<String, usize> =
                 std::collections::HashMap::new();
-            for i in (0..normalized.len()).step_by(chunk_size / 2) {
-                let end = (i + chunk_size).min(normalized.len());
-                let chunk = &normalized[i..end];
+            // Build char-boundary byte offsets to avoid slicing multi-byte UTF-8 chars.
+            let char_offsets: Vec<usize> = std::iter::once(0)
+                .chain(normalized.char_indices().map(|(i, _)| i))
+                .chain(std::iter::once(normalized.len()))
+                .collect();
+            let total_chars = char_offsets.len() - 1;
+            for i in (0..total_chars).step_by(chunk_size / 2) {
+                let byte_start = char_offsets[i];
+                let byte_end_idx = (i + chunk_size).min(total_chars);
+                let byte_end = char_offsets[byte_end_idx];
+                let chunk = &normalized[byte_start..byte_end];
                 if chunk.len() >= 50 {
                     *seen.entry(chunk.to_string()).or_insert(0) += 1;
                 }

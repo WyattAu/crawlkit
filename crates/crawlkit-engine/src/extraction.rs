@@ -98,7 +98,8 @@ pub fn extract_page(page_html: &str, rules: &[ExtractionRule]) -> Vec<Extraction
 
             let value = if let Some(max) = rule.max_length {
                 if value.len() > max {
-                    format!("{}...", &value[..max])
+                    let truncated: String = value.chars().take(max).collect();
+                    format!("{}...", truncated)
                 } else {
                     value
                 }

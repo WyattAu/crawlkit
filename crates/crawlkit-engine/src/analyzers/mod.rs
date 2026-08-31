@@ -23,6 +23,8 @@ pub mod heading_analyzers;
 pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
+/// Image accessibility analyzers.
+pub mod image_accessibility_analyzers;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;
 /// Link accessibility analyzers.
@@ -99,6 +101,7 @@ pub use http_analyzers::{
     RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
     ServerHeaderAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
+pub use image_accessibility_analyzers::ImageAccessibilityAnalyzer;
 pub use landmark_analyzers::LandmarkRegionsAnalyzer;
 pub use link_accessibility_analyzers::LinkAccessibilityAnalyzer;
 pub use media_analyzers::{
@@ -125,13 +128,13 @@ pub use security_analyzers::{
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, DnsRebindingAnalyzer,
     FocusManagementAnalyzer, FocusOrderPositiveTabindexAnalyzer, FormAccessibilityAnalyzerV2,
     FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer,
-    HstsPreloadListValidator, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
-    ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
-    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
-    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer,
-    TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzerV2, TableCaptionAnalyzer,
+    HstsPreloadListValidator, ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer,
+    LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
+    LinkAccessibilityAnalyzerV2, LinkTextAnalyzer, MixedContentFormValidator,
+    MixedContentImageValidator, MixedContentScriptValidator, PermissionsPolicyAnalyzerV3,
+    ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer, SkipLinkAnalyzer,
+    StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer, TabindexAnalyzer,
+    TabindexAnalyzerV2, TableAccessibilityAnalyzerV2, TableCaptionAnalyzer,
     TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2,
     XFrameOptionsAnalyzerV2,
 };

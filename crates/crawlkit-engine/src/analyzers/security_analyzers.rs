@@ -22,6 +22,7 @@ pub use super::dns_sri_cors_analyzers::{
     CorsMisconfigurationAnalyzer, DnsRebindingAnalyzer, SubresourceIntegrityAnalyzer,
 };
 pub use super::language_accessibility_analyzers::LanguageAttributeAnalyzer;
+pub use super::table_caption_analyzers::TableCaptionAnalyzer;
 use crate::parser::ExtractedImage;
 
 // ---------------------------------------------------------------------------
@@ -3561,60 +3562,6 @@ mod tests {
         let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
         assert_eq!(findings.len(), 1);
         assert!(findings.iter().any(|f| f.code == "COOP001"));
-    }
-}
-
-// =========================================================================
-// TableCaptionAnalyzer
-// =========================================================================
-
-pub struct TableCaptionAnalyzer;
-
-impl Default for TableCaptionAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl TableCaptionAnalyzer {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Analyzer for TableCaptionAnalyzer {
-    fn name(&self) -> &str {
-        "table-caption"
-    }
-
-    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-
-        if ctx.page.tables_total == 0 {
-            return findings;
-        }
-
-        let without_captions = ctx.page.tables_total - ctx.page.tables_with_captions;
-        if without_captions > 0 {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Accessibility,
-                code: "TABLECAP001".to_string(),
-                title: "Table missing caption element".to_string(),
-                description: format!(
-                    "{without_captions} of {} table(s) have no <caption> element. \
-                     Captions help screen reader users understand table purpose.",
-                    ctx.page.tables_total
-                ),
-                url: url.clone(),
-                recommendation: "Add a <caption> element to each table to describe its \
-                                 purpose."
-                    .to_string(),
-            });
-        }
-
-        findings
     }
 }
 

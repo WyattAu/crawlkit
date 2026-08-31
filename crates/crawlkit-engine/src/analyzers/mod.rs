@@ -63,6 +63,8 @@ pub mod social_analyzers;
 pub mod sts_analyzers;
 /// Table accessibility analyzers.
 pub mod table_analyzers;
+/// Table caption accessibility analyzer.
+pub mod table_caption_analyzers;
 /// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
 pub mod v2_analyzers;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
@@ -148,8 +150,8 @@ pub use security_analyzers::{
     MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
     PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
     SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzer, TabindexAnalyzerV2,
-    TableAccessibilityAnalyzerV2, TableCaptionAnalyzer, TableCaptionPresenceAnalyzer,
-    TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
+    TableAccessibilityAnalyzerV2, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
+    XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,
@@ -189,6 +191,7 @@ pub use sts_analyzers::{
     StrictTransportSecurityAnalyzer, XSSProtectionAnalyzer,
 };
 pub use table_analyzers::TableAccessibilityAnalyzer;
+pub use table_caption_analyzers::TableCaptionAnalyzer;
 pub use v2_analyzers::*;
 pub use x_header_analyzers::{
     CrossOriginResourcePolicyAnalyzer, XContentTypeOptionsAnalyzer,

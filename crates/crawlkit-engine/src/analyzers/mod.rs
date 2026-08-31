@@ -45,6 +45,8 @@ pub mod media_analyzers;
 pub mod mixed_content_analyzers;
 /// Mobile-friendliness analyzer for viewport and zoom accessibility checks.
 pub mod mobile_analyzers;
+/// Permissions-Policy V2 security analyzer.
+pub mod permissions_policy_v2_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
 pub mod post_crawl_analyzers;
 /// Schema.org validators, one per type.
@@ -137,6 +139,7 @@ pub use media_analyzers::{
 };
 pub use mixed_content_analyzers::{HstsPreloadReadinessAnalyzer, MixedContentDetectionAnalyzer};
 pub use mobile_analyzers::MobileFriendlinessChecker;
+pub use permissions_policy_v2_analyzers::PermissionsPolicyAnalyzerV2;
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,

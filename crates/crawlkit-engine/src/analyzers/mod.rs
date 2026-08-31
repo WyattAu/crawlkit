@@ -19,6 +19,8 @@ pub mod http_analyzers;
 pub mod media_analyzers;
 /// Mixed-content and HSTS preload-readiness analyzers extracted from the security monolith.
 pub mod mixed_content_analyzers;
+/// Mobile-friendliness analyzer for viewport and zoom accessibility checks.
+pub mod mobile_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
 pub mod post_crawl_analyzers;
 /// Schema.org validators, one per type.
@@ -89,6 +91,7 @@ pub use media_analyzers::{
     ThirdPartyResourceAnalyzer,
 };
 pub use mixed_content_analyzers::{HstsPreloadReadinessAnalyzer, MixedContentDetectionAnalyzer};
+pub use mobile_analyzers::MobileFriendlinessChecker;
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
@@ -107,10 +110,10 @@ pub use security_analyzers::{
     ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
     LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzer,
     LinkAccessibilityAnalyzerV2, LinkTextAnalyzer, MixedContentFormValidator,
-    MixedContentImageValidator, MixedContentScriptValidator, MobileFriendlinessChecker,
-    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer,
-    TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer, TableAccessibilityAnalyzerV2,
+    MixedContentImageValidator, MixedContentScriptValidator, PermissionsPolicyAnalyzerV3,
+    ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer, SkipLinkAnalyzer,
+    StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer, TabindexAnalyzer,
+    TabindexAnalyzerV2, TableAccessibilityAnalyzer, TableAccessibilityAnalyzerV2,
     TableCaptionAnalyzer, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
     XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };

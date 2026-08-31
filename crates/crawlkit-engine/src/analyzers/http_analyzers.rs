@@ -1266,8 +1266,6 @@ impl Analyzer for CacheHeaderAnalyzer {
 // 16. Mobile-Friendliness Checker
 // ---------------------------------------------------------------------------
 
-pub struct MobileFriendlinessChecker;
-
 // =========================================================================
 // CompressionAnalyzer
 // =========================================================================

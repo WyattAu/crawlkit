@@ -5,6 +5,8 @@ use crate::{CrawlConfig, RedirectHop};
 
 /// Content quality analyzers for readability, entity extraction, and structured data.
 pub mod content_analyzers;
+/// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
+pub mod cookies;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
@@ -46,6 +48,10 @@ pub use content_analyzers::{
     StructuredDataValidator, TableOfContentsAnalyzer, TitleLengthAnalyzer,
     TwitterPlayerStreamValidator,
 };
+pub use cookies::{
+    CookieAnalyzer, CookieHttpOnlyFlagValidator, CookieSecureFlagValidator,
+    CookieSecurityFlagAnalyzer,
+};
 pub use hsts_analyzer::HstsPreloadAnalyzer;
 pub use http_analyzers::{
     CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, HttpVersionAnalyzer,
@@ -71,24 +77,22 @@ pub use security_analyzers::{
     AriaRequiredAttributesAnalyzer, AriaRolesAnalyzer, AriaRolesAnalyzerV2,
     CertificateTransparencyAnalyzer, ColorContrastAnalyzer, ColorContrastLinkAnalyzer,
     ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzerV2, ContentTypeSniffingAnalyzer,
-    CookieAnalyzer, CookieHttpOnlyFlagValidator, CookieSecureFlagValidator,
-    CookieSecurityFlagAnalyzer, CorsMisconfigurationAnalyzer, CorsPolicyAnalyzer,
-    CrossOriginIsolationAnalyzerV2, CrossOriginIsolationDeepAnalyzer,
-    CrossOriginOpenerPolicyAnalyzerV2, CrossOriginResourcePolicyAnalyzer, CspDirectiveAnalyzer,
-    CspDirectiveValidator, DnsRebindingAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer,
-    FocusManagementAnalyzer, FocusManagementDeepAnalyzer, FocusOrderAnalyzer,
-    FocusOrderPositiveTabindexAnalyzer, FontSizeAnalyzer, FormAccessibilityAnalyzerV2,
-    FormLabelAnalyzer, FormLabelAssociationAnalyzer, FormLabelsDeepAnalyzer,
-    HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer, HeadingLevelSkipAnalyzer,
-    HeadingOrderAnalyzer, HstsPreloadListValidator, HstsPreloadReadinessAnalyzer,
-    ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer,
-    ImageAltTextDeepAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
-    LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2, LanguageAttributesDeepAnalyzer,
-    LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    LinkTextQualityAnalyzer, MixedContentDetectionAnalyzer, MixedContentFormValidator,
-    MixedContentImageValidator, MixedContentScriptValidator, MobileFriendlinessChecker,
-    PermissionsPolicyAnalyzerV3, PermissionsPolicyDeepAnalyzer, ReferrerPolicyAnalyzerV2,
-    ReferrerPolicyDeepAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer,
+    CorsMisconfigurationAnalyzer, CorsPolicyAnalyzer, CrossOriginIsolationAnalyzerV2,
+    CrossOriginIsolationDeepAnalyzer, CrossOriginOpenerPolicyAnalyzerV2,
+    CrossOriginResourcePolicyAnalyzer, CspDirectiveAnalyzer, CspDirectiveValidator,
+    DnsRebindingAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer, FocusManagementAnalyzer,
+    FocusManagementDeepAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
+    FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
+    FormLabelsDeepAnalyzer, HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer,
+    HeadingLevelSkipAnalyzer, HeadingOrderAnalyzer, HstsPreloadListValidator,
+    HstsPreloadReadinessAnalyzer, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
+    ImageAltTextAnalyzer, ImageAltTextDeepAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer,
+    LandmarkNavAnalyzer, LandmarkRegionsAnalyzer, LanguageAttributeAnalyzerV2,
+    LanguageAttributesDeepAnalyzer, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2,
+    LinkTextAnalyzer, LinkTextQualityAnalyzer, MixedContentDetectionAnalyzer,
+    MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
+    MobileFriendlinessChecker, PermissionsPolicyAnalyzerV3, PermissionsPolicyDeepAnalyzer,
+    ReferrerPolicyAnalyzerV2, ReferrerPolicyDeepAnalyzer, SecurityHeaderAnalyzer, SkipLinkAnalyzer,
     StrictTransportSecurityAnalyzer, StrictTransportSecurityAnalyzerV3,
     SubresourceIntegrityAnalyzer, TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer,
     TableAccessibilityAnalyzerV2, TableAccessibilityDeepAnalyzer, TableCaptionAnalyzer,

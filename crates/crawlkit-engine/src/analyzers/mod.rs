@@ -7,6 +7,9 @@ use crate::{CrawlConfig, RedirectHop};
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
 pub mod cookies;
+/// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
+/// Cross-Origin-Resource-Policy (extracted from security_analyzers).
+pub mod x_header_analyzers;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
@@ -53,6 +56,10 @@ pub use cookies::{
     CookieSecurityFlagAnalyzer,
 };
 pub use hsts_analyzer::HstsPreloadAnalyzer;
+pub use x_header_analyzers::{
+    CrossOriginResourcePolicyAnalyzer, XContentTypeOptionsAnalyzer,
+    XPermittedCrossDomainPoliciesAnalyzer,
+};
 pub use http_analyzers::{
     CacheHeaderAnalyzer, CompressionAnalyzer, HttpStatusAnalyzer, HttpVersionAnalyzer,
     RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
@@ -79,8 +86,8 @@ pub use security_analyzers::{
     ColorContrastTextAnalyzer, ContentSecurityPolicyAnalyzerV2, ContentTypeSniffingAnalyzer,
     CorsMisconfigurationAnalyzer, CorsPolicyAnalyzer, CrossOriginIsolationAnalyzerV2,
     CrossOriginIsolationDeepAnalyzer, CrossOriginOpenerPolicyAnalyzerV2,
-    CrossOriginResourcePolicyAnalyzer, CspDirectiveAnalyzer, CspDirectiveValidator,
-    DnsRebindingAnalyzer, ExpectCTAnalyzer, FeaturePolicyAnalyzer, FocusManagementAnalyzer,
+    CspDirectiveAnalyzer, CspDirectiveValidator, DnsRebindingAnalyzer, ExpectCTAnalyzer,
+    FeaturePolicyAnalyzer, FocusManagementAnalyzer,
     FocusManagementDeepAnalyzer, FocusOrderAnalyzer, FocusOrderPositiveTabindexAnalyzer,
     FontSizeAnalyzer, FormAccessibilityAnalyzerV2, FormLabelAnalyzer, FormLabelAssociationAnalyzer,
     FormLabelsDeepAnalyzer, HeadingHierarchyAnalyzerV2, HeadingHierarchyDeepAnalyzer,
@@ -96,9 +103,9 @@ pub use security_analyzers::{
     StrictTransportSecurityAnalyzer, StrictTransportSecurityAnalyzerV3,
     SubresourceIntegrityAnalyzer, TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer,
     TableAccessibilityAnalyzerV2, TableAccessibilityDeepAnalyzer, TableCaptionAnalyzer,
-    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzer,
+    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
     XContentTypeOptionsAnalyzerV2, XContentTypeOptionsDeepAnalyzer, XFrameOptionsAnalyzerV2,
-    XFrameOptionsDeepAnalyzer, XPermittedCrossDomainPoliciesAnalyzer, XSSProtectionAnalyzer,
+    XFrameOptionsDeepAnalyzer, XSSProtectionAnalyzer,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

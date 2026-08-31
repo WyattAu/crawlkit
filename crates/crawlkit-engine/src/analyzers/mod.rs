@@ -27,6 +27,8 @@ pub mod focus_management_analyzers;
 pub mod font_analyzers;
 /// Form accessibility analyzers.
 pub mod form_analyzers;
+/// Form and table accessibility validators.
+pub mod form_table_validator_analyzers;
 /// Heading hierarchy accessibility analyzers.
 pub mod heading_analyzers;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
@@ -129,6 +131,9 @@ pub use dns_sri_cors_analyzers::{
 pub use focus_management_analyzers::FocusManagementAnalyzer;
 pub use font_analyzers::FontSizeAnalyzer;
 pub use form_analyzers::FormLabelAnalyzer;
+pub use form_table_validator_analyzers::{
+    FormLabelAssociationAnalyzer, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
+};
 pub use heading_analyzers::HeadingOrderAnalyzer;
 pub use hsts_analyzer::HstsPreloadAnalyzer;
 pub use http_analyzers::{
@@ -167,11 +172,10 @@ pub use security_analyzers::{
     AriaRolesAnalyzerV2, ColorContrastLinkAnalyzer, ColorContrastTextAnalyzer,
     ContentSecurityPolicyAnalyzerV2, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, FocusOrderPositiveTabindexAnalyzer,
-    FormAccessibilityAnalyzerV2, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
-    ImageAccessibilityAnalyzerV2, LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2,
-    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    StrictTransportSecurityAnalyzerV3, TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
-    TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2,
+    FormAccessibilityAnalyzerV2, HeadingHierarchyAnalyzerV2, ImageAccessibilityAnalyzerV2,
+    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2, PermissionsPolicyAnalyzerV3,
+    ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer, StrictTransportSecurityAnalyzerV3,
+    TabindexAnalyzerV2, TableAccessibilityAnalyzerV2, XContentTypeOptionsAnalyzerV2,
     XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{

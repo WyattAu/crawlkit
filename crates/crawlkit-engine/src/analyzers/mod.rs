@@ -56,6 +56,8 @@ pub mod security_analyzers;
 pub mod security_header_analyzers;
 /// SEO analyzers for meta tags, headings, links, canonicals, and internationalization.
 pub mod seo_analyzers;
+/// Skip-navigation link accessibility analyzer.
+pub mod skip_link_analyzers;
 /// Social media analyzers for Open Graph, Twitter Cards, and social sharing metadata.
 pub mod social_analyzers;
 /// Strict-Transport-Security / COOP / COEP / Feature-Policy / Expect-CT / CT
@@ -149,7 +151,7 @@ pub use security_analyzers::{
     LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
     MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
     PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3, TabindexAnalyzer, TabindexAnalyzerV2,
+    StrictTransportSecurityAnalyzerV3, TabindexAnalyzer, TabindexAnalyzerV2,
     TableAccessibilityAnalyzerV2, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
     XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };
@@ -179,6 +181,7 @@ pub use seo_analyzers::{
     TitleAnalyzerV3, TitleKeywordAnalyzer, TitlePixelWidthAnalyzer, WikipediaLinkAnalyzer,
     WordCountAnalyzer, WordCountAnalyzerV2,
 };
+pub use skip_link_analyzers::SkipLinkAnalyzer;
 pub use social_analyzers::{
     OpenGraphAudioAnalyzer, OpenGraphImageValidator, OpenGraphSiteNameValidator,
     OpenGraphUrlValidator, OpenGraphVideoAnalyzer, SocialMediaAnalyzer, SocialPreviewOptimizer,

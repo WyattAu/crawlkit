@@ -22,6 +22,7 @@ pub use super::dns_sri_cors_analyzers::{
     CorsMisconfigurationAnalyzer, DnsRebindingAnalyzer, SubresourceIntegrityAnalyzer,
 };
 pub use super::language_accessibility_analyzers::LanguageAttributeAnalyzer;
+pub use super::skip_link_analyzers::SkipLinkAnalyzer;
 pub use super::table_caption_analyzers::TableCaptionAnalyzer;
 use crate::parser::ExtractedImage;
 
@@ -3562,54 +3563,6 @@ mod tests {
         let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
         assert_eq!(findings.len(), 1);
         assert!(findings.iter().any(|f| f.code == "COOP001"));
-    }
-}
-
-// =========================================================================
-// SkipLinkAnalyzer
-// =========================================================================
-
-pub struct SkipLinkAnalyzer;
-
-impl Default for SkipLinkAnalyzer {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl SkipLinkAnalyzer {
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-impl Analyzer for SkipLinkAnalyzer {
-    fn name(&self) -> &str {
-        "skip-link"
-    }
-
-    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-
-        if ctx.page.has_nav_landmark && !ctx.page.has_skip_link {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Accessibility,
-                code: "SKIPLINK001".to_string(),
-                title: "No skip navigation link".to_string(),
-                description: "The page has a navigation landmark but no skip-to-content \
-                              link. Keyboard users must tab through all navigation links \
-                              to reach main content."
-                    .to_string(),
-                url: url.clone(),
-                recommendation: "Add a skip link as the first focusable element pointing \
-                                 to the main content area."
-                    .to_string(),
-            });
-        }
-
-        findings
     }
 }
 

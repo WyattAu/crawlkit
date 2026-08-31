@@ -15,6 +15,8 @@ pub mod cookies;
 pub mod deep_security_header_analyzers;
 /// Font-size and line-height accessibility analyzers.
 pub mod font_analyzers;
+/// Form accessibility analyzers.
+pub mod form_analyzers;
 /// Heading hierarchy accessibility analyzers.
 pub mod heading_analyzers;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
@@ -85,6 +87,7 @@ pub use deep_security_header_analyzers::{
     XContentTypeOptionsDeepAnalyzer, XFrameOptionsDeepAnalyzer,
 };
 pub use font_analyzers::FontSizeAnalyzer;
+pub use form_analyzers::FormLabelAnalyzer;
 pub use heading_analyzers::HeadingOrderAnalyzer;
 pub use hsts_analyzer::HstsPreloadAnalyzer;
 pub use http_analyzers::{
@@ -116,17 +119,16 @@ pub use security_analyzers::{
     CorsMisconfigurationAnalyzer, CrossOriginIsolationAnalyzerV2,
     CrossOriginOpenerPolicyAnalyzerV2, CspDirectiveValidator, DnsRebindingAnalyzer,
     FocusManagementAnalyzer, FocusOrderPositiveTabindexAnalyzer, FormAccessibilityAnalyzerV2,
-    FormLabelAnalyzer, FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2,
-    HeadingLevelSkipAnalyzer, HstsPreloadListValidator, ImageAccessibilityAnalyzer,
-    ImageAccessibilityAnalyzerV2, ImageAltTextAnalyzer, LandmarkBannerAnalyzer,
-    LandmarkMainAnalyzer, LandmarkNavAnalyzer, LanguageAttributeAnalyzerV2,
-    LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2, LinkTextAnalyzer,
-    MixedContentFormValidator, MixedContentImageValidator, MixedContentScriptValidator,
-    PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2, SecurityHeaderAnalyzer,
-    SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3, SubresourceIntegrityAnalyzer,
-    TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer, TableAccessibilityAnalyzerV2,
-    TableCaptionAnalyzer, TableCaptionPresenceAnalyzer, TableHeaderScopeAnalyzer,
-    XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
+    FormLabelAssociationAnalyzer, HeadingHierarchyAnalyzerV2, HeadingLevelSkipAnalyzer,
+    HstsPreloadListValidator, ImageAccessibilityAnalyzer, ImageAccessibilityAnalyzerV2,
+    ImageAltTextAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
+    LanguageAttributeAnalyzerV2, LinkAccessibilityAnalyzer, LinkAccessibilityAnalyzerV2,
+    LinkTextAnalyzer, MixedContentFormValidator, MixedContentImageValidator,
+    MixedContentScriptValidator, PermissionsPolicyAnalyzerV3, ReferrerPolicyAnalyzerV2,
+    SecurityHeaderAnalyzer, SkipLinkAnalyzer, StrictTransportSecurityAnalyzerV3,
+    SubresourceIntegrityAnalyzer, TabindexAnalyzer, TabindexAnalyzerV2, TableAccessibilityAnalyzer,
+    TableAccessibilityAnalyzerV2, TableCaptionAnalyzer, TableCaptionPresenceAnalyzer,
+    TableHeaderScopeAnalyzer, XContentTypeOptionsAnalyzerV2, XFrameOptionsAnalyzerV2,
 };
 pub use security_header_analyzers::{
     ContentSecurityPolicyAnalyzer, CrossOriginIsolationAnalyzer, MixedContentAnalyzer,

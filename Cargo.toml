@@ -66,6 +66,7 @@ salting = { path = "../salting" }
 tokenkit = { path = "../tokenkit" }
 cryptkit = { path = "../cryptkit" }
 retry-backoff = { path = "../retry-backoff" }
+envstack = { path = "../envstack" }
 
 [profile.release]
 lto = true

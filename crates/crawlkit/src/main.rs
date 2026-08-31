@@ -9,6 +9,7 @@ mod cli;
 
 use anyhow::{Context, Result};
 use clap::Parser;
+use envstack::ConfigStack;
 use opentelemetry_sdk::trace::SdkTracerProvider;
 use std::path::PathBuf;
 use tracing_opentelemetry::OpenTelemetryLayer;
@@ -241,12 +242,16 @@ fn init_tracing(cli: &Cli) {
 
 fn load_config(cli: &Cli) -> Result<Config> {
     if let Some(config_path) = &cli.config {
-        let contents = std::fs::read_to_string(config_path)
+        let stack = ConfigStack::new()
+            .with_toml_file_strict(config_path)
             .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
-        toml::from_str::<Config>(&contents)
+        stack
+            .extract()
             .with_context(|| format!("Failed to parse config file: {}", config_path.display()))
     } else {
-        Ok(Config::default())
+        ConfigStack::new()
+            .extract()
+            .context("Failed to load default configuration")
     }
 }
 

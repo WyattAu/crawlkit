@@ -470,7 +470,11 @@ pub struct AnalyzerRegistry {
 impl AnalyzerRegistry {
     /// Create a registry with all default analyzers.
     ///
-    /// Registers 39 built-in analyzers covering HTTP status, redirects,
+    /// The default registry intentionally includes the complete analyzer set.
+    /// Use [`AnalyzerRegistry::core`] or [`AnalyzerRegistry::standard`] when a
+    /// smaller, lower-noise profile is preferable.
+    ///
+    /// Registers built-in analyzers covering HTTP status, redirects,
     /// canonical URLs, meta tags, headings, links, images, structured data,
     /// security, accessibility, social media, AI crawlers, and WASM patterns.
     pub fn new(_config: &CrawlConfig) -> Self {
@@ -502,6 +506,27 @@ impl AnalyzerRegistry {
             flags.get(crate::FLAG_AI_ANALYZERS),
             flags.get(crate::FLAG_WASM_ANALYZERS),
         )
+    }
+
+    /// Create a conservative core profile containing the foundational analyzers.
+    pub fn core(_config: &CrawlConfig) -> Self {
+        Self::with_analyzers(vec![
+            Box::new(HttpStatusAnalyzer::new()),
+            Box::new(RedirectChainAnalyzer::new()),
+            Box::new(CanonicalUrlValidator::new()),
+            Box::new(HreflangValidator::new()),
+            Box::new(MetaTagAnalyzer::new()),
+            Box::new(HeadingHierarchyAnalyzer::new()),
+            Box::new(LinkAnalyzer::new()),
+            Box::new(ImageAnalyzer::new()),
+            Box::new(StructuredDataValidator::new()),
+        ])
+    }
+
+    /// Create the standard profile. This currently aliases the complete
+    /// registry until behavioral consolidation identifies canonical analyzers.
+    pub fn standard(config: &CrawlConfig) -> Self {
+        Self::new(config)
     }
 
     /// Single registration site for all built-in analyzers.

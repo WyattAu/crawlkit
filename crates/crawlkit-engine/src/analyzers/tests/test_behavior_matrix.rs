@@ -5,6 +5,7 @@
 
 use crate::analyzers::{
     AnalysisContext, Analyzer, FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator,
+    TableAccessibilityDeepAnalyzerV2, TableAccessibilityDeepDeepValidator,
 };
 use crate::meta::MetaTags;
 use crate::parser::{ExtractedForm, ExtractedInput, ParsedPage};
@@ -58,6 +59,37 @@ fn page_with_unlabeled_input() -> ParsedPage {
         og_image_width: None,
         og_image_height: None,
     }
+}
+
+#[test]
+fn table_generations_have_distinct_codes_and_same_core_signal() {
+    let mut page = page_with_unlabeled_input();
+    page.tables_total = 2;
+    page.tables_with_headers = 0;
+    page.tables_with_captions = 0;
+    let ctx = AnalysisContext {
+        page: &page,
+        body: None,
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    };
+
+    let deep = TableAccessibilityDeepAnalyzerV2::new().analyze(&ctx);
+    let deep_deep = TableAccessibilityDeepDeepValidator::new().analyze(&ctx);
+
+    assert!(deep.iter().any(|f| f.code == "TABACC-V2001"));
+    assert!(deep.iter().any(|f| f.code == "TABACC-V2002"));
+    assert_eq!(deep_deep.len(), 1);
+    assert_eq!(deep_deep[0].code, "TABACC-V2001-DEEP-DEEP");
+    assert_eq!(deep[0].category, deep_deep[0].category);
 }
 
 #[test]

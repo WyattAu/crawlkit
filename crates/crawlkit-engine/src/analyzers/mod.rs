@@ -548,6 +548,35 @@ impl AnalyzerRegistry {
         ])
     }
 
+    /// Create the deep profile with canonical deep security, accessibility, and SEO checks.
+    ///
+    /// This profile is additive to `standard` conceptually, but intentionally
+    /// contains only deep analyzers so callers can choose the cost/noise level.
+    pub fn deep(_config: &CrawlConfig) -> Self {
+        Self::with_analyzers(vec![
+            Box::new(XContentTypeOptionsDeepAnalyzer::new()),
+            Box::new(ReferrerPolicyDeepAnalyzer::new()),
+            Box::new(XFrameOptionsDeepAnalyzer::new()),
+            Box::new(PermissionsPolicyDeepAnalyzer::new()),
+            Box::new(CrossOriginIsolationDeepAnalyzer::new()),
+            Box::new(AriaLandmarksAnalyzer::new()),
+            Box::new(HeadingHierarchyDeepAnalyzer::new()),
+            Box::new(FormLabelsDeepAnalyzer::new()),
+            Box::new(TableAccessibilityDeepAnalyzer::new()),
+            Box::new(LinkTextQualityAnalyzer::new()),
+            Box::new(ImageAltTextDeepAnalyzer::new()),
+            Box::new(FocusManagementDeepAnalyzer::new()),
+            Box::new(LanguageAttributesDeepAnalyzer::new()),
+            Box::new(TitleAnalysisDeepAnalyzer::new()),
+            Box::new(MetaDescriptionDeepAnalyzer::new()),
+            Box::new(CanonicalValidationDeepAnalyzer::new()),
+            Box::new(SitemapCoverageDeepAnalyzer::new()),
+            Box::new(RobotsTxtAnalysisDeepAnalyzer::new()),
+            Box::new(InternalLinkQualityAnalyzer::new()),
+            Box::new(ExternalLinkAuthorityDeepAnalyzer::new()),
+        ])
+    }
+
     /// Single registration site for all built-in analyzers.
     ///
     /// `include_ai` and `include_wasm` toggle the optional analyzer groups;

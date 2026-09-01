@@ -79,6 +79,18 @@ fn test_standard_profile_is_reduced_and_unique() {
     assert_eq!(names.len(), standard.len());
 }
 
+/// Deep is a focused profile of advanced analyzers with unique names and codes.
+#[test]
+fn test_deep_profile_is_focused_and_unique() {
+    let config = CrawlConfig::default();
+    let deep = AnalyzerRegistry::deep(&config);
+    let standard = AnalyzerRegistry::standard(&config);
+    let names: HashSet<&str> = deep.iter().map(|analyzer| analyzer.name()).collect();
+    assert_eq!(deep.len(), 20);
+    assert_eq!(names.len(), deep.len());
+    assert!(deep.len() > standard.len());
+}
+
 /// Every registered analyzer must have a unique name. A duplicate name means
 /// two registrations race for the same finding identity and downstream
 /// consumers cannot attribute findings.
@@ -146,6 +158,7 @@ fn test_profile_baseline_counts() {
     let ctx = fixture_context(&page);
     let core = AnalyzerRegistry::core(&config);
     let standard = AnalyzerRegistry::standard(&config);
+    let deep = AnalyzerRegistry::deep(&config);
     let default = AnalyzerRegistry::new(&config);
 
     let count_findings = |registry: &AnalyzerRegistry| {
@@ -157,7 +170,9 @@ fn test_profile_baseline_counts() {
 
     assert_eq!(core.len(), 9);
     assert_eq!(standard.len(), 17);
-    assert!(standard.len() < default.len());
+    assert_eq!(deep.len(), 20);
+    assert!(standard.len() < deep.len());
+    assert!(deep.len() < default.len());
     assert_eq!(count_findings(&core), 9);
     assert!(count_findings(&standard) <= count_findings(&default));
 }

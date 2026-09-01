@@ -67,13 +67,16 @@ fn test_core_profile_is_small_and_unique() {
     assert_eq!(names.len(), registry.len());
 }
 
-/// Standard currently preserves full-registry compatibility while consolidation is staged.
+/// Standard is a deliberately reduced, canonical profile; full coverage remains in `new`.
 #[test]
-fn test_standard_profile_preserves_default_coverage() {
+fn test_standard_profile_is_reduced_and_unique() {
     let config = CrawlConfig::default();
     let standard = AnalyzerRegistry::standard(&config);
     let default = AnalyzerRegistry::new(&config);
-    assert_eq!(standard.len(), default.len());
+    let names: HashSet<&str> = standard.iter().map(|analyzer| analyzer.name()).collect();
+    assert_eq!(standard.len(), 17);
+    assert!(standard.len() < default.len());
+    assert_eq!(names.len(), standard.len());
 }
 
 /// Every registered analyzer must have a unique name. A duplicate name means
@@ -153,9 +156,10 @@ fn test_profile_baseline_counts() {
     };
 
     assert_eq!(core.len(), 9);
-    assert_eq!(standard.len(), default.len());
+    assert_eq!(standard.len(), 17);
+    assert!(standard.len() < default.len());
     assert_eq!(count_findings(&core), 9);
-    assert_eq!(count_findings(&standard), count_findings(&default));
+    assert!(count_findings(&standard) <= count_findings(&default));
 }
 
 /// Every registered analyzer must be constructible with a non-empty name.

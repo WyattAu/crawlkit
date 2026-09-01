@@ -523,10 +523,29 @@ impl AnalyzerRegistry {
         ])
     }
 
-    /// Create the standard profile. This currently aliases the complete
-    /// registry until behavioral consolidation identifies canonical analyzers.
-    pub fn standard(config: &CrawlConfig) -> Self {
-        Self::new(config)
+    /// Create the standard profile with one canonical analyzer per common family.
+    ///
+    /// The complete registry remains available through [`AnalyzerRegistry::new`].
+    pub fn standard(_config: &CrawlConfig) -> Self {
+        Self::with_analyzers(vec![
+            Box::new(HttpStatusAnalyzer::new()),
+            Box::new(RedirectChainAnalyzer::new()),
+            Box::new(CanonicalUrlValidator::new()),
+            Box::new(HreflangValidator::new()),
+            Box::new(MetaTagAnalyzer::new()),
+            Box::new(HeadingHierarchyAnalyzer::new()),
+            Box::new(LinkAnalyzer::new()),
+            Box::new(ImageAnalyzer::new()),
+            Box::new(StructuredDataValidator::new()),
+            Box::new(ContentQualityAnalyzer::new()),
+            Box::new(SecurityHeaderAnalyzer::new()),
+            Box::new(MobileFriendlinessChecker::new()),
+            Box::new(AccessibilityAnalyzer::new()),
+            Box::new(SocialMediaAnalyzer::new()),
+            Box::new(InternationalSeoAnalyzer::new()),
+            Box::new(CookieAnalyzer::new()),
+            Box::new(MixedContentAnalyzer::new()),
+        ])
     }
 
     /// Single registration site for all built-in analyzers.

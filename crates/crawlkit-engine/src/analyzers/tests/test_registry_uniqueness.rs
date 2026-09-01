@@ -3,9 +3,59 @@
 //! Guards the single registration site (`AnalyzerRegistry::build_registry`)
 //! against duplicate analyzer names and empty registrations.
 
-use crate::analyzers::AnalyzerRegistry;
+use crate::analyzers::{AnalysisContext, AnalyzerRegistry};
+use crate::parser::ParsedPage;
 use crate::CrawlConfig;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+
+fn fixture_page() -> ParsedPage {
+    ParsedPage {
+        url: "https://example.com".to_string(),
+        meta: Default::default(),
+        headings: Vec::new(),
+        links: Vec::new(),
+        images: Vec::new(),
+        forms: Vec::new(),
+        scripts: Vec::new(),
+        styles: Vec::new(),
+        structured_data: Vec::new(),
+        word_count: 0,
+        sentence_count: 0,
+        landmarks: Vec::new(),
+        has_skip_link: false,
+        has_main_landmark: false,
+        has_nav_landmark: false,
+        has_positive_tabindex: false,
+        tabindex_negative_count: 0,
+        aria_role_count: 0,
+        aria_label_count: 0,
+        has_lang_attribute: false,
+        html_lang: None,
+        has_aria_hidden: false,
+        tables_with_headers: 0,
+        tables_total: 0,
+        tables_with_captions: 0,
+        og_image_width: None,
+        og_image_height: None,
+    }
+}
+
+fn fixture_context(page: &ParsedPage) -> AnalysisContext<'_> {
+    AnalysisContext {
+        page,
+        body: None,
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    }
+}
 
 /// Every registered analyzer must have a unique name. A duplicate name means
 /// two registrations race for the same finding identity and downstream
@@ -25,6 +75,31 @@ fn test_registry_analyzer_names_unique() {
             .filter(|n| names.iter().filter(|m| m == n).count() > 1)
             .collect::<Vec<_>>()
     );
+}
+
+/// Each analyzer must return unique finding codes on a representative page.
+/// This catches registry-level duplicate output while preserving the ability
+/// for one analyzer to emit multiple different issue codes.
+#[test]
+fn test_registry_finding_codes_unique_on_fixture() {
+    let config = CrawlConfig::default();
+    let registry = AnalyzerRegistry::new(&config);
+    let page = fixture_page();
+    let ctx = fixture_context(&page);
+    let mut owners: HashMap<String, String> = HashMap::new();
+    for analyzer in registry.iter() {
+        for finding in analyzer.analyze(&ctx) {
+            if let Some(previous) = owners.get(&finding.code) {
+                panic!(
+                    "duplicate finding code {} emitted by {} and {}",
+                    finding.code,
+                    previous,
+                    analyzer.name()
+                );
+            }
+            owners.insert(finding.code.clone(), analyzer.name().to_string());
+        }
+    }
 }
 
 /// The default registry must be non-empty and at least the documented

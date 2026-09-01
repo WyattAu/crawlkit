@@ -890,7 +890,7 @@ impl Analyzer for XContentTypeOptionsDeepAnalyzerV2 {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Security,
-                    code: "XCTO-V2001".to_string(),
+                    code: "XCTO-V2001-DEEP".to_string(),
                     title: "Missing X-Content-Type-Options".to_string(),
                     description: "Without nosniff, browsers may MIME-sniff responses.".to_string(),
                     url: url.clone(),
@@ -17079,7 +17079,7 @@ impl Analyzer for PermissionsPolicyDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Security,
-                code: "PERMP-V2001".to_string(),
+                code: "PERMP-V2001-DEEP-DEEP".to_string(),
                 title: "Missing Permissions-Policy header (deep-deep)".to_string(),
                 description:
                     "No Permissions-Policy or Feature-Policy header found in deep analysis."
@@ -17123,7 +17123,7 @@ impl Analyzer for CrossOriginIsolationDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Security,
-                code: "COISO-V2001".to_string(),
+                code: "COISO-V2001-DEEP-DEEP".to_string(),
                 title: "Missing Cross-Origin-Embedder-Policy (deep-deep)".to_string(),
                 description: "No COEP header found in deep analysis.".to_string(),
                 url: url.clone(),
@@ -19002,7 +19002,7 @@ impl Analyzer for LanguageAttributesDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "LANGATTR-V2001".to_string(),
+                code: "LANGATTR-V2001-DEEP-DEEP".to_string(),
                 title: "Missing lang attribute (deep-deep)".to_string(),
                 description: "HTML element has no lang attribute in deep analysis.".to_string(),
                 url: url.clone(),
@@ -19317,7 +19317,7 @@ impl Analyzer for HeadingHierarchyDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "HHIER-V2001".to_string(),
+                code: "HHIER-V2001-DEEP-DEEP-DEEP".to_string(),
                 title: "No headings found (deep-deep-deep)".to_string(),
                 description: "Page has no heading elements in deep-deep analysis.".to_string(),
                 url: url.clone(),
@@ -19623,7 +19623,7 @@ mod v2_analyzer_tests {
         let f = XContentTypeOptionsDeepAnalyzerV2::new()
             .analyze(&make_ctx(&make_page("https://example.com"), None));
         assert_eq!(f.len(), 1);
-        assert_eq!(f[0].code, "XCTO-V2001");
+        assert_eq!(f[0].code, "XCTO-V2001-DEEP");
     }
     #[test]
     fn test_rp_v2() {
@@ -26812,7 +26812,7 @@ mod v2_analyzer_tests {
         let p = make_page("https://example.com");
         let f = PermissionsPolicyDeepDeepValidator::new().analyze(&make_ctx(&p, None));
         assert!(!f.is_empty());
-        assert_eq!(f[0].code, "PERMP-V2001");
+        assert_eq!(f[0].code, "PERMP-V2001-DEEP-DEEP");
     }
     #[test]
     fn test_pp_dd_v8_present() {
@@ -27502,7 +27502,7 @@ mod v2_analyzer_tests {
         let p = make_page("https://example.com");
         let f = LanguageAttributesDeepDeepValidator::new().analyze(&make_ctx(&p, None));
         assert!(!f.is_empty());
-        assert_eq!(f[0].code, "LANGATTR-V2001");
+        assert_eq!(f[0].code, "LANGATTR-V2001-DEEP-DEEP");
     }
     #[test]
     fn test_lang_dd_v8_present() {
@@ -27622,7 +27622,7 @@ mod v2_analyzer_tests {
         let p = make_page("https://example.com");
         let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None));
         assert!(!f.is_empty());
-        assert_eq!(f[0].code, "HHIER-V2001");
+        assert_eq!(f[0].code, "HHIER-V2001-DEEP-DEEP-DEEP");
     }
     #[test]
     fn test_head_hier_ddd_v8_no_h1() {

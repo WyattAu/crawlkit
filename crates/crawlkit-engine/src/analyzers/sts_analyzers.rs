@@ -365,7 +365,7 @@ impl Analyzer for CrossOriginEmbedderPolicyAnalyzer {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
-                    code: "COEP001".to_string(),
+                    code: "COEP001-POLICY".to_string(),
                     title: "Cross-Origin-Embedder-Policy header missing".to_string(),
                     description: "No Cross-Origin-Embedder-Policy (COEP) header was found. COEP \
                                   prevents loading cross-origin resources without explicit opt-in, \
@@ -460,7 +460,7 @@ impl Analyzer for CrossOriginOpenerPolicyAnalyzer {
                     findings.push(Finding {
                         severity: Severity::Info,
                         category: IssueCategory::Security,
-                        code: "COOP002".to_string(),
+                        code: "COOP002-POLICY".to_string(),
                         title: "Cross-Origin-Opener-Policy not set to same-origin".to_string(),
                         description: format!(
                             "Cross-Origin-Opener-Policy is \"{value}\" instead of \"same-origin\". \

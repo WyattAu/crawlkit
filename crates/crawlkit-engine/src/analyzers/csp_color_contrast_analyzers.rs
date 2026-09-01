@@ -51,7 +51,7 @@ impl Analyzer for CspDirectiveValidator {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Security,
-                        code: "CSPDIR001".to_string(),
+                        code: "CSPDIR001-VALIDATOR".to_string(),
                         title: format!("CSP missing {dir} directive"),
                         description: format!("The Content-Security-Policy header does not include a '{dir}' directive. Without it, resources of this type are governed by default-src or are unrestricted."),
                         url: url.to_string(),

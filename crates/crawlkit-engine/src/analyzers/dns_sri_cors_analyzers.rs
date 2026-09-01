@@ -219,7 +219,7 @@ impl Analyzer for CorsMisconfigurationAnalyzer {
                 findings.push(Finding {
                     severity: Severity::Critical,
                     category: IssueCategory::Security,
-                    code: "CORS001".to_string(),
+                    code: "CORS001-MISCONFIG".to_string(),
                     title: "CORS allows all origins with credentials".to_string(),
                     description: "Access-Control-Allow-Origin is set to \"*\" with \
                                   Access-Control-Allow-Credentials: true. This is an \
@@ -241,7 +241,7 @@ impl Analyzer for CorsMisconfigurationAnalyzer {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Security,
-                        code: "CORS002".to_string(),
+                        code: "CORS002-MISCONFIG".to_string(),
                         title: "CORS wildcard on sensitive endpoint".to_string(),
                         description: "Access-Control-Allow-Origin is set to \"*\" on a \
                                       sensitive endpoint. While technically valid without \

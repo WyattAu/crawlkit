@@ -570,8 +570,8 @@ pub enum CrawlError {
     MaxRetriesExceeded(usize),
 }
 
-#[cfg(feature = "retry-backoff")]
-impl retry_backoff::IsRetryable for CrawlError {
+#[cfg(feature = "loop-retry")]
+impl loop_retry::IsRetryable for CrawlError {
     fn is_retryable(&self) -> bool {
         match self {
             #[cfg(feature = "full")]

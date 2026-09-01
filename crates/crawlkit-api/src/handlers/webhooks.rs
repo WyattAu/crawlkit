@@ -202,7 +202,7 @@ impl std::fmt::Display for WebhookError {
     }
 }
 
-impl retry_backoff::IsRetryable for WebhookError {
+impl loop_retry::IsRetryable for WebhookError {
     fn is_retryable(&self) -> bool {
         matches!(self, Self::Network(_) | Self::Http(_))
     }
@@ -226,7 +226,7 @@ pub async fn deliver_webhook(
         .map_err(|e| format!("Failed to serialize webhook payload: {e}"))?;
     let signature = sign_webhook_payload(&webhook.secret, &body);
 
-    let config = retry_backoff::RetryConfig {
+    let config = loop_retry::RetryConfig {
         max_retries: 3,
         initial_delay: std::time::Duration::from_secs(1),
         ..Default::default()
@@ -235,7 +235,7 @@ pub async fn deliver_webhook(
     let url = webhook.url.clone();
     let event = payload.event.clone();
 
-    retry_backoff::with_backoff(&config, || {
+    loop_retry::with_backoff(&config, || {
         let body = body.clone();
         let url = url.clone();
         let event = event.clone();

@@ -851,6 +851,7 @@ dependencies = [
  "dhat",
  "dirs",
  "ed25519-dalek",
+ "envstack",
  "indicatif",
  "opentelemetry",
  "opentelemetry-stdout",
@@ -886,6 +887,7 @@ dependencies = [
  "hmac 0.12.1",
  "http",
  "jsonwebtoken",
+ "loop-retry",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry-stdout",
@@ -894,7 +896,6 @@ dependencies = [
  "prometheus-client",
  "rand 0.8.7",
  "reqwest 0.12.28",
- "retry-backoff",
  "rusqlite",
  "salting",
  "sentry",
@@ -937,6 +938,7 @@ dependencies = [
  "futures",
  "getrandom 0.2.17",
  "libloading",
+ "loop-retry",
  "lru",
  "opentelemetry",
  "opentelemetry-otlp",
@@ -948,7 +950,6 @@ dependencies = [
  "redis",
  "regex",
  "reqwest 0.12.28",
- "retry-backoff",
  "rusqlite",
  "scraper",
  "serde",
@@ -1467,6 +1468,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "75030f3c4f45dafd7586dd6780965a8c7e8e285a5ecb86713e63a79c5b2766f3"
 dependencies = [
  "cfg-if",
+]
+
+[[package]]
+name = "envstack"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "toml 0.8.23",
 ]
 
 [[package]]
@@ -2502,6 +2513,15 @@ name = "log"
 version = "0.4.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
+
+[[package]]
+name = "loop-retry"
+version = "0.1.0"
+dependencies = [
+ "rand 0.9.5",
+ "thiserror 2.0.19",
+ "tokio",
+]
 
 [[package]]
 name = "lru"
@@ -3784,15 +3804,6 @@ dependencies = [
  "wasm-bindgen",
  "wasm-bindgen-futures",
  "web-sys",
-]
-
-[[package]]
-name = "retry-backoff"
-version = "0.1.0"
-dependencies = [
- "rand 0.9.5",
- "thiserror 2.0.19",
- "tokio",
 ]
 
 [[package]]

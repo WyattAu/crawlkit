@@ -63,7 +63,7 @@ utoipa-swagger-ui = { version = "9", features = ["axum"] }
 salting.workspace = true
 tokenkit.workspace = true
 cryptkit.workspace = true
-retry-backoff = { workspace = true }
+loop-retry = { workspace = true }
 
 [dev-dependencies]
 tempfile = "3"

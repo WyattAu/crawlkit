@@ -11,6 +11,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@pediment/tokens": "file:../../pediment/packages/tokens",
     "@radix-ui/react-dialog": "^1.0.5",
     "clsx": "^2.0.0",
     "date-fns": "^2.30.0",

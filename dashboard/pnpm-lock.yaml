@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@pediment/tokens':
+        specifier: file:../../pediment/packages/tokens
+        version: file:../../pediment/packages/tokens
       '@radix-ui/react-dialog':
         specifier: ^1.0.5
         version: 1.1.21(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
@@ -444,6 +447,9 @@ packages:
   '@nodelib/fs.walk@1.2.8':
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
+
+  '@pediment/tokens@file:../../pediment/packages/tokens':
+    resolution: {directory: ../../pediment/packages/tokens, type: directory}
 
   '@radix-ui/primitive@1.1.7':
     resolution: {integrity: sha512-rqWnm76nYT8HoNNqEjpgJ7Pw/DrBj5iBTrmEPo6HTX5+VJyBNOqTdv4g89G63HuR5g0AaENoAcH7Is5fF2kZ8Q==}
@@ -2554,6 +2560,8 @@ snapshots:
     dependencies:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
+
+  '@pediment/tokens@file:../../pediment/packages/tokens': {}
 
   '@radix-ui/primitive@1.1.7': {}
 

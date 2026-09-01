@@ -595,4 +595,4 @@ All Phase 8 code must comply with `.adrs/coding-standards.md`.
 
 ---
 
-*Last updated: 2026-07-23*
+*Last updated: 2026-09-01*

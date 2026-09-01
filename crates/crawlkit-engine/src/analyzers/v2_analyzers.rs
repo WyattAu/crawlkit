@@ -17314,7 +17314,7 @@ impl Analyzer for FormLabelsDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "FORMLBL-V2001".to_string(),
+                code: "FORMLBL-V2001-DEEP-DEEP".to_string(),
                 title: "Form inputs without labels (deep-deep)".to_string(),
                 description: format!(
                     "{unlabeled} input(s) have no associated label in deep analysis."
@@ -17349,7 +17349,7 @@ impl Analyzer for TableAccessibilityDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "TABACC-V2001".to_string(),
+                code: "TABACC-V2001-DEEP-DEEP".to_string(),
                 title: "Tables without headers (deep-deep)".to_string(),
                 description: format!(
                     "{} table(s) found but none have header cells in deep analysis.",
@@ -17392,7 +17392,7 @@ impl Analyzer for LinkTextQualityDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "LINKTQ-V2001".to_string(),
+                code: "LINKTQ-V2001-DEEP".to_string(),
                 title: "Links without text (deep)".to_string(),
                 description: format!(
                     "{empty_text} link(s) have no text, aria-label, or alt text in deep analysis."
@@ -18815,7 +18815,7 @@ impl Analyzer for FormLabelsDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "FORMLBL-V2001".to_string(),
+                code: "FORMLBL-V2001-DEEP-DEEP-DEEP".to_string(),
                 title: "Form inputs without labels (deep-deep-deep)".to_string(),
                 description: format!(
                     "{unlabeled} input(s) have no associated label in deep-deep analysis."
@@ -18850,7 +18850,7 @@ impl Analyzer for TableAccessibilityDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "TABACC-V2001".to_string(),
+                code: "TABACC-V2001-DEEP-DEEP-DEEP".to_string(),
                 title: "Tables without headers (deep-deep-deep)".to_string(),
                 description: format!(
                     "{} table(s) but none have header cells in deep-deep analysis.",
@@ -18864,7 +18864,7 @@ impl Analyzer for TableAccessibilityDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Accessibility,
-                code: "TABACC-V2002".to_string(),
+                code: "TABACC-V2002-DEEP-DEEP-DEEP".to_string(),
                 title: "Tables without captions (deep-deep-deep)".to_string(),
                 description: format!(
                     "{} table(s) but none have captions in deep-deep analysis.",
@@ -18906,7 +18906,7 @@ impl Analyzer for LinkTextQualityDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "LINKTQ-V2001".to_string(),
+                code: "LINKTQ-V2001-DEEP-DEEP".to_string(),
                 title: "Links without text (deep-deep)".to_string(),
                 description: format!(
                     "{empty_text} link(s) have no text or aria-label in deep-deep analysis."

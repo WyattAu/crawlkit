@@ -1386,7 +1386,7 @@ impl Analyzer for LinkTextQualityAnalyzerV2 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "LINKTQ-V2002".to_string(),
+                code: "LINKTQ-V2002-V2".to_string(),
                 title: "Empty link text".to_string(),
                 description: format!("{empty_count} link(s) have no text or aria-label."),
                 url: url.clone(),
@@ -17419,7 +17419,7 @@ impl Analyzer for LinkTextQualityDeepValidator {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Accessibility,
-                code: "LINKTQ-V2002".to_string(),
+                code: "LINKTQ-V2002-DEEP".to_string(),
                 title: "Generic link text (deep)".to_string(),
                 description: format!(
                     "{generic_count} link(s) use generic anchor text in deep analysis."

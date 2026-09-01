@@ -8091,7 +8091,7 @@ impl Analyzer for InternalLinkAnchorTextDiversityAnalyzer {
                         findings.push(Finding {
                             severity: Severity::Info,
                             category: IssueCategory::Seo,
-                            code: "ANCH-DIV001".to_string(),
+                            code: "ANCH-DIV001-INTERNAL".to_string(),
                             title: "Low internal link anchor text diversity".to_string(),
                             description: format!("The most common anchor text appears {max_count} times ({max_pct}% of {total_texts} unique texts). Overly uniform anchor text may appear manipulative."),
                             url: url.to_string(),
@@ -8369,7 +8369,7 @@ impl Analyzer for MetaDescriptionAnalyzerV3 {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Seo,
-                    code: "META-V3001".to_string(),
+                    code: "META-V3001-LENGTH".to_string(),
                     title: "Meta description too long".to_string(),
                     description: format!("Meta description is {} characters, exceeding the recommended maximum of 165. Search engines will truncate it.", desc.len()),
                     url: url.clone(),

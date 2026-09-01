@@ -5,9 +5,11 @@
 
 use crate::analyzers::{
     AnalysisContext, Analyzer, FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator,
-    TableAccessibilityDeepAnalyzerV2, TableAccessibilityDeepDeepValidator,
+    LinkTextQualityAnalyzerV2, LinkTextQualityDeepValidator, TableAccessibilityDeepAnalyzerV2,
+    TableAccessibilityDeepDeepValidator,
 };
 use crate::meta::MetaTags;
+use crate::parser::ExtractedLink;
 use crate::parser::{ExtractedForm, ExtractedInput, ParsedPage};
 
 fn page_with_unlabeled_input() -> ParsedPage {
@@ -59,6 +61,51 @@ fn page_with_unlabeled_input() -> ParsedPage {
         og_image_width: None,
         og_image_height: None,
     }
+}
+
+#[test]
+fn link_generations_separate_generic_and_empty_signals() {
+    let mut page = page_with_unlabeled_input();
+    page.links = vec![
+        ExtractedLink {
+            href: "/empty".to_string(),
+            text: String::new(),
+            rel: Vec::new(),
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        },
+        ExtractedLink {
+            href: "/generic".to_string(),
+            text: "click here".to_string(),
+            rel: Vec::new(),
+            is_external: false,
+            aria_label: None,
+            img_alt: None,
+        },
+    ];
+    let ctx = AnalysisContext {
+        page: &page,
+        body: None,
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    };
+
+    let v2 = LinkTextQualityAnalyzerV2::new().analyze(&ctx);
+    let deep = LinkTextQualityDeepValidator::new().analyze(&ctx);
+
+    assert!(v2.iter().any(|f| f.code == "LINKTQ-V2001"));
+    assert!(v2.iter().any(|f| f.code == "LINKTQ-V2002-V2"));
+    assert!(deep.iter().any(|f| f.code == "LINKTQ-V2001-DEEP"));
+    assert!(deep.iter().any(|f| f.code == "LINKTQ-V2002-DEEP"));
 }
 
 #[test]

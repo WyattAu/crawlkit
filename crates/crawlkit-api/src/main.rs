@@ -225,7 +225,7 @@ struct AppState {
     http_client: reqwest::Client,
     auth: Arc<AuthManager>,
     oidc: Option<Arc<OidcManager>>,
-    oidc_states: Arc<DashMap<String, DateTime<Utc>>>,
+    oidc_states: Arc<DashMap<String, OidcPendingState>>,
     tenants: Arc<dashmap::DashMap<String, Tenant>>,
     marketplace: MarketplaceState,
     sessions: Arc<DashMap<String, SessionInfo>>,
@@ -238,6 +238,13 @@ struct SessionInfo {
     created_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
     revoked: bool,
+}
+
+#[derive(Debug, Clone)]
+struct OidcPendingState {
+    created_at: DateTime<Utc>,
+    code_verifier: String,
+    nonce: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1255,9 +1262,19 @@ async fn oidc_authorize(State(state): State<AppState>) -> Result<Response, ApiEr
         .ok_or_else(|| ApiError::Internal("OIDC not configured".to_string()))?;
 
     let state_token = uuid::Uuid::new_v4().to_string();
-    state.oidc_states.insert(state_token.clone(), Utc::now());
+    let nonce = uuid::Uuid::new_v4().to_string();
+    let pkce = oidc::generate_pkce();
 
-    let url = oidc.authorization_url(&state_token);
+    state.oidc_states.insert(
+        state_token.clone(),
+        OidcPendingState {
+            created_at: Utc::now(),
+            code_verifier: pkce.code_verifier.clone(),
+            nonce: nonce.clone(),
+        },
+    );
+
+    let url = oidc.authorization_url(&state_token, &nonce, &pkce.code_challenge);
     let parsed_url = url::Url::parse(&url)
         .map_err(|e| ApiError::Internal(format!("Invalid authorization URL: {e}")))?;
 
@@ -1295,18 +1312,20 @@ async fn oidc_callback(
         .as_deref()
         .ok_or_else(|| ApiError::BadRequest("Missing state parameter".to_string()))?;
 
-    let created_at = state
+    let pending = state
         .oidc_states
         .get(state_token)
         .ok_or_else(|| ApiError::BadRequest("Invalid state parameter".to_string()))?;
 
     let state_ttl = chrono::Duration::minutes(10);
-    if Utc::now() - *created_at.value() > state_ttl {
+    if Utc::now() - pending.created_at > state_ttl {
+        drop(pending);
         state.oidc_states.remove(state_token);
         return Err(ApiError::BadRequest(
             "State parameter expired, please try again".to_string(),
         ));
     }
+    let pending = pending.value().clone();
     state.oidc_states.remove(state_token);
 
     let oidc = state
@@ -1315,7 +1334,7 @@ async fn oidc_callback(
         .ok_or_else(|| ApiError::Internal("OIDC not configured".to_string()))?;
 
     let tokens = oidc
-        .exchange_code(code)
+        .exchange_code(code, &pending.code_verifier)
         .await
         .map_err(|e| ApiError::Internal(format!("Token exchange failed: {e}")))?;
 

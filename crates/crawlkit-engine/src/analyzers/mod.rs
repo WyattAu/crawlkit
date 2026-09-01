@@ -1465,6 +1465,11 @@ impl AnalyzerRegistry {
     pub fn is_empty(&self) -> bool {
         self.analyzers.is_empty()
     }
+
+    /// Iterate over the registered analyzers.
+    pub fn iter(&self) -> impl Iterator<Item = &dyn Analyzer> {
+        self.analyzers.iter().map(|a| a.as_ref())
+    }
 }
 
 #[cfg(test)]

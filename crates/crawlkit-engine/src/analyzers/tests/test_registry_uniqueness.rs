@@ -57,6 +57,25 @@ fn fixture_context(page: &ParsedPage) -> AnalysisContext<'_> {
     }
 }
 
+/// Core is intentionally smaller than the complete registry and remains duplicate-free.
+#[test]
+fn test_core_profile_is_small_and_unique() {
+    let config = CrawlConfig::default();
+    let registry = AnalyzerRegistry::core(&config);
+    assert!(registry.len() < AnalyzerRegistry::new(&config).len());
+    let names: HashSet<&str> = registry.iter().map(|analyzer| analyzer.name()).collect();
+    assert_eq!(names.len(), registry.len());
+}
+
+/// Standard currently preserves full-registry compatibility while consolidation is staged.
+#[test]
+fn test_standard_profile_preserves_default_coverage() {
+    let config = CrawlConfig::default();
+    let standard = AnalyzerRegistry::standard(&config);
+    let default = AnalyzerRegistry::new(&config);
+    assert_eq!(standard.len(), default.len());
+}
+
 /// Every registered analyzer must have a unique name. A duplicate name means
 /// two registrations race for the same finding identity and downstream
 /// consumers cannot attribute findings.

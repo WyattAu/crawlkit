@@ -5,9 +5,10 @@
 
 use crate::analyzers::{
     AnalysisContext, Analyzer, CookieSecureDeepDeepValidator, CookieSecurityFlagAnalyzerV2,
-    FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator, HeadingHierarchyDeepAnalyzerV2,
-    HeadingHierarchyDeepDeepValidator, LinkTextQualityAnalyzerV2, LinkTextQualityDeepValidator,
-    TableAccessibilityDeepAnalyzerV2, TableAccessibilityDeepDeepValidator,
+    CspDirectiveAnalyzer, CspDirectiveAnalyzerV2, FormLabelsDeepAnalyzerV2,
+    FormLabelsDeepDeepValidator, HeadingHierarchyDeepAnalyzerV2, HeadingHierarchyDeepDeepValidator,
+    LinkTextQualityAnalyzerV2, LinkTextQualityDeepValidator, TableAccessibilityDeepAnalyzerV2,
+    TableAccessibilityDeepDeepValidator,
 };
 use crate::meta::MetaTags;
 use crate::parser::ExtractedLink;
@@ -62,6 +63,39 @@ fn page_with_unlabeled_input() -> ParsedPage {
         og_image_width: None,
         og_image_height: None,
     }
+}
+
+#[test]
+fn csp_generations_check_distinct_directives() {
+    let page = page_with_unlabeled_input();
+    let headers = vec![(
+        "Content-Security-Policy".to_string(),
+        "default-src 'self'".to_string(),
+    )];
+    let ctx = AnalysisContext {
+        page: &page,
+        body: None,
+        status_code: Some(200),
+        headers: &headers,
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    };
+
+    let legacy = CspDirectiveAnalyzer::new().analyze(&ctx);
+    let v2 = CspDirectiveAnalyzerV2::new().analyze(&ctx);
+
+    assert!(
+        legacy.is_empty(),
+        "legacy analyzer only checks unsafe directives and default-src"
+    );
+    assert_eq!(v2.len(), 4);
+    assert!(v2.iter().all(|f| f.code.starts_with("CSPDIR-V2")));
 }
 
 #[test]

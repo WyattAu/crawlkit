@@ -223,7 +223,7 @@ impl FocusOrderAnalyzer {
             f.push(Finding {
                 severity: Severity::Error,
                 category: IssueCategory::Accessibility,
-                code: "FOCUS001".to_string(),
+                code: "A11Y-FOCUS001".to_string(),
                 title: "Positive tabindex values disrupt tab order".to_string(),
                 description: "Elements with tabindex > 0 alter the natural tab order, making \
                               keyboard navigation unpredictable. Users expect a sequential tab \
@@ -255,7 +255,7 @@ impl FocusOrderAnalyzer {
             f.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "FOCUS002".to_string(),
+                code: "A11Y-FOCUS002".to_string(),
                 title: "No visible focus indicators found".to_string(),
                 description: format!(
                     "Page has {} interactive element(s) but no :focus or :focus-visible CSS \

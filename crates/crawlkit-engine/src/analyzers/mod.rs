@@ -3,6 +3,9 @@ use std::time::Duration;
 use crate::parser::ParsedPage;
 use crate::{CrawlConfig, RedirectHop};
 
+/// Accessibility aggregator: the original WCAG page-level analyzer
+/// (extracted from security_analyzers).
+pub mod accessibility_aggregator_analyzers;
 /// Deep accessibility analyzers for landmarks, structure, forms, media, focus, and language.
 pub mod accessibility_deep_analyzers;
 /// V2 accessibility analyzers for tabindex, links, images, forms, tables,
@@ -68,6 +71,9 @@ pub mod post_crawl_analyzers;
 pub mod schema;
 /// Security and accessibility analyzers for headers, mobile-friendliness, and WCAG compliance.
 pub mod security_analyzers;
+/// Security header aggregator: the original security-header checker
+/// (extracted from security_analyzers).
+pub mod security_header_aggregator_analyzers;
 /// Security header analyzers: SRI, Permission-Policy, Cross-Origin isolation
 /// (extracted from security_analyzers).
 pub mod security_header_analyzers;

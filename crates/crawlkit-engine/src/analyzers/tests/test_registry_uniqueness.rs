@@ -135,6 +135,29 @@ fn test_registry_non_empty_documented_floor() {
     );
 }
 
+/// Profile baselines make registry consolidation measurable and reviewable.
+#[test]
+fn test_profile_baseline_counts() {
+    let config = CrawlConfig::default();
+    let page = fixture_page();
+    let ctx = fixture_context(&page);
+    let core = AnalyzerRegistry::core(&config);
+    let standard = AnalyzerRegistry::standard(&config);
+    let default = AnalyzerRegistry::new(&config);
+
+    let count_findings = |registry: &AnalyzerRegistry| {
+        registry
+            .iter()
+            .map(|analyzer| analyzer.analyze(&ctx).len())
+            .sum::<usize>()
+    };
+
+    assert_eq!(core.len(), 9);
+    assert_eq!(standard.len(), default.len());
+    assert_eq!(count_findings(&core), 9);
+    assert_eq!(count_findings(&standard), count_findings(&default));
+}
+
 /// Every registered analyzer must be constructible with a non-empty name.
 #[test]
 fn test_registry_analyzers_have_names() {

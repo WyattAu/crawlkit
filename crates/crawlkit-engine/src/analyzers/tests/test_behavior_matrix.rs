@@ -5,7 +5,8 @@
 
 use crate::analyzers::{
     AnalysisContext, Analyzer, FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator,
-    LinkTextQualityAnalyzerV2, LinkTextQualityDeepValidator, TableAccessibilityDeepAnalyzerV2,
+    HeadingHierarchyDeepAnalyzerV2, HeadingHierarchyDeepDeepValidator, LinkTextQualityAnalyzerV2,
+    LinkTextQualityDeepValidator, TableAccessibilityDeepAnalyzerV2,
     TableAccessibilityDeepDeepValidator,
 };
 use crate::meta::MetaTags;
@@ -61,6 +62,47 @@ fn page_with_unlabeled_input() -> ParsedPage {
         og_image_width: None,
         og_image_height: None,
     }
+}
+
+#[test]
+fn heading_generations_have_distinct_codes_and_explicit_scope() {
+    let mut page = page_with_unlabeled_input();
+    page.headings = vec![
+        crate::parser::Heading {
+            level: 1,
+            text: "Title".to_string(),
+            length: 5,
+        },
+        crate::parser::Heading {
+            level: 3,
+            text: "Skipped".to_string(),
+            length: 7,
+        },
+    ];
+    let ctx = AnalysisContext {
+        page: &page,
+        body: None,
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    };
+
+    let deep = HeadingHierarchyDeepAnalyzerV2::new().analyze(&ctx);
+    let deep_deep = HeadingHierarchyDeepDeepValidator::new().analyze(&ctx);
+
+    assert!(deep.iter().any(|f| f.code == "HHIER-V2003"));
+    assert!(deep_deep.iter().any(|f| f.code == "HHIER-V2004"));
+    assert_ne!(
+        deep.iter().map(|f| &f.code).collect::<Vec<_>>(),
+        deep_deep.iter().map(|f| &f.code).collect::<Vec<_>>()
+    );
 }
 
 #[test]

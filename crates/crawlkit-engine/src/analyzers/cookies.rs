@@ -188,7 +188,7 @@ impl Analyzer for CookieSecureFlagValidator {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Security,
-                    code: "COOKIESEC001".to_string(),
+                    code: "COOKIESEC001-VALIDATOR".to_string(),
                     title: "Cookie missing Secure flag".to_string(),
                     description: format!("Cookie \"{name}\" does not have the Secure flag. It will be sent over unencrypted HTTP connections."),
                     url: url.to_string(),

@@ -4,10 +4,10 @@
 //! from the default registry.
 
 use crate::analyzers::{
-    AnalysisContext, Analyzer, FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator,
-    HeadingHierarchyDeepAnalyzerV2, HeadingHierarchyDeepDeepValidator, LinkTextQualityAnalyzerV2,
-    LinkTextQualityDeepValidator, TableAccessibilityDeepAnalyzerV2,
-    TableAccessibilityDeepDeepValidator,
+    AnalysisContext, Analyzer, CookieSecureDeepDeepValidator, CookieSecurityFlagAnalyzerV2,
+    FormLabelsDeepAnalyzerV2, FormLabelsDeepDeepValidator, HeadingHierarchyDeepAnalyzerV2,
+    HeadingHierarchyDeepDeepValidator, LinkTextQualityAnalyzerV2, LinkTextQualityDeepValidator,
+    TableAccessibilityDeepAnalyzerV2, TableAccessibilityDeepDeepValidator,
 };
 use crate::meta::MetaTags;
 use crate::parser::ExtractedLink;
@@ -62,6 +62,37 @@ fn page_with_unlabeled_input() -> ParsedPage {
         og_image_width: None,
         og_image_height: None,
     }
+}
+
+#[test]
+fn cookie_generations_have_distinct_scopes() {
+    let page = page_with_unlabeled_input();
+    let headers = vec![("Set-Cookie".to_string(), "session=abc".to_string())];
+    let ctx = AnalysisContext {
+        page: &page,
+        body: None,
+        status_code: Some(200),
+        headers: &headers,
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    };
+
+    let v2 = CookieSecurityFlagAnalyzerV2::new().analyze(&ctx);
+    let deep = CookieSecureDeepDeepValidator::new().analyze(&ctx);
+
+    assert!(v2.iter().any(|f| f.code == "COOKIE-V2002"));
+    assert!(v2.iter().any(|f| f.code == "COOKIE-V2003"));
+    assert!(v2.iter().any(|f| f.code == "COOKIE-V2004"));
+    assert!(
+        deep.is_empty(),
+        "session cookies are intentionally exempt by deep validator"
+    );
 }
 
 #[test]

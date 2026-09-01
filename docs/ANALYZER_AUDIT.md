@@ -100,4 +100,6 @@ heuristic alone violates WCAG or OWASP.
 4. Keep compatibility exports for public analyzer types where required.
 5. Re-measure default-registry size, findings per page, latency, and memory.
 6. Add registry profiles (`core`, `standard`, `deep`, and custom selection) only
-   after the measurements establish useful boundaries.
+   after the measurements establish useful boundaries. Core, standard, and deep
+   are now implemented; see `docs/ANALYZER_PROFILES.md`. Full-registry reduction
+   remains gated by behavior and performance evidence.

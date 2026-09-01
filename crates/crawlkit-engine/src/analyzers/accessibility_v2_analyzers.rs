@@ -82,7 +82,7 @@ impl Analyzer for LinkAccessibilityAnalyzerV2 {
             findings.push(Finding {
                 severity: Severity::Error,
                 category: IssueCategory::Accessibility,
-                code: "LINK-V2001".to_string(),
+                code: "A11Y-LINK-V2001".to_string(),
                 title: "Links with empty text".to_string(),
                 description: format!("{} link(s) have no visible text or aria-label: {}.", empty_text_links.len(), empty_text_links.iter().take(3).cloned().collect::<Vec<_>>().join(", ")),
                 url: url.clone(),

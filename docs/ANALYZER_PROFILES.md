@@ -8,7 +8,10 @@ trade-off between coverage, cost, and output noise.
 | Core | `AnalyzerRegistry::core(&config)` | Foundational HTTP, SEO, and structured-data checks | 9 |
 | Standard | `AnalyzerRegistry::standard(&config)` | Canonical checks suitable for routine crawls | 17 |
 | Deep | `AnalyzerRegistry::deep(&config)` | Focused deep security, accessibility, and SEO checks | 20 |
-| Full | `AnalyzerRegistry::new(&config)` | Complete backward-compatible built-in registry | implementation-defined |
+| Full | `AnalyzerRegistry::new(&config)` | Complete backward-compatible built-in registry | 785 |
+
+Profiles are selectable at runtime with `crawlkit crawl --analyzer-profile
+core|standard|deep|full` (default `full`).
 
 ## Compatibility
 
@@ -44,3 +47,14 @@ Analyzer generations are removed from a profile only after:
 
 The full registry is retained as the rollback and compatibility path while
 this consolidation work proceeds.
+
+## Consolidation progress (2026-09-02)
+
+All known duplicate finding-code families are resolved and guarded by
+dedicated behavior matrices (`tests/test_*_matrix.rs`): color-contrast,
+focus, heading-hierarchy, image-alt, anchor-text, LINKTQ, CSP, cookies,
+forms, tables, and links. Two strict-subset registrations have been
+removed from the full registry (`HeadingHierarchyDeepDeepDeepValidator`,
+`ImageAltTextDeepDeepDeepValidator`); both types remain exported for API
+compatibility. Remaining consolidation is gated on fixture evidence per
+candidate, following the policy above.

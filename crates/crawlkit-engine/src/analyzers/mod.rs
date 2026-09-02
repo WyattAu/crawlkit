@@ -1395,9 +1395,10 @@ impl AnalyzerRegistry {
             Box::new(CspFormActionSelfDeepDeepValidator::new()),
             Box::new(HstsPreloadReadyDeepDeepValidator::new()),
             Box::new(HstsMaxAgeDeepDeepValidator::new()),
-            Box::new(CookieSecureDeepDeepDeepValidator::new()),
-            Box::new(CookieHttpOnlyDeepDeepDeepValidator::new()),
-            Box::new(CookieSameSiteDeepDeepDeepValidator::new()),
+            // Cookie{Secure,HttpOnly,SameSite}DeepDeepDeepValidator are
+            // intentionally NOT registered: exact duplicates of their
+            // deep-deep counterparts (same triggers and findings). See
+            // `tests/test_generation_dedup.rs`.
             Box::new(MixedContentIframeDeepDeepValidator::new()),
             Box::new(CorsWildcardDeepDeepValidator::new()),
             Box::new(ReferrerPolicyStrictDeepDeepValidator::new()),
@@ -1407,7 +1408,10 @@ impl AnalyzerRegistry {
             Box::new(AriaLandmarksDeepValidator::new()),
             Box::new(HeadingHierarchyDeepDeepValidator::new()),
             Box::new(FormLabelsDeepDeepValidator::new()),
-            Box::new(TableAccessibilityDeepDeepValidator::new()),
+            // TableAccessibilityDeepDeepValidator is intentionally NOT
+            // registered: strict subset of TableAccessibilityDeepDeepDeepValidator
+            // (headers check only; the deep-deep-deep variant additionally
+            // checks captions). See `tests/test_generation_dedup.rs`.
             Box::new(LinkTextQualityDeepValidator::new()),
             Box::new(ImageAltTextDeepDeepValidator::new()),
             Box::new(FocusManagementDeepDeepValidator::new()),
@@ -1419,8 +1423,11 @@ impl AnalyzerRegistry {
             Box::new(MetaDescriptionTooShortDeepDeepValidator::new()),
             Box::new(MetaDescriptionUniquenessDeepDeepValidator::new()),
             Box::new(CanonicalMissingDeepDeepValidator::new()),
-            Box::new(CanonicalSelfReferenceDeepDeepDeepValidator::new()),
-            Box::new(CanonicalChainDeepDeepDeepValidator::new()),
+            // CanonicalSelfReferenceDeepDeepDeepValidator is intentionally
+            // NOT registered: exact duplicate of CanonicalSelfReferenceDeepDeepValidator.
+            // CanonicalChainDeepDeepDeepValidator is intentionally NOT
+            // registered: strict subset of CanonicalChainDeepDeepValidator
+            // (misses the curly-quote variant). See `tests/test_generation_dedup.rs`.
             Box::new(HreflangMissingDeepDeepValidator::new()),
             Box::new(HreflangReciprocalDeepDeepDeepValidator::new()),
             Box::new(HreflangXDefaultMissingDeepDeepValidator::new()),
@@ -1450,7 +1457,9 @@ impl AnalyzerRegistry {
             // (same missing-alt check, no empty-alt detection). The public
             // type remains exported for API compatibility; see
             // `tests/test_imgalt_matrix.rs` for the ownership decision.
-            Box::new(FocusManagementDeepDeepDeepValidator::new()),
+            // FocusManagementDeepDeepDeepValidator is intentionally NOT
+            // registered: exact duplicate of FocusManagementDeepDeepValidator
+            // (both check only positive tabindex). See `tests/test_generation_dedup.rs`.
             Box::new(LanguageAttributesDeepDeepValidator::new()),
             Box::new(ColorContrastTextDeepValidator::new()),
             Box::new(ColorContrastLinkDeepValidator::new()),

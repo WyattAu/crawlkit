@@ -1,0 +1,31 @@
+name: Feature matrix
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  engine-features:
+    name: Engine feature matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: full
+            args: '--features full'
+          - name: no-default-baseline
+            args: '--no-default-features'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check crawlkit-engine (${{ matrix.name }})
+        continue-on-error: ${{ matrix.name == 'no-default-baseline' }}
+        run: cargo check -p crawlkit-engine ${{ matrix.args }}
+      - name: Record baseline status
+        if: matrix.name == 'no-default-baseline'
+        run: |
+          echo 'The no-default-features job is a non-blocking architectural migration diagnostic.'
+          echo 'It becomes a required gate after CORE_FEATURE_MIGRATION.md acceptance criteria are met.'

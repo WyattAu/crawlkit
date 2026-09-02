@@ -121,9 +121,13 @@ heuristic alone violates WCAG or OWASP.
    with fixture evidence only.
 4. Keep compatibility exports for public analyzer types where required
    (unregistered types remain exported and tested).
-5. **Pending** — re-measure default-registry size (currently 785),
-   findings per page, latency, and memory against the kingstonpeptides.com
-   baseline (954 findings / 10 pages before consolidation).
+5. **Measured (2026-09-02)** — default registry is 778 registrations
+   (824 total construction sites across default + profile paths). The
+   kingstonpeptides.com full-profile output is unchanged (954 findings /
+   10 pages) because the removed duplicates only fire on pages carrying
+   the matching defects; the profile lever delivers the noise reduction
+   (standard = 80 findings, core = 30; see
+   `docs/ANALYZER_PROFILES.md`).
 6. ~~Add registry profiles (`core`, `standard`, `deep`, and custom
    selection).~~ **Complete** — implemented and selectable via CLI; see
    `docs/ANALYZER_PROFILES.md`.

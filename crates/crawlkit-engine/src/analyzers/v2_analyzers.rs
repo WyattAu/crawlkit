@@ -19128,7 +19128,7 @@ impl Analyzer for AnchorTextGenericDeepValidator {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Accessibility,
-                code: "ANCHGEN-V2001".to_string(),
+                code: "ANCHGEN-V2001-DEEP".to_string(),
                 title: "Generic anchor text (deep)".to_string(),
                 description: format!(
                     "{generic_count} link(s) use generic anchor text in deep analysis."

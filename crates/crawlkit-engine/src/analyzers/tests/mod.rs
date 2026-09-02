@@ -1,5 +1,6 @@
 pub(crate) mod standalone;
 pub(crate) mod test_accessibility_coverage;
+pub(crate) mod test_anchorgen_matrix;
 pub(crate) mod test_behavior_matrix;
 pub(crate) mod test_color_contrast_matrix;
 pub(crate) mod test_coverage_gaps;

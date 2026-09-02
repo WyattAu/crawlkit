@@ -269,6 +269,120 @@ async fn login_lockout_engages_after_five_failures() {
 }
 
 #[tokio::test]
+async fn login_unknown_and_disabled_users_are_rejected() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state.auth.add_user(make_user(
+        "disabled-user",
+        "tenant-a",
+        "viewer",
+        "password123!X",
+    ));
+    if let Some(mut user) = test.state.auth.find_user_by_id("disabled-user") {
+        user.enabled = false;
+        test.state.auth.delete_user("disabled-user");
+        test.state.auth.add_user(user);
+    }
+
+    let (status, body) = test
+        .send(test.public(
+            "POST",
+            "/api/v1/auth/login",
+            Some(serde_json::json!({
+                "email": "missing@example.com",
+                "password": "password123!X"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"], "Invalid credentials");
+
+    let (status, body) = test
+        .send(test.public(
+            "POST",
+            "/api/v1/auth/login",
+            Some(serde_json::json!({
+                "email": "disabled-user@example.com",
+                "password": "password123!X"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(body["error"], "Account disabled");
+}
+
+#[tokio::test]
+async fn admin_user_creation_rejects_weak_and_duplicate_accounts() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("existing", "default", "viewer", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/users",
+            Some(serde_json::json!({
+                "email": "new@example.com",
+                "name": "New User",
+                "password": "weak"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("12 characters"));
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/users",
+            Some(serde_json::json!({
+                "email": "existing@example.com",
+                "name": "Duplicate",
+                "password": "Str0ng!Pass#12"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["error"], "User with this email already exists");
+}
+
+#[tokio::test]
+async fn list_users_is_scoped_to_the_callers_tenant() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("same", "tenant-a", "viewer", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("other", "tenant-b", "viewer", "password123!X"));
+    let token = test.token_for("same");
+
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/users", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = body
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|user| user["id"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(ids, vec!["same"]);
+}
+
+#[tokio::test]
 async fn revoked_session_is_enforced_by_middleware() {
     let dir = tempfile::tempdir().unwrap();
     let test = setup(dir.path());

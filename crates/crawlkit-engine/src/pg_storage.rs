@@ -117,7 +117,7 @@ impl PgStorage {
             .bind(lock_id)
             .fetch_one(&pool)
             .await
-            .map_err(|e| StorageError::PgDatabase(e))?;
+            .map_err(StorageError::PgDatabase)?;
         Ok(result)
     }
 
@@ -132,7 +132,7 @@ impl PgStorage {
             .bind(lock_id)
             .fetch_one(&pool)
             .await
-            .map_err(|e| StorageError::PgDatabase(e))?;
+            .map_err(StorageError::PgDatabase)?;
         Ok(())
     }
 }
@@ -193,6 +193,7 @@ fn row_to_page_data(row: &sqlx::postgres::PgRow) -> Result<PageData, sqlx::error
         heading_count: row
             .try_get::<Option<i64>, _>("heading_count")?
             .map(|v| v as usize),
+        extractions: None,
     })
 }
 
@@ -1130,10 +1131,12 @@ impl StorageBackend for PgStorage {
         _baseline_crawl_id: &str,
         _target_crawl_id: &str,
     ) -> Result<crate::compare::CrawlDiff, StorageError> {
-        Err(StorageError::Database(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "compare_crawls is not yet supported for Postgres storage",
-        ))))
+        Err(StorageError::Database(
+            rusqlite::Error::ToSqlConversionFailure(Box::new(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "compare_crawls is not yet supported for Postgres storage",
+            ))),
+        ))
     }
 }
 

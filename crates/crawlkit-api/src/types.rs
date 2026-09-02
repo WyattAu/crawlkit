@@ -1220,6 +1220,60 @@ mod tests {
         ));
         assert!(matches!(ApiError::RateLimited, ApiError::RateLimited));
     }
+
+    #[test]
+    fn test_login_lockout_normalizes_email_and_blocks_until_expiry() {
+        let attempts = DashMap::new();
+        let start = Utc::now();
+        let email = "  User@Example.COM ";
+
+        for offset in 0..5 {
+            record_login_failure(&attempts, email, start + chrono::Duration::seconds(offset));
+        }
+
+        let blocked = check_login_lockout(
+            &attempts,
+            "user@example.com",
+            start + chrono::Duration::minutes(1),
+        );
+        assert!(
+            matches!(blocked, Err(ApiError::Unauthorized(message)) if message.contains("locked"))
+        );
+
+        let after_expiry =
+            start + LOGIN_FAILURE_WINDOW + LOGIN_LOCKOUT + chrono::Duration::seconds(1);
+        assert!(check_login_lockout(&attempts, email, after_expiry).is_ok());
+        let record = attempts.get("user@example.com").expect("normalized record");
+        assert_eq!(record.failures, 0);
+        assert!(record.locked_until.is_none());
+    }
+
+    #[test]
+    fn test_login_failures_reset_after_window_before_next_failure() {
+        let attempts = DashMap::new();
+        let start = Utc::now();
+        record_login_failure(&attempts, "user@example.com", start);
+        record_login_failure(
+            &attempts,
+            "user@example.com",
+            start + LOGIN_FAILURE_WINDOW + chrono::Duration::seconds(1),
+        );
+
+        let record = attempts.get("user@example.com").expect("login record");
+        assert_eq!(record.failures, 1);
+        assert_eq!(
+            record.window_start,
+            start + LOGIN_FAILURE_WINDOW + chrono::Duration::seconds(1)
+        );
+    }
+
+    #[test]
+    fn test_clear_login_failures_uses_normalized_email() {
+        let attempts = DashMap::new();
+        record_login_failure(&attempts, "user@example.com", Utc::now());
+        clear_login_failures(&attempts, " USER@EXAMPLE.COM ");
+        assert!(attempts.is_empty());
+    }
 }
 
 #[derive(Serialize, ToSchema)]

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added — coverage and release controls
 - Coverage CI now measures native engine library and API all-target surfaces separately, including the existing router integration tests without instrumenting the WASM target
-- Added persistence corruption and invalid-timestamp regression coverage; API all-target coverage now measures 54.17%
+- Added persistence corruption, invalid-timestamp, login-lockout, disabled-account, tenant-scoping, and administrative-validation regression coverage; API all-target coverage now measures 55.60%
 
 ### Added — core/full feature boundary
 - Core builds now compile without the full runtime: plugin, post-crawl, crawl-map, integration, and browser-specific CLI surfaces are gated behind `full` while `log-analyze` remains available in core mode
@@ -37,7 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Validation
 - Engine unit tests: 3,477 core tests and 3,944 full tests passing independently; full CLI smoke tests pass
-- Workspace: 4,267 tests passing, 0 failed; fmt + clippy `-D warnings` clean on both primary crates
+- Workspace: 4,273 tests passing, 0 failed; fmt + clippy `-D warnings` clean on both primary crates
 - Core and full engine/CLI all-target checks pass; core artifact is below the 10 MB target while full runtime size is reported separately
 - Live crawl regression (kingstonpeptides.com, 10 pages, 500 ms delay): full profile 954 findings / 100 codes (unchanged — removed duplicates only fired on defects this site lacks), standard 80 / 8, core 30 / 3
 

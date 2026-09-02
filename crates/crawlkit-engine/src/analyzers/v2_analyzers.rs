@@ -17243,7 +17243,7 @@ impl Analyzer for HeadingHierarchyDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "HHIER-V2002".to_string(),
+                code: "HHIER-V2002-DEEP-DEEP".to_string(),
                 title: "Missing H1 heading (deep-deep)".to_string(),
                 description: "No H1 heading found in deep analysis.".to_string(),
                 url: url.clone(),
@@ -17253,7 +17253,7 @@ impl Analyzer for HeadingHierarchyDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "HHIER-V2003".to_string(),
+                code: "HHIER-V2003-DEEP-DEEP".to_string(),
                 title: "Multiple H1 headings (deep-deep)".to_string(),
                 description: format!("{h1_count} H1 headings found in deep analysis."),
                 url: url.clone(),
@@ -19327,7 +19327,7 @@ impl Analyzer for HeadingHierarchyDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "HHIER-V2002".to_string(),
+                code: "HHIER-V2002-DEEP-DEEP-DEEP".to_string(),
                 title: "Missing H1 heading (deep-deep-deep)".to_string(),
                 description: "No H1 heading found in deep-deep analysis.".to_string(),
                 url: url.clone(),
@@ -19337,7 +19337,7 @@ impl Analyzer for HeadingHierarchyDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "HHIER-V2003".to_string(),
+                code: "HHIER-V2003-DEEP-DEEP-DEEP".to_string(),
                 title: "Multiple H1 headings (deep-deep-deep)".to_string(),
                 description: format!("{h1_count} H1 headings found in deep-deep analysis."),
                 url: url.clone(),
@@ -27630,7 +27630,7 @@ mod v2_analyzer_tests {
             length: 2,
         }];
         let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None));
-        assert!(f.iter().any(|x| x.code == "HHIER-V2002"));
+        assert!(f.iter().any(|x| x.code == "HHIER-V2002-DEEP-DEEP-DEEP"));
     }
     #[test]
     fn test_head_hier_ddd_v8_multi_h1() {
@@ -27648,7 +27648,7 @@ mod v2_analyzer_tests {
             },
         ];
         let f = HeadingHierarchyDeepDeepDeepValidator::new().analyze(&make_ctx(&p, None));
-        assert!(f.iter().any(|x| x.code == "HHIER-V2003"));
+        assert!(f.iter().any(|x| x.code == "HHIER-V2003-DEEP-DEEP-DEEP"));
     }
     #[test]
     fn test_head_hier_ddd_v8_good() {

@@ -1455,7 +1455,11 @@ impl AnalyzerRegistry {
             Box::new(TableHeaderScopeDeepValidator::new()),
             Box::new(FormLabelAssociationDeepValidator::new()),
             Box::new(AriaRequiredAttributesDeepValidator::new()),
-            Box::new(HeadingHierarchyDeepDeepDeepValidator::new()),
+            // HeadingHierarchyDeepDeepDeepValidator is intentionally NOT
+            // registered: it is a strict subset of HeadingHierarchyDeepDeepValidator
+            // (same missing-H1 / multiple-H1 checks, no skip detection). The
+            // public type remains exported for API compatibility; see
+            // `tests/test_hhier_matrix.rs` for the ownership decision.
             Box::new(LandmarkContentinfoDeepValidator::new()),
             Box::new(LandmarkComplementaryDeepValidator::new()),
         ];

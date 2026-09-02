@@ -17452,7 +17452,7 @@ impl Analyzer for ImageAltTextDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "IMGALT-V2001".to_string(),
+                code: "IMGALT-V2001-DEEP-DEEP".to_string(),
                 title: "Images missing alt attribute (deep-deep)".to_string(),
                 description: format!("{no_alt} image(s) lack an alt attribute in deep analysis."),
                 url: url.clone(),
@@ -17469,7 +17469,7 @@ impl Analyzer for ImageAltTextDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Accessibility,
-                code: "IMGALT-V2002".to_string(),
+                code: "IMGALT-V2002-DEEP-DEEP".to_string(),
                 title: "Images with empty alt text (deep-deep)".to_string(),
                 description: format!("{empty_alt} image(s) have alt='' in deep analysis."),
                 url: url.clone(),
@@ -18939,7 +18939,7 @@ impl Analyzer for ImageAltTextDeepDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "IMGALT-V2001".to_string(),
+                code: "IMGALT-V2001-DEEP-DEEP-DEEP".to_string(),
                 title: "Images missing alt attribute (deep-deep-deep)".to_string(),
                 description: format!(
                     "{no_alt} image(s) lack an alt attribute in deep-deep analysis."

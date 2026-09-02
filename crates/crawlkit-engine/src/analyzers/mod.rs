@@ -1445,7 +1445,11 @@ impl AnalyzerRegistry {
             Box::new(FormLabelsDeepDeepDeepValidator::new()),
             Box::new(TableAccessibilityDeepDeepDeepValidator::new()),
             Box::new(LinkTextQualityDeepDeepValidator::new()),
-            Box::new(ImageAltTextDeepDeepDeepValidator::new()),
+            // ImageAltTextDeepDeepDeepValidator is intentionally NOT
+            // registered: it is a strict subset of ImageAltTextDeepDeepValidator
+            // (same missing-alt check, no empty-alt detection). The public
+            // type remains exported for API compatibility; see
+            // `tests/test_imgalt_matrix.rs` for the ownership decision.
             Box::new(FocusManagementDeepDeepDeepValidator::new()),
             Box::new(LanguageAttributesDeepDeepValidator::new()),
             Box::new(ColorContrastTextDeepValidator::new()),

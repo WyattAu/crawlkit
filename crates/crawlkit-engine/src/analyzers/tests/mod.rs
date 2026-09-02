@@ -8,6 +8,7 @@ pub(crate) mod test_deep_security_coverage;
 mod test_focus_matrix;
 mod test_hhier_matrix;
 pub(crate) mod test_hsts_preload;
+mod test_imgalt_matrix;
 pub(crate) mod test_main;
 pub(crate) mod test_panic_isolation;
 pub(crate) mod test_permission_policy;

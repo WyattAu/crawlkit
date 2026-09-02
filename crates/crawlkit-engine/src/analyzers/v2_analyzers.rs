@@ -1580,7 +1580,7 @@ impl Analyzer for ColorContrastLinkAnalyzerV2 {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Accessibility,
-                    code: "COLRCL-V2001".to_string(),
+                    code: "COLRCL-V2001-UNDERLINE".to_string(),
                     title: "Links without underline".to_string(),
                     description: "Links may be indistinguishable from text.".to_string(),
                     url: url.clone(),
@@ -19078,7 +19078,7 @@ impl Analyzer for ColorContrastLinkDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Accessibility,
-                    code: "COLRCL-V2001".to_string(),
+                    code: "COLRCL-V2001-DEEP".to_string(),
                     title: "Possible link contrast issue (deep)".to_string(),
                     description: "Detected white links on white background in deep analysis."
                         .to_string(),

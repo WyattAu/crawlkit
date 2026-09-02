@@ -663,4 +663,51 @@ mod tests {
         assert_eq!(users.len(), 1);
         assert_eq!(users[0].roles, vec!["admin".to_string()]);
     }
+
+    #[tokio::test]
+    async fn load_users_rejects_corrupt_roles_json() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteStateStore::open(&dir.path().join("state.db")).unwrap();
+        let conn = store.conn.lock().await;
+        conn.execute(
+            "INSERT INTO api_users (id, email, name, password_hash, tenant_id, roles, enabled)
+             VALUES ('broken', 'broken@example.com', 'Broken', 'hash', 'tenant', 'not-json', 1)",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        assert!(matches!(
+            store.load_users().await,
+            Err(PersistenceError::Database(_))
+        ));
+    }
+
+    #[tokio::test]
+    async fn invalid_persisted_timestamps_fall_back_without_failing_load() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = SqliteStateStore::open(&dir.path().join("state.db")).unwrap();
+        let conn = store.conn.lock().await;
+        conn.execute(
+            "INSERT INTO api_tenants (id, name, created_at) VALUES ('tenant', 'Tenant', 'invalid')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO api_keys (key, name, created_at, requests_per_minute)
+             VALUES ('key', 'Key', 'invalid', 60)",
+            [],
+        )
+        .unwrap();
+        drop(conn);
+
+        let before = chrono::Utc::now();
+        let tenants = store.load_tenants().await.unwrap();
+        let keys = store.load_api_keys().await.unwrap();
+        let after = chrono::Utc::now();
+        assert_eq!(tenants.len(), 1);
+        assert_eq!(keys.len(), 1);
+        assert!(tenants[0].created_at >= before && tenants[0].created_at <= after);
+        assert!(keys[0].created_at >= before && keys[0].created_at <= after);
+    }
 }

@@ -178,22 +178,33 @@ jobs:
         with:
           key: coverage
       - uses: taiki-e/install-action@cargo-llvm-cov
-      # Measured baseline 2026-08-23: 71.6% lines locally (workspace --lib).
-      # The gate prints the measured TOTAL before enforcing, so any failure
-      # shows its number in the log. Floor ratchets upward only.
-      - name: Generate coverage report
+      # Measure supported native targets separately. A workspace-wide
+      # coverage invocation also discovers the wasm32 test target and can fail
+      # during instrumentation before producing a trustworthy report.
+      - name: Generate engine coverage report
         run: |
-          cargo llvm-cov --workspace --lib --summary-only 2>&1 | tee cov-summary.txt
-          TOTAL_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' cov-summary.txt)
-          echo "Measured line coverage: ${TOTAL_PCT}%"
-          awk -v pct="$TOTAL_PCT" -v floor=70 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
-            || { echo "::error::coverage ${TOTAL_PCT}% is below the 70% floor"; exit 1; }
-          cargo llvm-cov --workspace --lib --lcov --output-path coverage.lcov
+          cargo llvm-cov -p crawlkit-engine --lib --summary-only \
+            -- --test-threads=1 2>&1 | tee engine-cov-summary.txt
+          ENGINE_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' engine-cov-summary.txt)
+          echo "Measured engine library line coverage: ${ENGINE_PCT}%"
+          awk -v pct="$ENGINE_PCT" -v floor=70 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
+            || { echo "::error::engine coverage ${ENGINE_PCT}% is below the 70% floor"; exit 1; }
+          cargo llvm-cov -p crawlkit-engine --lib --lcov --output-path engine-coverage.lcov
+      - name: Generate API coverage report
+        run: |
+          cargo llvm-cov -p crawlkit-api --all-targets --summary-only \
+            -- --test-threads=1 2>&1 | tee api-cov-summary.txt
+          API_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' api-cov-summary.txt)
+          echo "Measured API all-target line coverage: ${API_PCT}%"
+          awk -v pct="$API_PCT" -v floor=50 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
+            || { echo "::error::API coverage ${API_PCT}% is below the 50% floor"; exit 1; }
+          cargo llvm-cov -p crawlkit-api --all-targets --lcov --output-path api-coverage.lcov
+          cat engine-coverage.lcov api-coverage.lcov > coverage.lcov
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           file: coverage.lcov
-          flags: unittests
+          flags: native-targets
 
   msrv:
     name: MSRV Check

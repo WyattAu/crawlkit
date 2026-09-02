@@ -7,21 +7,33 @@
 
 mod cli;
 
-use anyhow::{Context, Result};
+#[cfg(feature = "full")]
+use anyhow::Context;
+use anyhow::Result;
 use clap::Parser;
+#[cfg(feature = "full")]
 use opentelemetry_sdk::trace::SdkTracerProvider;
+#[cfg(feature = "full")]
 use std::path::PathBuf;
+#[cfg(feature = "full")]
 use tracing_opentelemetry::OpenTelemetryLayer;
+#[cfg(feature = "full")]
 use tracing_subscriber::layer::SubscriberExt;
+#[cfg(feature = "full")]
 use tracing_subscriber::util::SubscriberInitExt;
+#[cfg(feature = "full")]
 use tracing_subscriber::EnvFilter;
+#[cfg(feature = "full")]
 use tracing_subscriber::Layer;
 
-use cli::{Cli, Commands, Config};
+#[cfg(feature = "full")]
+use cli::Config;
+use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     // Initialize Sentry error tracking
+    #[cfg(feature = "full")]
     let _sentry_guard = std::env::var("SENTRY_DSN").ok().map(|dsn| {
         sentry::init((dsn, {
             let mut opts = sentry::ClientOptions::default();
@@ -48,10 +60,13 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
     init_tracing(&cli);
 
+    #[cfg(feature = "full")]
     let config = load_config(&cli)?;
+    #[cfg(feature = "full")]
     let mut feature_flags = build_feature_flags(&config);
 
     match cli.command {
+        #[cfg(feature = "full")]
         Commands::Crawl {
             url,
             max_pages,
@@ -132,12 +147,14 @@ async fn main() -> Result<()> {
             };
             cli::crawl::run(&params).await
         }
+        #[cfg(feature = "full")]
         Commands::Compare {
             crawl1,
             crawl2,
             output,
             format,
         } => cli::compare::run(&crawl1, &crawl2, output.as_deref(), &format),
+        #[cfg(feature = "full")]
         Commands::Report {
             crawl,
             output,
@@ -149,18 +166,21 @@ async fn main() -> Result<()> {
                 .unwrap_or_else(|| "html".to_string());
             cli::report::run(&crawl, output.as_deref(), &format, &theme, &feature_flags)
         }
+        #[cfg(feature = "full")]
         Commands::Backlinks {
             crawl,
             output,
             format,
             source,
         } => cli::backlinks::run(&crawl, output.as_deref(), &format, source.as_deref()).await,
+        #[cfg(feature = "full")]
         Commands::CrawlMap {
             crawl,
             output,
             color_by,
             max_nodes,
         } => cli::crawl_map::run(&crawl, &output, &color_by, max_nodes),
+        #[cfg(feature = "full")]
         Commands::Inspect {
             url,
             output,
@@ -178,14 +198,17 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        #[cfg(feature = "full")]
         Commands::Plugin { command } => cli::plugin::run(command),
         Commands::LogAnalyze(args) => cli::log_analyze::run(args),
+        #[cfg(feature = "full")]
         Commands::Trend {
             db,
             crawl_ids,
             output,
             format,
         } => cli::trend::run(&db, &crawl_ids, output.as_deref(), &format),
+        #[cfg(feature = "full")]
         Commands::Gsc {
             site_url,
             output,
@@ -209,6 +232,7 @@ async fn main() -> Result<()> {
     }
 }
 
+#[cfg(feature = "full")]
 fn init_tracing(cli: &Cli) {
     let log_level = if cli.quiet {
         "error"
@@ -249,6 +273,10 @@ fn init_tracing(cli: &Cli) {
     }
 }
 
+#[cfg(not(feature = "full"))]
+fn init_tracing(_cli: &Cli) {}
+
+#[cfg(feature = "full")]
 fn load_config(cli: &Cli) -> Result<Config> {
     if let Some(config_path) = &cli.config {
         let contents = std::fs::read_to_string(config_path)
@@ -260,6 +288,7 @@ fn load_config(cli: &Cli) -> Result<Config> {
     }
 }
 
+#[cfg(feature = "full")]
 fn build_feature_flags(config: &Config) -> crawlkit_engine::FeatureFlags {
     let mut feature_flags = crawlkit_engine::FeatureFlags::default();
     if let Some(ref features_config) = config.features {

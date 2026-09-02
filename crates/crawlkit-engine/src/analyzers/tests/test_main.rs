@@ -814,10 +814,31 @@ fn test_heading_deep_hierarchy() {
 // ---- AnalyzerRegistry ----
 
 #[test]
+fn rendered_page_summary_is_owned_and_serializable() {
+    let summary = crate::RenderedPageSummary {
+        final_url: Some("https://example.com/".to_string()),
+        html_size: Some(128),
+        console_message_count: 2,
+        network_request_count: 4,
+        wasm_error_count: 0,
+        render_time_ms: Some(75),
+        succeeded: true,
+    };
+    let encoded = serde_json::to_string(&summary).unwrap();
+    let decoded: crate::RenderedPageSummary = serde_json::from_str(&encoded).unwrap();
+    assert_eq!(decoded.final_url, summary.final_url);
+    assert_eq!(decoded.html_size, Some(128));
+    assert!(decoded.succeeded);
+}
+
+#[test]
 fn test_registry_default() {
     let config = default_config();
     let registry = AnalyzerRegistry::new(&config);
+    #[cfg(feature = "full")]
     assert_eq!(registry.len(), 778);
+    #[cfg(not(feature = "full"))]
+    assert_eq!(registry.len(), 775);
     assert!(!registry.is_empty());
 }
 

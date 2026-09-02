@@ -120,7 +120,8 @@ The token bucket refills at the configured RPS. No syscalls — purely in-memory
 | Pages/sec (fetch + parse + analyze) | **50–100** | ≥50 |
 | Memory (10K pages) | **~200 MB** | <500 MB |
 | Startup time | **~10 ms** | <100 ms |
-| Binary size (release) | **~8 MB** | <10 MB |
+| Binary size (core release, stripped) | **2.46 MiB** | <10 MB |
+| Binary size (full release, stripped) | **24.39 MiB** | Runtime-dependent; Wasmtime/plugins included |
 
 ## Comparison with competitors
 

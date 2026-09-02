@@ -1,22 +1,34 @@
+#[cfg(feature = "full")]
 pub mod backlinks;
+#[cfg(feature = "full")]
 pub mod compare;
+#[cfg(feature = "full")]
 pub mod crawl;
+#[cfg(feature = "full")]
 pub mod crawl_map;
+#[cfg(feature = "full")]
 pub mod gsc;
+#[cfg(feature = "full")]
 pub mod inspect;
 pub mod log_analyze;
+#[cfg(feature = "full")]
 pub mod plugin;
+#[cfg(feature = "full")]
 pub mod report;
+#[cfg(feature = "full")]
 pub mod trend;
+#[cfg(feature = "full")]
 pub mod util;
 
 pub use log_analyze::LogAnalyzeArgs;
+#[cfg(feature = "full")]
 pub use plugin::PluginCommands;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 /// CLI configuration file structure.
+#[cfg(feature = "full")]
 #[derive(serde::Deserialize, Default)]
 pub struct Config {
     /// Crawl-specific defaults.
@@ -28,6 +40,7 @@ pub struct Config {
 }
 
 /// Feature flag configuration loaded from file.
+#[cfg(feature = "full")]
 #[derive(serde::Deserialize, Default)]
 pub struct FeaturesConfig {
     /// Enable AI analyzers.
@@ -41,6 +54,7 @@ pub struct FeaturesConfig {
 }
 
 /// Crawl configuration loaded from file.
+#[cfg(feature = "full")]
 #[derive(serde::Deserialize)]
 pub struct CrawlConfig {
     /// Analyzer registry profile: `full`, `core`, `standard`, or `deep`.
@@ -60,6 +74,7 @@ pub struct CrawlConfig {
 }
 
 /// Output configuration loaded from file.
+#[cfg(feature = "full")]
 #[derive(serde::Deserialize)]
 pub struct OutputConfig {
     /// Default output directory.
@@ -96,6 +111,7 @@ pub struct Cli {
 #[allow(clippy::large_enum_variant)]
 pub enum Commands {
     /// Crawl a website and analyze pages for SEO signals
+    #[cfg(feature = "full")]
     Crawl {
         /// The starting URL to crawl
         url: String,
@@ -214,6 +230,7 @@ pub enum Commands {
     },
 
     /// Compare two crawl results
+    #[cfg(feature = "full")]
     Compare {
         /// First crawl database path or directory
         crawl1: PathBuf,
@@ -231,6 +248,7 @@ pub enum Commands {
     },
 
     /// Generate a report from an existing crawl
+    #[cfg(feature = "full")]
     Report {
         /// Crawl database path or directory
         #[arg(short, long)]
@@ -250,6 +268,7 @@ pub enum Commands {
     },
 
     /// Analyze backlinks from an existing crawl
+    #[cfg(feature = "full")]
     Backlinks {
         /// Crawl database path or directory
         #[arg(short, long)]
@@ -269,6 +288,7 @@ pub enum Commands {
     },
 
     /// Generate a visual crawl map (SVG) from existing crawl data
+    #[cfg(feature = "full")]
     CrawlMap {
         /// Crawl database path or directory
         #[arg(short, long)]
@@ -288,6 +308,7 @@ pub enum Commands {
     },
 
     /// Deep single-page analysis: fetch + all analyzers + optional CrUX/GSC
+    #[cfg(feature = "full")]
     Inspect {
         /// URL to inspect
         url: String,
@@ -310,6 +331,7 @@ pub enum Commands {
     },
 
     /// Manage WASM plugin signing keys and verify plugin trust chains
+    #[cfg(feature = "full")]
     Plugin {
         #[command(subcommand)]
         command: PluginCommands,
@@ -319,6 +341,7 @@ pub enum Commands {
     LogAnalyze(LogAnalyzeArgs),
 
     /// Analyze trends across multiple crawl snapshots
+    #[cfg(feature = "full")]
     Trend {
         /// Path to crawl database or directory
         #[arg(short, long)]
@@ -338,6 +361,7 @@ pub enum Commands {
     },
 
     /// Fetch and analyze Google Search Console data
+    #[cfg(feature = "full")]
     Gsc {
         /// Site URL to query (overrides GSC_SITE_URL env var)
         #[arg(long)]
@@ -370,6 +394,7 @@ pub enum Commands {
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.
+#[cfg(feature = "full")]
 pub struct CrawlParams {
     pub url: String,
     pub max_pages: Option<usize>,

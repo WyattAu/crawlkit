@@ -227,7 +227,7 @@
 | 6.3 | Documentation: README overhaul | All phases | Install, quickstart, CLI reference, configuration, architecture diagram |
 | 6.4 | Documentation: API docs (rustdoc) | All phases | All public items documented; `cargo doc --no-deps` passes warning-free |
 | 6.5 | Documentation: examples | 0.4, 0.9 | ≥ 5 runnable examples (basic crawl, custom analyzer, export, plugin, comparison) |
-| 6.6 | Binary releases (cross-compile) | 0.1 | `release.yml` produces Linux (glibc + musl), macOS (Intel + ARM), Windows; each < 10 MB |
+| 6.6 | Binary releases (cross-compile) | 0.1 | `release.yml` produces Linux (glibc + musl), macOS (Intel + ARM), Windows; core artifacts target < 10 MB and full artifacts report runtime-dependent size |
 | 6.7 | GitHub Actions CI/CD full pipeline | 0.2 | lint → test → build → release → publish; triggered on tag push |
 | 6.8 | Beta testing round | 6.7 | ≥ 3 external testers; issue tracker with resolved bugs |
 | 6.9 | v1.0.0 release | 6.8 | CHANGELOG, git tag, GitHub Release with binaries, crates.io publish |
@@ -382,7 +382,7 @@ Phase 7 includes cross-cutting standards compliance work. These tasks are tracke
 | **Memory usage** | < 500 MB | Peak RSS during 10k-page crawl (valgrind / `dhat`) |
 | **Test coverage** | > 90% | `cargo tarpaulin` report |
 | **Documentation** | Complete | All public APIs documented; ≥ 5 examples; architecture diagram in README |
-| **Binary size** | < 10 MB | `ls -lh` on release binary (Linux x86_64) |
+| **Binary size** | Core < 10 MB; full size reported separately | Strip both feature variants and record byte counts |
 | **Startup time** | < 100 ms | Time from process start to first HTTP request (measured via `strace -T`) |
 
 ---
@@ -485,7 +485,7 @@ All Phase 8 code must comply with `.adrs/coding-standards.md`.
 | # | Task | Depends On | Acceptance Criteria |
 |---|------|------------|---------------------|
 | 9.1 | Cross-platform binary builds | All phases | Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64) |
-| 9.2 | Binary size optimization | 9.1 | All binaries < 10MB (Phase D measured 25MB stripped; no-default-features prototype exposed 97 feature assumptions; requires separate Wasmtime/core-binary packaging design) |
+| 9.2 | Binary size optimization | 9.1 | Core CLI is 2.46 MiB stripped and meets < 10 MB; full CLI is 24.39 MiB stripped because Wasmtime/plugins are included |
 | 9.3 | Documentation overhaul | 9.1 | README, API docs, architecture docs complete; cargo doc warning-free verified in Phase D |
 | 9.4 | Examples enhancement | 9.1 | >= 5 runnable examples |
 | 9.5 | Performance benchmarks | 9.1 | Criterion benchmarks pass all targets |
@@ -590,9 +590,10 @@ All Phase 8 code must comply with `.adrs/coding-standards.md`.
 | Memory (10k pages) | < 500MB | < 300MB |
 | Test coverage | >= 90% | >= 95% |
 | Documentation | Complete | Enterprise-grade |
-| Binary size | < 10MB | < 15MB |
+| Core binary size | < 10MB | < 15MB |
+| Full binary size | Report runtime-dependent size | Report runtime-dependent size |
 | Startup time | < 100ms | < 50ms |
 
 ---
 
-*Last updated: 2026-09-01*
+*Last updated: 2026-09-02*

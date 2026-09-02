@@ -8,22 +8,22 @@ an evidence gate, not a certification.
 | Gate | Result | Status |
 |---|---:|---|
 | Workspace build | All crates build | Pass |
-| Workspace tests | 4,263 passed, 0 failed, 5 ignored | Pass |
+| Workspace tests | 4,265 passed, 0 failed, 5 ignored | Pass |
 | Documentation | `cargo doc --workspace --no-deps`, 0 warnings | Pass |
 | Engine line coverage | 79.07% (79.08% after focused tests) | Exception — below the 90% target |
-| Stripped release binary | 25 MB | Exception — above the 10 MB target |
-| CLI smoke surface | All documented subcommands expose help | Pass |
+| Stripped core CLI (`--no-default-features`) | 2,575,640 bytes (2.46 MiB) | Pass — below the 10 MB target |
+| Stripped full CLI (`--features full`) | 25,579,176 bytes (24.39 MiB) | Exception — full runtime remains above the 10 MB target |
+| CLI feature matrix | Core and full all-target checks; strict clippy | Pass |
+| CLI smoke surface | Full command surface exposes help | Pass |
 
 These exceptions are explicit. Coverage is limited primarily by large
 storage, sitemap, RUM, type, and WASM feature surfaces; integration coverage
 remains planned. The binary already uses LTO, one codegen unit, `opt-level=3`,
-stripping, and aborting panics. Reaching 10 MB requires a separate packaging
-decision: make the Wasmtime/plugin runtime opt-in, or ship a small core binary
-with plugin support as a separate artifact. A no-default-features prototype
-was attempted during remediation and exposed 97 compile-time feature
-assumptions across engine modules; it was reverted without changing the
-stable default path. This feature/API migration must not be made implicitly
-at release time.
+stripping, and aborting panics. The feature migration now provides a measured
+core artifact at 2,575,640 bytes stripped, while the full artifact remains
+25,579,176 bytes because it includes the Wasmtime/plugin and integration
+runtime. The core/full distinction must remain explicit in packaging and
+release claims; the full artifact must not be represented as sub-10 MB.
 
 ## Before release
 
@@ -43,8 +43,17 @@ at release time.
    bash scripts/capture-benchmark-metadata.sh
    ```
 
-6. Build release artifacts and record checksums, dependency/SBOM output, and
-   the exact toolchain.
+6. Build both release artifacts and record checksums, dependency/SBOM output,
+   exact toolchain, feature flags, and stripped byte counts:
+
+   ```bash
+   cargo build --release -p crawlkit --no-default-features
+   strip target/release/crawlkit
+   stat -c '%s' target/release/crawlkit
+   cargo build --release -p crawlkit --features full
+   strip target/release/crawlkit
+   stat -c '%s' target/release/crawlkit
+   ```
 7. Run CLI help/API smoke tests against the release artifact.
 8. Review migration, rollback, security, and plugin compatibility notes.
 

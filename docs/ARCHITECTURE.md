@@ -919,7 +919,7 @@ pub enum ScoreGrade {
 | **Performance** | ~50 pages/sec | ~5 pages/sec | ~8 pages/sec | ~30 pages/sec |
 | **Memory** | < 500MB/10k | ~2GB/10k | ~1.5GB/10k | ~800MB/10k |
 | **Concurrency** | Tokio (async) | asyncio (GIL) | Event loop | Goroutines |
-| **Binary size** | ~10MB | N/A | ~50MB | ~15MB |
+| **Binary size** | 2.46 MiB core / 24.39 MiB full | N/A | ~50MB | ~15MB |
 | **Dependencies** | None at runtime | Python required | Node required | None at runtime |
 | **Safety** | Memory safe | Memory safe | Memory safe | Memory safe |
 | **Type system** | Strong, static | Dynamic | Dynamic | Strong, static |

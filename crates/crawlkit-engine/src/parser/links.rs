@@ -65,12 +65,14 @@ impl HtmlParser {
 ///
 /// Used internally by [`HtmlParser::parse_stream`] to extract links from
 /// accumulated HTML chunks before the full document is available.
+#[cfg(feature = "full")]
 pub(super) struct LinkExtractor<'a> {
     base_url: &'a Url,
     page_domain: &'a str,
     seen: std::collections::HashSet<String>,
 }
 
+#[cfg(feature = "full")]
 impl<'a> LinkExtractor<'a> {
     pub(super) fn new(base_url: &'a Url) -> Self {
         Self {

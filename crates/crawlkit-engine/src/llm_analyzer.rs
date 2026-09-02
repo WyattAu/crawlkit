@@ -2,7 +2,7 @@
 //!
 //! Users bring their own LLM API key (OpenAI, Anthropic, or compatible) and
 //! configure prompt templates.  The [`LlmPostCrawlAnalyzer`](crate::llm_analyzer::LlmPostCrawlAnalyzer) implements
-//! [`PostCrawlAnalyzer`] so it plugs directly into the crawl engine's
+//! [`crate::analyzers::post_crawl_analyzers::PostCrawlAnalyzer`] so it plugs directly into the crawl engine's
 //! post-crawl phase.
 //!
 //! # Configuration (crawlkit.toml)

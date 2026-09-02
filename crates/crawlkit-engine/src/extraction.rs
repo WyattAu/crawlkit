@@ -394,6 +394,7 @@ mod tests {
         assert_eq!(deserialized.rules[0].name, "date");
     }
 
+    #[cfg(feature = "full")]
     #[test]
     fn test_extraction_config_toml_roundtrip() {
         let toml_str = r#"

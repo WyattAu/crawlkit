@@ -18,8 +18,52 @@ workspace = true
 name = "crawlkit"
 path = "src/main.rs"
 
+[[test]]
+name = "cli_tests"
+required-features = ["full"]
+
+[[example]]
+name = "basic-crawl"
+path = "examples/basic-crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "crawl_and_analyze"
+path = "examples/crawl_and_analyze.rs"
+required-features = ["full"]
+
+[[example]]
+name = "custom-analyzer"
+path = "examples/custom-analyzer.rs"
+required-features = ["full"]
+
+[[example]]
+name = "custom_analyzer"
+path = "examples/custom_analyzer.rs"
+required-features = ["full"]
+
+[[example]]
+name = "deterministic_crawl"
+path = "examples/deterministic_crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "encrypted_crawl"
+path = "examples/encrypted_crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "export-report"
+path = "examples/export-report.rs"
+required-features = ["full"]
+
+[[example]]
+name = "metrics_export"
+path = "examples/metrics_export.rs"
+required-features = ["full"]
+
 [dependencies]
-crawlkit-engine = { path = "../crawlkit-engine" }
+crawlkit-engine = { path = "../crawlkit-engine", default-features = false }
 tokio.workspace = true
 clap.workspace = true
 tracing.workspace = true
@@ -31,17 +75,17 @@ serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
 chrono.workspace = true
-uuid.workspace = true
-async-trait = "0.1"
-tracing-opentelemetry = "0.33"
-opentelemetry = "0.32"
-opentelemetry_sdk = { version = "0.32", features = ["trace"] }
-opentelemetry-stdout = { version = "0.32", features = ["trace"] }
-sentry = { version = "0.49", default-features = false, features = ["backtrace", "panic", "rustls"] }
-ed25519-dalek = "2"
-rand = "0.8"
-sha2.workspace = true
-dirs = "5"
+uuid = { workspace = true, optional = true }
+async-trait = { version = "0.1", optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["trace"], optional = true }
+opentelemetry-stdout = { version = "0.32", features = ["trace"], optional = true }
+sentry = { version = "0.49", default-features = false, features = ["backtrace", "panic", "rustls"], optional = true }
+ed25519-dalek = { version = "2", optional = true }
+rand = { version = "0.8", optional = true }
+sha2 = { workspace = true, optional = true }
+dirs = { version = "5", optional = true }
 dhat = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -50,5 +94,18 @@ predicates = "3"
 
 [features]
 default = ["full"]
-full = ["crawlkit-engine/full"]
+full = [
+    "crawlkit-engine/full",
+    "uuid",
+    "async-trait",
+    "tracing-opentelemetry",
+    "opentelemetry",
+    "opentelemetry_sdk",
+    "opentelemetry-stdout",
+    "sentry",
+    "ed25519-dalek",
+    "rand",
+    "sha2",
+    "dirs",
+]
 profiling = ["crawlkit-engine/profiling", "dhat"]

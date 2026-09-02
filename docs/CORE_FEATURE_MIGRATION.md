@@ -1,6 +1,6 @@
 # Core/Full Feature Migration
 
-Status: design groundwork only (2026-09-02)
+Status: first implementation slice complete; follow-up boundaries remain (2026-09-02)
 
 ## Goal
 
@@ -10,15 +10,36 @@ public API for compatibility.
 
 ## Current baseline
 
-`cargo check -p crawlkit-engine --no-default-features` currently fails because
-core-visible modules still reference full-mode concerns. The observed failure
-surface includes storage, post-crawl analyzers, plugin index/runtime, the
-Playwright rendered-page type, LLM configuration, and full-only dependencies
-such as reqwest, TOML, tracing, and parking_lot.
+The first migration slice now passes both library and CLI compilation:
 
-This is an architectural boundary issue, not a dependency-size issue. The
-stable default feature path must remain unchanged until each boundary has a
-compile and behavior test.
+```bash
+cargo check -p crawlkit-engine --no-default-features
+cargo check -p crawlkit --no-default-features
+cargo check -p crawlkit-engine --features full
+cargo check -p crawlkit --features full
+```
+
+Core mode excludes the full-only plugin, post-crawl, crawl-map, and integration
+modules. The `CrawlConfig` LLM field remains source-compatible through a small
+core-safe placeholder, and `AnalysisContext` uses a unit rendered-page
+placeholder in core mode. Full mode retains the concrete Playwright type and
+all existing behavior.
+
+Full-only integration tests, benchmarks, and examples are declared with
+`required-features = ["full"]`, so core lint/check jobs do not attempt to
+compile targets whose public APIs are intentionally unavailable. Full-mode
+workspace tests continue to exercise those targets.
+
+This slice also produced reproducible release measurements:
+
+| Artifact | Build flags | Stripped size |
+|---|---|---:|
+| Core CLI | `--no-default-features` | 2,575,640 bytes (2.46 MiB) |
+| Full CLI | `--features full` | 25,579,176 bytes (24.39 MiB) |
+
+The core artifact meets the sub-10 MB target. The full artifact does not, by
+design, because it includes the Wasmtime/plugin and integration runtime. The
+full/core distinction must remain explicit in packaging and public claims.
 
 ## Proposed feature layers
 
@@ -38,9 +59,19 @@ compile and behavior test.
 4. Split `AnalysisContext`'s rendered-page type behind a feature-neutral
    abstraction.
 5. Gate post-crawl, insights, and integration modules consistently.
-6. Add CI checks for `cargo check -p crawlkit-engine --no-default-features`,
-   `cargo check -p crawlkit-engine --features full`, and CLI full builds.
+6. Add CI checks for core engine/CLI compilation and full workspace behavior.
 7. Measure separate release artifacts and only then revise the 10 MB target.
+
+Completed in the first migration slice:
+
+- plugin index/runtime, crawl-map, insights, and post-crawl analyzer exports are
+  gated behind `full`;
+- core-safe `LlmConfig` and `AnalysisContext::rendered` boundaries compile;
+- `RenderedPageSummary` provides an owned, serializable contract and
+  `RenderedPage::summary()` adapts full browser output;
+- full-only examples, benches, and integration tests are explicitly gated;
+- core and full library/CLI compile checks pass;
+- core and full stripped release sizes are measured reproducibly.
 
 ## Acceptance criteria
 

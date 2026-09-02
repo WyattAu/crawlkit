@@ -130,6 +130,23 @@ pub struct RenderedPage {
     pub memory_used: u64,
 }
 
+impl RenderedPage {
+    /// Convert browser-specific rendering output into the feature-neutral
+    /// analyzer summary contract.
+    #[must_use]
+    pub fn summary(&self) -> crate::analyzers::RenderedPageSummary {
+        crate::analyzers::RenderedPageSummary {
+            final_url: Some(self.final_url.clone()),
+            html_size: Some(self.html.len()),
+            console_message_count: self.console_messages.len(),
+            network_request_count: self.network_requests.len(),
+            wasm_error_count: self.wasm_errors.len(),
+            render_time_ms: Some(self.render_time.as_millis().min(u128::from(u64::MAX)) as u64),
+            succeeded: true,
+        }
+    }
+}
+
 /// Console message from browser.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ConsoleMessage {
@@ -621,6 +638,33 @@ mod tests {
         assert_eq!(config.max_concurrent, 5);
         assert!(config.headless);
         assert_eq!(config.max_memory_per_context, 512 * 1024 * 1024);
+    }
+
+    #[test]
+    fn rendered_page_summary_captures_browser_facts() {
+        let page = RenderedPage {
+            final_url: "https://example.com/final".to_string(),
+            html: "<html></html>".to_string(),
+            console_messages: vec![ConsoleMessage {
+                level: "warning".to_string(),
+                text: "test".to_string(),
+                source: None,
+                line: None,
+            }],
+            network_requests: Vec::new(),
+            wasm_errors: Vec::new(),
+            render_time: Duration::from_millis(12),
+            memory_used: 1024,
+        };
+        let summary = page.summary();
+        assert_eq!(
+            summary.final_url.as_deref(),
+            Some("https://example.com/final")
+        );
+        assert_eq!(summary.html_size, Some(13));
+        assert_eq!(summary.console_message_count, 1);
+        assert_eq!(summary.render_time_ms, Some(12));
+        assert!(summary.succeeded);
     }
 
     #[test]

@@ -1,10 +1,12 @@
 //! Incremental HTML parsing over chunked streams.
 
+#[cfg(feature = "full")]
 use url::Url;
 
 #[cfg(feature = "full")]
 use tokio::sync::mpsc;
 
+#[cfg(feature = "full")]
 use super::links::LinkExtractor;
 use super::{ExtractedLink, HtmlParser, MetaTags, ParsedPage};
 

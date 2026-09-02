@@ -15,17 +15,17 @@ jobs:
         include:
           - name: full
             args: '--features full'
-          - name: no-default-baseline
+          - name: core
             args: '--no-default-features'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check crawlkit-engine (${{ matrix.name }})
-        continue-on-error: ${{ matrix.name == 'no-default-baseline' }}
         run: cargo check -p crawlkit-engine ${{ matrix.args }}
-      - name: Record baseline status
-        if: matrix.name == 'no-default-baseline'
-        run: |
-          echo 'The no-default-features job is a non-blocking architectural migration diagnostic.'
-          echo 'It becomes a required gate after CORE_FEATURE_MIGRATION.md acceptance criteria are met.'
+      - name: Check crawlkit CLI core target
+        if: matrix.name == 'core'
+        run: cargo check -p crawlkit --no-default-features
+      - name: Check crawlkit CLI full target
+        if: matrix.name == 'full'
+        run: cargo check -p crawlkit --features full

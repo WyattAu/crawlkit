@@ -66,6 +66,7 @@ pub mod mobile_analyzers;
 /// Permissions-Policy V2 security analyzer.
 pub mod permissions_policy_v2_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
+#[cfg(feature = "full")]
 pub mod post_crawl_analyzers;
 /// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
 pub mod profile;
@@ -189,6 +190,7 @@ pub use mixed_content_validator_analyzers::{
 };
 pub use mobile_analyzers::MobileFriendlinessChecker;
 pub use permissions_policy_v2_analyzers::PermissionsPolicyAnalyzerV2;
+#[cfg(feature = "full")]
 pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
@@ -395,7 +397,34 @@ pub struct AnalysisContext<'a> {
     /// Content-Type header value (e.g., "text/html; charset=utf-8").
     pub content_type: Option<&'a str>,
     /// Rendered page data from JS rendering (if available).
+    #[cfg(feature = "full")]
     pub rendered: Option<&'a crate::playwright::RenderedPage>,
+    /// Core builds do not include a browser runtime.
+    #[cfg(not(feature = "full"))]
+    pub rendered: Option<&'a ()>,
+}
+
+/// Feature-neutral facts produced by an optional rendering integration.
+///
+/// This type is intentionally small and owned. It is suitable for core
+/// analyzer consumers that need rendering status without depending on the
+/// Playwright runtime or its concrete browser types.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct RenderedPageSummary {
+    /// Final URL after rendering, when available.
+    pub final_url: Option<String>,
+    /// Rendered HTML size in bytes, when available.
+    pub html_size: Option<usize>,
+    /// Number of console messages captured.
+    pub console_message_count: usize,
+    /// Number of network requests captured.
+    pub network_request_count: usize,
+    /// Number of rendering-time WASM errors captured.
+    pub wasm_error_count: usize,
+    /// Rendering duration in milliseconds, when available.
+    pub render_time_ms: Option<u64>,
+    /// Whether the rendering operation completed successfully.
+    pub succeeded: bool,
 }
 
 /// A finding/issue detected by an analyzer.
@@ -1594,6 +1623,7 @@ impl AnalyzerRegistry {
                     .map(|s| (*s).to_string())
                     .or_else(|| payload.downcast_ref::<String>().cloned())
                     .unwrap_or_else(|| "unknown panic payload".to_string());
+                #[cfg(feature = "full")]
                 tracing::error!(
                     analyzer = name,
                     url = %ctx.page.url,

@@ -18,10 +18,60 @@ workspace = true
 [[bench]]
 name = "crawlkit_benchmarks"
 harness = false
+required-features = ["full"]
 
 [[example]]
 name = "throughput_bench"
 path = "examples/throughput_bench.rs"
+required-features = ["full"]
+
+[[test]]
+name = "analyzer_registry_contract_tests"
+required-features = ["full"]
+
+[[test]]
+name = "backlink_integration_tests"
+required-features = ["full"]
+
+[[test]]
+name = "determinism_tests"
+required-features = ["full"]
+
+[[test]]
+name = "integration_tests"
+required-features = ["full"]
+
+[[test]]
+name = "parallel_pipeline_tests"
+required-features = ["full"]
+
+[[test]]
+name = "playwright_integration_tests"
+required-features = ["full"]
+
+[[test]]
+name = "plugin_index_tests"
+required-features = ["full"]
+
+[[test]]
+name = "property_tests"
+required-features = ["full"]
+
+[[test]]
+name = "queue_contract_tests"
+required-features = ["full"]
+
+[[test]]
+name = "rum_integration_tests"
+required-features = ["full"]
+
+[[test]]
+name = "storage_contract_tests"
+required-features = ["full"]
+
+[[test]]
+name = "wasm_abi_tests"
+required-features = ["full"]
 
 [features]
 default = ["full"]

@@ -242,7 +242,9 @@ pub mod playwright;
 /// ABI (`crawlkit_plugin_init`, `crawlkit_plugin_analyze`, `crawlkit_plugin_alloc/free`).
 #[cfg(feature = "full")]
 pub mod plugin;
+#[cfg(feature = "full")]
 pub mod plugin_index;
+#[cfg(feature = "full")]
 pub mod plugin_runtime;
 
 #[cfg(all(feature = "full", feature = "wasi-preview2"))]
@@ -252,6 +254,7 @@ pub use plugin::{
     ManifestError, PluginError, PluginInstance, PluginKind, PluginManifest, PluginMetadata,
     PluginRegistry, WasmConfig, WasmPlugin,
 };
+#[cfg(feature = "full")]
 pub use plugin_index::{
     install_plugin, list_installed_plugins, parse_plugin_index, PluginChangelog, PluginIndexEntry,
     PluginIndexError, PluginStats, PluginVerification,
@@ -268,6 +271,7 @@ pub mod gsc;
 /// based on severity and prevalence, estimates fix effort, and produces
 /// a ranked list of actionable insights — the key differentiator that
 /// tools like Sitebulb and Lumar offer.
+#[cfg(feature = "full")]
 pub mod insights;
 /// LLM-powered post-crawl analysis plugin (user-brings-own-key).
 ///
@@ -275,6 +279,19 @@ pub mod insights;
 /// OpenAI and Anthropic APIs via [`LlmConfig`](llm_analyzer::LlmConfig).
 #[cfg(feature = "full")]
 pub mod llm_analyzer;
+
+/// Core-safe placeholder for LLM configuration when full integrations are
+/// disabled. LLM execution is unavailable without the `full` feature.
+#[cfg(not(feature = "full"))]
+pub mod llm_analyzer {
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+    pub struct LlmConfig {
+        #[serde(default)]
+        pub enabled: bool,
+    }
+}
 /// PostgreSQL-backed storage for crawl data.
 ///
 /// Uses sqlx with connection pooling for async database access.
@@ -360,17 +377,18 @@ pub use ai_analyzers::{
 pub use ai_bots::{AiBot, AiBotRegistry};
 pub use analyzers::{
     AccessibilityAnalyzer, AnalysisContext, Analyzer, AnalyzerRegistry, CacheHeaderAnalyzer,
-    CanonicalUrlValidator, ContentQualityAnalyzer, CrawlData, EcommerceSignalsAnalyzer,
+    CanonicalUrlValidator, ContentQualityAnalyzer, EcommerceSignalsAnalyzer,
     EnhancedReadabilityAnalyzer, EntityAnalyzer, Finding, HeadingHierarchyAnalyzer,
     HreflangValidator, HttpStatusAnalyzer, ImageAnalyzer, ImageInfo, InternationalSeoAnalyzer,
     KeywordAnalyzer, LinkAnalyzer, LinkInfo, MetaTagAnalyzer, MobileFriendlinessChecker,
-    PostCrawlAnalyzer, PostCrawlAnalyzerRegistry, RedirectChainAnalyzer, ResourceCountAnalyzer,
-    ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer, SecurityHeaderAnalyzer, SitemapAnalyzer,
-    SitemapEntry, SocialMediaAnalyzer, SslCertificateInfo, SslCertificateValidator,
-    StructuredDataValidator, TtfbAnalyzer, WordCountAnalyzer,
+    RedirectChainAnalyzer, RenderedPageSummary, ResourceCountAnalyzer, ResponseSizeAnalyzer,
+    RobotsRule, RobotsTxtAnalyzer, SecurityHeaderAnalyzer, SitemapAnalyzer, SitemapEntry,
+    SocialMediaAnalyzer, SslCertificateInfo, SslCertificateValidator, StructuredDataValidator,
+    TtfbAnalyzer, WordCountAnalyzer,
 };
 #[cfg(feature = "full")]
 pub use audit::{AuditEvent, AuditEventType, AuditTrail};
+
 #[cfg(feature = "full")]
 pub use backlink_adapters::{
     AdapterError, AhrefsAdapter, BacklinkAdapter, BacklinkAdapterRegistry, ExternalBacklink,
@@ -446,6 +464,7 @@ pub use web_vitals::{WebVitals, WebVitalsError, WebVitalsMeasurer};
 ///
 /// Generates a force-directed layout visualization of crawled pages
 /// and their link relationships, with configurable color schemes.
+#[cfg(feature = "full")]
 pub mod crawl_map;
 /// Declarative custom extraction engine.
 ///

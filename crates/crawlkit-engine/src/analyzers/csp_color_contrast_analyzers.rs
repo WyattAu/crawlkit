@@ -121,16 +121,22 @@ impl ColorContrastTextAnalyzer {
 
     fn extract_text_color_pairs(body: &str) -> Vec<((u8, u8, u8), (u8, u8, u8))> {
         use regex::Regex;
-        let re = Regex::new(r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
         let mut pairs = Vec::new();
+        let Ok(re) = Regex::new(
+            r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#,
+        ) else {
+            return pairs;
+        };
         for cap in re.captures_iter(body) {
             if let (Some(fg), Some(bg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
                 pairs.push((fg, bg));
             }
         }
-        let re2 = Regex::new(r#"style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let Ok(re2) = Regex::new(
+            r#"style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})["']"#,
+        ) else {
+            return pairs;
+        };
         for cap in re2.captures_iter(body) {
             if let (Some(bg), Some(fg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
                 pairs.push((fg, bg));
@@ -228,9 +234,12 @@ impl ColorContrastLinkAnalyzer {
 
     fn extract_link_color_pairs(body: &str) -> Vec<((u8, u8, u8), (u8, u8, u8))> {
         use regex::Regex;
-        let re = Regex::new(r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
         let mut pairs = Vec::new();
+        let Ok(re) = Regex::new(
+            r#"style\s*=\s*["'][^"']*color\s*:\s*(#[0-9a-fA-F]{3,6})[^"']*background(?:-color)?\s*:\s*(#[0-9a-fA-F]{3,6})["']"#,
+        ) else {
+            return pairs;
+        };
         for cap in re.captures_iter(body) {
             if let (Some(fg), Some(bg)) = (Self::parse_hex(&cap[1]), Self::parse_hex(&cap[2])) {
                 pairs.push((fg, bg));

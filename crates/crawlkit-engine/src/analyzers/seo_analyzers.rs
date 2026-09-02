@@ -1863,7 +1863,9 @@ impl Analyzer for LanguageAttributeAnalyzer {
             return findings;
         }
 
-        let lang = ctx.page.html_lang.as_deref().unwrap();
+        let Some(lang) = ctx.page.html_lang.as_deref() else {
+            return findings;
+        };
 
         // LANG003: Empty lang attribute
         if lang.trim().is_empty() {

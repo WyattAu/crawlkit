@@ -1096,27 +1096,22 @@ impl RdfaValidator {
             || lower.contains("resource=")
     }
 
-    #[allow(clippy::unwrap_used)]
     fn extract_vocabs(body: &str) -> Vec<String> {
         let mut vocabs = Vec::new();
-        if let Some(caps) = Regex::new(r#"(?i)vocab\s*=\s*["']([^"']+)["']"#)
-            .unwrap()
-            .captures_iter(body)
-            .next()
-        {
-            vocabs.push(caps[1].to_string());
+        if let Ok(re) = Regex::new(r#"(?i)vocab\s*=\s*["']([^"']+)["']"#) {
+            if let Some(caps) = re.captures_iter(body).next() {
+                vocabs.push(caps[1].to_string());
+            }
         }
         vocabs
     }
 
-    #[allow(clippy::unwrap_used)]
     fn extract_typeofs(body: &str) -> Vec<String> {
         let mut types = Vec::new();
-        for caps in Regex::new(r#"(?i)typeof\s*=\s*["']([^"']+)["']"#)
-            .unwrap()
-            .captures_iter(body)
-        {
-            types.push(caps[1].to_string());
+        if let Ok(re) = Regex::new(r#"(?i)typeof\s*=\s*["']([^"']+)["']"#) {
+            for caps in re.captures_iter(body) {
+                types.push(caps[1].to_string());
+            }
         }
         types
     }
@@ -1273,14 +1268,12 @@ impl MicrodataValidator {
         body.to_lowercase().contains("itemprop")
     }
 
-    #[allow(clippy::unwrap_used)]
     fn extract_itemtype(body: &str) -> Vec<String> {
         let mut types = Vec::new();
-        for caps in Regex::new(r#"(?i)itemtype\s*=\s*["']([^"']+)["']"#)
-            .unwrap()
-            .captures_iter(body)
-        {
-            types.push(caps[1].to_string());
+        if let Ok(re) = Regex::new(r#"(?i)itemtype\s*=\s*["']([^"']+)["']"#) {
+            for caps in re.captures_iter(body) {
+                types.push(caps[1].to_string());
+            }
         }
         types
     }

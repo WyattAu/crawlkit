@@ -116,10 +116,7 @@ impl Analyzer for ContentFreshnessScoreAnalyzer {
                     if let Ok(parsed) =
                         chrono::NaiveDate::parse_from_str(&dp[..dp.len().min(10)], "%Y-%m-%d")
                     {
-                        let today =
-                            chrono::NaiveDate::from_ymd_opt(2026, 8, 30).unwrap_or_else(|| {
-                                chrono::NaiveDate::from_ymd_opt(2025, 1, 1).unwrap()
-                            });
+                        let today = chrono::NaiveDate::from_ymd_opt(2026, 8, 30).unwrap_or(parsed);
                         let age = (today - parsed).num_days();
                         if age > 365 {
                             findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FRESHSC002".to_string(), title: "Content is over a year old".to_string(), description: format!("Content date is {age} days old. Outdated content may rank lower."), url: url.clone(), recommendation: "Update the content and refresh the date.".to_string() });
@@ -4291,8 +4288,8 @@ impl Analyzer for HowToStepDescriptionValidator {
                 continue;
             }
             if let Some(steps) = sd.data.get("step") {
-                let step_list = if steps.is_array() {
-                    steps.as_array().unwrap()
+                let step_list = if let Some(arr) = steps.as_array() {
+                    arr
                 } else {
                     std::slice::from_ref(steps)
                 };

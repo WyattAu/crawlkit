@@ -403,7 +403,7 @@ pub struct AnalysisContext<'a> {
 /// Represents a single SEO or technical issue found during page analysis.
 /// Each finding has a severity, category, machine-readable code, and
 /// a human-readable recommendation for fixing the issue.
-pub use crawlkit_types::Finding;
+pub use crawlkit_types::{Finding, IssueCategory, Severity};
 
 /// Trait for page analyzers.
 ///
@@ -1518,27 +1518,77 @@ impl AnalyzerRegistry {
     /// Run all analyzers on a page and collect findings.
     ///
     /// Analyzers run in parallel via rayon when the `full` feature is enabled,
-    /// or sequentially under `wasm`. Returns a flat list of all [`Finding`]s
-    /// from all analyzers, canonically ordered by `(code, url)` so the
-    /// (potentially nondeterministic) analyzer completion order cannot
-    /// affect downstream output.
+    /// or sequentially under `wasm`. Each analyzer runs inside
+    /// [`std::panic::catch_unwind`], so a panicking analyzer degrades to a
+    /// single `ANALYZER-PANIC` error finding instead of aborting the crawl.
+    ///
+    /// Returns a flat list of all [`Finding`]s from all analyzers, canonically
+    /// ordered by `(code, url)` so the (potentially nondeterministic) analyzer
+    /// completion order cannot affect downstream output.
     pub fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         #[cfg(feature = "full")]
         let mut findings: Vec<Finding> = {
             use rayon::prelude::*;
             self.analyzers
                 .par_iter()
-                .flat_map(|a| a.analyze(ctx))
+                .flat_map(|a| self.run_analyzer_isolated(a.as_ref(), ctx))
                 .collect()
         };
         #[cfg(not(feature = "full"))]
-        let mut findings: Vec<Finding> =
-            self.analyzers.iter().flat_map(|a| a.analyze(ctx)).collect();
+        let mut findings: Vec<Finding> = self
+            .analyzers
+            .iter()
+            .flat_map(|a| self.run_analyzer_isolated(a.as_ref(), ctx))
+            .collect();
 
         // Canonical ordering: stable sort by (code, url) so identical input
         // always produces identical output regardless of parallel scheduling.
         findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
         findings
+    }
+
+    /// Run one analyzer, converting a panic into an error finding.
+    ///
+    /// Unwinding is fully contained here: the rest of the registry continues
+    /// normally and the crawl is never aborted by analyzer bugs.
+    fn run_analyzer_isolated(
+        &self,
+        analyzer: &dyn Analyzer,
+        ctx: &AnalysisContext,
+    ) -> Vec<Finding> {
+        let name = analyzer.name();
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| analyzer.analyze(ctx))) {
+            Ok(findings) => findings,
+            Err(payload) => {
+                let detail = payload
+                    .downcast_ref::<&str>()
+                    .map(|s| (*s).to_string())
+                    .or_else(|| payload.downcast_ref::<String>().cloned())
+                    .unwrap_or_else(|| "unknown panic payload".to_string());
+                tracing::error!(
+                    analyzer = name,
+                    url = %ctx.page.url,
+                    %detail,
+                    "analyzer panicked; isolating failure"
+                );
+                vec![Finding {
+                    severity: Severity::Error,
+                    category: IssueCategory::Http,
+                    code: "ANALYZER-PANIC".to_string(),
+                    title: format!("Analyzer '{name}' panicked"),
+                    description: format!(
+                        "The analyzer '{name}' panicked while analyzing this page: {detail}. \
+                         The failure was isolated; all other analyzers completed normally."
+                    ),
+                    url: ctx.page.url.to_string(),
+                    recommendation: format!(
+                        "This is an internal analyzer defect, not a problem with the site. \
+                         Report it with the analyzer name and page URL so the '{name}' \
+                         analyzer can be fixed."
+                    ),
+                }]
+            }
+        }
     }
 
     /// Returns the number of registered analyzers.

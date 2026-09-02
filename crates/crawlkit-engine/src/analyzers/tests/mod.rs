@@ -1,8 +1,10 @@
 pub(crate) mod standalone;
 pub(crate) mod test_behavior_matrix;
+pub(crate) mod test_coverage_gaps;
 pub(crate) mod test_cross_origin_isolation;
 pub(crate) mod test_hsts_preload;
 pub(crate) mod test_main;
+pub(crate) mod test_panic_isolation;
 pub(crate) mod test_permission_policy;
 pub(crate) mod test_registry_uniqueness;
 pub(crate) mod test_sri;

@@ -36,8 +36,9 @@ impl FontSizeAnalyzer {
     }
 
     fn extract_inline_font_sizes(html: &str) -> Vec<f64> {
-        let re = Regex::new(r#"style\s*=\s*["'][^"']*font-size\s*:\s*([^;"']+)["']"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let Ok(re) = Regex::new(r#"style\s*=\s*["'][^"']*font-size\s*:\s*([^;"']+)["']"#) else {
+            return Vec::new();
+        };
         let mut sizes = Vec::new();
         for cap in re.captures_iter(html) {
             if let Some(px) = Self::parse_font_size_px(&cap[1]) {
@@ -48,8 +49,9 @@ impl FontSizeAnalyzer {
     }
 
     fn extract_style_block_font_sizes(html: &str) -> Vec<f64> {
-        let re =
-            Regex::new(r#"font-size\s*:\s*([^;}]+)"#).unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let Ok(re) = Regex::new(r#"font-size\s*:\s*([^;}]+)"#) else {
+            return Vec::new();
+        };
         let mut sizes = Vec::new();
         for cap in re.captures_iter(html) {
             if let Some(px) = Self::parse_font_size_px(&cap[1]) {
@@ -60,8 +62,9 @@ impl FontSizeAnalyzer {
     }
 
     fn extract_inline_line_heights(html: &str) -> Vec<f64> {
-        let re = Regex::new(r#"style\s*=\s*["'][^"']*line-height\s*:\s*([^;"']+)["']"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let Ok(re) = Regex::new(r#"style\s*=\s*["'][^"']*line-height\s*:\s*([^;"']+)["']"#) else {
+            return Vec::new();
+        };
         let mut heights = Vec::new();
         for cap in re.captures_iter(html) {
             if let Some(lh) = Self::parse_line_height(&cap[1]) {
@@ -72,8 +75,9 @@ impl FontSizeAnalyzer {
     }
 
     fn extract_style_block_line_heights(html: &str) -> Vec<f64> {
-        let re = Regex::new(r#"line-height\s*:\s*([^;}]+)"#)
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let Ok(re) = Regex::new(r#"line-height\s*:\s*([^;}]+)"#) else {
+            return Vec::new();
+        };
         let mut heights = Vec::new();
         for cap in re.captures_iter(html) {
             if let Some(lh) = Self::parse_line_height(&cap[1]) {

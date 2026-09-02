@@ -66,8 +66,7 @@ impl ColorContrastAnalyzer {
     }
 
     fn parse_rgb_function(val: &str) -> Option<(u8, u8, u8)> {
-        let re = Regex::new(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)")
-            .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        let re = Regex::new(r"rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)").ok()?;
         let caps = re.captures(val)?;
         let r: u8 = caps[1].parse().ok()?;
         let g: u8 = caps[2].parse().ok()?;
@@ -107,11 +106,12 @@ impl ColorContrastAnalyzer {
     }
 
     fn extract_color_pairs(html: &str) -> Vec<((u8, u8, u8), (u8, u8, u8))> {
-        let re = Regex::new(
-            r#"style\s*=\s*["'][^"']*color\s*:\s*([^;"']+)[^"']*background(?:-color)?\s*:\s*([^;"']+)["']"#,
-        )
-        .unwrap_or_else(|_| Regex::new("x^").unwrap());
         let mut pairs = Vec::new();
+        let Ok(re) = Regex::new(
+            r#"style\s*=\s*["'][^"']*color\s*:\s*([^;"']+)[^"']*background(?:-color)?\s*:\s*([^;"']+)["']"#,
+        ) else {
+            return pairs;
+        };
         for cap in re.captures_iter(html) {
             if let (Some(fg), Some(bg)) = (
                 Self::parse_color_value(&cap[1]),
@@ -121,10 +121,11 @@ impl ColorContrastAnalyzer {
             }
         }
 
-        let re2 = Regex::new(
+        let Ok(re2) = Regex::new(
             r#"style\s*=\s*["'][^"']*background(?:-color)?\s*:\s*([^;"']+)[^"']*color\s*:\s*([^;"']+)["']"#,
-        )
-        .unwrap_or_else(|_| Regex::new("x^").unwrap());
+        ) else {
+            return pairs;
+        };
         for cap in re2.captures_iter(html) {
             if let (Some(bg), Some(fg)) = (
                 Self::parse_color_value(&cap[1]),

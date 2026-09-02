@@ -326,7 +326,7 @@ pub mod sitemap;
 pub mod storage;
 /// Trait-based abstraction for storage backends.
 ///
-/// Defines [`StorageBackend`](storage_trait::StorageBackend) for pluggable
+/// Defines [`StorageBackend`] for pluggable
 /// storage implementations (SQLite, in-memory, distributed, etc.).
 #[cfg(feature = "full")]
 pub mod storage_trait;

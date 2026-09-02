@@ -323,6 +323,61 @@ mod tests {
         assert!(!adapter.is_available());
     }
 
+    #[tokio::test]
+    async fn unavailable_adapters_return_typed_errors_without_network_access() {
+        let ga = GoogleAnalyticsAdapter::new(None, Some("unused".to_string()));
+        assert_eq!(
+            ga.fetch_rum_data(&[]).await.unwrap_err().to_string(),
+            "RUM not configured"
+        );
+
+        let crux = CruxAdapter::new(None);
+        assert_eq!(
+            crux.fetch_crux_data("https://example.com")
+                .await
+                .unwrap_err()
+                .to_string(),
+            "RUM not configured"
+        );
+    }
+
+    #[test]
+    fn rum_data_points_round_trip_through_json() {
+        let point = RumDataPoint {
+            path: "/products".to_string(),
+            lcp: Some(2100.5),
+            inp: Some(120.0),
+            cls: Some(0.03),
+            fcp: Some(1100.0),
+            ttfb: Some(300.0),
+            page_views: 42,
+            period: "30d".to_string(),
+        };
+        let encoded = serde_json::to_string(&point).unwrap();
+        let decoded: RumDataPoint = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.path, point.path);
+        assert_eq!(decoded.page_views, 42);
+        assert_eq!(decoded.lcp, point.lcp);
+        assert_eq!(decoded.inp, point.inp);
+    }
+
+    #[test]
+    fn crux_data_round_trips_through_json() {
+        let data = CruxData {
+            url: "https://example.com".to_string(),
+            lcp_p75: Some(2200.0),
+            inp_p75: None,
+            cls_p75: Some(0.04),
+            fcp_p75: Some(1200.0),
+            ttfb_p75: Some(350.0),
+        };
+        let encoded = serde_json::to_string(&data).unwrap();
+        let decoded: CruxData = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(decoded.url, data.url);
+        assert_eq!(decoded.lcp_p75, data.lcp_p75);
+        assert_eq!(decoded.inp_p75, None);
+    }
+
     #[test]
     fn test_merged_metrics() {
         let metrics = MergedMetrics {

@@ -35,7 +35,7 @@ pub enum NotificationChannel {
     Slack(String),
 }
 
-/// Errors produced by [`ContinuousMonitor`](ContinuousMonitor) lifecycle
+/// Errors produced by [`ContinuousMonitor`] lifecycle
 /// polling.
 #[derive(Debug, thiserror::Error)]
 pub enum MonitorError {

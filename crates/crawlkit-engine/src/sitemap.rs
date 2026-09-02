@@ -406,6 +406,36 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_malformed_xml_returns_error() {
+        assert!(parse_sitemap("<urlset").is_err());
+        assert!(parse_sitemap("").is_err());
+    }
+
+    #[test]
+    fn test_parse_unknown_root_uses_safe_fallback() {
+        let result =
+            parse_sitemap("<rss><channel><item>not a sitemap</item></channel></rss>").unwrap();
+        match result {
+            SitemapContent::UrlSet(entries) => assert!(entries.is_empty()),
+            SitemapContent::SitemapIndex(urls) => assert!(urls.is_empty()),
+        }
+    }
+
+    #[test]
+    fn test_parse_namespaced_urlset_with_optional_fields() {
+        let xml = r#"<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"><url><loc>https://example.com/x</loc><lastmod>2026-01-01</lastmod><changefreq>weekly</changefreq><priority>0.5</priority></url></urlset>"#;
+        match parse_sitemap(xml).unwrap() {
+            SitemapContent::UrlSet(entries) => {
+                assert_eq!(entries.len(), 1);
+                assert_eq!(entries[0].lastmod.as_deref(), Some("2026-01-01"));
+                assert_eq!(entries[0].changefreq.as_deref(), Some("weekly"));
+                assert_eq!(entries[0].priority, Some(0.5));
+            }
+            _ => panic!("Expected UrlSet"),
+        }
+    }
+
+    #[test]
     fn test_parse_empty_urlset() {
         let xml = r#"<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">

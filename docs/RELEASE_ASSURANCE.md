@@ -3,6 +3,25 @@
 This is the maintainer checklist for producing a trustworthy release. It is
 an evidence gate, not a certification.
 
+## Phase D verification (2026-09-02)
+
+| Gate | Result | Status |
+|---|---:|---|
+| Workspace build | All crates build | Pass |
+| Workspace tests | 4,257 passed, 0 failed, 5 ignored | Pass |
+| Documentation | `cargo doc --workspace --no-deps`, 0 warnings | Pass |
+| Engine line coverage | 79.07% | Exception — below the 90% target |
+| Stripped release binary | 25 MB | Exception — above the 10 MB target |
+| CLI smoke surface | All documented subcommands expose help | Pass |
+
+These exceptions are explicit. Coverage is limited primarily by large
+storage, sitemap, RUM, type, and WASM feature surfaces; integration coverage
+remains planned. The binary already uses LTO, one codegen unit, `opt-level=3`,
+stripping, and aborting panics. Reaching 10 MB requires a separate packaging
+decision: make the Wasmtime/plugin runtime opt-in, or ship a small core binary
+with plugin support as a separate artifact. That feature/API migration must
+not be made implicitly at release time.
+
 ## Before release
 
 1. Review `ROADMAP.md`, `docs/capabilities.toml`, and public claims.

@@ -80,6 +80,7 @@ async fn main() -> Result<()> {
             monitor,
             alert_threshold,
             llm,
+            analyzer_profile,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -119,6 +120,15 @@ async fn main() -> Result<()> {
                 monitor,
                 alert_threshold,
                 llm,
+                analyzer_profile: if analyzer_profile == "full" {
+                    config
+                        .crawl
+                        .as_ref()
+                        .and_then(|c| c.analyzer_profile.clone())
+                        .unwrap_or(analyzer_profile)
+                } else {
+                    analyzer_profile
+                },
             };
             cli::crawl::run(&params).await
         }

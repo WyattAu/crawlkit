@@ -6,7 +6,7 @@ mod fetch;
 mod pipeline;
 
 use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzerRegistry};
-use crate::analyzers::AnalyzerRegistry;
+use crate::analyzers::{AnalyzerProfile, AnalyzerRegistry};
 use crate::coordination::{CrawlCoordinator, PartitionStrategy};
 use crate::http::{HttpClient, HttpClientConfig};
 use crate::queue::{Priority, QueueEntry};
@@ -129,6 +129,17 @@ pub struct CrawlEngineConfig {
     /// Post-crawl analyzers that run after the main crawl loop completes.
     pub post_crawl_analyzers: PostCrawlAnalyzerRegistry,
 
+    /// Which built-in page-analyzer set to register. Defaults to
+    /// [`AnalyzerProfile::Full`] for backward compatibility; feature flags
+    /// still control the optional AI/WASM analyzer groups in that mode.
+    /// Ignored when [`Self::custom_analyzers`] is set.
+    pub analyzer_profile: AnalyzerProfile,
+
+    /// Optional fully custom analyzer registry. When set, it replaces the
+    /// built-in set entirely and takes precedence over
+    /// [`Self::analyzer_profile`].
+    pub custom_analyzers: Option<Arc<AnalyzerRegistry>>,
+
     /// Optional queue backend override. When `None`, the default
     /// [`UrlQueue`](crate::queue::UrlQueue) is used.
     pub queue: Option<Arc<dyn Queue>>,
@@ -225,6 +236,8 @@ impl Default for CrawlEngineConfig {
             post_crawl_analyzers: crate::analyzers::post_crawl_analyzers::build_post_crawl_registry(
                 &CrawlConfig::default(),
             ),
+            analyzer_profile: AnalyzerProfile::default(),
+            custom_analyzers: None,
             queue: None,
             crux_api_key: None,
             previous_crawl_id: None,
@@ -986,6 +999,20 @@ impl CrawlEngine {
         }
     }
 
+    /// Select the built-in analyzer profile used by this engine.
+    pub fn with_analyzer_profile(mut self, profile: AnalyzerProfile) -> Self {
+        self.config.analyzer_profile = profile;
+        self
+    }
+
+    /// Replace the built-in analyzer registry with a custom one. Use this
+    /// only when you need analyzers outside the built-in profiles; for
+    /// profile selection prefer [`Self::with_analyzer_profile`].
+    pub fn with_analyzers(mut self, registry: AnalyzerRegistry) -> Self {
+        self.config.custom_analyzers = Some(Arc::new(registry));
+        self
+    }
+
     /// Build the analyzer registry based on feature flags.
     ///
     /// Delegates to [`AnalyzerRegistry::with_feature_flags`], the single
@@ -993,7 +1020,15 @@ impl CrawlEngine {
     /// [`AnalyzerRegistry::new`]). The `ai_analyzers` and `wasm_analyzers`
     /// feature flags control the optional analyzer groups.
     fn build_analyzer_registry(&self) -> AnalyzerRegistry {
-        AnalyzerRegistry::with_feature_flags(&self.config.feature_flags)
+        if let Some(custom) = &self.config.custom_analyzers {
+            return AnalyzerRegistry::shared(Arc::clone(custom));
+        }
+        match self.config.analyzer_profile {
+            AnalyzerProfile::Full => {
+                AnalyzerRegistry::with_feature_flags(&self.config.feature_flags)
+            }
+            other => other.build_registry(&self.config.crawl_config),
+        }
     }
 
     /// Fetch CrUX field data for all crawled pages and update their CWV

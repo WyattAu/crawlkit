@@ -59,8 +59,8 @@ fn test_co_no_headers() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &[]);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -72,8 +72,8 @@ fn test_co_coep_present() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "COEP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(!findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -85,8 +85,8 @@ fn test_co_coop_present() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
-    assert!(!findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(!findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -140,8 +140,8 @@ fn test_co_only_coep_present() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "COEP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(!findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -159,8 +159,8 @@ fn test_co_only_coop_present() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
-    assert!(!findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(!findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -172,8 +172,8 @@ fn test_co_corp_only_no_coep_no_coop() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]
@@ -186,7 +186,7 @@ fn test_co_coep_wrong_value_still_present() {
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
     // Only checks presence, not value
-    assert!(!findings.iter().any(|f| f.code == "COEP001"));
+    assert!(!findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
 }
 
 #[test]
@@ -220,8 +220,8 @@ fn test_co_only_coep_wrong_value() {
     let page = make_page("https://example.com");
     let ctx = make_ctx_with_headers(&page, &headers);
     let findings = CrossOriginIsolationAnalyzer::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "COEP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(!findings.iter().any(|f| f.code == "COEP001-ISOLATION"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-ISOLATION"));
 }
 
 #[test]

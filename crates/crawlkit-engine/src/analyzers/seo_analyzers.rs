@@ -10425,7 +10425,7 @@ mod new_seo_tests {
         assert!(InternalLinkAnchorTextDiversityAnalyzer::new()
             .analyze(&ctx)
             .iter()
-            .any(|f| f.code == "ANCH-DIV001"));
+            .any(|f| f.code == "ANCH-DIV001-INTERNAL"));
     }
 
     #[test]

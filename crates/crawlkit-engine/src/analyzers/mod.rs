@@ -67,6 +67,8 @@ pub mod mobile_analyzers;
 pub mod permissions_policy_v2_analyzers;
 /// Post-crawl analyzers that inspect full crawl data for cross-page issues.
 pub mod post_crawl_analyzers;
+/// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
+pub mod profile;
 /// Schema.org validators, one per type.
 pub mod schema;
 /// Security and accessibility analyzers for headers, mobile-friendliness, and WCAG compliance.
@@ -96,7 +98,6 @@ pub mod tabindex_analyzers;
 pub mod table_analyzers;
 /// Table caption accessibility analyzer.
 pub mod table_caption_analyzers;
-/// V2/V3/V4 analyzers for content scoring, security deep analysis, and SEO analysis.
 pub mod v2_analyzers;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
 /// Cross-Origin-Resource-Policy (extracted from security_analyzers).
@@ -192,6 +193,7 @@ pub use post_crawl_analyzers::{
     build_post_crawl_registry, CannibalizationDetector, CrawlData, PostCrawlAnalyzer,
     PostCrawlAnalyzerRegistry, SitemapCoverageAnalyzer,
 };
+pub use profile::AnalyzerProfile;
 pub use schema::*;
 pub use security_analyzers::{AccessibilityAnalyzer, SecurityHeaderAnalyzer};
 pub use security_header_analyzers::{
@@ -1492,6 +1494,16 @@ impl AnalyzerRegistry {
     /// Use this when you want full control over which analyzers are run,
     /// without the default set.
     pub fn with_analyzers(analyzers: Vec<Box<dyn Analyzer>>) -> Self {
+        Self { analyzers }
+    }
+
+    /// Create a registry that wraps an existing registry shared via `Arc`,
+    /// avoiding a rebuild of the analyzer set. `Analyzer` objects are shared
+    /// immutably (the trait takes `&self`), so this is safe.
+    pub fn shared(shared: std::sync::Arc<AnalyzerRegistry>) -> Self {
+        let analyzers = std::sync::Arc::into_inner(shared)
+            .map(|inner| inner.analyzers)
+            .unwrap_or_default();
         Self { analyzers }
     }
 

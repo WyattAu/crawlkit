@@ -639,7 +639,7 @@ impl Analyzer for CrossOriginIsolationAnalyzer {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Security,
-                code: "COEP001".to_string(),
+                code: "COEP001-ISOLATION".to_string(),
                 title: "Missing Cross-Origin-Embedder-Policy header".to_string(),
                 description: "No Cross-Origin-Embedder-Policy (COEP) header was found. COEP \
                               prevents loading cross-origin resources without explicit opt-in, \
@@ -657,7 +657,7 @@ impl Analyzer for CrossOriginIsolationAnalyzer {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: IssueCategory::Security,
-                code: "COOP002".to_string(),
+                code: "COOP002-ISOLATION".to_string(),
                 title: "Missing Cross-Origin-Opener-Policy header".to_string(),
                 description: "No Cross-Origin-Opener-Policy (COOP) header was found. COOP \
                               isolates your browsing context from cross-origin popups, preventing \

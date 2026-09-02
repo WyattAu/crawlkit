@@ -2710,7 +2710,7 @@ fn test_coep_missing_header() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
     let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-POLICY"));
 }
 
 #[test]
@@ -2767,7 +2767,7 @@ fn test_coep_empty_value() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
-    assert!(!findings.iter().any(|f| f.code == "COEP001"));
+    assert!(!findings.iter().any(|f| f.code == "COEP001-POLICY"));
     assert!(findings.iter().any(|f| f.code == "COEP002"));
 }
 
@@ -2789,7 +2789,7 @@ fn test_coep_no_headers() {
     let ctx = make_ctx(&page, Some(200), &[], None);
     let findings = CrossOriginEmbedderPolicyAnalyzer::new().analyze(&ctx);
     assert_eq!(findings.len(), 1);
-    assert!(findings.iter().any(|f| f.code == "COEP001"));
+    assert!(findings.iter().any(|f| f.code == "COEP001-POLICY"));
 }
 
 // =========================================================================
@@ -2813,7 +2813,7 @@ fn test_coop_not_same_origin() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-POLICY"));
 }
 
 #[test]
@@ -2837,7 +2837,7 @@ fn test_coop_unsafe_none() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-POLICY"));
 }
 
 #[test]
@@ -2849,7 +2849,7 @@ fn test_coop_case_sensitive() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-POLICY"));
 }
 
 #[test]
@@ -2859,7 +2859,7 @@ fn test_coop_empty_value() {
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let findings = CrossOriginOpenerPolicyAnalyzer::new().analyze(&ctx);
     assert!(!findings.iter().any(|f| f.code == "COOP001"));
-    assert!(findings.iter().any(|f| f.code == "COOP002"));
+    assert!(findings.iter().any(|f| f.code == "COOP002-POLICY"));
 }
 
 #[test]

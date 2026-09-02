@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use crawlkit_engine::analyzers::post_crawl_analyzers;
+use crawlkit_engine::analyzers::{post_crawl_analyzers, AnalyzerProfile};
 use crawlkit_engine::crawl_engine::{CrawlEngine, CrawlEngineConfig};
 use crawlkit_engine::playwright::{PlaywrightConfig, PlaywrightDetector, PlaywrightRenderer};
 use crawlkit_engine::storage::{Severity, Storage};
@@ -129,6 +129,19 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         None
     };
 
+    let analyzer_profile = AnalyzerProfile::parse(&params.analyzer_profile).ok_or_else(|| {
+        anyhow::anyhow!(
+            "unknown analyzer profile '{}'; expected full, core, standard, or deep",
+            params.analyzer_profile
+        )
+    })?;
+    if analyzer_profile != AnalyzerProfile::default() {
+        tracing::info!(
+            profile = analyzer_profile.as_str(),
+            "Using analyzer profile"
+        );
+    }
+
     let crawl_config = crawlkit_engine::CrawlConfig {
         respect_robots_txt: params.respect_robots.unwrap_or(true),
         max_time: params.max_time_secs.map(std::time::Duration::from_secs),
@@ -175,6 +188,8 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         partition_strategy: None,
         instance_id: None,
         instance_count: None,
+        analyzer_profile,
+        custom_analyzers: None,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

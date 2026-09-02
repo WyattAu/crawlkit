@@ -43,6 +43,8 @@ pub struct FeaturesConfig {
 /// Crawl configuration loaded from file.
 #[derive(serde::Deserialize)]
 pub struct CrawlConfig {
+    /// Analyzer registry profile: `full`, `core`, `standard`, or `deep`.
+    pub analyzer_profile: Option<String>,
     /// Default max pages.
     pub max_pages: Option<usize>,
     /// Default request delay in milliseconds.
@@ -205,6 +207,10 @@ pub enum Commands {
         /// Enable LLM-powered analysis (requires API key in env)
         #[arg(long)]
         llm: bool,
+
+        /// Analyzer profile: full, core, standard, or deep (default: full)
+        #[arg(long, default_value = "full")]
+        analyzer_profile: String,
     },
 
     /// Compare two crawl results
@@ -397,4 +403,6 @@ pub struct CrawlParams {
     pub alert_threshold: Option<usize>,
     /// Enable LLM-powered analysis (requires API key in env).
     pub llm: bool,
+    /// Selected analyzer registry profile.
+    pub analyzer_profile: String,
 }

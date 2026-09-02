@@ -600,7 +600,7 @@ fn test_cors_wildcard_with_creds() {
     assert!(CorsMisconfigurationAnalyzer::new()
         .analyze(&ctx)
         .iter()
-        .any(|f| f.code == "CORS001"));
+        .any(|f| f.code == "CORS001-MISCONFIG"));
 }
 
 #[test]
@@ -611,7 +611,7 @@ fn test_cors_wildcard_on_sensitive() {
     assert!(CorsMisconfigurationAnalyzer::new()
         .analyze(&ctx)
         .iter()
-        .any(|f| f.code == "CORS002"));
+        .any(|f| f.code == "CORS002-MISCONFIG"));
 }
 
 #[test]
@@ -1435,7 +1435,7 @@ fn test_csp_dir_missing_default_src() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
     let f = CspDirectiveValidator::new().analyze(&ctx);
-    assert!(f.iter().any(|f| f.code == "CSPDIR001"));
+    assert!(f.iter().any(|f| f.code == "CSPDIR001-VALIDATOR"));
 }
 
 #[test]
@@ -1527,7 +1527,7 @@ fn test_cookie_secure_missing() {
     assert!(CookieSecureFlagValidator::new()
         .analyze(&ctx)
         .iter()
-        .any(|f| f.code == "COOKIESEC001"));
+        .any(|f| f.code == "COOKIESEC001-VALIDATOR"));
 }
 
 #[test]

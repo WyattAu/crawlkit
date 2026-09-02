@@ -19,8 +19,11 @@ storage, sitemap, RUM, type, and WASM feature surfaces; integration coverage
 remains planned. The binary already uses LTO, one codegen unit, `opt-level=3`,
 stripping, and aborting panics. Reaching 10 MB requires a separate packaging
 decision: make the Wasmtime/plugin runtime opt-in, or ship a small core binary
-with plugin support as a separate artifact. That feature/API migration must
-not be made implicitly at release time.
+with plugin support as a separate artifact. A no-default-features prototype
+was attempted during remediation and exposed 97 compile-time feature
+assumptions across engine modules; it was reverted without changing the
+stable default path. This feature/API migration must not be made implicitly
+at release time.
 
 ## Before release
 

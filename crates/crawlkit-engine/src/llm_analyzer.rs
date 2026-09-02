@@ -1,7 +1,7 @@
 //! LLM-powered post-crawl analysis plugin.
 //!
 //! Users bring their own LLM API key (OpenAI, Anthropic, or compatible) and
-//! configure prompt templates.  The [`LlmPostCrawlAnalyzer`] implements
+//! configure prompt templates.  The [`LlmPostCrawlAnalyzer`](crate::llm_analyzer::LlmPostCrawlAnalyzer) implements
 //! [`PostCrawlAnalyzer`] so it plugs directly into the crawl engine's
 //! post-crawl phase.
 //!
@@ -25,7 +25,7 @@
 //!
 //! The API key is read from the environment variable named in `api_key_env`
 //! at construction time.  If the variable is absent the analyzer refuses to
-//! build and returns [`LlmError::MissingApiKey`].
+//! build and returns [`LlmError::MissingApiKey`](crate::llm_analyzer::LlmError::MissingApiKey).
 
 use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzer};
 use crate::types::{IssueCategory, Severity};

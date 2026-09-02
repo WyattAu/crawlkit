@@ -35,7 +35,8 @@ pub enum NotificationChannel {
     Slack(String),
 }
 
-/// Errors produced by [`ContinuousMonitor::run`].
+/// Errors produced by [`ContinuousMonitor`](ContinuousMonitor) lifecycle
+/// polling.
 #[derive(Debug, thiserror::Error)]
 pub enum MonitorError {
     /// The check interval could not be parsed.

@@ -104,7 +104,7 @@ impl Default for PostCrawlAnalyzerRegistry {
 /// Build the default post-crawl analyzer registry with all built-in analyzers.
 ///
 /// If `config.llm.enabled` is true and the API key environment variable is
-/// set, the [`LlmPostCrawlAnalyzer`] is also registered.
+/// set, the LLM post-crawl analyzer is also registered.
 pub fn build_post_crawl_registry(config: &crate::CrawlConfig) -> PostCrawlAnalyzerRegistry {
     let mut registry = PostCrawlAnalyzerRegistry::new();
     registry.register(Box::new(InternalLinkGraphAnalyzer::new()));

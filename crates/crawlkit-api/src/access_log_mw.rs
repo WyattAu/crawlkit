@@ -42,8 +42,8 @@ fn derive_action(method: &str, path: &str) -> String {
     format!("{resource_type}.{verb}")
 }
 
-/// Middleware that logs every API access to the [`AccessLogger`] for SOC 2
-/// compliance. Extracts the authenticated user (if present) and records
+/// Middleware that logs every API access to the engine's `AccessLogger`
+/// for SOC 2 compliance. Extracts the authenticated user (if present) and records
 /// the action, resource, IP, and outcome.
 pub async fn access_log_middleware(
     State(state): State<AppState>,

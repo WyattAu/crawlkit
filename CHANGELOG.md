@@ -5,6 +5,30 @@ All notable changes to crawlkit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — analyzer robustness and profiles
+- **Analyzer profiles** (`core` 9 / `standard` 21 / `deep` 20 / `full`), selectable via `crawlkit crawl --analyzer-profile` or engine config; `standard` is now the recommended routine default with one canonical analyzer per major family
+- **Per-analyzer panic isolation**: `AnalyzerRegistry::analyze` wraps every analyzer in `catch_unwind`; a panicking analyzer degrades to an `ANALYZER-PANIC` error finding instead of aborting the crawl
+- **Registry finding-code uniqueness guard**: runtime fixture proving no two registered analyzers emit the same code on the same page
+- **Behavior matrices** for 11 overlapping families (color-contrast, focus, heading-hierarchy, image-alt, anchor-text, link-quality, CSP, cookies, forms, tables, links) documenting finding-code ownership with dedicated fixtures
+- **Generation dedup contract** (`test_generation_dedup.rs`) pinning the proof for every removed registration and every intentionally retained divergent pair
+- 9 new coverage test modules; ~110 new tests (suite now 4,257 across the workspace)
+
+### Changed — finding-code ownership (breaking for code consumers)
+- Redundant analyzer generations received explicit namespaces: `FOCUS-V2001-DEEP-DEEP(-DEEP)`, `HHIER-V2002/3-DEEP-DEEP(-DEEP)`, `IMGALT-V2001/2-DEEP-DEEP(-DEEP)`, `ANCHGEN-V2001-DEEP`, `COLRCL-V2001-DEEP`, plus the earlier CORS/cookie/CSP/COEP/COOP namespacing
+- `HHIER-V2002` semantic collision resolved: it now exclusively means "empty headings" (V2 generation); the V8 "missing H1" meaning moved to `HHIER-V2002-DEEP-DEEP`
+- **Nine redundant registrations removed from the default registry** (833 → 778): the cookie Secure/HttpOnly/SameSite, canonical self-reference, canonical chain, focus-management, heading-hierarchy, and image-alt deep-deep-deep validators (exact duplicates or strict subsets), plus the reverse-subset `TableAccessibilityDeepDeepValidator`. All removed types remain exported and behavior-pinned; only their default registration changed
+- `FormLabelsDeepDeepValidator` no longer counts hidden/submit/button/reset/image inputs as unlabeled (false positive fix, matching the deep-deep-deep semantics)
+- Production analyzer code contains zero `unwrap`/`expect` calls
+
+### Fixed
+- 17 broken intra-doc links across `crawlkit-engine` and `crawlkit-api`; `cargo doc --workspace` now builds with zero warnings
+
+### Validation
+- Workspace: 4,257 tests passing, 0 failed; fmt + clippy `-D warnings` clean on both primary crates
+- Live crawl regression (kingstonpeptides.com, 10 pages, 500 ms delay): full profile 954 findings / 100 codes (unchanged — removed duplicates only fired on defects this site lacks), standard 80 / 8, core 30 / 3
+
 ## [4.4.1] - 2026-08-23
 
 ### Security — release integrity

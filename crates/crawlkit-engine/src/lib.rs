@@ -125,9 +125,10 @@ pub mod compare;
 pub mod content_gap;
 /// Distributed crawling coordination: leader election and URL partitioning.
 ///
-/// Provides [`CrawlCoordinator`] for partitioning URLs across multiple
-/// crawler instances by domain hash, and defines [`PartitionStrategy`]
-/// for hash-based or range-based partitioning.
+/// Provides [`CrawlCoordinator`](coordination::CrawlCoordinator) for
+/// partitioning URLs across multiple crawler instances by domain hash, and
+/// defines [`PartitionStrategy`](coordination::PartitionStrategy) for
+/// hash-based or range-based partitioning.
 #[cfg(feature = "full")]
 pub mod coordination;
 /// Crawl engine that encapsulates the shared crawl loop for CLI and API consumers.

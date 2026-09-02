@@ -738,8 +738,8 @@ impl Drop for EpochWatchdog {
     }
 }
 
-/// A loaded plugin instance — either a core ABI [`WasmPlugin`] or a
-/// WASI Preview 2 [`WasiPlugin`].
+/// A loaded plugin instance — either a core ABI [`WasmPlugin`](WasmPlugin)
+/// or, under the `wasi-preview2` feature, a WASI Preview 2 plugin.
 ///
 /// This enum provides a uniform interface for the plugin registry and
 /// runtime without requiring dynamic dispatch.

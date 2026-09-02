@@ -15,9 +15,8 @@ pub enum QueueError {
 /// A trait abstracting URL queue backends.
 ///
 /// Both the in-memory [`UrlQueue`](crate::queue::UrlQueue) and the
-/// Redis-backed [`DistributedQueue`](crate::distributed_queue::DistributedQueue)
-/// implement this trait, allowing callers to swap backends without changing
-/// queue-consuming code.
+/// Redis-backed `DistributedQueue` implement this trait, allowing callers
+/// to swap backends without changing queue-consuming code.
 pub trait Queue: Send + Sync {
     /// Push an entry into the queue.
     ///

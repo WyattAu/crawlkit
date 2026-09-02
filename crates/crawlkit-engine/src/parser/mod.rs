@@ -1,9 +1,9 @@
 //! HTML parsing and feature extraction.
 //!
 //! Splits document analysis into focused submodules:
-//! [`content`] (meta/headings/word count), [`links`], [`media`], [`forms`],
-//! [`assets`] (scripts/styles/JSON-LD), [`accessibility`], and
-//! [`streaming`] (incremental chunked parsing).
+//! `content` (meta/headings/word count), `links`, `media`, `forms`,
+//! `assets` (scripts/styles/JSON-LD), `accessibility`, and
+//! `streaming` (incremental chunked parsing).
 
 mod accessibility;
 mod assets;

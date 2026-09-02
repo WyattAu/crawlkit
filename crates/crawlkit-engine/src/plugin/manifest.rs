@@ -27,7 +27,7 @@ pub struct PluginMetadata {
     /// Hex sha256 digest of the `.wasm` file this manifest describes.
     pub wasm_hash: Option<String>,
     /// Hex ed25519 signature over the raw 32-byte sha256 digest (not over
-    /// the hex string). Verified against [`TRUSTED_PLUGIN_KEYS`].
+    /// the hex string). Verified against the crate's trusted plugin keys.
     pub signature: Option<String>,
     /// Key id of the signer — the first 16 hex characters of the signer's
     /// ed25519 public key.

@@ -17305,7 +17305,22 @@ impl Analyzer for FormLabelsDeepDeepValidator {
             .forms
             .iter()
             .flat_map(|f| &f.inputs)
-            .filter(|i| !i.has_label && i.aria_label.is_none() && i.id.is_none())
+            .filter(|i| {
+                // Hidden inputs are not user-visible and cannot receive a
+                // visible label; treating them as unlabeled is a false
+                // positive. Submit/button inputs likewise carry no label
+                // expectation beyond their own text.
+                !matches!(
+                    i.input_type.as_deref(),
+                    Some("hidden")
+                        | Some("submit")
+                        | Some("button")
+                        | Some("reset")
+                        | Some("image")
+                ) && !i.has_label
+                    && i.aria_label.is_none()
+                    && i.id.is_none()
+            })
             .count();
         if unlabeled > 0 {
             findings.push(Finding {

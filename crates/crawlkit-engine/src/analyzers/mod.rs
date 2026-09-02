@@ -528,6 +528,14 @@ impl AnalyzerRegistry {
     /// Create the standard profile with one canonical analyzer per common family.
     ///
     /// The complete registry remains available through [`AnalyzerRegistry::new`].
+    /// The recommended default for routine crawls.
+    ///
+    /// One canonical analyzer per major family (HTTP, redirects,
+    /// canonical/hreflang, metadata, headings, links, images, structured
+    /// data, content, security headers, CSP, cookies, mixed content,
+    /// mobile, accessibility, forms, tables, social, international SEO).
+    /// Family ownership is documented by the `tests/test_*_matrix.rs`
+    /// files; additions must go through the same fixture-first process.
     pub fn standard(_config: &CrawlConfig) -> Self {
         Self::with_analyzers(vec![
             Box::new(HttpStatusAnalyzer::new()),
@@ -541,12 +549,16 @@ impl AnalyzerRegistry {
             Box::new(StructuredDataValidator::new()),
             Box::new(ContentQualityAnalyzer::new()),
             Box::new(SecurityHeaderAnalyzer::new()),
-            Box::new(MobileFriendlinessChecker::new()),
-            Box::new(AccessibilityAnalyzer::new()),
-            Box::new(SocialMediaAnalyzer::new()),
-            Box::new(InternationalSeoAnalyzer::new()),
+            Box::new(ContentSecurityPolicyAnalyzer::new()),
+            Box::new(StrictTransportSecurityAnalyzer::new()),
             Box::new(CookieAnalyzer::new()),
             Box::new(MixedContentAnalyzer::new()),
+            Box::new(MobileFriendlinessChecker::new()),
+            Box::new(AccessibilityAnalyzer::new()),
+            Box::new(FormLabelAnalyzer::new()),
+            Box::new(TableAccessibilityAnalyzer::new()),
+            Box::new(SocialMediaAnalyzer::new()),
+            Box::new(InternationalSeoAnalyzer::new()),
         ])
     }
 

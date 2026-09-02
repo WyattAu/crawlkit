@@ -241,23 +241,25 @@ fn table_accessibility_deep_deep_is_subset_of_ddd() {
 #[test]
 fn form_labels_generations_differ_and_are_both_retained() {
     let mut p = page();
+    // A visible but unlabeled text input: both generations must flag it.
+    let make_input = |ty: &str| crate::parser::ExtractedInput {
+        input_type: Some(ty.to_string()),
+        name: None,
+        id: None,
+        has_label: false,
+        aria_label: None,
+        aria_labelledby: None,
+        aria_describedby: None,
+        placeholder: None,
+        required: false,
+    };
     p.forms.push(crate::parser::ExtractedForm {
         action: None,
         method: "get".to_string(),
-        input_count: 1,
+        input_count: 2,
         has_file_input: false,
         has_search_input: false,
-        inputs: vec![crate::parser::ExtractedInput {
-            input_type: Some("hidden".to_string()),
-            name: None,
-            id: None,
-            has_label: false,
-            aria_label: None,
-            aria_labelledby: None,
-            aria_describedby: None,
-            placeholder: None,
-            required: false,
-        }],
+        inputs: vec![make_input("text"), make_input("hidden")],
         has_fieldset: false,
         has_legend: false,
     });
@@ -266,12 +268,27 @@ fn form_labels_generations_differ_and_are_both_retained() {
     assert_eq!(
         dd.len(),
         1,
-        "deep-deep counts hidden inputs as unlabeled (latent FP, kept as-is)"
+        "deep-deep must flag the text input but not the hidden one: {dd:?}"
     );
-    assert!(
-        ddd.is_empty(),
-        "deep-deep-deep excludes hidden inputs: {ddd:?}"
-    );
+    assert_eq!(ddd.len(), 1, "deep-deep-deep agrees on the text input");
+    // A hidden-only form must be silent in both (no false positive).
+    let mut hidden_only = page();
+    hidden_only.forms.push(crate::parser::ExtractedForm {
+        action: None,
+        method: "post".to_string(),
+        input_count: 1,
+        has_file_input: false,
+        has_search_input: false,
+        inputs: vec![make_input("hidden")],
+        has_fieldset: false,
+        has_legend: false,
+    });
+    assert!(FormLabelsDeepDeepValidator::new()
+        .analyze(&ctx(&hidden_only, &[], ""))
+        .is_empty());
+    assert!(FormLabelsDeepDeepDeepValidator::new()
+        .analyze(&ctx(&hidden_only, &[], ""))
+        .is_empty());
 }
 
 #[test]

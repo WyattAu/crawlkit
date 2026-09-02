@@ -74,7 +74,7 @@ fn test_standard_profile_is_reduced_and_unique() {
     let standard = AnalyzerRegistry::standard(&config);
     let default = AnalyzerRegistry::new(&config);
     let names: HashSet<&str> = standard.iter().map(|analyzer| analyzer.name()).collect();
-    assert_eq!(standard.len(), 17);
+    assert_eq!(standard.len(), 21);
     assert!(standard.len() < default.len());
     assert_eq!(names.len(), standard.len());
 }
@@ -84,11 +84,12 @@ fn test_standard_profile_is_reduced_and_unique() {
 fn test_deep_profile_is_focused_and_unique() {
     let config = CrawlConfig::default();
     let deep = AnalyzerRegistry::deep(&config);
-    let standard = AnalyzerRegistry::standard(&config);
     let names: HashSet<&str> = deep.iter().map(|analyzer| analyzer.name()).collect();
     assert_eq!(deep.len(), 20);
     assert_eq!(names.len(), deep.len());
-    assert!(deep.len() > standard.len());
+    // Deep is a *focused* generation set, not a superset of standard:
+    // standard now carries the comprehensive canonical family set while
+    // deep holds only generation-specific checks.
 }
 
 /// Every registered analyzer must have a unique name. A duplicate name means
@@ -169,9 +170,9 @@ fn test_profile_baseline_counts() {
     };
 
     assert_eq!(core.len(), 9);
-    assert_eq!(standard.len(), 17);
+    assert_eq!(standard.len(), 21);
     assert_eq!(deep.len(), 20);
-    assert!(standard.len() < deep.len());
+    assert!(core.len() < standard.len());
     assert!(deep.len() < default.len());
     assert_eq!(count_findings(&core), 9);
     assert!(count_findings(&standard) <= count_findings(&default));

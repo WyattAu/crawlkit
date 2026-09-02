@@ -21,7 +21,7 @@ pub enum AnalyzerProfile {
     Full,
     /// Conservative foundational profile (9 analyzers).
     Core,
-    /// One canonical analyzer per common family (17 analyzers).
+    /// One canonical analyzer per common family (21 analyzers).
     Standard,
     /// Focused deep security/accessibility/SEO analyzers (20 analyzers).
     Deep,
@@ -95,7 +95,7 @@ mod tests {
         assert!(core < standard, "core={core} standard={standard}");
         assert!(standard < full, "standard={standard} full={full}");
         assert_eq!(core, 9);
-        assert_eq!(standard, 17);
+        assert_eq!(standard, 21);
         assert_eq!(deep, 20);
     }
 }

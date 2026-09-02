@@ -17503,7 +17503,7 @@ impl Analyzer for FocusManagementDeepDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "FOCUS-V2001".to_string(),
+                code: "FOCUS-V2001-DEEP-DEEP".to_string(),
                 title: "Positive tabindex found (deep-deep)".to_string(),
                 description:
                     "Elements with positive tabindex disrupt natural tab order in deep analysis."
@@ -18971,7 +18971,7 @@ impl Analyzer for FocusManagementDeepDeepDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if ctx.page.has_positive_tabindex {
-            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FOCUS-V2001".to_string(), title: "Positive tabindex found (deep-deep-deep)".to_string(), description: "Elements with positive tabindex disrupt natural tab order in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Remove positive tabindex values and use DOM order.".to_string() });
+            findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Accessibility, code: "FOCUS-V2001-DEEP-DEEP-DEEP".to_string(), title: "Positive tabindex found (deep-deep-deep)".to_string(), description: "Elements with positive tabindex disrupt natural tab order in deep-deep analysis.".to_string(), url: url.clone(), recommendation: "Remove positive tabindex values and use DOM order.".to_string() });
         }
         findings
     }

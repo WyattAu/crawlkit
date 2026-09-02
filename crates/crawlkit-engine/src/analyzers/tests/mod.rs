@@ -5,6 +5,7 @@ pub(crate) mod test_color_contrast_matrix;
 pub(crate) mod test_coverage_gaps;
 pub(crate) mod test_cross_origin_isolation;
 pub(crate) mod test_deep_security_coverage;
+mod test_focus_matrix;
 pub(crate) mod test_hsts_preload;
 pub(crate) mod test_main;
 pub(crate) mod test_panic_isolation;

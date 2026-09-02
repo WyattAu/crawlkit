@@ -485,7 +485,7 @@ All Phase 8 code must comply with `.adrs/coding-standards.md`.
 | # | Task | Depends On | Acceptance Criteria |
 |---|------|------------|---------------------|
 | 9.1 | Cross-platform binary builds | All phases | Linux (x86_64, aarch64), macOS (x86_64, aarch64), Windows (x86_64) |
-| 9.2 | Binary size optimization | 9.1 | All binaries < 10MB (Phase D measured 25MB stripped; requires separate Wasmtime/core-binary packaging decision) |
+| 9.2 | Binary size optimization | 9.1 | All binaries < 10MB (Phase D measured 25MB stripped; requires separate Wasmtime/core-binary packaging decision; no safe feature split made in Phase D remediation) |
 | 9.3 | Documentation overhaul | 9.1 | README, API docs, architecture docs complete; cargo doc warning-free verified in Phase D |
 | 9.4 | Examples enhancement | 9.1 | >= 5 runnable examples |
 | 9.5 | Performance benchmarks | 9.1 | Criterion benchmarks pass all targets |

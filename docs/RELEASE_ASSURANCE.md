@@ -8,9 +8,9 @@ an evidence gate, not a certification.
 | Gate | Result | Status |
 |---|---:|---|
 | Workspace build | All crates build | Pass |
-| Workspace tests | 4,257 passed, 0 failed, 5 ignored | Pass |
+| Workspace tests | 4,263 passed, 0 failed, 5 ignored | Pass |
 | Documentation | `cargo doc --workspace --no-deps`, 0 warnings | Pass |
-| Engine line coverage | 79.07% | Exception — below the 90% target |
+| Engine line coverage | 79.07% (79.08% after focused tests) | Exception — below the 90% target |
 | Stripped release binary | 25 MB | Exception — above the 10 MB target |
 | CLI smoke surface | All documented subcommands expose help | Pass |
 

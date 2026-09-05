@@ -62,6 +62,9 @@ Build commands: `cargo build --release -p crawlkit --no-default-features` and
    bash scripts/capture-benchmark-metadata.sh
    ```
 
+   The 2026-09-05 run is committed (raw output + summary in
+   `docs/benchmarks/2026-09-05/` and `measured-2026-09-05.md`).
+
 6. Coverage is measured by the CI workflow with native targets separated:
    engine library coverage uses `--lib`, and API coverage uses `--all-targets`
    so router integration tests are included without instrumenting the WASM

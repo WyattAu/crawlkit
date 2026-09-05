@@ -4,6 +4,16 @@
 **Scope:** Full repository analysis (codebase, documentation, claims accuracy, standards compliance)  
 **Toolchain:** Rust 1.97.1 stable, release build profile, workspace lints
 
+> **Supersession note (2026-09-05):** this audit is a point-in-time snapshot.
+> Where later work has changed the ground truth, the following rows/items
+> are resolved or superseded: item 16 (MSRV) and item 11 (performance
+> claims) are resolved — committed criterion evidence now exists in
+> `docs/benchmarks/measured-2026-09-05.md`. Binary-size claims are superseded
+> by the measured core/full split (2,575,640 B core / 25,579,176 B full,
+> `docs/RELEASE_ASSURANCE.md`), and the test-count rows are superseded by
+> the 4,300-test workspace suite. See the file history and the coverage
+> contract (`docs/COVERAGE_CONTRACT.md`) for current figures.
+
 ---
 
 ## Table of Contents
@@ -374,7 +384,7 @@ For each domain: **canonical industry standard** → crawlkit's **actual impleme
 ### P2 — Documentation Accuracy
 
 10. **Synchronize test count badge.** Current: 736. Actual: 798.
-11. **Remove or qualify all performance claims** until backed by committed criterion output. Currently 4 docs give 4 contradictory numbers with no raw data.
+11. ~~**Remove or qualify all performance claims** until backed by committed criterion output.~~ **RESOLVED (2026-09-05)** — raw criterion output and environment metadata are committed in `docs/benchmarks/2026-09-05/` with a summary in `docs/benchmarks/measured-2026-09-05.md`; contradictory prose must now defer to that evidence.
 12. **Fix binary size claim** (~8 MB → ~23 MB) and **startup time claim** (~10ms → ~32ms median).
 13. **Update `docs/ARCHITECTURE.md` §Standards Compliance** to reflect shipped items (determinism, circuit breaker, encryption, audit trail) and remove aspirational descriptions (actor model, Bloom filter, MockFetcher, channel pipeline).
 14. **Update `docs/COMPETITIVE_ANALYSIS.md`** — either source the competitor numbers or remove fabricated claims. Self-contradictory numbers (500+ vs ≥50) damage credibility.

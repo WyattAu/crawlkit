@@ -1,0 +1,18 @@
+test html_parser/parse_small_page ... bench:      149816 ns/iter (+/- 8864)
+test html_parser/parse_5kb_page ... bench:      589169 ns/iter (+/- 24824)
+
+test analyzer_registry_full_suite ... bench:     1402373 ns/iter (+/- 230897)
+
+test url_queue/push_1000_urls ... bench:     1629902 ns/iter (+/- 136167)
+test url_queue/pop_1000_urls ... bench:      753905 ns/iter (+/- 35804)
+test url_queue/push_pop_mixed_priorities ... bench:     2190300 ns/iter (+/- 149589)
+
+test storage/insert_100_pages ... bench:     1416526 ns/iter (+/- 119989)
+test storage/query_pages ... bench:      708476 ns/iter (+/- 88613)
+test storage/insert_and_query_issues ... bench:      506062 ns/iter (+/- 56027)
+
+test circuit_breaker_state_check ... bench:           0 ns/iter (+/- 0)
+
+test link_graph_pagerank_100_nodes ... bench:      935413 ns/iter (+/- 62117)
+
+test feature_flags_get ... bench:          46 ns/iter (+/- 3)

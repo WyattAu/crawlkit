@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — benchmark evidence
+- Committed the first criterion benchmark evidence run (2026-09-05): raw output and environment metadata in `docs/benchmarks/2026-09-05/` with a summary in `docs/benchmarks/measured-2026-09-05.md`; the full analyzer suite measures ~1.40 ms/iter and 5 KB HTML parsing ~0.59 ms on the capture machine
+
 ### Fixed — release documentation
 - `CODEBASE_AUDIT.md` MSRV row corrected: all enforcement paths (CI `msrv` job, `scripts/pre-commit.sh`, `justfile`) now pin 1.94.0, matching `rust-version`; the "inconsistent MSRV enforcement" action item is marked resolved
 - `RELEASE_ASSURANCE.md` gains a release-artifact evidence annex: workspace version 4.4.1, rustc 1.97.1, and SHA-256/stripped-byte records for the core (2,575,640 B) and full (25,579,176 B) binaries

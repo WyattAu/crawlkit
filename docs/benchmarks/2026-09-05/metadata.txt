@@ -1,0 +1,8 @@
+timestamp_utc=2026-09-05T19:22:40Z
+commit=5a43aa85b4c956a2876311b6b4c9e0b4a6df44df
+rustc=rustc 1.97.1 (8bab26f4f 2026-07-14)
+cargo=cargo 1.97.1 (c980f4866 2026-06-30)
+os=Linux msi-ge66 7.2.2-1-cachyos #1 SMP PREEMPT_DYNAMIC Fri, 28 Aug 2026 17:20:10 +0000 x86_64 GNU/Linux
+cpu=16
+features=default
+criterion_command=cargo bench -p crawlkit-engine --bench crawlkit_benchmarks -- --output-format bencher

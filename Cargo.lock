@@ -1103,6 +1103,8 @@ checksum = "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5"
 [[package]]
 name = "cryptkit"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c06b2298ff21f74c9d1ed1f1468350edbd961175669295073d48becaf22d4738"
 dependencies = [
  "aes-gcm",
  "hmac 0.12.1",
@@ -1554,6 +1556,8 @@ dependencies = [
 [[package]]
 name = "envstack"
 version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4a2849ff91a24428792f7e030c164265485db921245f474a89895ea67fa015a6"
 dependencies = [
  "serde",
  "serde_json",
@@ -2614,6 +2618,8 @@ checksum = "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad"
 [[package]]
 name = "loop-retry"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "247b0c1c74a7e3d91f5307cffc8e72eb8c61efb67e9e351e2bb0171df53e7676"
 dependencies = [
  "rand 0.9.5",
  "thiserror 2.0.19",
@@ -4115,7 +4121,9 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "salting"
-version = "0.2.0"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5493af6b46ecb7cf899e60401358202505933da13153ba625164bc38e4548a8"
 dependencies = [
  "argon2",
  "rand 0.8.7",
@@ -5025,6 +5033,8 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 [[package]]
 name = "tokenkit"
 version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "420028108ec323158bc362a0ae53a5606b0f2c1fbd98fadd3e8e71034a120e4f"
 dependencies = [
  "chrono",
  "jsonwebtoken",

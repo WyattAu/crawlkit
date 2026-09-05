@@ -669,6 +669,241 @@ async fn webhook_to_private_address_is_rejected() {
 }
 
 #[tokio::test]
+async fn webhook_creation_listing_and_deletion_preserve_secret_boundary() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/webhooks",
+            Some(serde_json::json!({
+                "url": "https://example.com/hooks",
+                "events": ["crawl.completed", "crawl.failed"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let webhook_id = created["id"].as_str().unwrap().to_string();
+    assert_eq!(created["tenant_id"], "tenant-a");
+    assert_eq!(created["secret"].as_str().unwrap().len(), 64);
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/webhooks", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(listed.as_array().unwrap().len(), 1);
+    assert!(listed[0].get("secret").is_none(), "webhook secret leaked");
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            &format!("/api/v1/webhooks/{webhook_id}"),
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!test.state.webhooks.contains_key(&webhook_id));
+}
+
+#[tokio::test]
+async fn webhook_unknown_event_is_rejected_before_registration() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/webhooks",
+            Some(serde_json::json!({
+                "url": "https://example.com/hooks",
+                "events": ["crawl.completed", "account.deleted"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Invalid event type"));
+    assert!(test.state.webhooks.is_empty());
+}
+
+#[tokio::test]
+async fn webhook_cross_tenant_delete_is_not_found_and_keeps_resource() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("viewer", "tenant-a", "viewer", "password123!X"));
+    let webhook_id = "tenant-b-webhook";
+    test.state.webhooks.insert(
+        webhook_id.to_string(),
+        crawlkit_api::types::WebhookConfig {
+            id: webhook_id.to_string(),
+            tenant_id: "tenant-b".to_string(),
+            url: "https://example.com/hooks".to_string(),
+            events: vec!["crawl.completed".to_string()],
+            secret: "secret".to_string(),
+            created_at: chrono::Utc::now(),
+        },
+    );
+    let token = test.token_for("viewer");
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            &format!("/api/v1/webhooks/{webhook_id}"),
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(test.state.webhooks.contains_key(webhook_id));
+}
+
+fn schedule_body() -> Value {
+    serde_json::json!({
+        "start_url": "https://example.com/start",
+        "max_pages": 25,
+        "request_delay_ms": 100,
+        "concurrency": 2,
+        "interval_secs": 300
+    })
+}
+
+#[tokio::test]
+async fn schedule_crud_and_partial_update_are_tenant_scoped() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("other", "tenant-b", "editor", "password123!X"));
+    test.state.schedules.insert(
+        "foreign-schedule".to_string(),
+        crawlkit_api::types::ScheduleConfig {
+            id: "foreign-schedule".to_string(),
+            tenant_id: "tenant-b".to_string(),
+            crawl_config: crawlkit_engine::CrawlConfig {
+                start_url: url::Url::parse("https://example.com/foreign").unwrap(),
+                ..Default::default()
+            },
+            interval_secs: 300,
+            enabled: true,
+            next_run: chrono::Utc::now(),
+            last_run_at: None,
+            last_crawl_id: None,
+            created_at: chrono::Utc::now(),
+        },
+    );
+    let token = test.token_for("editor");
+
+    let (status, created) = test
+        .send(test.authed(&token, "POST", "/api/v1/schedules", Some(schedule_body())))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["interval_secs"], 300);
+    assert_eq!(created["enabled"], true);
+    let schedule_id = created["id"].as_str().unwrap().to_string();
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/schedules", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let listed_ids = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|schedule| schedule["id"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(listed_ids.len(), 1);
+    assert!(listed_ids.contains(&schedule_id.as_str()));
+    assert!(!listed_ids.contains(&"foreign-schedule"));
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/schedules/foreign-schedule", None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(test.state.schedules.contains_key("foreign-schedule"));
+
+    let (status, updated) = test
+        .send(test.authed(
+            &token,
+            "PATCH",
+            &format!("/api/v1/schedules/{schedule_id}"),
+            Some(serde_json::json!({
+                "start_url": "https://example.com/updated",
+                "max_pages": 50,
+                "enabled": false,
+                "interval_secs": 600
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["start_url"], "https://example.com/updated");
+    assert_eq!(updated["interval_secs"], 600);
+    assert_eq!(updated["enabled"], false);
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            &format!("/api/v1/schedules/{schedule_id}"),
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!test.state.schedules.contains_key(&schedule_id));
+}
+
+#[tokio::test]
+async fn schedule_validation_rejects_invalid_interval_and_bounds() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let mut invalid_interval = schedule_body();
+    invalid_interval["interval_secs"] = serde_json::json!(59);
+    let (status, body) = test
+        .send(test.authed(&token, "POST", "/api/v1/schedules", Some(invalid_interval)))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("at least 60"));
+
+    let mut invalid_pages = schedule_body();
+    invalid_pages["max_pages"] = serde_json::json!(0);
+    let (status, body) = test
+        .send(test.authed(&token, "POST", "/api/v1/schedules", Some(invalid_pages)))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("max_pages"));
+    assert!(test.state.schedules.is_empty());
+}
+
+#[tokio::test]
 async fn public_health_endpoint_is_open() {
     let dir = tempfile::tempdir().unwrap();
     let test = setup(dir.path());

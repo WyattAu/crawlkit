@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — PostgreSQL storage backend (found by the service-backed suite)
+- `get_crawl_meta` decoded the `TIMESTAMPTZ` columns `start_time`/`end_time` as text, panicking at runtime; they now decode through `chrono::DateTime<Utc>` and re-format as RFC 3339, matching the SQLite backend's stored representation
+- `get_crawl_meta` decoded the `INTEGER` columns `pages_crawled`/`total_issues` as `i64`; they now decode as `i32` and widen to the trait's `usize` contract, and `finish_crawl` binds them as `i32` to match the schema
+- `test_pg_top_issues` asserted an aggregation shape impossible under the documented `TopIssue` contract (one page yielding `affected_pages = 2`); it now seeds two pages with findings sharing one `(severity, code, title)` and asserts the single grouped row reports both affected pages
+
 ### Fixed — dependency supply chain
 - Resolved a failing `cargo deny check` (the CI-enforcing dependency gate): updated yanked `chacha20` 0.10.1 → 0.10.2 (transitive via `rand` → `sqlx-postgres`) and `event-listener` 5.4.1 → 5.4.2, clearing unsound advisory RUSTSEC-2026-0221 (also unifying away an extra `concurrent-queue` version)
 - Removed the stale `RUSTSEC-2024-0436` (`paste`) ignore from `deny.toml`: the crate is no longer in the dependency tree, so the ignore no longer matched anything

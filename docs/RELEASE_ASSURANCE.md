@@ -19,6 +19,7 @@ an evidence gate, not a certification.
 | CLI smoke surface | Full command surface exposes help | Pass |
 | Bounded release gate | `verify-release-controls.sh` run 2026-09-05, every stage exit 0; log in `docs/release-evidence/release-gate-2026-09-05.txt` | Pass |
 | Dependency gate | `cargo deny check` (advisories, bans, licenses, sources) exit 0 after fixing yanked `chacha20` and `event-listener` RUSTSEC-2026-0221; `cargo audit` 0 vulnerabilities, 2 documented warnings | Pass |
+| Service-backed suite | Run 2026-09-05 against ephemeral PostgreSQL 16 + Redis 7 (Docker): all 20 engine + 1 API ignored service tests pass | Pass — 3 `pg_storage` decode/aggregation bugs found and fixed |
 
 These exceptions are explicit. Coverage is limited primarily by large
 storage, sitemap, RUM, type, and WASM feature surfaces. API all-target
@@ -57,7 +58,11 @@ Build commands: `cargo build --release -p crawlkit --no-default-features` and
    ```
 
 4. Run service-backed tests when PostgreSQL/Redis support is part of the
-   release scope.
+   release scope. Executed 2026-09-05 against ephemeral PostgreSQL 16 +
+   Redis 7 containers; the full ignored suite (20 engine + 1 API) passes.
+   The run surfaced and fixed three `pg_storage` bugs (TIMESTAMPTZ->text
+   and INTEGER->i64 decode mismatches in `get_crawl_meta`, and an
+   impossible `test_pg_top_issues` aggregation assertion) — see CHANGELOG.
 5. Capture benchmark evidence when performance claims change:
 
    ```bash

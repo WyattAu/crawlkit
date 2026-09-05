@@ -1,0 +1,42 @@
+=== service-backed suite @ d4719af9 2026-09-05T21:25:24Z ===
+env: postgres:16-alpine + redis:7-alpine (docker), DATABASE_URL=postgres://postgres@localhost:5432/crawlkit_test, REDIS_URL=redis://localhost:6379/
+--- engine (--features "postgres unstable" --lib --ignored)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.57s
+     Running unittests src/lib.rs (target/debug/deps/crawlkit_engine-970e14c9f66363d0)
+
+running 20 tests
+test distributed_queue::tests::test_distributed_queue_clear ... ok
+test distributed_queue::tests::test_distributed_queue_different_crawl_ids ... ok
+test distributed_queue::tests::test_distributed_queue_empty_pop ... ok
+test distributed_queue::tests::test_distributed_queue_is_empty ... ok
+test distributed_queue::tests::test_distributed_queue_push_and_pop ... ok
+test pg_storage::tests::test_pg_conditional_requests ... ok
+test pg_storage::tests::test_pg_crawl_meta_and_ids ... ok
+test pg_storage::tests::test_pg_insert_and_get_issues ... ok
+test pg_storage::tests::test_pg_insert_and_get_page ... ok
+test pg_storage::tests::test_pg_insert_pages_batch ... ok
+test pg_storage::tests::test_pg_links_for_crawl_and_external ... ok
+test pg_storage::tests::test_pg_page_urls ... ok
+test pg_storage::tests::test_pg_rich_page_fields_null_defaults ... ok
+test pg_storage::tests::test_pg_rich_page_fields_roundtrip ... ok
+test pg_storage::tests::test_pg_start_and_finish_crawl ... ok
+test pg_storage::tests::test_pg_stats ... ok
+test pg_storage::tests::test_pg_tenant_isolation ... ok
+test pg_storage::tests::test_pg_top_issues ... ok
+test pg_storage::tests::test_pg_update_page_fetched_at ... ok
+test web_vitals::tests::test_measure_requires_playwright ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 3956 filtered out; finished in 0.68s
+
+engine_exit=0
+--- api (--lib --ignored)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.60s
+     Running unittests src/lib.rs (target/debug/deps/crawlkit_api-95d3ba875f36174c)
+
+running 1 test
+test persistence::pg_tests::pg_state_store_roundtrip ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 101 filtered out; finished in 0.04s
+
+api_exit=0
+=== SUITE_COMPLETE ===

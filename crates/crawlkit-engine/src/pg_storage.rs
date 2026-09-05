@@ -336,8 +336,8 @@ impl StorageBackend for PgStorage {
                 "UPDATE crawls SET end_time = $1, pages_crawled = $2, total_issues = $3 WHERE id = $4",
             )
             .bind(Utc::now())
-            .bind(pages as i64)
-            .bind(issues as i64)
+            .bind(pages as i32)
+            .bind(issues as i32)
             .bind(&crawl_id)
             .execute(&pool)
             .await?;
@@ -997,11 +997,20 @@ impl StorageBackend for PgStorage {
             Ok(CrawlMeta {
                 id: row.try_get("id")?,
                 target_url: row.try_get("target_url")?,
-                start_time: row.try_get("start_time")?,
-                end_time: row.try_get("end_time")?,
-                pages_crawled: row.try_get::<Option<i64>, _>("pages_crawled")?.unwrap_or(0)
+                // `start_time`/`end_time` are TIMESTAMPTZ columns; decode them
+                // through chrono and re-format as RFC 3339 so the value matches
+                // what the SQLite backend stores/returns (to_rfc3339).
+                start_time: row
+                    .try_get::<Option<chrono::DateTime<Utc>>, _>("start_time")?
+                    .map(|t| t.to_rfc3339()),
+                end_time: row
+                    .try_get::<Option<chrono::DateTime<Utc>>, _>("end_time")?
+                    .map(|t| t.to_rfc3339()),
+                // The crawls table declares these as INTEGER (int4); decode as
+                // i32 and widen to match the trait's usize contract.
+                pages_crawled: row.try_get::<Option<i32>, _>("pages_crawled")?.unwrap_or(0)
                     as usize,
-                total_issues: row.try_get::<Option<i64>, _>("total_issues")?.unwrap_or(0) as usize,
+                total_issues: row.try_get::<Option<i32>, _>("total_issues")?.unwrap_or(0) as usize,
             })
         })
     }
@@ -1587,29 +1596,36 @@ mod tests {
         let storage = sync_test_storage();
 
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
-        let page = test_page(&unique("p"), "https://example.com/", 200);
-        storage.insert_page(&crawl_id, &page).unwrap();
+        let page_a = test_page(&unique("p"), "https://example.com/a", 200);
+        let page_b = test_page(&unique("p"), "https://example.com/b", 200);
+        storage.insert_page(&crawl_id, &page_a).unwrap();
+        storage.insert_page(&crawl_id, &page_b).unwrap();
 
-        let issues = vec![
-            test_issue(
-                &unique("i"),
-                page.id.as_str(),
-                IssueCategory::Seo,
-                Severity::Error,
-            ),
-            test_issue(
-                &unique("i"),
-                page.id.as_str(),
-                IssueCategory::Seo,
-                Severity::Error,
-            ),
-        ];
-        storage.insert_issues_batch(&issues).unwrap();
+        // Two findings sharing one (severity, code, title) across two pages
+        // must aggregate into a single row reporting both affected pages.
+        let mut issue_a = test_issue(
+            &unique("i"),
+            page_a.id.as_str(),
+            IssueCategory::Seo,
+            Severity::Error,
+        );
+        let mut issue_b = test_issue(
+            &unique("i"),
+            page_b.id.as_str(),
+            IssueCategory::Seo,
+            Severity::Error,
+        );
+        issue_a.code = "SEO-AGGR".to_string();
+        issue_a.title = "Aggregated SEO issue".to_string();
+        issue_b.code = issue_a.code.clone();
+        issue_b.title = issue_a.title.clone();
+        storage.insert_issues_batch(&[issue_a, issue_b]).unwrap();
 
         let top = storage.get_top_issues(&crawl_id, 10).unwrap();
-        assert_eq!(top.len(), 1);
-        assert_eq!(top[0].affected_pages, 2);
+        assert_eq!(top.len(), 1, "identical findings must group into one row");
         assert_eq!(top[0].severity, "error");
+        assert_eq!(top[0].code, "SEO-AGGR");
+        assert_eq!(top[0].affected_pages, 2);
         storage.finish().unwrap();
     }
 }

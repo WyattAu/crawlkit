@@ -1666,5 +1666,63 @@ impl AnalyzerRegistry {
     }
 }
 
+/// Returns true when `robots_txt` blanket-disallows an otherwise-unmatched
+/// crawler: a `Disallow: /` inside the `User-agent: *` group (RFC 9309).
+///
+/// Rules apply only to the user-agent group that precedes them, so a blanket
+/// `Disallow: /` scoped to a named bot (e.g. `User-agent: CCBot`) must never
+/// be reported as "blocks all crawlers". Consecutive `User-agent:` lines
+/// extend a single group header, rules before any header match no crawler,
+/// and within the `*` group an `Allow: /` that follows the blanket rule wins
+/// the equal-priority tie, leaving the crawler unblocked.
+pub(crate) fn robots_txt_star_blanket_disallows_all(robots_txt: &str) -> bool {
+    let mut star_blocked = false;
+    let mut star_allowed_after = false;
+    // The group currently receiving rules, if its header named the `*` agent.
+    let mut active_star_group: Option<bool> = None;
+    let mut group_has_rules = false;
+
+    for raw in robots_txt.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((directive, value)) = line.split_once(':') else {
+            continue;
+        };
+        let directive = directive.trim().to_ascii_lowercase();
+        let value = value.split('#').next().unwrap_or("").trim();
+        match directive.as_str() {
+            "user-agent" => {
+                if group_has_rules {
+                    // A rule line sealed the previous group; commit it.
+                    if star_blocked && !star_allowed_after {
+                        return true;
+                    }
+                    star_blocked = false;
+                    star_allowed_after = false;
+                    group_has_rules = false;
+                    active_star_group = None;
+                }
+                // Consecutive `User-agent:` lines extend one group header.
+                active_star_group = Some(active_star_group.unwrap_or(false) || value == "*");
+            }
+            "disallow" | "allow" => {
+                group_has_rules = true;
+                if !active_star_group.unwrap_or(false) || value != "/" {
+                    continue;
+                }
+                match directive.as_str() {
+                    "disallow" => star_blocked = true,
+                    "allow" if star_blocked => star_allowed_after = true,
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
+    }
+    star_blocked && !star_allowed_after
+}
+
 #[cfg(test)]
 mod tests;

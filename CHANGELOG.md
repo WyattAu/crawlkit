@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — robots.txt "blocks all" false positives (found by the dogfood crawl)
+- Four registered analyzers (`ROBOTS-V3002`, `ROBOTSDEEP-V2001`, `ROBOTSDIS-V5001`, `ROBOTSWILD-V6101`) flagged "robots.txt blocks all" for any blanket `Disallow: /` in the file, ignoring RFC 9309 user-agent group scoping — kingstonpeptides.com (which blanket-disallows only `CCBot`/`ByteSpider` while its `User-agent: *` group allows crawling) produced 400 false positives across 100 pages
+- Added a shared `robots_txt_star_blanket_disallows_all` helper (analyzer-group-aware: only a `Disallow: /` in the `*` group counts; consecutive `User-agent:` lines merge; a later `Allow: /` wins the equal-priority tie) and routed all five detection sites through it, including the base `ROBOTSDEEP001` analyzer
+- 9 unit tests cover the helper; re-crawl of kingstonpeptides.com dropped from 10,413 to 10,011 issues with the blanket cluster eliminated (the legitimate `ROBOTS-V2001` path-disallow finding is retained)
+- Known follow-up: `ROBOTSDEEP-V2001` is emitted by two registered analyzers with different meanings (blanket disallow vs. missing User-agent) — code collision to resolve in the analyzer-catalog cleanup
+
 ### Fixed — PostgreSQL storage backend (found by the service-backed suite)
 - `get_crawl_meta` decoded the `TIMESTAMPTZ` columns `start_time`/`end_time` as text, panicking at runtime; they now decode through `chrono::DateTime<Utc>` and re-format as RFC 3339, matching the SQLite backend's stored representation
 - `get_crawl_meta` decoded the `INTEGER` columns `pages_crawled`/`total_issues` as `i64`; they now decode as `i32` and widen to the trait's `usize` contract, and `finish_crawl` binds them as `i32` to match the schema

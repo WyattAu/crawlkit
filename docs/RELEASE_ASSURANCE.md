@@ -20,6 +20,7 @@ an evidence gate, not a certification.
 | Bounded release gate | `verify-release-controls.sh` run 2026-09-05, every stage exit 0; log in `docs/release-evidence/release-gate-2026-09-05.txt` | Pass |
 | Dependency gate | `cargo deny check` (advisories, bans, licenses, sources) exit 0 after fixing yanked `chacha20` and `event-listener` RUSTSEC-2026-0221; `cargo audit` 0 vulnerabilities, 2 documented warnings | Pass |
 | Service-backed suite | Run 2026-09-05 against ephemeral PostgreSQL 16 + Redis 7 (Docker): all 20 engine + 1 API ignored service tests pass | Pass — 3 `pg_storage` decode/aggregation bugs found and fixed |
+| Dogfood crawl (ADR-009) | kingstonpeptides.com 2026-09-05: 100 pages, 0 failures | Pass — found and fixed a 400-finding robots.txt "blocks all" false-positive cluster (RFC 9309 group scoping) |
 
 These exceptions are explicit. Coverage is limited primarily by large
 storage, sitemap, RUM, type, and WASM feature surfaces. API all-target

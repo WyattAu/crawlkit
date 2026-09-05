@@ -15,5 +15,6 @@ pub(crate) mod test_main;
 pub(crate) mod test_panic_isolation;
 pub(crate) mod test_permission_policy;
 pub(crate) mod test_registry_uniqueness;
+mod test_robots_blanket;
 pub(crate) mod test_sri;
 pub(crate) mod test_validator_coverage;

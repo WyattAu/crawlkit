@@ -16,7 +16,7 @@
     clippy::redundant_clone,
     clippy::useless_conversion
 )]
-use super::{AnalysisContext, Analyzer, Finding};
+use super::{robots_txt_star_blanket_disallows_all, AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
 // =========================================================================
@@ -2076,26 +2076,16 @@ impl Analyzer for RobotsTxtAnalysisDeepAnalyzerV2 {
             Some(r) => r,
             None => return findings,
         };
-        let lower = robots.to_lowercase();
-        if lower.contains("disallow: /") {
-            for line in robots.lines() {
-                let t = line.trim();
-                if t.to_lowercase().starts_with("disallow:") {
-                    let path = t.split(':').nth(1).unwrap_or("").trim();
-                    if path == "/" {
-                        findings.push(Finding {
-                            severity: Severity::Critical,
-                            category: IssueCategory::Seo,
-                            code: "ROBOTSDEEP-V2001".to_string(),
-                            title: "robots.txt blocks all".to_string(),
-                            description: "Blanket Disallow: / blocks all crawlers.".to_string(),
-                            url: url.clone(),
-                            recommendation: "Remove blanket disallow.".to_string(),
-                        });
-                        break;
-                    }
-                }
-            }
+        if robots_txt_star_blanket_disallows_all(robots) {
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Seo,
+                code: "ROBOTSDEEP-V2001".to_string(),
+                title: "robots.txt blocks all".to_string(),
+                description: "Blanket Disallow: / blocks all crawlers.".to_string(),
+                url: url.clone(),
+                recommendation: "Remove blanket disallow.".to_string(),
+            });
         }
         findings
     }
@@ -3053,25 +3043,16 @@ impl Analyzer for RobotsTxtAnalyzerV3 {
                 return findings;
             }
         };
-        let lower = robots.to_lowercase();
-        if lower.contains("disallow: /") {
-            for line in robots.lines() {
-                let t = line.trim();
-                if t.to_lowercase().starts_with("disallow:")
-                    && t.split(':').nth(1).unwrap_or("").trim() == "/"
-                {
-                    findings.push(Finding {
-                        severity: Severity::Critical,
-                        category: IssueCategory::Seo,
-                        code: "ROBOTS-V3002".to_string(),
-                        title: "robots.txt blocks all".to_string(),
-                        description: "Blanket Disallow: /.".to_string(),
-                        url: url.clone(),
-                        recommendation: "Remove blanket disallow.".to_string(),
-                    });
-                    break;
-                }
-            }
+        if robots_txt_star_blanket_disallows_all(robots) {
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Seo,
+                code: "ROBOTS-V3002".to_string(),
+                title: "robots.txt blocks all".to_string(),
+                description: "Blanket Disallow: /.".to_string(),
+                url: url.clone(),
+                recommendation: "Remove blanket disallow.".to_string(),
+            });
         }
         findings
     }
@@ -6016,25 +5997,16 @@ impl Analyzer for RobotsTxtDisallowValidator {
             None => return findings,
         };
         let lower = robots.to_lowercase();
-        if lower.contains("disallow: /") {
-            for line in robots.lines() {
-                let t = line.trim();
-                if t.to_lowercase().starts_with("disallow:") {
-                    let path = t.split(':').nth(1).unwrap_or("").trim();
-                    if path == "/" {
-                        findings.push(Finding {
-                            severity: Severity::Critical,
-                            category: IssueCategory::Seo,
-                            code: "ROBOTSDIS-V5001".to_string(),
-                            title: "robots.txt blocks all crawlers".to_string(),
-                            description: "Disallow: / blocks everything.".to_string(),
-                            url: url.clone(),
-                            recommendation: "Remove blanket disallow.".to_string(),
-                        });
-                        break;
-                    }
-                }
-            }
+        if robots_txt_star_blanket_disallows_all(robots) {
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Seo,
+                code: "ROBOTSDIS-V5001".to_string(),
+                title: "robots.txt blocks all crawlers".to_string(),
+                description: "Disallow: / blocks everything.".to_string(),
+                url: url.clone(),
+                recommendation: "Remove blanket disallow.".to_string(),
+            });
         }
         let disallow_count = lower
             .lines()
@@ -10935,11 +10907,7 @@ impl Analyzer for RobotsTxtWildcardDisallowValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(robots) = ctx.robots_txt {
-            let block_all = robots.lines().any(|l| {
-                (l.starts_with("Disallow:") || l.starts_with("disallow:"))
-                    && l.trim() == "Disallow: /"
-            });
-            if block_all {
+            if robots_txt_star_blanket_disallows_all(robots) {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Seo,

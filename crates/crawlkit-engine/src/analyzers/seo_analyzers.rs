@@ -20,7 +20,9 @@ use url::Url;
 use crate::parser::ExtractedLink;
 use crate::types::{IssueCategory, Severity};
 
-use super::{is_utility_page, AnalysisContext, Analyzer, Finding};
+use super::{
+    is_utility_page, robots_txt_star_blanket_disallows_all, AnalysisContext, Analyzer, Finding,
+};
 
 // ---------------------------------------------------------------------------
 // 3. Canonical URL Validator
@@ -3715,23 +3717,20 @@ impl Analyzer for RobotsTxtAnalysisDeepAnalyzer {
             None => return findings,
         };
 
-        let lower = robots.to_lowercase();
-        if lower.contains("disallow: /") && !lower.contains("disallow: / ") {
-            // Check if there's a blanket disallow for all agents
-            let lines: Vec<&str> = robots.lines().collect();
-            let mut current_agent = "*";
-            for line in &lines {
-                let trimmed = line.trim();
-                if trimmed.to_lowercase().starts_with("user-agent:") {
-                    current_agent = trimmed.split(':').nth(1).unwrap_or("*").trim();
-                }
-                if trimmed.to_lowercase().starts_with("disallow:") && current_agent == "*" {
-                    let path = trimmed.split(':').nth(1).unwrap_or("").trim();
-                    if path == "/" {
-                        findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Seo, code: "ROBOTSDEEP001".to_string(), title: "robots.txt blocks all crawlers".to_string(), description: "A blanket 'Disallow: /' rule blocks all crawlers from the entire site.".to_string(), url: url.clone(), recommendation: "Remove the blanket disallow unless intentionally blocking indexing.".to_string() });
-                    }
-                }
-            }
+        if robots_txt_star_blanket_disallows_all(robots) {
+            findings.push(Finding {
+                severity: Severity::Critical,
+                category: IssueCategory::Seo,
+                code: "ROBOTSDEEP001".to_string(),
+                title: "robots.txt blocks all crawlers".to_string(),
+                description:
+                    "A blanket 'Disallow: /' rule blocks all crawlers from the entire site."
+                        .to_string(),
+                url: url.clone(),
+                recommendation:
+                    "Remove the blanket disallow unless intentionally blocking indexing."
+                        .to_string(),
+            });
         }
 
         let crawl_delay_lines: Vec<&str> = robots

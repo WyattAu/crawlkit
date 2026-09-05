@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Coverage CI now measures native engine library and API all-target surfaces separately, including the existing router integration tests without instrumenting the WASM target
 - Added persistence corruption, invalid-timestamp, login-lockout, disabled-account, tenant-scoping, and administrative-validation regression coverage; API all-target coverage now measures 60.38%
 - Added webhook secret-boundary, event-validation, and cross-tenant-deletion regression coverage plus schedule tenant-scoped CRUD/partial-update and boundary-validation coverage (5 new router integration tests)
-- Added marketplace lifecycle, rating-aggregation/bounds, RBAC, and test-plugin coverage plus API-key CRUD/redaction, tenant CRUD/isolation, and admin-only audit-trail coverage (9 new router integration tests); API all-target coverage now measures 64.14%
+- Added marketplace lifecycle, rating-aggregation/bounds, RBAC, and test-plugin coverage plus API-key CRUD/redaction, tenant CRUD/isolation, and admin-only audit-trail coverage (9 new router integration tests); API all-target coverage now measures 66.51%
+- Added user create/delete/list RBAC coverage (success, password hashing, admin-only enforcement, cross-tenant admin listing) and session refresh/listing/revoke-ownership plus OIDC unconfigured/validation error-path coverage (8 new router integration tests)
 
 ### Added — core/full feature boundary
 - Core builds now compile without the full runtime: plugin, post-crawl, crawl-map, integration, and browser-specific CLI surfaces are gated behind `full` while `log-analyze` remains available in core mode

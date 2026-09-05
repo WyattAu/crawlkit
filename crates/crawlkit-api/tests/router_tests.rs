@@ -1680,3 +1680,335 @@ async fn audit_events_are_admin_only_and_carry_chain_fields() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Users (create/delete/list under RBAC)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn admin_user_creation_success_persists_and_echoes_roles() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/users",
+            Some(serde_json::json!({
+                "email": "new@example.com",
+                "name": "New User",
+                "password": "Str0ng!Pass#12",
+                "roles": ["viewer"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["email"], "new@example.com");
+    assert_eq!(created["tenant_id"], "default");
+    assert_eq!(created["roles"], serde_json::json!(["viewer"]));
+    assert_eq!(created["enabled"], true);
+
+    let stored = test
+        .state
+        .auth
+        .find_user_by_id(created["id"].as_str().unwrap());
+    assert!(
+        stored.is_some(),
+        "created user must be persisted in auth state"
+    );
+    let stored = stored.unwrap();
+    assert_eq!(stored.email, "new@example.com");
+    assert_ne!(stored.password_hash, "Str0ng!Pass#12");
+    assert!(
+        test.state
+            .auth
+            .verify_password("Str0ng!Pass#12", &stored.password_hash),
+        "stored hash must verify the password"
+    );
+}
+
+#[tokio::test]
+async fn user_creation_and_deletion_are_admin_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/users",
+            Some(serde_json::json!({
+                "email": "new@example.com",
+                "name": "New",
+                "password": "Str0ng!Pass#12"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Only admins"));
+    assert!(test.state.auth.find_user_by_id("editor").is_some());
+}
+
+#[tokio::test]
+async fn admin_user_delete_success_and_unknown_id() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("doomed", "default", "viewer", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/users/doomed", None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(test.state.auth.find_user_by_id("doomed").is_none());
+
+    let (status, body) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/users/ghost", None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+}
+
+#[tokio::test]
+async fn admin_user_listing_spans_tenants() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("other", "tenant-b", "viewer", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/users", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|user| user["id"].as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&"root"));
+    assert!(
+        ids.contains(&"other"),
+        "admins must see every tenant, got: {listed}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Sessions: refresh, listing, revoke ownership, OIDC error paths
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn refresh_issues_new_token_and_registers_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("u1");
+
+    let (status, body) = test
+        .send(test.authed(&token, "POST", "/api/v1/auth/refresh", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let refreshed = body["token"].as_str().unwrap();
+    assert_ne!(refreshed, token, "refresh must issue a new token");
+    assert_eq!(body["user"]["id"], "u1");
+
+    // The refreshed token is itself valid against the middleware.
+    let (status, _) = test
+        .send(test.authed(refreshed, "GET", "/api/v1/auth/me", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn session_listing_is_scoped_to_the_caller() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("alice", "tenant-a", "viewer", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("bob", "tenant-a", "viewer", "password123!X"));
+
+    // Real logins register sessions for each user.
+    let login = |email: &str| {
+        test.public(
+            "POST",
+            "/api/v1/auth/login",
+            Some(serde_json::json!({"email": email, "password": "password123!X"})),
+        )
+    };
+    let (_, alice_login) = test.send(login("alice@example.com")).await;
+    let (_, bob_login) = test.send(login("bob@example.com")).await;
+    let alice_token = alice_login["token"].as_str().unwrap().to_string();
+    let bob_jti = {
+        let claims = test
+            .state
+            .auth
+            .validate_token(bob_login["token"].as_str().unwrap());
+        claims.unwrap().jti
+    };
+
+    let (status, sessions) = test
+        .send(test.authed(&alice_token, "GET", "/api/v1/sessions", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let jtis = sessions
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|session| session["jti"].as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        jtis.len(),
+        1,
+        "only the caller's session may be listed: {sessions}"
+    );
+    assert!(
+        !jtis.contains(&bob_jti.as_str()),
+        "foreign session leaked: {sessions}"
+    );
+}
+
+#[tokio::test]
+async fn revoke_session_ownership_is_enforced() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("alice", "tenant-a", "viewer", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+
+    let login = |email: &str| {
+        test.public(
+            "POST",
+            "/api/v1/auth/login",
+            Some(serde_json::json!({"email": email, "password": "password123!X"})),
+        )
+    };
+    let (_, bob_login) = test.send(login("alice@example.com")).await;
+    let bob_jti = test
+        .state
+        .auth
+        .validate_token(bob_login["token"].as_str().unwrap())
+        .unwrap()
+        .jti;
+
+    // A different non-admin may not revoke the session (404, no leak).
+    test.state
+        .auth
+        .add_user(make_user("mallory", "tenant-a", "viewer", "password123!X"));
+    let mallory_token = test.token_for("mallory");
+    let (status, _) = test
+        .send(test.authed(
+            &mallory_token,
+            "POST",
+            "/api/v1/sessions/revoke",
+            Some(serde_json::json!({"jti": bob_jti})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // An admin may revoke another user's session.
+    let admin_token = test.token_for("root");
+    let (status, _) = test
+        .send(test.authed(
+            &admin_token,
+            "POST",
+            "/api/v1/sessions/revoke",
+            Some(serde_json::json!({"jti": bob_jti})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn oidc_endpoints_fail_cleanly_when_unconfigured_or_malformed() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+
+    // oidc is None in the test state, so authorize fails deterministically.
+    let (status, body) = test
+        .send(test.public("GET", "/api/v1/auth/oidc/authorize", None))
+        .await;
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("OIDC not configured"));
+
+    // Provider-reported error surfaces as 400.
+    let (status, body) = test
+        .send(test.public(
+            "GET",
+            "/api/v1/auth/oidc/callback?error=access_denied&state=abc",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("provider error"));
+
+    // Missing code / state / unknown state are rejected before any network I/O.
+    let (status, body) = test
+        .send(test.public("GET", "/api/v1/auth/oidc/callback?state=abc", None))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("authorization code"));
+
+    let (status, body) = test
+        .send(test.public("GET", "/api/v1/auth/oidc/callback?code=abc", None))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("state parameter"));
+
+    let (status, body) = test
+        .send(test.public(
+            "GET",
+            "/api/v1/auth/oidc/callback?code=abc&state=never-issued",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("Invalid state"));
+}

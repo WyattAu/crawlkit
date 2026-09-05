@@ -35,7 +35,14 @@ core artifact at 2,575,640 bytes stripped, while the full artifact remains
 runtime. The core/full distinction must remain explicit in packaging and
 release claims; the full artifact must not be represented as sub-10 MB.
 
-## Release artifact evidence (2026-09-05, @ `56abc686`; originally `888d14dd`)
+## Release artifact evidence (2026-09-05; recorded at `394b18d7`)
+
+Artifact checksums are point-in-time records: regenerate both binaries and
+re-record the table below at the tag commit (the `release.yml` workflow
+computes and signs its own `checksums.txt` from the tagged sources).
+Subsequent engine fixes (`56abc686` pg_storage, `5cb5e7b8` robots.txt
+scoping) change the full artifact bytes, so values below describe
+`394b18d7`.
 
 Workspace version **4.4.1**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
 release profile (LTO, one codegen unit, `opt-level=3`, stripped).

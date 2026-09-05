@@ -34,7 +34,7 @@ core artifact at 2,575,640 bytes stripped, while the full artifact remains
 runtime. The core/full distinction must remain explicit in packaging and
 release claims; the full artifact must not be represented as sub-10 MB.
 
-## Release artifact evidence (2026-09-05, @ `888d14dd`)
+## Release artifact evidence (2026-09-05, @ `56abc686`; originally `888d14dd`)
 
 Workspace version **4.4.1**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
 release profile (LTO, one codegen unit, `opt-level=3`, stripped).
@@ -42,10 +42,17 @@ release profile (LTO, one codegen unit, `opt-level=3`, stripped).
 | Artifact | Feature flags | Stripped bytes | SHA-256 |
 |---|---:|---:|---|
 | `crawlkit` (core) | `--no-default-features` | 2,575,640 | `e52ccca43733a9f070d2c6834db099ecfcd49c5ae51ea3d01966179566bef1e2` |
-| `crawlkit` (full) | `--features full` | 25,579,176 | `76f5f6b150aadcc25e9ae4fb6669b96b4e7eb3f4929cb16aaf492db0b867f0fb` |
+| `crawlkit` (full) | `--features full` | 25,576,616 | `2055dda5ec76a8627367296436ee3a257a591fc3effcd596105c4e86dbfb1c64` |
 
 Build commands: `cargo build --release -p crawlkit --no-default-features` and
 `cargo build --release -p crawlkit --features full`, then `strip`.
+
+The full-artifact checksum was re-recorded 2026-09-05 after the dependency
+supply-chain fix (`chacha20` 0.10.2, `event-listener` 5.4.2, `concurrent-queue`
+unification): the core artifact rebuilt byte-for-byte identical; the full
+artifact changed (25,579,176 -> 25,576,616 bytes) because those crates link
+into it. The earlier `76f5f6b1…` value corresponds to the pre-fix lockfile
+at `888d14dd`.
 
 ## Before release
 
@@ -88,14 +95,23 @@ Build commands: `cargo build --release -p crawlkit --no-default-features` and
    strip target/release/crawlkit
    stat -c '%s' target/release/crawlkit
    ```
-8. Run CLI help/API smoke tests against the release artifact.
+8. Run CLI help/API smoke tests against the release artifact. Executed
+   2026-09-05 against the stripped full artifact: root and all 10
+   subcommand help surfaces resolve, `--version` reports 4.4.1; record in
+   `docs/release-evidence/cli-smoke-2026-09-05.txt`.
 9. Review migration, rollback, security, and plugin compatibility notes.
+   Reviewed 2026-09-05: `MIGRATION.md` (4.0/3.0 sections + semver policy),
+   `SECURITY.md`, `SECURITY_BOUNDARIES.md`, and `PLUGIN_DEVELOPMENT.md`
+   compatibility notes are present and carry no stale claims; no breaking
+   changes since 4.0, so no new migration section is required.
 
 ## Evidence retention
 
 The 2026-09-05 run commits its records under `docs/release-evidence/`:
 `release-gate-2026-09-05.txt` (bounded gate, per-stage exit codes),
-`cargo-deny-2026-09-05.txt`, and `cargo-audit-2026-09-05.txt`.
+`cargo-deny-2026-09-05.txt`, `cargo-audit-2026-09-05.txt`,
+`service-backed-2026-09-05.txt` (PostgreSQL 16 + Redis 7 suite), and
+`cli-smoke-2026-09-05.txt` (release-artifact CLI surface).
 
 Retain the following with the release or CI run:
 

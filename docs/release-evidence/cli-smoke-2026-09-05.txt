@@ -1,0 +1,15 @@
+=== release-artifact CLI smoke @ 56abc686 2026-09-05T21:44:34Z ===
+artifact: target/release/crawlkit (full, stripped, 25576616 B, sha256 2055dda5ec76a8627367296436ee3a257a591fc3effcd596105c4e86dbfb1c64)
+crawlkit 4.4.1
+root --help: ok
+crawl --help: ok
+compare --help: ok
+report --help: ok
+backlinks --help: ok
+plugin --help: ok
+trend --help: ok
+gsc --help: ok
+log-analyze --help: ok
+inspect --help: ok
+crawl-map --help: ok
+=== SMOKE_COMPLETE ===

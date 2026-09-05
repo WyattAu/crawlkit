@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cargo audit` now reports 2 allowed warnings (both documented ignores: fxhash, number_prefix) and `cargo deny check` passes all sections (advisories, bans, licenses, sources)
 
 ### Added — release evidence
+- Committed the service-backed suite run (2026-09-05, PostgreSQL 16 + Redis 7 in Docker) and the release-artifact CLI smoke record in `docs/release-evidence/`; the full-artifact checksum was re-recorded after the dependency fix (core rebuilt byte-for-byte identical)
 - Committed the bounded release-gate run (2026-09-05) with per-stage exit codes plus `cargo deny` and `cargo audit` records in `docs/release-evidence/`
 - Committed the first criterion benchmark evidence run (2026-09-05): raw output and environment metadata in `docs/benchmarks/2026-09-05/` with a summary in `docs/benchmarks/measured-2026-09-05.md`; the full analyzer suite measures ~1.40 ms/iter and 5 KB HTML parsing ~0.59 ms on the capture machine
 

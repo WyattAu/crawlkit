@@ -11,7 +11,8 @@ an evidence gate, not a certification.
 | Workspace tests | 4,300 passed, 0 failed, 5 ignored | Pass |
 | Documentation | `cargo doc --workspace --no-deps`, 0 warnings | Pass |
 | Engine library region coverage | 86.64% | Exception — below the 90% target |
-| API all-target region coverage | 68.67% (router integration included) | Exception — below the 90% target |
+| API all-target region coverage | 73.94% (main.rs excluded; see `docs/COVERAGE_CONTRACT.md`) | Exception — below the 90% target |
+| API raw region coverage (bootstrap included) | 68.67% | Informational |
 | Stripped core CLI (`--no-default-features`) | 2,575,640 bytes (2.46 MiB) | Pass — below the 10 MB target |
 | Stripped full CLI (`--features full`) | 25,579,176 bytes (24.39 MiB) | Exception — full runtime remains above the 10 MB target |
 | CLI feature matrix | Core and full all-target checks; strict clippy | Pass |
@@ -20,7 +21,9 @@ an evidence gate, not a certification.
 These exceptions are explicit. Coverage is limited primarily by large
 storage, sitemap, RUM, type, and WASM feature surfaces. API all-target
 coverage is measured separately with router integration tests included and
-currently stands at 68.67%; the overall 90% target remains open. The binary
+currently stands at 73.94% on the covered surface (68.67% raw including
+the excluded binary bootstrap); the scope, exclusions, and path to the 90%
+target are defined in `docs/COVERAGE_CONTRACT.md`. The binary
 already uses LTO, one codegen unit, `opt-level=3`,
 stripping, and aborting panics. The feature migration now provides a measured
 core artifact at 2,575,640 bytes stripped, while the full artifact remains
@@ -49,7 +52,7 @@ release claims; the full artifact must not be represented as sub-10 MB.
 6. Coverage is measured by the CI workflow with native targets separated:
    engine library coverage uses `--lib`, and API coverage uses `--all-targets`
    so router integration tests are included without instrumenting the WASM
-   target.
+   target. Binary entrypoints are excluded per `docs/COVERAGE_CONTRACT.md`.
 
 7. Build both release artifacts and record checksums, dependency/SBOM output,
    exact toolchain, feature flags, and stripped byte counts:

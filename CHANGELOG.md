@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added tenant-scoped/admin-wide crawl listing, storage-backed stats/findings/backlinks, and crawl-submission validation coverage (3 new router integration tests); API all-target coverage now measures 68.67%
 - Added webhook unknown-id deletion, monitoring-event creation, and admin-wide listing-with-secret-redaction coverage (2 new router integration tests)
 - Coverage labels corrected: the CI coverage gate and release records extract the summary region column, so figures are now labeled "region coverage" rather than "line coverage"
+- Added `docs/COVERAGE_CONTRACT.md` defining measurement scope, exclusions (binary entrypoints only), blocking floors, and the machine-checked path to the 90% target; API covered-surface region coverage now measures 73.94% with the bootstrap excluded (68.67% raw); removed the unrouted `download_plugin` leftover handler
 
 ### Added — core/full feature boundary
 - Core builds now compile without the full runtime: plugin, post-crawl, crawl-map, integration, and browser-specific CLI surfaces are gated behind `full` while `log-analyze` remains available in core mode

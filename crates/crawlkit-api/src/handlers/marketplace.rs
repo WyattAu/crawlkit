@@ -154,19 +154,6 @@ pub async fn delete_marketplace_plugin(
     }
 }
 
-#[allow(dead_code, clippy::unused_async)]
-pub async fn download_plugin(
-    State(state): State<AppState>,
-    Path(name): Path<String>,
-) -> Result<Vec<u8>, ApiError> {
-    let plugins = state.marketplace.plugins.read();
-    if plugins.contains_key(&name) {
-        Ok(Vec::new())
-    } else {
-        Err(ApiError::NotFound(format!("Plugin '{name}' not found")))
-    }
-}
-
 /// Execute a plugin against a free-form test input. Requires
 /// `marketplace:write`. Both the request and response bodies are
 /// plugin-defined JSON documents.

@@ -191,16 +191,21 @@ jobs:
           awk -v pct="$ENGINE_PCT" -v floor=70 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
             || { echo "::error::engine coverage ${ENGINE_PCT}% is below the 70% floor"; exit 1; }
           cargo llvm-cov -p crawlkit-engine --lib --lcov --output-path engine-coverage.lcov
+      # Binary entrypoints (src/main.rs) are process bootstrap, not product
+      # logic; see docs/COVERAGE_CONTRACT.md. The ignore list is applied to
+      # both the summary gate and the LCOV upload so they never diverge.
       - name: Generate API coverage report
         run: |
           cargo llvm-cov -p crawlkit-api --all-targets --summary-only \
+            --ignore-filename-regex 'src/main\.rs' \
             -- --test-threads=1 2>&1 | tee api-cov-summary.txt
           # Column 4 of the summary TOTAL row is region coverage.
           API_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' api-cov-summary.txt)
           echo "Measured API all-target region coverage: ${API_PCT}%"
           awk -v pct="$API_PCT" -v floor=50 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
             || { echo "::error::API coverage ${API_PCT}% is below the 50% floor"; exit 1; }
-          cargo llvm-cov -p crawlkit-api --all-targets --lcov --output-path api-coverage.lcov
+          cargo llvm-cov -p crawlkit-api --all-targets --lcov \
+            --ignore-filename-regex 'src/main\.rs' --output-path api-coverage.lcov
           cat engine-coverage.lcov api-coverage.lcov > coverage.lcov
       - name: Upload coverage
         uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0

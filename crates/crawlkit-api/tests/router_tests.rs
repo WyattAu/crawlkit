@@ -1120,3 +1120,563 @@ async fn idempotency_key_replays_the_original_crawl() {
         "replay must not create a second crawl"
     );
 }
+
+// ---------------------------------------------------------------------------
+// Marketplace plugins
+// ---------------------------------------------------------------------------
+
+fn plugin_body(name: &str) -> Value {
+    serde_json::json!({
+        "name": name,
+        "version": "1.0.0",
+        "author": "author",
+        "description": "description",
+        "license": "MIT",
+        "categories": ["seo"],
+        "tags": ["meta"]
+    })
+}
+
+fn seed_plugin(state: &AppState, name: &str, rating: f64) {
+    state.marketplace.plugins.write().insert(
+        name.to_string(),
+        crawlkit_api::types::MarketplacePlugin {
+            name: name.to_string(),
+            version: "1.0.0".to_string(),
+            author: "author".to_string(),
+            description: "description".to_string(),
+            license: "MIT".to_string(),
+            categories: vec!["seo".to_string()],
+            tags: vec!["meta".to_string()],
+            downloads: 0,
+            rating,
+            rating_count: 1,
+            verified: true,
+            created_at: chrono::Utc::now().to_rfc3339(),
+            updated_at: chrono::Utc::now().to_rfc3339(),
+        },
+    );
+}
+
+#[tokio::test]
+async fn marketplace_publish_duplicate_get_and_delete_lifecycle() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins",
+            Some(plugin_body("meta-checker")),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["name"], "meta-checker");
+    assert_eq!(created["downloads"], 0);
+    assert_eq!(created["rating"], 0.0);
+    assert_eq!(created["rating_count"], 0);
+    assert_eq!(created["verified"], false);
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins",
+            Some(plugin_body("meta-checker")),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("already exists"));
+
+    let (status, fetched) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/meta-checker",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["name"], "meta-checker");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/never-published",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/marketplace/plugins", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let names = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|plugin| plugin["name"].as_str())
+        .collect::<Vec<_>>();
+    assert!(names.contains(&"meta-checker"));
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            "/api/v1/marketplace/plugins/meta-checker",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            "/api/v1/marketplace/plugins/meta-checker",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn marketplace_rating_aggregation_and_bounds() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("u1");
+    seed_plugin(&test.state, "meta-checker", 0.0);
+
+    let (status, rated) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/meta-checker/rate",
+            Some(serde_json::json!({"rating": 5.0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(rated["rating"], 5.0);
+    assert_eq!(rated["rating_count"], 1);
+    assert_eq!(rated["average_rating"], 5.0);
+
+    let (status, rated) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/meta-checker/rate",
+            Some(serde_json::json!({"rating": 3.0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(rated["rating_count"], 2);
+    assert_eq!(rated["average_rating"], 4.0);
+
+    // The stored aggregate reflects both ratings.
+    let plugin = test
+        .state
+        .marketplace
+        .plugins
+        .read()
+        .get("meta-checker")
+        .cloned()
+        .unwrap();
+    assert_eq!(plugin.rating, 4.0);
+    assert_eq!(plugin.rating_count, 2);
+
+    for out_of_range in [serde_json::json!(-1.0), serde_json::json!(5.5)] {
+        let (status, body) = test
+            .send(test.authed(
+                &token,
+                "POST",
+                "/api/v1/marketplace/plugins/meta-checker/rate",
+                Some(serde_json::json!({"rating": out_of_range})),
+            ))
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        assert!(body["error"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("between 0.0 and 5.0"));
+    }
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/missing/rate",
+            Some(serde_json::json!({"rating": 4.0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+}
+
+#[tokio::test]
+async fn marketplace_read_roles_rate_but_cannot_write_or_test() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+    seed_plugin(&test.state, "existing", 0.0);
+
+    // marketplace:read roles may list, fetch, and rate.
+    let (status, _) = test
+        .send(test.authed(&token, "GET", "/api/v1/marketplace/plugins", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = test
+        .send(test.authed(&token, "GET", "/api/v1/marketplace/plugins/existing", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/existing/rate",
+            Some(serde_json::json!({"rating": 4.0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+
+    // marketplace:write actions are admin-only.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins",
+            Some(plugin_body("denied")),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            "/api/v1/marketplace/plugins/existing",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/existing/test",
+            Some(serde_json::json!({"url": "https://example.com"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(test
+        .state
+        .marketplace
+        .plugins
+        .read()
+        .contains_key("existing"));
+}
+
+#[tokio::test]
+async fn marketplace_test_plugin_returns_passed_for_existing_plugin() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let token = test.token_for("root");
+    seed_plugin(&test.state, "auditor", 0.0);
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/auditor/test",
+            Some(serde_json::json!({"url": "https://example.com"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["status"], "passed");
+    assert_eq!(body["findings"], 0);
+
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/unknown/test",
+            Some(serde_json::json!({})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+// ---------------------------------------------------------------------------
+// API keys
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn api_key_crud_redacts_keys_and_reports_unknown_deletion() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/keys",
+            Some(serde_json::json!({"name": "ci", "requests_per_minute": 120})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let full_key = created["key"].as_str().unwrap().to_string();
+    assert!(full_key.starts_with("ck_"));
+    assert_eq!(created["name"], "ci");
+    assert_eq!(created["requests_per_minute"], 120);
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/keys", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let listed_keys = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|entry| entry["key"].as_str())
+        .collect::<Vec<_>>();
+    let redacted_tail = format!("{}****", &full_key[full_key.len() - 4..]);
+    assert!(
+        listed_keys.iter().any(|k| *k == redacted_tail),
+        "expected redacted key {redacted_tail:?} in listing, got: {listed}"
+    );
+    assert!(
+        !listed_keys.iter().any(|k| *k == full_key),
+        "full key leaked in listing: {listed}"
+    );
+    assert!(listed_keys.contains(&"y123****"));
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", &format!("/api/v1/keys/{full_key}"), None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!test.state.api_keys.contains_key(&full_key));
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", &format!("/api/v1/keys/{full_key}"), None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn api_key_listing_requires_read_and_deletion_requires_write() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, _) = test
+        .send(test.authed(&token, "GET", "/api/v1/keys", None))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/keys/ck_testkey123", None))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert!(test.state.api_keys.contains_key("ck_testkey123"));
+}
+
+// ---------------------------------------------------------------------------
+// Tenants
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn tenant_crud_duplicate_rejection_and_unknown_delete() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let token = test.token_for("root");
+
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/tenants",
+            Some(serde_json::json!({"id": "acme", "name": "ACME"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["id"], "acme");
+    assert_eq!(created["name"], "ACME");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/tenants",
+            Some(serde_json::json!({"id": "acme", "name": "Again"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("already exists"));
+
+    let (status, fetched) = test
+        .send(test.authed(&token, "GET", "/api/v1/tenants/acme", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(fetched["id"], "acme");
+
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/tenants/nope", None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/tenants", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|tenant| tenant["id"] == "acme"));
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/tenants/acme", None))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+
+    let (status, _) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/tenants/acme", None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn tenant_read_and_write_surfaces_deny_non_admins() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("viewer", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("viewer");
+
+    for (method, uri) in [
+        ("GET", "/api/v1/tenants"),
+        ("GET", "/api/v1/tenants/acme"),
+        ("POST", "/api/v1/tenants"),
+        ("DELETE", "/api/v1/tenants/acme"),
+    ] {
+        let (status, _) = test
+            .send(test.authed(
+                &token,
+                method,
+                uri,
+                (method == "POST").then(|| serde_json::json!({"id": "acme", "name": "ACME"})),
+            ))
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::FORBIDDEN,
+            "{method} {uri} must be denied"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Audit trail
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn audit_events_are_admin_only_and_carry_chain_fields() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("viewer", "tenant-a", "viewer", "password123!X"));
+    let viewer_token = test.token_for("viewer");
+
+    // Non-admins lack audit:read entirely.
+    let (status, _) = test
+        .send(test.authed(&viewer_token, "GET", "/api/v1/audit", None))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let admin_token = test.token_for("root");
+
+    // Trigger audited writes through the real handlers.
+    let (status, _) = test
+        .send(test.authed(
+            &admin_token,
+            "POST",
+            "/api/v1/keys",
+            Some(serde_json::json!({"name": "audited", "requests_per_minute": 60})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, _) = test
+        .send(test.authed(
+            &admin_token,
+            "POST",
+            "/api/v1/tenants",
+            Some(serde_json::json!({"id": "audited-tenant", "name": "Audited"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    let (status, events) = test
+        .send(test.authed(&admin_token, "GET", "/api/v1/audit", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let events = events.as_array().unwrap();
+    assert!(
+        events.len() >= 2,
+        "expected audit entries for the writes, got: {events:?}"
+    );
+    for event in events {
+        assert!(
+            !event["hash"].as_str().unwrap_or_default().is_empty(),
+            "every audit event must carry a tamper-evidence hash"
+        );
+        assert!(
+            event["previous_hash"].is_string(),
+            "audit chain must be continuous"
+        );
+    }
+}

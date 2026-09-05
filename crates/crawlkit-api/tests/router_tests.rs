@@ -2012,3 +2012,217 @@ async fn oidc_endpoints_fail_cleanly_when_unconfigured_or_malformed() {
         .unwrap_or_default()
         .contains("Invalid state"));
 }
+
+// ---------------------------------------------------------------------------
+// Crawl listing and storage-backed detail endpoints
+// ---------------------------------------------------------------------------
+
+/// Seed a crawl whose pages/issues/links live in the SQLite storage and whose
+/// public in-memory result resolves to the engine crawl id.
+fn seed_storage_backed_crawl(state: &AppState, public_id: &str, tenant: &str) -> String {
+    let engine_id = state
+        .storage
+        .start_crawl("https://example.com", None)
+        .unwrap();
+    let page = crawlkit_engine::storage::PageData {
+        id: format!("{public_id}-p1"),
+        url: url::Url::parse("https://example.com/").unwrap(),
+        final_url: url::Url::parse("https://example.com/").unwrap(),
+        status_code: 200,
+        title: Some("Home".to_string()),
+        load_time_ms: Some(120),
+        body_size: Some(4096),
+        fetched_at: chrono::Utc::now(),
+        links: vec![
+            url::Url::parse("https://example.com/about").unwrap(),
+            url::Url::parse("https://cdn.other.test/asset.js").unwrap(),
+        ],
+        tenant_id: Some(tenant.to_string()),
+        ..Default::default()
+    };
+    state.storage.insert_page(&engine_id, &page).unwrap();
+    state
+        .storage
+        .insert_issue(&crawlkit_engine::storage::Issue {
+            id: format!("{public_id}-i1"),
+            page_id: page.id,
+            category: crawlkit_engine::types::IssueCategory::Seo,
+            severity: crawlkit_engine::types::Severity::Warning,
+            code: "SEO001".to_string(),
+            title: "Duplicate title".to_string(),
+            description: "Pages share a title".to_string(),
+            element: None,
+            recommendation: "Write unique titles".to_string(),
+            tenant_id: Some(tenant.to_string()),
+        })
+        .unwrap();
+    state.crawl_results.insert(
+        public_id.to_string(),
+        CrawlResult {
+            crawl_id: public_id.to_string(),
+            tenant_id: tenant.to_string(),
+            start_url: "https://example.com".to_string(),
+            status: "completed".to_string(),
+            pages_crawled: 1,
+            issues_found: 1,
+            created_at: chrono::Utc::now(),
+            completed_at: Some(chrono::Utc::now()),
+            storage_crawl_id: Some(engine_id.clone()),
+        },
+    );
+    engine_id
+}
+
+#[tokio::test]
+async fn crawl_listing_is_tenant_scoped_and_admin_wide() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state.auth.add_user(make_user(
+        "tenant-user",
+        "tenant-a",
+        "viewer",
+        "password123!X",
+    ));
+    seed_crawl(&test.state, "own-crawl", "tenant-a");
+    seed_crawl(&test.state, "foreign-crawl", "tenant-b");
+
+    let token = test.token_for("tenant-user");
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/crawls", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|crawl| crawl["crawl_id"].as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&"own-crawl"));
+    assert!(
+        !ids.contains(&"foreign-crawl"),
+        "tenant leak in listing: {listed}"
+    );
+
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let admin_token = test.token_for("root");
+    let (status, listed) = test
+        .send(test.authed(&admin_token, "GET", "/api/v1/crawls", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|crawl| crawl["crawl_id"].as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&"own-crawl") && ids.contains(&"foreign-crawl"));
+}
+
+#[tokio::test]
+async fn crawl_stats_findings_and_backlinks_serve_storage_rows() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("u1");
+    seed_storage_backed_crawl(&test.state, "rich-crawl", "tenant-a");
+
+    // Stats aggregate over the seeded page + issue.
+    let (status, stats) = test
+        .send(test.authed(&token, "GET", "/api/v1/crawls/rich-crawl/stats", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(stats["crawl_id"], "rich-crawl");
+    assert_eq!(stats["total_pages"], 1);
+    assert_eq!(stats["total_issues"], 1);
+    assert_eq!(stats["issues_by_severity"]["warning"], 1);
+    assert_eq!(stats["issues_by_category"]["seo"], 1);
+    assert_eq!(stats["avg_response_time_ms"], 120.0);
+
+    // Findings map engine issues onto the public response shape.
+    let (status, findings) = test
+        .send(test.authed(&token, "GET", "/api/v1/crawls/rich-crawl/findings", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let findings = findings.as_array().unwrap();
+    assert_eq!(findings.len(), 1);
+    assert_eq!(findings[0]["code"], "SEO001");
+    assert_eq!(findings[0]["category"], "seo");
+    assert_eq!(findings[0]["severity"], "warning");
+    assert_eq!(findings[0]["title"], "Duplicate title");
+    assert!(findings[0]["page_id"].is_string());
+
+    // Backlinks summarize internal/external link rows.
+    let (status, backlinks) = test
+        .send(test.authed(&token, "GET", "/api/v1/crawls/rich-crawl/backlinks", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    // get_links_for_crawl returns every link row (internal and external
+    // targets alike), so both seeded rows count as internal links, while the
+    // external row is additionally registered as a backlink below.
+    assert_eq!(backlinks["total_internal_links"], 2);
+    assert_eq!(backlinks["total_external_links"], 1);
+    assert!(backlinks["orphan_pages"].is_array());
+    assert!(backlinks["top_pages_by_pagerank"].is_array());
+}
+
+#[tokio::test]
+async fn crawl_submission_validates_url_pages_concurrency_and_delay() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let submit = |overrides: serde_json::Value| {
+        let mut body = crawl_body();
+        if let Some(value) = overrides.get("start_url") {
+            body["start_url"] = value.clone();
+        }
+        if let Some(value) = overrides.get("max_pages") {
+            body["max_pages"] = value.clone();
+        }
+        if let Some(value) = overrides.get("concurrency") {
+            body["concurrency"] = value.clone();
+        }
+        if let Some(value) = overrides.get("request_delay_ms") {
+            body["request_delay_ms"] = value.clone();
+        }
+        body
+    };
+
+    let cases: Vec<(serde_json::Value, &str)> = vec![
+        (
+            submit(serde_json::json!({"start_url": "ftp://example.com"})),
+            "http or https",
+        ),
+        (
+            submit(serde_json::json!({"start_url": "http://127.0.0.1/admin"})),
+            "private IP",
+        ),
+        (submit(serde_json::json!({"max_pages": 0})), "max_pages"),
+        (submit(serde_json::json!({"concurrency": 0})), "concurrency"),
+        (
+            submit(serde_json::json!({"request_delay_ms": 60_001})),
+            "request_delay_ms",
+        ),
+    ];
+    for (body, expected) in cases {
+        let (status, response) = test
+            .send(test.authed(&token, "POST", "/api/v1/crawls", Some(body.clone())))
+            .await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body} must be rejected");
+        assert!(
+            response["error"]
+                .as_str()
+                .unwrap_or_default()
+                .contains(expected),
+            "expected {expected:?} in error, got: {response}"
+        );
+    }
+    assert!(test.state.crawl_results.is_empty());
+}

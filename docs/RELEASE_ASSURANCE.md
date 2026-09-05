@@ -31,6 +31,19 @@ core artifact at 2,575,640 bytes stripped, while the full artifact remains
 runtime. The core/full distinction must remain explicit in packaging and
 release claims; the full artifact must not be represented as sub-10 MB.
 
+## Release artifact evidence (2026-09-05, @ `888d14dd`)
+
+Workspace version **4.4.1**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
+release profile (LTO, one codegen unit, `opt-level=3`, stripped).
+
+| Artifact | Feature flags | Stripped bytes | SHA-256 |
+|---|---:|---:|---|
+| `crawlkit` (core) | `--no-default-features` | 2,575,640 | `e52ccca43733a9f070d2c6834db099ecfcd49c5ae51ea3d01966179566bef1e2` |
+| `crawlkit` (full) | `--features full` | 25,579,176 | `76f5f6b150aadcc25e9ae4fb6669b96b4e7eb3f4929cb16aaf492db0b867f0fb` |
+
+Build commands: `cargo build --release -p crawlkit --no-default-features` and
+`cargo build --release -p crawlkit --features full`, then `strip`.
+
 ## Before release
 
 1. Review `ROADMAP.md`, `docs/capabilities.toml`, and public claims.

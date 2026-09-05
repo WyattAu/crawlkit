@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — release documentation
+- `CODEBASE_AUDIT.md` MSRV row corrected: all enforcement paths (CI `msrv` job, `scripts/pre-commit.sh`, `justfile`) now pin 1.94.0, matching `rust-version`; the "inconsistent MSRV enforcement" action item is marked resolved
+- `RELEASE_ASSURANCE.md` gains a release-artifact evidence annex: workspace version 4.4.1, rustc 1.97.1, and SHA-256/stripped-byte records for the core (2,575,640 B) and full (25,579,176 B) binaries
+
 ### Added — coverage and release controls
 - Coverage CI now measures native engine library and API all-target surfaces separately, including the existing router integration tests without instrumenting the WASM target
 - Added persistence corruption, invalid-timestamp, login-lockout, disabled-account, tenant-scoping, and administrative-validation regression coverage; API all-target coverage now measures 60.38%

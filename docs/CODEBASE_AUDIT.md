@@ -329,7 +329,7 @@ For each domain: **canonical industry standard** → crawlkit's **actual impleme
 | 10 | **Zero clippy warnings** | **ACCURATE** | Empirically verified: `cargo clippy --workspace --all-targets -- -D warnings` passes with zero output. Enforcement hard-wired in CI (`ci.yml:42`), pre-commit (`pre-commit.sh:59-60`), and justfile. |
 | 11 | **Zero unsafe code** | **FALSE** | README says `unsafe_code = "forbid"` — wrong keyword (Cargo.toml:6 says `deny`). Unsafe FFI in `native_plugin.rs` (5 blocks) and `plugin-sdk/export.rs` (~15 blocks). SDK overrides lint to `allow`. |
 | 12 | **736 tests (badge)** | **STALE** | Badge should read **798** (empirically measured). |
-| 13 | **Rust 1.94+** | **ACCURATE** | `rust-version = "1.94.0"` in `Cargo.toml:25`. Installed toolchain: 1.97.1. However, `pre-commit.sh:113` and `justfile:67,98` still check 1.85.0 — **inconsistent MSRV enforcement**. |
+| 13 | **Rust 1.94+** | **ACCURATE** | `rust-version = "1.94.0"` in `Cargo.toml:25`. Enforcement is consistent: CI `msrv` job installs toolchain `1.94.0` (`.github/workflows/ci.yml`), `scripts/pre-commit.sh` runs `cargo +1.94.0 check --workspace`, and the `justfile` `msrv` recipe does the same. No 1.85 references remain. |
 
 ### Documentation claims
 
@@ -379,7 +379,7 @@ For each domain: **canonical industry standard** → crawlkit's **actual impleme
 13. **Update `docs/ARCHITECTURE.md` §Standards Compliance** to reflect shipped items (determinism, circuit breaker, encryption, audit trail) and remove aspirational descriptions (actor model, Bloom filter, MockFetcher, channel pipeline).
 14. **Update `docs/COMPETITIVE_ANALYSIS.md`** — either source the competitor numbers or remove fabricated claims. Self-contradictory numbers (500+ vs ≥50) damage credibility.
 15. **Update `ENTERPRISE_ARCHITECTURE.md`** — RS256 → HS256; remove SAML; mark shipped items as Active.
-16. **Fix MSRV inconsistency** — `pre-commit.sh:113` and `justfile:67,98` check 1.85.0 but workspace MSRV is 1.94.0.
+16. ~~**Fix MSRV inconsistency** — `pre-commit.sh:113` and `justfile:67,98` check 1.85.0 but workspace MSRV is 1.94.0.~~ **RESOLVED** — all enforcement paths (`scripts/pre-commit.sh:105`, `justfile` `msrv` recipe, CI `msrv` job) now pin 1.94.0, matching `rust-version` in `Cargo.toml`.
 
 ### P3 — Code Quality
 

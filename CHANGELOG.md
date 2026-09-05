@@ -13,7 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added webhook secret-boundary, event-validation, and cross-tenant-deletion regression coverage plus schedule tenant-scoped CRUD/partial-update and boundary-validation coverage (5 new router integration tests)
 - Added marketplace lifecycle, rating-aggregation/bounds, RBAC, and test-plugin coverage plus API-key CRUD/redaction, tenant CRUD/isolation, and admin-only audit-trail coverage (9 new router integration tests); API all-target coverage now measures 66.51%
 - Added user create/delete/list RBAC coverage (success, password hashing, admin-only enforcement, cross-tenant admin listing) and session refresh/listing/revoke-ownership plus OIDC unconfigured/validation error-path coverage (8 new router integration tests)
-- Added tenant-scoped/admin-wide crawl listing, storage-backed stats/findings/backlinks, and crawl-submission validation coverage (3 new router integration tests); API all-target coverage now measures 68.63%
+- Added tenant-scoped/admin-wide crawl listing, storage-backed stats/findings/backlinks, and crawl-submission validation coverage (3 new router integration tests); API all-target coverage now measures 68.67%
+- Added webhook unknown-id deletion, monitoring-event creation, and admin-wide listing-with-secret-redaction coverage (2 new router integration tests)
+- Coverage labels corrected: the CI coverage gate and release records extract the summary region column, so figures are now labeled "region coverage" rather than "line coverage"
 
 ### Added — core/full feature boundary
 - Core builds now compile without the full runtime: plugin, post-crawl, crawl-map, integration, and browser-specific CLI surfaces are gated behind `full` while `log-analyze` remains available in core mode

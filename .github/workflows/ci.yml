@@ -185,8 +185,9 @@ jobs:
         run: |
           cargo llvm-cov -p crawlkit-engine --lib --summary-only \
             -- --test-threads=1 2>&1 | tee engine-cov-summary.txt
+          # Column 4 of the summary TOTAL row is region coverage.
           ENGINE_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' engine-cov-summary.txt)
-          echo "Measured engine library line coverage: ${ENGINE_PCT}%"
+          echo "Measured engine library region coverage: ${ENGINE_PCT}%"
           awk -v pct="$ENGINE_PCT" -v floor=70 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
             || { echo "::error::engine coverage ${ENGINE_PCT}% is below the 70% floor"; exit 1; }
           cargo llvm-cov -p crawlkit-engine --lib --lcov --output-path engine-coverage.lcov
@@ -194,8 +195,9 @@ jobs:
         run: |
           cargo llvm-cov -p crawlkit-api --all-targets --summary-only \
             -- --test-threads=1 2>&1 | tee api-cov-summary.txt
+          # Column 4 of the summary TOTAL row is region coverage.
           API_PCT=$(awk '/^TOTAL/ {sub(/%/,"",$4); print $4}' api-cov-summary.txt)
-          echo "Measured API all-target line coverage: ${API_PCT}%"
+          echo "Measured API all-target region coverage: ${API_PCT}%"
           awk -v pct="$API_PCT" -v floor=50 'BEGIN { exit (pct < floor) ? 1 : 0 }' \
             || { echo "::error::API coverage ${API_PCT}% is below the 50% floor"; exit 1; }
           cargo llvm-cov -p crawlkit-api --all-targets --lcov --output-path api-coverage.lcov

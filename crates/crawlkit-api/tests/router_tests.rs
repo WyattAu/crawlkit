@@ -713,6 +713,83 @@ async fn webhook_creation_listing_and_deletion_preserve_secret_boundary() {
 }
 
 #[tokio::test]
+async fn webhook_unknown_id_deletion_and_monitoring_event_creation() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, body) = test
+        .send(test.authed(&token, "DELETE", "/api/v1/webhooks/never-created", None))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+
+    // The third supported event type is accepted end to end.
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/webhooks",
+            Some(serde_json::json!({
+                "url": "https://example.com/hooks",
+                "events": ["monitoring.alert_triggered"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["events"][0], "monitoring.alert_triggered");
+}
+
+#[tokio::test]
+async fn webhook_listing_admin_sees_all_tenants() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    for (id, tenant) in [("wh-a", "tenant-a"), ("wh-b", "tenant-b")] {
+        test.state.webhooks.insert(
+            id.to_string(),
+            crawlkit_api::types::WebhookConfig {
+                id: id.to_string(),
+                tenant_id: tenant.to_string(),
+                url: "https://example.com/hooks".to_string(),
+                events: vec!["crawl.completed".to_string()],
+                secret: "secret".to_string(),
+                created_at: chrono::Utc::now(),
+            },
+        );
+    }
+    let token = test.token_for("root");
+
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/webhooks", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let ids = listed
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|hook| hook["id"].as_str())
+        .collect::<Vec<_>>();
+    assert!(ids.contains(&"wh-a") && ids.contains(&"wh-b"));
+    assert!(
+        listed
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|hook| hook.get("secret").is_none()),
+        "admin listing must still redact secrets"
+    );
+}
+
+#[tokio::test]
 async fn webhook_unknown_event_is_rejected_before_registration() {
     let dir = tempfile::tempdir().unwrap();
     let test = setup(dir.path());

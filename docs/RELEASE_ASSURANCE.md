@@ -17,6 +17,8 @@ an evidence gate, not a certification.
 | Stripped full CLI (`--features full`) | 25,579,176 bytes (24.39 MiB) | Exception — full runtime remains above the 10 MB target |
 | CLI feature matrix | Core and full all-target checks; strict clippy | Pass |
 | CLI smoke surface | Full command surface exposes help | Pass |
+| Bounded release gate | `verify-release-controls.sh` run 2026-09-05, every stage exit 0; log in `docs/release-evidence/release-gate-2026-09-05.log` | Pass |
+| Dependency gate | `cargo deny check` (advisories, bans, licenses, sources) exit 0 after fixing yanked `chacha20` and `event-listener` RUSTSEC-2026-0221; `cargo audit` 0 vulnerabilities, 2 documented warnings | Pass |
 
 These exceptions are explicit. Coverage is limited primarily by large
 storage, sitemap, RUM, type, and WASM feature surfaces. API all-target
@@ -85,6 +87,10 @@ Build commands: `cargo build --release -p crawlkit --no-default-features` and
 9. Review migration, rollback, security, and plugin compatibility notes.
 
 ## Evidence retention
+
+The 2026-09-05 run commits its records under `docs/release-evidence/`:
+`release-gate-2026-09-05.log` (bounded gate, per-stage exit codes),
+`cargo-deny-2026-09-05.txt`, and `cargo-audit-2026-09-05.txt`.
 
 Retain the following with the release or CI run:
 

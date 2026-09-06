@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (post-5.0.0)
+- Playwright rendering no longer hardcodes a stale `crawlkit/4.4.1` browser user-agent; it derives `crawlkit/<workspace version>` from `CARGO_PKG_VERSION` at build time
+- The API server reads an optional `CRAWLKIT_API_ADDR` environment variable (host:port) instead of being hard-bound to `0.0.0.0:4000`
+- Removed an always-false dead scaffold in `RobotsTxtAnalysisDeepDeepValidator` (a `contains(...) && !contains(...)` block that could never execute)
+
+### Known (backlog)
+- `ROBOTSDEEP-V2001` is emitted by two registered robots analyzers with different meanings (blanket-disallow "blocks all" on `RobotsTxtAnalysisDeepAnalyzerV2` vs. missing User-agent on `RobotsTxtAnalysisDeepDeepValidator`); `RobotsTxtEmptyDeepValidator` likewise overloads `ROBOTSEMPTY001` (empty vs. missing User-agent). Resolution is a catalog consolidation (one canonical representative per analyzer family/profile with the `-DEEP`/`-DEEP-DEEP` namespace for survivors) — deferred to the next major since renames are breaking for code consumers
+
 ## [5.0.0] - 2026-09-06
 
 ### Fixed — robots.txt "blocks all" false positives (found by the dogfood crawl)

@@ -207,7 +207,10 @@ async fn main() -> anyhow::Result<()> {
         .layer(TraceLayer::new_for_http());
 
     // Start server
-    let addr = SocketAddr::from(([0, 0, 0, 0], 4000));
+    let addr = std::env::var("CRAWLKIT_API_ADDR")
+        .ok()
+        .and_then(|s| s.parse::<SocketAddr>().ok())
+        .unwrap_or_else(|| SocketAddr::from(([0, 0, 0, 0], 4000)));
     if std::env::var("METRICS_PUBLIC")
         .unwrap_or_default()
         .eq_ignore_ascii_case("true")

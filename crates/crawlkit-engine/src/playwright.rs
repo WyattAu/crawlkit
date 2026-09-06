@@ -482,7 +482,7 @@ const targetUrl = process.argv[2];
     
     const context = await browser.newContext({{
         viewport: {{ width: 1920, height: 1080 }},
-        userAgent: 'crawlkit/4.4.1'
+        userAgent: '{user_agent}'
     }});
     
     const page = await context.newPage();
@@ -556,7 +556,8 @@ const targetUrl = process.argv[2];
 "#,
             self.config.headless,
             serde_json::to_string(&self.config.args).unwrap_or_else(|_| "[]".to_string()),
-            self.config.timeout.as_millis()
+            self.config.timeout.as_millis(),
+            user_agent = format!("crawlkit/{}", env!("CARGO_PKG_VERSION")),
         );
 
         // Write script to temporary file

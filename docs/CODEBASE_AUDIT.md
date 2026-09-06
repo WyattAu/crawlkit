@@ -13,6 +13,24 @@
 > `docs/RELEASE_ASSURANCE.md`), and the test-count rows are superseded by
 > the 4,300-test workspace suite. See the file history and the coverage
 > contract (`docs/COVERAGE_CONTRACT.md`) for current figures.
+>
+> **Verification follow-up (2026-09-06):** soundness rows re-checked against
+> the shipped 5.0.0 tree. RESOLVED: "Blocking SQLite in async API" (axum
+> handlers now wrap storage in `spawn_blocking`), "Duplicated security-
+> critical logic" (API calls `crawlkit_engine::ssrf::is_public_url` — single
+> source), "Customer-specific paths" and "Site-specific utility-page
+> heuristic" (lists are generic; no `/certifications` or `/research-use`
+> remain), "Stale user-agent in Playwright JS" (now derives from
+> `CARGO_PKG_VERSION`), "Hardcoded port" (API honors `CRAWLKIT_API_ADDR`),
+> and the README `forbid`-vs-`deny` unsafe claim (README now states `deny`
+> with documented FFI exceptions, enforced by
+> `scripts/verify-unsafe-inventory.sh`). STILL OPEN (deliberate backlog):
+> ~1.4k lines of unwired exported modules (`backpressure.rs`,
+> `distributed_queue.rs`, `enterprise.rs`, `native_plugin.rs`) awaiting a
+> gate/delete decision for the next major; CPU-bound WASM plugin execution
+> runs inline with fuel/epoch bounds by design; the analyzer-catalog code
+> collisions (`ROBOTSDEEP-V2001`, `ROBOTSEMPTY001`) recorded in the
+> changelog for a namespaced consolidation in the next major.
 
 ---
 

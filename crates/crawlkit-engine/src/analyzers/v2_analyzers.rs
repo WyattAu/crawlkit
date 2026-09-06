@@ -18389,9 +18389,6 @@ impl Analyzer for RobotsTxtAnalysisDeepDeepValidator {
         let url = &ctx.page.url;
         if let Some(robots) = ctx.robots_txt {
             let lower = robots.to_lowercase();
-            if lower.contains("disallow: /") && !lower.contains("disallow: /") {
-                // Intentionally empty - just checking basic structure
-            }
             if !lower.contains("user-agent:") {
                 findings.push(Finding {
                     severity: Severity::Info,

@@ -3,6 +3,7 @@
 #
 # Confirms the release-critical state is coherent before a tag is pushed:
 #   1. Version alignment across workspace + satellite manifests + docs
+#   1b. The target version is not already tagged at a different commit
 #   2. CHANGELOG has a dated section for the target version
 #   3. Release workflow YAML parses
 #   4. Workspace compiles and the full quality gate passes
@@ -25,7 +26,7 @@ echo "== Release readiness for v${VERSION} =="
 [ "$WORKSPACE_VERSION" = "$VERSION" ] || fail "workspace Cargo.toml is ${WORKSPACE_VERSION}, expected ${VERSION}"
 ok "workspace Cargo.toml = ${VERSION}"
 
-for crate in crawlkit crawlkit-engine crawlkit-api crawlkit-plugin-sdk; do
+for crate in crawlkit crawlkit-engine crawlkit-api crawlkit-plugin-sdk crawlkit-types; do
     grep -q 'version.workspace = true' "crates/${crate}/Cargo.toml" \
         || fail "crates/${crate} no longer inherits workspace version — update this check"
 done
@@ -46,6 +47,20 @@ else
     ok "VERSION.md uses a non-versioned roadmap phase header"
 fi
 ok "VERSION.md phase header consistent"
+
+# --- 1b. Target version not already tagged --------------------------------
+# Prevents re-tagging an already-released version (the v4.4.1 mislabel): if a
+# tag v$VERSION exists anywhere but at HEAD, the release was already shipped
+# and the workspace version must be bumped before preparing another one.
+if git rev-parse -q --verify "refs/tags/v${VERSION}^{commit}" >/dev/null 2>&1; then
+    TAG_COMMIT="$(git rev-parse "refs/tags/v${VERSION}^{commit}")"
+    HEAD_COMMIT="$(git rev-parse HEAD)"
+    [ "$TAG_COMMIT" = "$HEAD_COMMIT" ] \
+        || fail "v${VERSION} is already tagged at ${TAG_COMMIT}; bump the workspace version before preparing this release"
+    ok "v${VERSION} tag matches HEAD"
+else
+    ok "v${VERSION} not yet tagged"
+fi
 
 # --- 2. CHANGELOG has a dated section ------------------------------------
 grep -qE "^## \[${VERSION}\] - [0-9]{4}-[0-9]{2}-[0-9]{2}" CHANGELOG.md \

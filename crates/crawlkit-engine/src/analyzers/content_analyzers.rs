@@ -1089,11 +1089,35 @@ impl RdfaValidator {
 
     fn has_rdfa_attributes(body: &str) -> bool {
         let lower = body.to_lowercase();
-        lower.contains("vocab=")
+        if lower.contains("vocab=")
             || lower.contains("typeof=")
-            || lower.contains("property=")
             || lower.contains("about=")
             || lower.contains("resource=")
+        {
+            return true;
+        }
+        // `property=` alone is not RDFa evidence: Open Graph and Twitter Card
+        // meta tags use namespaced properties (og:*, twitter:*). Only
+        // non-namespaced property values suggest RDFa usage.
+        Self::has_non_namespaced_property(body)
+    }
+
+    /// True when some `property="..."` value is not OG/Twitter-namespaced.
+    fn has_non_namespaced_property(body: &str) -> bool {
+        let re = Regex::new(r#"(?i)property\s*=\s*["']([^"']*)["']"#).unwrap();
+        let has = re.captures_iter(body).any(|c| {
+            let v = c.get(1).map(|m| m.as_str()).unwrap_or("");
+            let namespaced = v.starts_with("og:")
+                || v.starts_with("twitter:")
+                || v.starts_with("fb:")
+                || v.starts_with("article:")
+                || v.starts_with("music:")
+                || v.starts_with("video:")
+                || v.starts_with("profile:")
+                || v.is_empty();
+            !namespaced
+        });
+        has
     }
 
     fn extract_vocabs(body: &str) -> Vec<String> {

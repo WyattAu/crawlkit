@@ -21,6 +21,7 @@ impl HtmlParser {
                 let defer = el.value().attr("defer").is_some();
                 let script_type = el.value().attr("type").map(String::from);
                 let has_integrity = el.value().attr("integrity").is_some();
+                let is_module = script_type.as_deref() == Some("module");
 
                 ScriptInfo {
                     src,
@@ -28,6 +29,7 @@ impl HtmlParser {
                     defer,
                     script_type,
                     has_integrity,
+                    is_module,
                 }
             })
             .collect()

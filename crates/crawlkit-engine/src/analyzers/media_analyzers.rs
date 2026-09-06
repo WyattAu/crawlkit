@@ -179,7 +179,7 @@ impl Analyzer for AsyncScriptAnalyzer {
             .page
             .scripts
             .iter()
-            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer && !s.is_module)
             .filter(|s| {
                 s.script_type
                     .as_deref()
@@ -1621,7 +1621,7 @@ impl CriticalResourceAnalyzer {
             .page
             .scripts
             .iter()
-            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer && !s.is_module)
             .filter(|s| {
                 s.script_type
                     .as_deref()
@@ -1694,7 +1694,7 @@ impl CriticalResourceAnalyzer {
                 blocking.join(", ")
             };
             f.push(Finding {
-                severity: Severity::Critical,
+                severity: Severity::Info,
                 category: IssueCategory::Performance,
                 code: "CRIT002".to_string(),
                 title: "Render-blocking stylesheets detected".to_string(),
@@ -2160,6 +2160,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: Some("https://cdn2.example.com/lib.js".to_string()),
@@ -2167,6 +2168,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), Some(""));
@@ -2225,6 +2227,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), Some(body));
         let findings = PreloadHintAnalyzer::new().analyze(&ctx);
@@ -2250,6 +2253,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
@@ -2265,6 +2269,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
@@ -2280,6 +2285,7 @@ mod tests {
             defer: true,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
@@ -2295,6 +2301,7 @@ mod tests {
             defer: false,
             script_type: Some("application/ld+json".to_string()),
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
@@ -2311,6 +2318,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: Some("https://cdn.example.com/b.js".to_string()),
@@ -2318,6 +2326,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), None);
@@ -2337,6 +2346,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: None,
@@ -2344,6 +2354,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: None,
@@ -2351,6 +2362,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: None,
@@ -2358,6 +2370,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), Some("<script>var x = 1;</script>"));
@@ -2374,6 +2387,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         let findings = AsyncScriptAnalyzer::new().analyze(&ctx);
@@ -2770,6 +2784,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             };
             30
         ];
@@ -2874,6 +2889,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             })
             .collect();
         let ctx = make_ctx(&page, Some(200), None);
@@ -2891,6 +2907,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             })
             .collect();
         let ctx = make_ctx(&page, Some(200), None);
@@ -2908,6 +2925,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: Some("https://cdn2.example.com/b.js".to_string()),
@@ -2915,6 +2933,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), Some(""));
@@ -2933,6 +2952,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: Some("https://cdn2.example.com/b.js".to_string()),
@@ -2940,6 +2960,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), Some(body));
@@ -2958,6 +2979,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
             ScriptInfo {
                 src: Some("https://cdn2.example.com/b.js".to_string()),
@@ -2965,6 +2987,7 @@ mod tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             },
         ];
         let ctx = make_ctx(&page, Some(200), Some(body));
@@ -3351,7 +3374,7 @@ impl Analyzer for ScriptLoadAnalyzerV2 {
             .page
             .scripts
             .iter()
-            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer && !s.is_module)
             .filter(|s| {
                 s.script_type
                     .as_deref()
@@ -3516,6 +3539,7 @@ mod new_media_tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let ctx = make_ctx(&page, Some(200), None);
         assert!(ThirdPartyResourceAnalyzer::new().analyze(&ctx).is_empty());
@@ -3531,6 +3555,7 @@ mod new_media_tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             })
             .collect();
         page.scripts.push(ScriptInfo {
@@ -3539,6 +3564,7 @@ mod new_media_tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         });
         let ctx = make_ctx(&page, Some(200), None);
         assert!(ThirdPartyResourceAnalyzer::new()
@@ -3572,6 +3598,7 @@ mod new_media_tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             })
             .collect();
         let ctx = make_ctx(&page, Some(200), None);
@@ -3588,6 +3615,7 @@ mod new_media_tests {
                 defer: false,
                 script_type: None,
                 has_integrity: false,
+                is_module: false,
             })
             .collect();
         page.styles = (0..5)

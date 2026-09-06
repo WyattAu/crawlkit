@@ -43,6 +43,7 @@ fn make_bench_page() -> ParsedPage {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }],
         styles: Vec::new(),
         structured_data: Vec::new(),

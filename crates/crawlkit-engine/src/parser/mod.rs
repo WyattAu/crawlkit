@@ -153,6 +153,9 @@ pub struct ScriptInfo {
     pub script_type: Option<String>,
     /// Whether the script has an `integrity` attribute (Subresource Integrity).
     pub has_integrity: bool,
+    /// Whether the script is an ES module (`type="module"`). Module scripts
+    /// are deferred by default and are never render-blocking.
+    pub is_module: bool,
 }
 
 /// Style/link stylesheet information.

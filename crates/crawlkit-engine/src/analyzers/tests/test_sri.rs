@@ -68,6 +68,7 @@ fn test_sri_local_script_no_issue() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let ctx = make_ctx(&page, Some(200));
     let findings = SriAnalyzer::new().analyze(&ctx);
@@ -83,6 +84,7 @@ fn test_sri_external_script_without_integrity() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let ctx = make_ctx(&page, Some(200));
     let findings = SriAnalyzer::new().analyze(&ctx);
@@ -98,6 +100,7 @@ fn test_sri_external_script_with_integrity() {
         defer: false,
         script_type: None,
         has_integrity: true,
+        is_module: false,
     }];
     let ctx = make_ctx(&page, Some(200));
     let findings = SriAnalyzer::new().analyze(&ctx);
@@ -156,6 +159,7 @@ fn test_sri_multiple_external_scripts_mixed() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
         ScriptInfo {
             src: Some("https://cdn.example.com/b.js".to_string()),
@@ -163,6 +167,7 @@ fn test_sri_multiple_external_scripts_mixed() {
             defer: false,
             script_type: None,
             has_integrity: true,
+            is_module: false,
         },
     ];
     let ctx = make_ctx(&page, Some(200));
@@ -181,6 +186,7 @@ fn test_sri_protocol_relative_url() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let ctx = make_ctx(&page, Some(200));
     let findings = SriAnalyzer::new().analyze(&ctx);
@@ -196,6 +202,7 @@ fn test_sri_both_scripts_and_styles() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     page.styles = vec![StyleInfo {
         href: Some("https://cdn.example.com/style.css".to_string()),
@@ -219,6 +226,7 @@ fn test_sri_no_cross_origin_scripts_all_local() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
         ScriptInfo {
             src: Some("/js/b.js".to_string()),
@@ -226,6 +234,7 @@ fn test_sri_no_cross_origin_scripts_all_local() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
     ];
     let ctx = make_ctx(&page, Some(200));
@@ -265,6 +274,7 @@ fn test_sri_only_external_without_integrity_counted() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
         ScriptInfo {
             src: Some("https://cdn.example.com/b.js".to_string()),
@@ -272,6 +282,7 @@ fn test_sri_only_external_without_integrity_counted() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
         ScriptInfo {
             src: Some("/local.js".to_string()),
@@ -279,6 +290,7 @@ fn test_sri_only_external_without_integrity_counted() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
     ];
     let ctx = make_ctx(&page, Some(200));
@@ -297,6 +309,7 @@ fn test_sri_all_with_integrity_no_findings() {
         defer: false,
         script_type: None,
         has_integrity: true,
+        is_module: false,
     }];
     page.styles = vec![StyleInfo {
         href: Some("https://cdn.example.com/style.css".to_string()),
@@ -318,6 +331,7 @@ fn test_sri_only_local_no_findings() {
         defer: true,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     page.styles = vec![StyleInfo {
         href: Some("/style.css".to_string()),

@@ -6008,9 +6008,9 @@ impl Analyzer for RobotsTxtDisallowValidator {
                 recommendation: "Remove blanket disallow.".to_string(),
             });
         }
-        let disallow_count = lower
+        let disallow_count = robots
             .lines()
-            .filter(|l| l.trim().starts_with("disallow:"))
+            .filter(|l| l.trim().to_lowercase().starts_with("disallow:"))
             .count();
         if disallow_count > 50 {
             findings.push(Finding {
@@ -20787,6 +20787,7 @@ mod v2_analyzer_tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let f = SriValidator::new().analyze(&make_ctx(
             &p,
@@ -21217,6 +21218,7 @@ mod v2_analyzer_tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         let f = ScriptAsyncDeferValidator::new().analyze(&make_ctx(&p, None));
         assert!(!f.is_empty());
@@ -21230,6 +21232,7 @@ mod v2_analyzer_tests {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }];
         assert!(ScriptAsyncDeferValidator::new()
             .analyze(&make_ctx(&p, None))

@@ -1,0 +1,3 @@
+=== pre-tag readiness gate @ cb47700d 2026-09-06 — final v5.0.0 tag tree ===
+stages (all exit 0): version alignment + version-tag guard, dated [5.0.0] changelog, empty [Unreleased], release.yml checks, roadmap-baseline, unsafe-inventory, fmt, clippy --workspace --all-targets -D warnings, verify-contracts, doc tests
+readiness-2026-09-06: READY: v5.0.0 is consistent and the quality gate passes

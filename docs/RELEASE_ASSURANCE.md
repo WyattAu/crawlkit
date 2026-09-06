@@ -35,32 +35,32 @@ core artifact at 2,575,640 bytes stripped, while the full artifact remains
 runtime. The core/full distinction must remain explicit in packaging and
 release claims; the full artifact must not be represented as sub-10 MB.
 
-## Release artifact evidence (2026-09-05; recorded at `394b18d7`)
+## Release artifact evidence (2026-09-06; tag-state build)
 
 Artifact checksums are point-in-time records: regenerate both binaries and
 re-record the table below at the tag commit (the `release.yml` workflow
 computes and signs its own `checksums.txt` from the tagged sources).
-Subsequent engine fixes (`56abc686` pg_storage, `5cb5e7b8` robots.txt
-scoping) change the full artifact bytes, so values below describe
-`394b18d7`.
 
 Workspace version **4.4.1**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
 release profile (LTO, one codegen unit, `opt-level=3`, stripped).
 
 | Artifact | Feature flags | Stripped bytes | SHA-256 |
 |---|---:|---:|---|
-| `crawlkit` (core) | `--no-default-features` | 2,575,640 | `e52ccca43733a9f070d2c6834db099ecfcd49c5ae51ea3d01966179566bef1e2` |
-| `crawlkit` (full) | `--features full` | 25,576,616 | `2055dda5ec76a8627367296436ee3a257a591fc3effcd596105c4e86dbfb1c64` |
+| `crawlkit` (core) | `--no-default-features` | 2,575,648 | `d153272b32f8c26c80163dc4a7cd6c961624dd1017b7f0e85eeed42bcd8f77c2` |
+| `crawlkit` (full) | `--features full` | 25,574,184 | `da5688f31ef4d378ca7d4f3a11956f5ed66420013583ff2ce2bd3b51ba8c7d8b` |
 
 Build commands: `cargo build --release -p crawlkit --no-default-features` and
 `cargo build --release -p crawlkit --features full`, then `strip`.
 
-The full-artifact checksum was re-recorded 2026-09-05 after the dependency
-supply-chain fix (`chacha20` 0.10.2, `event-listener` 5.4.2, `concurrent-queue`
-unification): the core artifact rebuilt byte-for-byte identical; the full
-artifact changed (25,579,176 -> 25,576,616 bytes) because those crates link
-into it. The earlier `76f5f6b1…` value corresponds to the pre-fix lockfile
-at `888d14dd`.
+Both binaries rebuilt 2026-09-06 at the pre-tag state (source at `5cb5e7b8`
+plus the `[4.4.1]` changelog fold; changelog-only change does not affect
+binary bytes). The `5cb5e7b8` robots.txt RFC 9309 scoping fix altered both
+artifacts versus earlier records: core `e52ccca4…` (2,575,640) →
+`d153272b…` (2,575,648), full `2055dda5…` (25,576,616) → `da5688f1…`
+(25,574,184). Earlier provenance: the dependency supply-chain fix
+(`chacha20` 0.10.2, `event-listener` 5.4.2) changed the full artifact from
+`76f5f6b1…` (25,579,176 B, `888d14dd`) to `2055dda5…` (25,576,616 B,
+`394b18d7`) with core byte-for-byte identical.
 
 ## Before release
 

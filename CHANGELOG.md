@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.4.1] - 2026-09-06
+
 ### Fixed — robots.txt "blocks all" false positives (found by the dogfood crawl)
 - Four registered analyzers (`ROBOTS-V3002`, `ROBOTSDEEP-V2001`, `ROBOTSDIS-V5001`, `ROBOTSWILD-V6101`) flagged "robots.txt blocks all" for any blanket `Disallow: /` in the file, ignoring RFC 9309 user-agent group scoping — kingstonpeptides.com (which blanket-disallows only `CCBot`/`ByteSpider` while its `User-agent: *` group allows crawling) produced 400 false positives across 100 pages
 - Added a shared `robots_txt_star_blanket_disallows_all` helper (analyzer-group-aware: only a `Disallow: /` in the `*` group counts; consecutive `User-agent:` lines merge; a later `Allow: /` wins the equal-priority tie) and routed all five detection sites through it, including the base `ROBOTSDEEP001` analyzer

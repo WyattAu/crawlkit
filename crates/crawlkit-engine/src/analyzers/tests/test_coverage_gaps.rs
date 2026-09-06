@@ -279,6 +279,7 @@ fn mixed_content_v2_flags_http_scripts_on_https_page() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         }],
         styles: Vec::new(),
         structured_data: Vec::new(),

@@ -151,6 +151,7 @@ fn sri_flags_external_script_without_integrity() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     // The analyzer checks ctx.body for integrity attributes, so provide one.
     let body = r#"<script src="https://cdn.example.com/lib.js"></script>"#;

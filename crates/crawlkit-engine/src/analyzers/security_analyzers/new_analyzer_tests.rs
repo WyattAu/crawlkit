@@ -191,6 +191,7 @@ fn test_sri_external_script_without_sri() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let body =
         r#"<html><head><script src="https://cdn.example.com/lib.js"></script></head></html>"#;
@@ -210,6 +211,7 @@ fn test_sri_external_script_with_sri() {
         defer: false,
         script_type: None,
         has_integrity: true,
+        is_module: false,
     }];
     let body = r#"<html><head><script src="https://cdn.example.com/lib.js" integrity="sha384-abc" crossorigin="anonymous"></script></head></html>"#;
     let ctx = make_ctx(&page, Some(200), &[], Some(body));
@@ -225,6 +227,7 @@ fn test_sri_internal_script_no_finding() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let body = r#"<html><head><script src="/app.js"></script></head></html>"#;
     let ctx = make_ctx(&page, Some(200), &[], Some(body));
@@ -249,6 +252,7 @@ fn test_sri_multiple_external_without_sri() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
         crate::parser::ScriptInfo {
             src: Some("https://cdn.example.com/b.js".to_string()),
@@ -256,6 +260,7 @@ fn test_sri_multiple_external_without_sri() {
             defer: false,
             script_type: None,
             has_integrity: false,
+            is_module: false,
         },
     ];
     let body = r#"<html><head><script src="https://cdn.example.com/a.js"></script><script src="https://cdn.example.com/b.js"></script></head></html>"#;
@@ -274,6 +279,7 @@ fn test_sri_mixed_sri_and_no_sri() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let body =
         r#"<html><head><script src="https://cdn.example.com/bad.js"></script></head></html>"#;
@@ -293,6 +299,7 @@ fn test_sri_protocol_relative_url() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let body = r#"<html><head><script src="//cdn.example.com/lib.js"></script></head></html>"#;
     let ctx = make_ctx(&page, Some(200), &[], Some(body));
@@ -311,6 +318,7 @@ fn test_sri_no_script_src() {
         defer: false,
         script_type: None,
         has_integrity: false,
+        is_module: false,
     }];
     let body = "<html><head><script>console.log('hi')</script></head></html>";
     let ctx = make_ctx(&page, Some(200), &[], Some(body));

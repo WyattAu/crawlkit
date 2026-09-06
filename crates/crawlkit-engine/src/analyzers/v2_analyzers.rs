@@ -5996,7 +5996,6 @@ impl Analyzer for RobotsTxtDisallowValidator {
             Some(r) => r,
             None => return findings,
         };
-        let lower = robots.to_lowercase();
         if robots_txt_star_blanket_disallows_all(robots) {
             findings.push(Finding {
                 severity: Severity::Critical,

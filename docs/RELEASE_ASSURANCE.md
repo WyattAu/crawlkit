@@ -47,22 +47,22 @@ release profile (LTO, one codegen unit, `opt-level=3`, stripped).
 | Artifact | Feature flags | Stripped bytes | SHA-256 |
 |---|---:|---:|---|
 | `crawlkit` (core) | `--no-default-features` | 2,575,648 | `f4b016c1ffcdadb72728941ee3ebb8bcb94142286d1b9479d05bc403acd122dd` |
-| `crawlkit` (full) | `--features full` | 25,631,312 | `1a683b77633ec503acd7b93326a5d2e36037cf8c6dad40e35214b540e4d27d25` |
+| `crawlkit` (full) | `--features full` | 25,621,264 | `8466be3da9717eaefa28fe516ba17328dbffb0b3ed10db922fca8a7289e437ae` |
 
 Build commands: `cargo build --release -p crawlkit --no-default-features` and
 `cargo build --release -p crawlkit --features full`, then `strip`.
 
-Both binaries rebuilt 2026-09-06 at the **merged v5.0.0** tree (merge
-`6b1f835c` reconciling origin/main's 9 owner commits: `--allow-private`,
-envstack config, auth salting policy, loop-retry webhook client): core
-`b7d9858e…` (2,575,648 B) → `f4b016c1…` (2,575,648 B), full
-`70ac19f4…` (25,574,192 B) → `1a683b77…` (25,631,312 B). The workspace
-version is 5.0.0 throughout; earlier records describe the pre-merge
-5.0.0 lineage (core `d153272b…`/`b7d9858e…`, full `da5688f1…`/`70ac19f4…`
-back to `76f5f6b1…` at `888d14dd`). The 5.0.0 relabel corrected the
-original mislabeling: v4.4.1 was already tagged at `fe9258d7`
-(2026-08-23), and the 156 unreleased commits since then — including the
-robots.txt RFC 9309 fix, the PostgreSQL storage fixes, and the breaking
+Both binaries rebuilt 2026-09-06 at the final **v5.0.0** tag-state tree
+(`1c3b944a`): the merged reconciliation (`6b1f835c`, origin/main's 9 owner
+commits: `--allow-private`, envstack config, auth salting policy,
+loop-retry webhook client) plus the wasmtime 47.0.4 / h2 0.4.19 advisory
+patches (`1c3b944a`). Full: `1a683b77…` (25,631,312 B, merged tree) →
+`8466be3d…` (25,621,264 B, patched lock); core is byte-identical across
+the advisory patches (`f4b016c1…`, 2,575,648 B — wasmtime/h2 are
+full-only deps). The workspace version is 5.0.0 throughout; the 5.0.0
+relabel corrected the original mislabeling: v4.4.1 was already tagged at
+`fe9258d7` (2026-08-23), and the 156 unreleased commits since then — the
+robots.txt RFC 9309 fix, the PostgreSQL storage fixes, the breaking
 finding-code changes — ship as 5.0.0 alongside the owner's main work.
 
 ## Before release

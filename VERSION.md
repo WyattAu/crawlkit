@@ -3,7 +3,7 @@
 **Project:** crawlkit
 **Current Phase:** Roadmap hardening and release assurance
 **Version:** 5.0.0
-**Status:** In preparation (tag pending)
+**Status:** Released (tagged v5.0.0, 2026-09-06)
 **Last Updated:** 2026-09-06
 **MSRV:** 1.94.0
 
@@ -65,6 +65,7 @@
 | 4.3.0 | 2026-08-23 | Structured guest context (B4): crawlkit_host.get_context + analyze_with_context + SDK host module; soft-404 example |
 | 4.4.0 | 2026-08-23 | Plugins execute during crawls (plugin_dirs config, --plugins CLI, default ~/.crawlkit/plugins; trap-safe, E2E-tested) |
 | 4.4.1 | 2026-08-23 | GPG-signed checksums (first signed release); ADR-011 WASI eval; OSS-Fuzz submission kit |
+| 5.0.0 | 2026-09-06 | Breaking release on the reconciled main: analyzer finding-code ownership (833 → 778), profiles, robots.txt RFC 9309 + PostgreSQL storage fixes, `dyn StorageBackend`, crawlkit-types, `--allow-private`, auth salting Policy+Strength, envstack config, loop-retry webhook delivery, @pediment/tokens; version-tag guard + release-pipeline fixes |
 | 5.0.0 | 2026-08-27 | Breaking: unified types (crawlkit-types crate); DIP fix (dyn StorageBackend); client library completion (Python 92%, Go/Node 100%); SSRF dedup; dead code gated; docs reconciled |
 
 ---

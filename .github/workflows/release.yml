@@ -195,8 +195,16 @@ jobs:
         shell: bash
         run: |
           cd artifacts
-          find ../sbom -type f -name '*.cdx.json' -print0 | xargs -0 -r sha256sum >> checksums.txt
+          # Bare-filename entries (not ../sbom/... paths): the release uploads
+          # the .cdx.json assets flat next to checksums.txt, so consumers can
+          # verify the whole manifest with sha256sum -c checksums.txt.
+          (cd ../sbom && sha256sum ./*.cdx.json) >> checksums.txt
           sort -o checksums.txt checksums.txt
+          # Refresh the flat staging dir and re-verify the full manifest
+          # (archives + SBOM) exactly as consumers will.
+          cp ../sbom/*.cdx.json flat/
+          cp checksums.txt flat/
+          (cd flat && sha256sum -c checksums.txt)
 
       - name: Sign checksums (single signature covers all artifacts + SBOM)
         env:

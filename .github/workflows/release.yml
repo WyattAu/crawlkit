@@ -175,6 +175,12 @@ jobs:
             (cd "$(dirname "$f")" && sha256sum -c "$(basename "$f")") || failed=1
           done < <(find . -type f -name '*.sha256' -print0)
           [ "$failed" -eq 0 ]
+          # Verify the aggregate exactly as consumers will: flatten the
+          # archives beside checksums.txt and check the bare filenames.
+          mkdir -p flat
+          find . -mindepth 2 -type f ! -name '*.sha256' -exec cp {} flat/ \;
+          cp checksums.txt flat/
+          (cd flat && sha256sum -c checksums.txt)
           echo "=== Release checksums ==="
           cat checksums.txt
 

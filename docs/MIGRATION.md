@@ -37,6 +37,23 @@ surfaces are gated behind the `full` feature (the default). Builds with
 `--no-default-features` expose only the core CLI surface and must not
 reference those gated modules.
 
+## 4. API password policy (5.0.0)
+
+Password hashing moved onto a salting `Policy` + `Strength` model with a
+stricter default policy (12+ characters including upper/lowercase, digit,
+and special characters, plus a strength gate) enforced when passwords are
+set or changed. Stored Argon2 hashes remain verifiable, so existing users
+are unaffected until they next change a password. Operators who create
+users programmatically must generate passwords that satisfy the default
+policy or supply a relaxed `Policy`.
+
+## 5. CLI configuration loading (5.0.0)
+
+Manual TOML config parsing was replaced by the `envstack` crate. Config
+files remain fully supported (`--config` still reads a TOML file with the
+same schema) and gain environment-variable layering on top. No config file
+changes are required.
+
 ---
 
 # Migrating to crawlkit 4.0

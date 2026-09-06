@@ -164,9 +164,17 @@ jobs:
       - name: Aggregate checksums
         run: |
           cd artifacts
-          find . -mindepth 2 -maxdepth 2 -type f -name '*.sha256' -print0 | xargs -0 -r cat > checksums.txt
+          # actions/download-artifact v8 nests each artifact under its own
+          # directory, so verify every checksum against its archive in place
+          # (entries are bare filenames relative to that directory) before
+          # concatenating them into the single signed checksums.txt.
+          find . -type f -name '*.sha256' -print0 | xargs -0 -r cat > checksums.txt
           test -s checksums.txt
-          sha256sum -c checksums.txt
+          failed=0
+          while IFS= read -r -d '' f; do
+            (cd "$(dirname "$f")" && sha256sum -c "$(basename "$f")") || failed=1
+          done < <(find . -type f -name '*.sha256' -print0)
+          [ "$failed" -eq 0 ]
           echo "=== Release checksums ==="
           cat checksums.txt
 

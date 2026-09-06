@@ -7,21 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed (post-5.0.0)
+## [5.0.0] - 2026-09-06
+
+### Added — upstream main reconciliation (owner commits merged 2026-09-06)
+- `crawlkit crawl --allow-private` flag for crawling local/private targets (engine honors it past the SSRF guard)
+- CLI configuration loading moved to the `envstack` crate (manual TOML reading replaced; layered env-var/file config)
+- Dashboard and web adopt the `@pediment/tokens` design tokens
+- API password hashing moved onto a salting `Policy` + `Strength` model (default policy: 12+ chars with upper/lower/digit/special plus a strength gate); stored Argon2 hashes remain verifiable
+- Webhook delivery migrated to the `retry-backoff` retry client; the internal crate was renamed `retry-backoff` → `loop-retry` after a registry name conflict
+- OIDC/auth compilation fixes; `LanguageAttributeAnalyzer` unwrap replaced with `let-else` (workspace `unwrap`-denial hygiene)
+- CI pins workspace sibling-dep registry versions for fresh-checkout resolution
+
+### Fixed — release pipeline
+- Preflight `timeout-minutes` raised 15 → 45 (the enlarged 5.0.0 workspace no longer fit the old budget on a cold runner cache)
+- Release checksum aggregation fixed for `actions/download-artifact` v8 nesting (each checksum is now verified against its archive in its own artifact directory before concatenation; the first 5.0.0 run failed here after all builds passed)
+
+### Fixed — release hardening (post-5.0.0 fixes folded into this release)
 - Playwright rendering no longer hardcodes a stale `crawlkit/4.4.1` browser user-agent; it derives `crawlkit/<workspace version>` from `CARGO_PKG_VERSION` at build time
 - The API server reads an optional `CRAWLKIT_API_ADDR` environment variable (host:port) instead of being hard-bound to `0.0.0.0:4000`
 - Removed an always-false dead scaffold in `RobotsTxtAnalysisDeepDeepValidator` (a `contains(...) && !contains(...)` block that could never execute)
+- `verify-release-readiness.sh` now fails if the target version is already tagged at a commit other than HEAD (prevents re-tagging a released version) and checks `crawlkit-types` workspace-version inheritance
 
 ### Known (backlog)
 - `ROBOTSDEEP-V2001` is emitted by two registered robots analyzers with different meanings (blanket-disallow "blocks all" on `RobotsTxtAnalysisDeepAnalyzerV2` vs. missing User-agent on `RobotsTxtAnalysisDeepDeepValidator`); `RobotsTxtEmptyDeepValidator` likewise overloads `ROBOTSEMPTY001` (empty vs. missing User-agent). Resolution is a catalog consolidation (one canonical representative per analyzer family/profile with the `-DEEP`/`-DEEP-DEEP` namespace for survivors) — deferred to the next major since renames are breaking for code consumers
-
-## [5.0.0] - 2026-09-06
 
 ### Fixed — robots.txt "blocks all" false positives (found by the dogfood crawl)
 - Four registered analyzers (`ROBOTS-V3002`, `ROBOTSDEEP-V2001`, `ROBOTSDIS-V5001`, `ROBOTSWILD-V6101`) flagged "robots.txt blocks all" for any blanket `Disallow: /` in the file, ignoring RFC 9309 user-agent group scoping — kingstonpeptides.com (which blanket-disallows only `CCBot`/`ByteSpider` while its `User-agent: *` group allows crawling) produced 400 false positives across 100 pages
 - Added a shared `robots_txt_star_blanket_disallows_all` helper (analyzer-group-aware: only a `Disallow: /` in the `*` group counts; consecutive `User-agent:` lines merge; a later `Allow: /` wins the equal-priority tie) and routed all five detection sites through it, including the base `ROBOTSDEEP001` analyzer
 - 9 unit tests cover the helper; re-crawl of kingstonpeptides.com dropped from 10,413 to 10,011 issues with the blanket cluster eliminated (the legitimate `ROBOTS-V2001` path-disallow finding is retained)
-- Known follow-up: `ROBOTSDEEP-V2001` is emitted by two registered analyzers with different meanings (blanket disallow vs. missing User-agent) — code collision to resolve in the analyzer-catalog cleanup
 
 ### Fixed — PostgreSQL storage backend (found by the service-backed suite)
 - `get_crawl_meta` decoded the `TIMESTAMPTZ` columns `start_time`/`end_time` as text, panicking at runtime; they now decode through `chrono::DateTime<Utc>` and re-format as RFC 3339, matching the SQLite backend's stored representation
@@ -54,7 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Added `docs/COVERAGE_CONTRACT.md` defining measurement scope, exclusions (binary entrypoints only), blocking floors, and the machine-checked path to the 90% target; API covered-surface region coverage now measures 73.94% with the bootstrap excluded (68.67% raw); removed the unrouted `download_plugin` leftover handler
 
 ### Added — core/full feature boundary
-- Core builds now compile without the full runtime: plugin, post-crawl, crawl-map, integration, and browser-specific CLI surfaces are gated behind `full` while `log-analyze` remains available in core mode
+- Core builds (`--no-default-features`) compile without the full runtime and expose only the `log-analyze` surface; `crawl`, `compare`, `report`, `crawl-map`, `inspect`, `plugin`, `trend`, `gsc`, and `log-analyze`'s sibling commands resolve in the default (`full`) build
 - `RenderedPageSummary` provides an owned, serializable rendering contract, with full Playwright output adapted through `RenderedPage::summary()`
 - Full-only tests, benchmarks, examples, and CLI integration tests declare `required-features = ["full"]`
 - Measured stripped release artifacts: core CLI 2,575,640 bytes (2.46 MiB) with `--no-default-features`; full CLI 25,579,176 bytes (24.39 MiB) with `--features full`

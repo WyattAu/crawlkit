@@ -108,8 +108,11 @@ jobs:
       # Previously-ignored tests that require live PostgreSQL/Redis: the
       # pg_storage suite, the distributed (Redis) queue suite, and the
       # API-plane Postgres state store.
+      # NOTE: the pg_storage tests share one database and some assert on
+      # global store state (e.g. get_latest_crawl_id), so they must run
+      # serially — parallel threads race on the shared crawls table.
       - name: PostgreSQL-backed tests
-        run: cargo test -p crawlkit-engine --features postgres --lib pg_storage -- --ignored --test-threads=4
+        run: cargo test -p crawlkit-engine --features postgres --lib pg_storage -- --ignored --test-threads=1
       - name: PostgreSQL API state store test
         run: cargo test -p crawlkit-api --lib pg_tests -- --ignored --test-threads=1
       - name: Redis distributed queue tests

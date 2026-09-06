@@ -128,6 +128,11 @@ The 2026-09-05 run commits its records under `docs/release-evidence/`:
 `service-backed-2026-09-05.txt` (PostgreSQL 16 + Redis 7 suite), and
 `cli-smoke-2026-09-05.txt` (release-artifact CLI surface).
 
+The 2026-09-06 v5.0.0 records add `release-gate-2026-09-06.txt` (bounded
+gate at `0042ae15`, every stage exit 0), `readiness-2026-09-06.txt`
+(pre-tag gate at `a61379a5`, READY), and `cli-smoke-2026-09-06.txt`
+(release-artifact CLI surface reporting 5.0.0).
+
 Retain the following with the release or CI run:
 
 - validation logs;

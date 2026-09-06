@@ -20,3 +20,5 @@ pub mod openapi;
 pub mod persistence;
 pub mod router;
 pub mod types;
+
+pub use types::AppState;

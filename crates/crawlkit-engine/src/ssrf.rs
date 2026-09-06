@@ -28,10 +28,17 @@ pub fn is_public_url(url: &str) -> bool {
         normalized.as_str(),
         "localhost" | "localhost.localdomain" | "metadata.google.internal"
     ) {
+        // Allow private IPs for local development
+        if std::env::var("CRAWLKIT_ALLOW_PRIVATE").as_deref() == Ok("1") {
+            return true;
+        }
         return false;
     }
     let ip_host = host.trim_matches(['[', ']']);
     if let Ok(ip) = ip_host.parse::<IpAddr>() {
+        if std::env::var("CRAWLKIT_ALLOW_PRIVATE").as_deref() == Ok("1") {
+            return true;
+        }
         return !is_private_ip(ip);
     }
     true

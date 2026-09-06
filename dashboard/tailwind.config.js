@@ -32,11 +32,13 @@ export default {
         },
       },
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        /* Derived from pediment amoebic-ui radius tokens */
+        lg: 'var(--radius-lg)',
+        md: 'var(--radius-md)',
+        sm: 'var(--radius-sm)',
       },
       boxShadow: {
+        /* Derived from pediment spatial-materialism elevation tokens */
         elevation0: 'var(--elevation-0)',
         elevation1: 'var(--elevation-1)',
         elevation2: 'var(--elevation-2)',
@@ -44,12 +46,17 @@ export default {
         elevation4: 'var(--elevation-4)',
       },
       transitionDuration: {
-        fast: '100ms',
-        base: '200ms',
-        slow: '300ms',
+        /* Derived from pediment amoebic-ui duration tokens */
+        fast: '150ms',
+        base: '250ms',
+        slow: '350ms',
       },
       transitionTimingFunction: {
-        spring: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
+        /* Derived from pediment amoebic-ui easing tokens */
+        organic: 'var(--ease-organic)',
+        'organic-in': 'var(--ease-organic-in)',
+        'organic-out': 'var(--ease-organic-out)',
+        spring: 'var(--ease-spring)',
       },
       spacing: {
         xs: '4px',

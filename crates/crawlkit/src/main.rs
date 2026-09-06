@@ -12,6 +12,8 @@ use anyhow::Context;
 use anyhow::Result;
 use clap::Parser;
 #[cfg(feature = "full")]
+use envstack::ConfigStack;
+#[cfg(feature = "full")]
 use opentelemetry_sdk::trace::SdkTracerProvider;
 #[cfg(feature = "full")]
 use std::path::PathBuf;
@@ -83,6 +85,7 @@ async fn main() -> Result<()> {
             exclude,
             javascript,
             allow_external,
+            allow_private,
             seed,
             enable_ai,
             enable_wasm,
@@ -124,6 +127,7 @@ async fn main() -> Result<()> {
                 exclude,
                 javascript,
                 allow_external,
+                allow_private,
                 seed,
                 encrypt,
                 metrics_json,
@@ -279,12 +283,16 @@ fn init_tracing(_cli: &Cli) {}
 #[cfg(feature = "full")]
 fn load_config(cli: &Cli) -> Result<Config> {
     if let Some(config_path) = &cli.config {
-        let contents = std::fs::read_to_string(config_path)
+        let stack = ConfigStack::new()
+            .with_toml_file_strict(config_path)
             .with_context(|| format!("Failed to read config file: {}", config_path.display()))?;
-        toml::from_str::<Config>(&contents)
+        stack
+            .extract()
             .with_context(|| format!("Failed to parse config file: {}", config_path.display()))
     } else {
-        Ok(Config::default())
+        ConfigStack::new()
+            .extract()
+            .context("Failed to load default configuration")
     }
 }
 

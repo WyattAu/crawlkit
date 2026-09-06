@@ -317,6 +317,10 @@ async fn dns_pin_check(url: &Url) -> Result<(), CrawlError> {
     if host.parse::<std::net::IpAddr>().is_ok() {
         return Ok(());
     }
+    // Allow private IPs for local development (set via CRAWLKIT_ALLOW_PRIVATE=1)
+    if std::env::var("CRAWLKIT_ALLOW_PRIVATE").as_deref() == Ok("1") {
+        return Ok(());
+    }
     let socket_addr = format!("{host}:0");
     let addrs = tokio::net::lookup_host(&socket_addr)
         .await

@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use argon2::password_hash::{PasswordHash, PasswordHasher, PasswordVerifier, SaltString};
-use argon2::Argon2;
 use jsonwebtoken::{decode, encode, DecodingKey, EncodingKey, Header, Validation};
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
@@ -169,24 +167,12 @@ impl AuthManager {
 
     /// Verify password.
     pub fn verify_password(&self, password: &str, hash: &str) -> bool {
-        let parsed_hash = match PasswordHash::new(hash) {
-            Ok(h) => h,
-            Err(_) => return false,
-        };
-        Argon2::default()
-            .verify_password(password.as_bytes(), &parsed_hash)
-            .is_ok()
+        salting::verify_password(password, hash).unwrap_or(false)
     }
 
     /// Hash a password.
     pub fn hash_password(&self, password: &str) -> Result<String, Argon2Error> {
-        use rand::rngs::OsRng;
-
-        let salt = SaltString::generate(&mut OsRng);
-        let hash = Argon2::default()
-            .hash_password(password.as_bytes(), &salt)
-            .map_err(|e| Argon2Error::HashFailed(e.to_string()))?;
-        Ok(hash.to_string())
+        salting::hash_password(password).map_err(|e| Argon2Error::HashFailed(e.to_string()))
     }
 
     /// Generate JWT token.
@@ -235,65 +221,31 @@ impl AuthManager {
 }
 
 /// Validate password strength against defense-sector standards.
+///
+/// Delegates to [`salting::check_password`] with the default
+/// [`salting::Policy`] (12+ chars, uppercase, lowercase, digit, special):
+///
+/// - Policy failures map 1:1 onto [`PasswordError`] variants.
+/// - The former hardcoded common-password list is replaced by zxcvbn's
+///   entropy-based estimation: a password that passes the policy but
+///   scores 0-1 on guessability is rejected as
+///   [`PasswordError::CommonPassword`]. This subsumes (and strengthens)
+///   the old 25-entry list, which only caught exact matches.
 pub fn validate_password_strength(password: &str) -> Result<(), PasswordError> {
-    const MIN_LENGTH: usize = 12;
-    const COMMON_PASSWORDS: &[&str] = &[
-        "password",
-        "password123",
-        "password1234",
-        "admin123",
-        "12345678",
-        "qwerty",
-        "letmein",
-        "welcome",
-        "monkey",
-        "dragon",
-        "master",
-        "login",
-        "abc123",
-        "iloveyou",
-        "1234567",
-        "12345",
-        "sunshine",
-        "princess",
-        "football",
-        "shadow",
-        "trustno1",
-        "superman",
-        "michael",
-        "batman",
-        "access",
-        "hello",
-    ];
-
-    if COMMON_PASSWORDS
-        .iter()
-        .any(|&p| p.eq_ignore_ascii_case(password))
-    {
-        return Err(PasswordError::CommonPassword);
-    }
-
-    if password.len() < MIN_LENGTH {
-        return Err(PasswordError::TooShort {
-            min: MIN_LENGTH,
-            got: password.len(),
+    if let Err(policy_err) = salting::check_password(password, &salting::Policy::default(), &[]) {
+        return Err(match policy_err {
+            salting::PolicyError::TooShort { min, got } => PasswordError::TooShort { min, got },
+            salting::PolicyError::MissingUppercase => PasswordError::MissingUppercase,
+            salting::PolicyError::MissingLowercase => PasswordError::MissingLowercase,
+            salting::PolicyError::MissingDigit => PasswordError::MissingDigit,
+            salting::PolicyError::MissingSpecialChar => PasswordError::MissingSpecialChar,
         });
     }
 
-    if !password.chars().any(|c| c.is_uppercase()) {
-        return Err(PasswordError::MissingUppercase);
-    }
-    if !password.chars().any(|c| c.is_lowercase()) {
-        return Err(PasswordError::MissingLowercase);
-    }
-    if !password.chars().any(|c| c.is_ascii_digit()) {
-        return Err(PasswordError::MissingDigit);
-    }
-    if !password
-        .chars()
-        .any(|c| "!@#$%^&*()-_+=[]{}|;':\",./<>?~`".contains(c))
-    {
-        return Err(PasswordError::MissingSpecialChar);
+    // Entropy-based common detection: any password trivially guessable
+    // (score <= 1) is treated as a common password.
+    if salting::strength(password, &[]).score <= 1 {
+        return Err(PasswordError::CommonPassword);
     }
 
     Ok(())
@@ -572,14 +524,28 @@ mod tests {
 
     #[test]
     fn test_validate_password_common() {
-        let err = AuthManager::validate_password("password").unwrap_err();
+        // Passes the composition policy but is trivially guessable
+        // (zxcvbn score <= 1) → CommonPassword.
+        let err = AuthManager::validate_password("Password123!").unwrap_err();
         assert!(err.contains("common"));
     }
 
     #[test]
-    fn test_validate_password_common_case_insensitive() {
-        let err = AuthManager::validate_password("PASSWORD").unwrap_err();
+    fn test_validate_password_common_variant() {
+        // Entropy-based detection: trivially guessable variants of common
+        // passwords are still caught (score <= 1). Unlike the old hardcoded
+        // list, this generalizes beyond exact matches, though high-entropy
+        // case variants (e.g. "PassWORD!123") now pass.
+        let err = AuthManager::validate_password("Password123!!").unwrap_err();
         assert!(err.contains("common"));
+    }
+
+    #[test]
+    fn test_validate_password_weak_still_rejected() {
+        // Policy-first ordering: "password" fails on length before the
+        // common check, but is still rejected.
+        let err = AuthManager::validate_password("password").unwrap_err();
+        assert!(err.contains("12 characters"));
     }
 
     // ---------------------------------------------------------------
@@ -631,10 +597,39 @@ mod tests {
 
     #[test]
     fn test_password_strength_common_password() {
+        // Passes the policy (12 chars, all classes) but scores <= 1 on
+        // guessability → CommonPassword replaces the old hardcoded list.
         assert!(matches!(
-            validate_password_strength("password1234"),
+            validate_password_strength("Password123!"),
             Err(PasswordError::CommonPassword)
         ));
+    }
+
+    #[test]
+    fn test_password_strength_weak_short_fails_fast_on_policy() {
+        // "password" is weak AND short; the policy runs first so the
+        // error is TooShort, not CommonPassword.
+        assert!(matches!(
+            validate_password_strength("password"),
+            Err(PasswordError::TooShort { min: 12, got: 8 })
+        ));
+    }
+
+    #[test]
+    fn test_password_strength_passphrase_passes_with_relaxed_policy() {
+        // A long passphrase carries enough entropy without character-class
+        // gymnastics; salting::Policy can express that, and zxcvbn agrees
+        // it is strong.
+        let policy = salting::Policy::default()
+            .require_uppercase(false)
+            .require_lowercase(false)
+            .require_digit(false)
+            .require_special(false);
+        assert!(salting::check_password("correcthorsebatterystaple", &policy, &[]).is_ok());
+        assert!(salting::strength("correcthorsebatterystaple", &[]).score >= 3);
+        // The default crawlkit policy still requires classes, so this
+        // passphrase needs the relaxed one:
+        assert!(validate_password_strength("Correct-Horse42!Battery").is_ok());
     }
 
     #[test]

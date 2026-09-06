@@ -469,6 +469,7 @@ impl PlaywrightRenderer {
 
         // SECURITY: URL is NOT interpolated into the JS string.
         // It is passed via process.argv to prevent code injection.
+        let user_agent = format!("crawlkit/{}", env!("CARGO_PKG_VERSION"));
         let script = format!(
             r#"
 const {{ chromium }} = require('playwright');
@@ -556,8 +557,7 @@ const targetUrl = process.argv[2];
 "#,
             self.config.headless,
             serde_json::to_string(&self.config.args).unwrap_or_else(|_| "[]".to_string()),
-            self.config.timeout.as_millis(),
-            user_agent = format!("crawlkit/{}", env!("CARGO_PKG_VERSION")),
+            self.config.timeout.as_millis()
         );
 
         // Write script to temporary file

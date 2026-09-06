@@ -184,6 +184,30 @@ pub fn sign_webhook_payload(secret: &str, payload: &[u8]) -> String {
     hex::encode(result.into_bytes())
 }
 
+/// Error type for webhook delivery that supports retry classification.
+#[derive(Debug)]
+enum WebhookError {
+    /// Network or transport error (retryable).
+    Network(String),
+    /// Non-success HTTP status code (retryable).
+    Http(axum::http::StatusCode),
+}
+
+impl std::fmt::Display for WebhookError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Network(msg) => write!(f, "network error: {msg}"),
+            Self::Http(status) => write!(f, "HTTP {status}"),
+        }
+    }
+}
+
+impl loop_retry::IsRetryable for WebhookError {
+    fn is_retryable(&self) -> bool {
+        matches!(self, Self::Network(_) | Self::Http(_))
+    }
+}
+
 pub async fn deliver_webhook(
     client: &reqwest::Client,
     webhook: &WebhookConfig,
@@ -202,77 +226,62 @@ pub async fn deliver_webhook(
         .map_err(|e| format!("Failed to serialize webhook payload: {e}"))?;
     let signature = sign_webhook_payload(&webhook.secret, &body);
 
-    let max_retries = 3;
-    let mut last_error = String::new();
+    let config = loop_retry::RetryConfig {
+        max_retries: 3,
+        initial_delay: std::time::Duration::from_secs(1),
+        ..Default::default()
+    };
 
-    for attempt in 0..max_retries {
-        if attempt > 0 {
-            let delay_ms = 1000 * 2u64.pow(attempt - 1);
-            tracing::info!(
-                "Retrying webhook to {} in {}ms (attempt {}/{})",
-                webhook.url,
-                delay_ms,
-                attempt + 1,
-                max_retries
-            );
-            tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
-        }
+    let url = webhook.url.clone();
+    let event = payload.event.clone();
 
-        tracing::debug!(
-            "Delivering webhook to {} (event={}, attempt={}/{})",
-            webhook.url,
-            payload.event,
-            attempt + 1,
-            max_retries
-        );
+    loop_retry::with_backoff(&config, || {
+        let body = body.clone();
+        let url = url.clone();
+        let event = event.clone();
+        let signature = signature.clone();
+        let client = client.clone();
+        async move {
+            tracing::debug!("Delivering webhook to {url} (event={event})");
 
-        match client
-            .post(&webhook.url)
-            .header("Content-Type", "application/json")
-            .header("X-Webhook-Event", &payload.event)
-            .header("X-Webhook-Signature", format!("sha256={signature}"))
-            .body(body.clone())
-            .timeout(std::time::Duration::from_secs(10))
-            .send()
-            .await
-        {
-            Ok(resp) => {
-                if resp.status().is_success() {
-                    tracing::info!(
-                        "Webhook delivered successfully to {} (status={})",
-                        webhook.url,
-                        resp.status()
-                    );
-                    return Ok(());
+            match client
+                .post(&url)
+                .header("Content-Type", "application/json")
+                .header("X-Webhook-Event", &event)
+                .header("X-Webhook-Signature", format!("sha256={signature}"))
+                .body(body)
+                .timeout(std::time::Duration::from_secs(10))
+                .send()
+                .await
+            {
+                Ok(resp) => {
+                    if resp.status().is_success() {
+                        tracing::info!(
+                            "Webhook delivered successfully to {url} (status={})",
+                            resp.status()
+                        );
+                        Ok(())
+                    } else {
+                        let status = resp.status();
+                        tracing::warn!("Webhook to {url} returned non-success status {status}");
+                        Err(WebhookError::Http(status))
+                    }
                 }
-                let status = resp.status();
-                last_error = format!("HTTP {status}");
-                tracing::warn!(
-                    "Webhook to {} returned non-success status {status} (attempt {}/{})",
-                    webhook.url,
-                    attempt + 1,
-                    max_retries
-                );
-            }
-            Err(e) => {
-                last_error = e.to_string();
-                tracing::warn!(
-                    "Failed to send webhook to {} (attempt {}/{}): {e}",
-                    webhook.url,
-                    attempt + 1,
-                    max_retries
-                );
+                Err(e) => {
+                    tracing::warn!("Failed to send webhook to {url}: {e}");
+                    Err(WebhookError::Network(e.to_string()))
+                }
             }
         }
-    }
+    })
+    .await
+    .map_err(|e| {
+        let msg = e.into_inner();
+        tracing::error!("Webhook delivery to {} failed: {msg}", webhook.url);
+        format!("Webhook delivery failed: {msg}")
+    })?;
 
-    tracing::error!(
-        "Webhook delivery to {} failed after {max_retries} attempts: {last_error}",
-        webhook.url
-    );
-    Err(format!(
-        "Webhook delivery failed after {max_retries} attempts: {last_error}"
-    ))
+    Ok(())
 }
 
 pub fn fire_webhooks(

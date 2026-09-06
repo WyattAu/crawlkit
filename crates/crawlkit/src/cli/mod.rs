@@ -172,6 +172,11 @@ pub enum Commands {
         #[arg(long)]
         allow_external: bool,
 
+        /// Allow crawling private/internal IPs (localhost, RFC 1918)
+        /// For local development and testing only
+        #[arg(long)]
+        allow_private: bool,
+
         /// Random seed for reproducible crawls
         #[arg(long)]
         seed: Option<u64>,
@@ -411,6 +416,7 @@ pub struct CrawlParams {
     pub exclude: Vec<String>,
     pub javascript: bool,
     pub allow_external: bool,
+    pub allow_private: bool,
     pub seed: Option<u64>,
     pub encrypt: bool,
     pub metrics_json: Option<PathBuf>,

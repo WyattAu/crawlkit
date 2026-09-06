@@ -176,6 +176,10 @@ pub struct CrawlEngineConfig {
     /// Total number of crawler instances in the cluster.
     /// Required when `distributed_mode` is `true`.
     pub instance_count: Option<u32>,
+
+    /// Allow crawling private/internal IPs (localhost, RFC 1918).
+    /// For local development and testing only — disables DNS rebinding protection.
+    pub allow_private: bool,
 }
 
 impl std::fmt::Debug for CrawlEngineConfig {
@@ -207,6 +211,7 @@ impl std::fmt::Debug for CrawlEngineConfig {
             .field("partition_strategy", &self.partition_strategy)
             .field("instance_id", &self.instance_id)
             .field("instance_count", &self.instance_count)
+            .field("allow_private", &self.allow_private)
             .finish()
     }
 }
@@ -246,6 +251,7 @@ impl Default for CrawlEngineConfig {
             partition_strategy: None,
             instance_id: None,
             instance_count: None,
+            allow_private: false,
         }
     }
 }

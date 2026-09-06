@@ -177,7 +177,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         concurrency: Some(concurrency),
         incremental: params.incremental,
         force: params.force,
-        allow_http: false,
+        allow_http: params.allow_private,
         plugin_dirs,
         post_crawl_analyzers: post_crawl_analyzers::build_post_crawl_registry(&crawl_config),
         queue: None,
@@ -190,6 +190,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         instance_count: None,
         analyzer_profile,
         custom_analyzers: None,
+        allow_private: params.allow_private,
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

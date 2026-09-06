@@ -17,7 +17,12 @@ jobs:
   preflight:
     name: Pre-flight Checks
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # v5.0.0's workspace (unified types crate, larger analyzer/contract suites)
+    # exceeded the former 15-minute cap on a cold cache: the serial full
+    # workspace test run alone approached 15 min before clippy could start.
+    # 45 minutes matches the build-matrix jobs and leaves headroom for a cold
+    # compile of the whole workspace plus clippy --all-targets.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable

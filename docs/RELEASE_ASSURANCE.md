@@ -65,6 +65,16 @@ relabel corrected the original mislabeling: v4.4.1 was already tagged at
 robots.txt RFC 9309 fix, the PostgreSQL storage fixes, the breaking
 finding-code changes — ship as 5.0.0 alongside the owner's main work.
 
+## v5.0.0 shipped (2026-09-06)
+
+GitHub Release **v5.0.0** published from tag `554fe85e` (run 34055829118):
+all preflight/audit/build jobs green; `Create Release` succeeded with the
+download-artifact v8 checksum fix. Assets verified: the linux x86_64
+archive hash matches the GPG-signed `checksums.txt`
+(`71b6268c…`); SBOMs (`crawlkit.cdx.json` + per-crate) included. CI on the
+final merged main (`554fe85e`) is green. The version-tag guard now
+requires a workspace version bump before the next release.
+
 ## Before release
 
 1. Review `ROADMAP.md`, `docs/capabilities.toml`, and public claims.

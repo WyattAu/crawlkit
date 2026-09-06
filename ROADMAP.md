@@ -1,9 +1,9 @@
 # crawlkit Engineering Roadmap
 
 **Status:** Living implementation contract
-**Version baseline:** 4.4.1
+**Version baseline:** 5.0.0
 **Roadmap owner:** Maintainers
-**Last reviewed:** 2026-08-30
+**Last reviewed:** 2026-09-06
 
 This roadmap is intentionally evidence-driven. A feature is not considered complete because code exists or a document describes it. It is complete only when the implementation, tests, operational behavior, documentation, and release evidence all agree.
 

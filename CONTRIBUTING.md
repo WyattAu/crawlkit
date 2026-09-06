@@ -1,6 +1,6 @@
 # Contributing to crawlkit
 
-*Version: 4.4.1 | Last reviewed: 2026-08-30*
+*Version: 5.0.0 | Last reviewed: 2026-09-06*
 
 ## Prerequisites
 

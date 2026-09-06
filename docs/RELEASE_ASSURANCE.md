@@ -41,26 +41,30 @@ Artifact checksums are point-in-time records: regenerate both binaries and
 re-record the table below at the tag commit (the `release.yml` workflow
 computes and signs its own `checksums.txt` from the tagged sources).
 
-Workspace version **4.4.1**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
+Workspace version **5.0.0**; toolchain **rustc 1.97.1 (8bab26f4f 2026-07-14)**;
 release profile (LTO, one codegen unit, `opt-level=3`, stripped).
 
 | Artifact | Feature flags | Stripped bytes | SHA-256 |
 |---|---:|---:|---|
-| `crawlkit` (core) | `--no-default-features` | 2,575,648 | `d153272b32f8c26c80163dc4a7cd6c961624dd1017b7f0e85eeed42bcd8f77c2` |
-| `crawlkit` (full) | `--features full` | 25,574,184 | `da5688f31ef4d378ca7d4f3a11956f5ed66420013583ff2ce2bd3b51ba8c7d8b` |
+| `crawlkit` (core) | `--no-default-features` | 2,575,648 | `b7d9858efcbb44652f0c2d9fc021b80e973ba9fc3f2495e1d94462384e53d443` |
+| `crawlkit` (full) | `--features full` | 25,574,192 | `70ac19f44b69d52292e08bd9fb32fc21d7798ada46e64f0d38cae17cd03aa189` |
 
 Build commands: `cargo build --release -p crawlkit --no-default-features` and
 `cargo build --release -p crawlkit --features full`, then `strip`.
 
-Both binaries rebuilt 2026-09-06 at the pre-tag state (source at `5cb5e7b8`
-plus the `[4.4.1]` changelog fold; changelog-only change does not affect
-binary bytes). The `5cb5e7b8` robots.txt RFC 9309 scoping fix altered both
-artifacts versus earlier records: core `e52ccca4…` (2,575,640) →
-`d153272b…` (2,575,648), full `2055dda5…` (25,576,616) → `da5688f1…`
-(25,574,184). Earlier provenance: the dependency supply-chain fix
-(`chacha20` 0.10.2, `event-listener` 5.4.2) changed the full artifact from
-`76f5f6b1…` (25,579,176 B, `888d14dd`) to `2055dda5…` (25,576,616 B,
-`394b18d7`) with core byte-for-byte identical.
+Both binaries rebuilt 2026-09-06 at the **v5.0.0** relabel state (workspace
+version bumped from 4.4.1, which changes embedded package metadata): core
+`d153272b…` (2,575,648 B, 4.4.1) → `b7d9858e…` (2,575,648 B), full
+`da5688f1…` (25,574,184 B, 4.4.1) → `70ac19f4…` (25,574,192 B). The
+5.0.0 relabel corrected the earlier mislabeling: v4.4.1 was already tagged
+at `fe9258d7` (2026-08-23), and the 156 unreleased commits since then —
+including the `5cb5e7b8` robots.txt RFC 9309 fix, the PostgreSQL storage
+fixes, and the breaking finding-code changes — now ship as 5.0.0.
+Earlier provenance: the `5cb5e7b8` robots fix changed 4.4.1-era records
+(core `e52ccca4…` → `d153272b…`, full `2055dda5…` → `da5688f1…`), and the
+dependency supply-chain fix changed the full artifact from `76f5f6b1…`
+(25,579,176 B, `888d14dd`) to `2055dda5…` (25,576,616 B, `394b18d7`)
+with core byte-for-byte identical.
 
 ## Before release
 
@@ -105,13 +109,16 @@ artifacts versus earlier records: core `e52ccca4…` (2,575,640) →
    ```
 8. Run CLI help/API smoke tests against the release artifact. Executed
    2026-09-05 against the stripped full artifact: root and all 10
-   subcommand help surfaces resolve, `--version` reports 4.4.1; record in
-   `docs/release-evidence/cli-smoke-2026-09-05.txt`.
+   subcommand help surfaces resolve, `--version` reports the workspace
+   version; recorded 2026-09-05 at 4.4.1 in
+   `docs/release-evidence/cli-smoke-2026-09-05.txt` and re-recorded
+   2026-09-06 at 5.0.0 in `docs/release-evidence/cli-smoke-2026-09-06.txt`.
 9. Review migration, rollback, security, and plugin compatibility notes.
    Reviewed 2026-09-05: `MIGRATION.md` (4.0/3.0 sections + semver policy),
    `SECURITY.md`, `SECURITY_BOUNDARIES.md`, and `PLUGIN_DEVELOPMENT.md`
-   compatibility notes are present and carry no stale claims; no breaking
-   changes since 4.0, so no new migration section is required.
+   compatibility notes are present and carry no stale claims; v5.0.0 is a
+   breaking release (finding-code renames/removals, engine construction,
+   feature boundary), so a `[5.0]` migration section was added 2026-09-06.
 
 ## Evidence retention
 

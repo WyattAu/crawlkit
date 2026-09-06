@@ -2,9 +2,9 @@
 
 **Project:** crawlkit
 **Current Phase:** Roadmap hardening and release assurance
-**Version:** 4.4.1
-**Status:** Released
-**Last Updated:** 2026-08-30
+**Version:** 5.0.0
+**Status:** In preparation (tag pending)
+**Last Updated:** 2026-09-06
 **MSRV:** 1.94.0
 
 ---
@@ -69,4 +69,4 @@
 
 ---
 
-*Historical phase record; current workspace version: 4.4.1*
+*Historical phase record; current workspace version: 5.0.0*

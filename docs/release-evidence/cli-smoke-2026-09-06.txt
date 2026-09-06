@@ -1,0 +1,14 @@
+=== release-artifact CLI smoke @ e55249ab 2026-09-06 ===
+artifact: target/release/crawlkit (full, stripped), workspace 5.0.0
+crawlkit 5.0.0
+root help: ok
+crawl        ok
+compare      ok
+report       ok
+backlinks    ok
+crawl-map    ok
+inspect      ok
+plugin       ok
+log-analyze  ok
+trend        ok
+gsc          ok

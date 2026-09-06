@@ -59,7 +59,7 @@ crawlkit is a well-engineered Rust web crawler and SEO analysis toolkit with gen
 
 | Metric | Value |
 |--------|-------|
-| Version | 4.4.1 (Cargo.toml) |
+| Version | 5.0.0 (Cargo.toml) |
 | Workspace crates | 4 (crawlkit CLI, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk) |
 | Total Rust source | ~50k lines across 177 .rs files |
 | Production code | ~32.5k lines |
@@ -297,7 +297,7 @@ For each domain: **canonical industry standard** → crawlkit's **actual impleme
 | **Dead code shipped and advertised** | MEDIUM | ~1.4k lines: `backpressure.rs`, `distributed_queue.rs`, `enterprise.rs`, `native_plugin.rs` — all have zero production callers. |
 | **Duplicated security-critical logic** | HIGH | SSRF blocklist in two diverging copies across crates. |
 | **Hardcoded port with no env override** | LOW | API binds `0.0.0.0:4000` with no port env var (`api/main.rs:208`). |
-| **Stale user-agent in Playwright JS** | LOW | `playwright.rs:468` hardcodes `'crawlkit/0.4.0'` vs workspace version 4.4.1. |
+| **Stale user-agent in Playwright JS** | LOW | `playwright.rs:468` hardcodes `'crawlkit/0.4.0'` vs workspace version 5.0.0. |
 | **Customer-specific paths in generic code** | LOW | `analyzers/mod.rs:66-67` contains `"/certifications"` and `"/research-use"` — leaked from one deployment. |
 | **Site-specific utility-page heuristic** | LOW | `is_utility_page` in `analyzers/mod.rs:66-67` has domain-specific business logic baked into generic engine code. |
 

@@ -1,3 +1,44 @@
+# Migrating to crawlkit 5.0
+
+Version 5.0.0 is a breaking release for finding-code consumers, programmatic
+engine construction, and non-default-feature builds. It accumulates the
+analyzer-ownership, storage, and feature-boundary work landed since 4.4.1.
+For 4.0.0 and 3.0.0 changes, see the later sections of this document.
+
+## 1. Finding codes renamed; redundant registrations removed (5.0.0)
+
+Redundant analyzer generations received explicit namespaces:
+`FOCUS-V2001-DEEP-DEEP(-DEEP)`, `HHIER-V2002/3-DEEP-DEEP(-DEEP)`,
+`IMGALT-V2001/2-DEEP-DEEP(-DEEP)`, `ANCHGEN-V2001-DEEP`,
+`COLRCL-V2001-DEEP`, plus the earlier CORS/cookie/CSP/COEP/COOP
+namespacing. `HHIER-V2002` now exclusively means "empty headings"; the V8
+"missing H1" meaning moved to `HHIER-V2002-DEEP-DEEP`.
+
+Nine redundant registrations were removed from the default registry
+(833 → 778); all removed types remain exported and behavior-pinned by
+tests, but the default finding set for a crawl is smaller. Analyzer
+profiles (`core`/`standard`/`deep`/`full`, default `standard` for new
+runs) change which analyzers run by default.
+
+Consuming pipelines that switch on finding codes must update matchers and
+re-baseline expected finding sets. See the `[5.0.0]` changelog section for
+the full enumeration.
+
+## 2. Engine construction and types (5.0.0)
+
+`CrawlEngine` now accepts `dyn StorageBackend` (dependency-inversion
+refactor), and the unified `crawlkit-types` crate is the single source of
+truth for `Severity`, `IssueCategory`, and `Finding`.
+
+## 3. Feature boundary (5.0.0)
+
+Plugin, post-crawl, crawl-map, integration, and browser-specific CLI
+surfaces are gated behind the `full` feature (the default). Builds with
+`--no-default-features` expose only the core CLI surface and must not
+reference those gated modules.
+
+---
+
 # Migrating to crawlkit 4.0
 
 Version 4.0.0 contains one breaking Rust API change and two finding-output

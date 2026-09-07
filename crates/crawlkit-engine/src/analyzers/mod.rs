@@ -99,7 +99,7 @@ pub mod tabindex_analyzers;
 pub mod table_analyzers;
 /// Table caption accessibility analyzer.
 pub mod table_caption_analyzers;
-pub mod v2_analyzers;
+pub mod v2;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
 /// Cross-Origin-Resource-Policy (extracted from security_analyzers).
 pub mod x_header_analyzers;
@@ -248,7 +248,7 @@ pub use sts_analyzers::{
 pub use tabindex_analyzers::TabindexAnalyzer;
 pub use table_analyzers::TableAccessibilityAnalyzer;
 pub use table_caption_analyzers::TableCaptionAnalyzer;
-pub use v2_analyzers::*;
+pub use v2::*;
 pub use x_header_analyzers::{
     CrossOriginResourcePolicyAnalyzer, XContentTypeOptionsAnalyzer,
     XPermittedCrossDomainPoliciesAnalyzer,

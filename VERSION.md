@@ -1,10 +1,10 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** Roadmap hardening and release assurance
-**Version:** 5.0.0
-**Status:** Released (tagged v5.0.0, 2026-09-06)
-**Last Updated:** 2026-09-06
+**Current Phase:** v5.1.0 Consolidation and Feature Completion
+**Version:** 5.1.0
+**Status:** Released
+**Last Updated:** 2026-09-07
 **MSRV:** 1.94.0
 
 ---

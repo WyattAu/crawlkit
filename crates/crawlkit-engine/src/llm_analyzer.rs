@@ -608,6 +608,16 @@ model = "claude-3"
     }
 
     #[test]
+    fn test_llm_config_default_disabled() {
+        let config = LlmConfig::default();
+        assert!(!config.enabled);
+        assert_eq!(config.provider, "openai");
+        assert_eq!(config.model, "gpt-4");
+        assert_eq!(config.max_tokens, 1024);
+        assert!(config.prompts.is_empty());
+    }
+
+    #[test]
     fn test_llm_error_display() {
         let e = LlmError::MissingApiKey("MY_KEY".into());
         assert!(e.to_string().contains("MY_KEY"));

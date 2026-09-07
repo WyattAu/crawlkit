@@ -1,5 +1,6 @@
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
+use std::net::IpAddr;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
@@ -303,6 +304,34 @@ impl From<&CrawlConfig> for HttpClientConfig {
     }
 }
 
+/// Validates that a domain's resolved IPs contain no private addresses.
+///
+/// This is the decision half of the DNS-rebinding defense: the caller
+/// resolves the host's DNS answers *before* the fetch and rejects the
+/// request if any of them points into private/loopback/link-local space.
+/// A rebinding attacker can alternate public and private answers between
+/// the check and the connection; checking every resolved address here
+/// closes the trivial variant of that attack.
+fn validate_resolved_ips(host: &str, ips: &[IpAddr]) -> Result<(), CrawlError> {
+    for ip in ips {
+        if is_private_ip(*ip) {
+            return Err(CrawlError::Internal(format!(
+                "DNS rebinding blocked: {host} resolved to private IP {ip}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Resolves `host` to all of its IP addresses.
+async fn resolve_host_ips(host: &str) -> Result<Vec<IpAddr>, CrawlError> {
+    let socket_addr = format!("{host}:0");
+    let addrs = tokio::net::lookup_host(&socket_addr)
+        .await
+        .map_err(|e| CrawlError::Internal(format!("DNS resolution failed for {host}: {e}")))?;
+    Ok(addrs.map(|addr| addr.ip()).collect())
+}
+
 /// Resolve the domain of a URL and check that no resolved IP is private.
 ///
 /// Prevents DNS rebinding attacks where a domain resolves to a private IP
@@ -314,26 +343,15 @@ async fn dns_pin_check(url: &Url) -> Result<(), CrawlError> {
         None => return Ok(()),
     };
     let host = host.trim_matches(['[', ']']);
-    if host.parse::<std::net::IpAddr>().is_ok() {
+    if host.parse::<IpAddr>().is_ok() {
         return Ok(());
     }
     // Allow private IPs for local development (set via CRAWLKIT_ALLOW_PRIVATE=1)
     if std::env::var("CRAWLKIT_ALLOW_PRIVATE").as_deref() == Ok("1") {
         return Ok(());
     }
-    let socket_addr = format!("{host}:0");
-    let addrs = tokio::net::lookup_host(&socket_addr)
-        .await
-        .map_err(|e| CrawlError::Internal(format!("DNS resolution failed for {host}: {e}")))?;
-    for addr in addrs {
-        if is_private_ip(addr.ip()) {
-            return Err(CrawlError::Internal(format!(
-                "DNS rebinding blocked: {host} resolved to private IP {}",
-                addr.ip()
-            )));
-        }
-    }
-    Ok(())
+    let ips = resolve_host_ips(host).await?;
+    validate_resolved_ips(host, &ips)
 }
 
 /// An HTTP client with retry, redirect tracking, and user-agent rotation.
@@ -1228,5 +1246,110 @@ mod tests {
         let (etag, last_modified) = extract_conditional_headers(&headers);
         assert!(etag.is_none());
         assert!(last_modified.is_none());
+    }
+
+    // -- DNS pinning --------------------------------------------------------
+
+    #[test]
+    fn test_dns_pin_check_blocks_domain_resolving_to_private_ip() {
+        // Simulates a rebinding attack: a public-looking domain whose DNS
+        // answers point into private address space.
+        let cases: Vec<(&str, Vec<IpAddr>)> = vec![
+            ("evil.example.com", vec![IpAddr::from([10, 0, 0, 5])]),
+            ("rebind.example.com", vec![IpAddr::from([192, 168, 1, 1])]),
+            ("metassrf.example.com", vec![IpAddr::from([169, 254, 169, 254])]),
+            ("loopback.example.com", vec![IpAddr::from([127, 0, 0, 1])]),
+            ("cgnat.example.com", vec![IpAddr::from([100, 64, 0, 1])]),
+            ("v6ula.example.com", vec![IpAddr::from([
+                0xfd00, 0, 0, 0, 0, 0, 0, 0x0001,
+            ])]),
+        ];
+        for (host, ips) in cases {
+            let err = validate_resolved_ips(host, &ips).expect_err("must be blocked");
+            match err {
+                CrawlError::Internal(msg) => {
+                    assert!(
+                        msg.contains("DNS rebinding blocked"),
+                        "wrong message for {host}: {msg}"
+                    );
+                    assert!(msg.contains(host), "message must name host: {msg}");
+                }
+                other => panic!("expected CrawlError::Internal, got: {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn test_dns_pin_check_blocks_mixed_public_and_private_answers() {
+        // One private answer among public ones must still block: the
+        // connection could be routed to the private address.
+        let ips = vec![
+            IpAddr::from([8, 8, 8, 8]),
+            IpAddr::from([192, 168, 0, 9]),
+            IpAddr::from([1, 1, 1, 1]),
+        ];
+        assert!(validate_resolved_ips("mixed.example.com", &ips).is_err());
+    }
+
+    #[test]
+    fn test_dns_pin_check_allows_domain_resolving_to_public_ip() {
+        let cases: Vec<(&str, Vec<IpAddr>)> = vec![
+            ("example.com", vec![IpAddr::from([93, 184, 216, 34])]),
+            ("dns.example.com", vec![IpAddr::from([8, 8, 8, 8])]),
+            ("multi.example.com", vec![
+                IpAddr::from([1, 1, 1, 1]),
+                IpAddr::from([8, 8, 4, 4]),
+            ]),
+            ("v6.example.com", vec![IpAddr::from([
+                0x2606, 0x4700, 0, 0, 0, 0, 0, 0x1111,
+            ])]),
+        ];
+        for (host, ips) in cases {
+            assert!(
+                validate_resolved_ips(host, &ips).is_ok(),
+                "{host} with public IPs must be allowed"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dns_pin_check_end_to_end_blocks_private_dns_answer() {
+        // `localhost` is a real hostname that every resolver maps into
+        // loopback space, so this exercises the full path: hostname → real
+        // resolution → private-IP rejection.
+        let url = Url::parse("http://localhost:1234/admin").unwrap();
+        let err = dns_pin_check(&url).await.expect_err("must be blocked");
+        match err {
+            CrawlError::Internal(msg) => {
+                assert!(msg.contains("DNS rebinding blocked"), "message: {msg}");
+            }
+            other => panic!("expected CrawlError::Internal, got: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dns_pin_check_allows_ip_literal_hosts() {
+        // IP literals need no DNS and cannot rebind; loopback literals must
+        // pass so local test servers remain crawlable when explicitly
+        // targeted.
+        for url_str in ["http://127.0.0.1:1/", "http://[::1]:1/", "http://8.8.8.8/"] {
+            let url = Url::parse(url_str).unwrap();
+            assert!(dns_pin_check(&url).await.is_ok(), "{url_str} must pass");
+        }
+    }
+
+    #[tokio::test]
+    async fn test_dns_pin_check_reports_resolution_failure() {
+        // A hostname containing spaces is rejected by the resolver without
+        // any network I/O, exercising the DNS-failure error path offline.
+        let err = resolve_host_ips("this host is not valid")
+            .await
+            .expect_err("must fail");
+        match err {
+            CrawlError::Internal(msg) => {
+                assert!(msg.contains("DNS resolution failed"), "message: {msg}");
+            }
+            other => panic!("expected CrawlError::Internal, got: {other:?}"),
+        }
     }
 }

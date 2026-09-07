@@ -472,10 +472,18 @@ impl CrawlEngine {
 
         let determinism = cfg.seed.map(DeterminismController::new);
 
-        let rate_limiter = RateLimiter::new(
-            concurrency as f64,
-            1.0 / (cfg.crawl_config.request_delay.as_millis() as f64 / 1000.0),
-        );
+        // Politeness pacing is driven by `request_delay`: a zero delay means
+        // the caller opted out of rate limiting entirely, so no token bucket
+        // applies (in-flight requests are still bounded by the fetch
+        // semaphore). Non-zero delays map to 1/delay requests per second
+        // per domain and globally. (Previously `concurrency` was misused as
+        // the per-domain RPS cap, throttling every crawl to `concurrency`
+        // requests/second regardless of this setting.)
+        let rate_limiter = if cfg.crawl_config.request_delay.is_zero() {
+            None
+        } else {
+            Some(RateLimiter::from_crawl_config(&cfg.crawl_config))
+        };
 
         // Build analyzer registry
         let analyzer_registry = self.build_analyzer_registry();
@@ -618,7 +626,10 @@ impl CrawlEngine {
                         continue;
                     }
                     if let Some(delay_secs) = robots_cache.crawl_delay(scheme, &domain).await {
-                        rate_limiter.set_crawl_delay(&domain, Duration::from_secs_f64(delay_secs));
+                        if let Some(ref rate_limiter) = rate_limiter {
+                            rate_limiter
+                                .set_crawl_delay(&domain, Duration::from_secs_f64(delay_secs));
+                        }
                     }
                     robots_raw = robots_cache.raw_content(scheme, &domain).await;
 
@@ -649,10 +660,12 @@ impl CrawlEngine {
                     robots_raw = String::new();
                 }
 
-                // Rate limit
-                let _ = rate_limiter
-                    .acquire(entry.url.host_str().unwrap_or(""))
-                    .await;
+                // Rate limit (only configured when request_delay > 0)
+                if let Some(ref rate_limiter) = rate_limiter {
+                    let _ = rate_limiter
+                        .acquire(entry.url.host_str().unwrap_or(""))
+                        .await;
+                }
 
                 // Circuit breaker check
                 let domain = entry.url.host_str().unwrap_or("");

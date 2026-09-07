@@ -664,6 +664,15 @@ impl Storage {
         Ok(count)
     }
 
+    /// Composite LRU cache key: pages are unique per `(crawl_id, url)`,
+    /// so caching by URL alone would leak pages across crawls (and thus
+    /// across tenants in multi-tenant deployments).
+    fn cache_key(crawl_id: &str, url: &str) -> String {
+        // \u{1} is a control character that cannot appear unescaped in a
+        // URL, making the (crawl_id, url) pair unambiguous.
+        format!("{crawl_id}\u{1}{url}")
+    }
+
     /// Insert a single page into the database under the given crawl.
     /// Uses a single SQLite transaction for the page row + all link rows
     /// to avoid per-statement fsync overhead.
@@ -775,7 +784,7 @@ impl Storage {
         let page_size = std::mem::size_of::<PageData>()
             + page.url.as_str().len()
             + page.title.as_deref().unwrap_or("").len();
-        cache.put(page.id.clone(), page.clone());
+        cache.put(Self::cache_key(crawl_id, page.url.as_str()), page.clone());
         self.memory_usage.fetch_add(page_size, Ordering::Relaxed);
 
         Ok(())
@@ -930,11 +939,9 @@ impl Storage {
     /// Checks the LRU cache first for recently accessed pages.
     pub fn get_page(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
         {
-            let cache = self.page_cache.lock();
-            for (_, page) in cache.iter() {
-                if page.url.as_str() == url {
-                    return Ok(Some(page.clone()));
-                }
+            let mut cache = self.page_cache.lock();
+            if let Some(page) = cache.get(&Self::cache_key(crawl_id, url)) {
+                return Ok(Some(page.clone()));
             }
         }
 

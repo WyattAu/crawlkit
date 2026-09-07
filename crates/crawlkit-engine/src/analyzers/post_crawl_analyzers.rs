@@ -2893,6 +2893,51 @@ mod tests {
         assert!(findings.is_empty());
     }
 
+    #[test]
+    fn test_build_registry_llm_disabled_skips_llm_analyzer() {
+        let config = crate::CrawlConfig::default();
+        assert!(!config.llm.enabled);
+        let registry = build_post_crawl_registry(&config);
+        assert!(!registry.iter().any(|a| a.name() == "llm-analysis"));
+        assert_eq!(registry.len(), 19);
+    }
+
+    #[test]
+    fn test_build_registry_llm_enabled_without_api_key_skips() {
+        let env_var = "CRAWLKIT_TEST_LLM_API_KEY_UNSET_9Q3X";
+        std::env::remove_var(env_var);
+
+        let config = crate::CrawlConfig {
+            llm: crate::llm_analyzer::LlmConfig {
+                enabled: true,
+                api_key_env: Some(env_var.to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let registry = build_post_crawl_registry(&config);
+        assert!(!registry.iter().any(|a| a.name() == "llm-analysis"));
+        assert_eq!(registry.len(), 19);
+    }
+
+    #[test]
+    fn test_build_registry_llm_enabled_with_api_key_registers() {
+        const ENV_VAR: &str = "CRAWLKIT_TEST_LLM_API_KEY_REGISTRY";
+        std::env::set_var(ENV_VAR, "test-key");
+
+        let config = crate::CrawlConfig {
+            llm: crate::llm_analyzer::LlmConfig {
+                enabled: true,
+                api_key_env: Some(ENV_VAR.to_string()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let registry = build_post_crawl_registry(&config);
+        assert!(registry.iter().any(|a| a.name() == "llm-analysis"));
+        assert_eq!(registry.len(), 20);
+    }
+
     // ===== SchemaCoverageAnalyzer tests =====
 
     #[test]

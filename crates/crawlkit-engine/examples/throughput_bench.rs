@@ -1,9 +1,17 @@
 //! End-to-end crawl throughput benchmark.
 //!
-//! Spins up a local TestServer at varying page counts and measures
-//! pages/sec + peak RSS. Criterion is NOT used — this is a simple
-//! wall-clock measurement to produce a single reproducible pages/sec
-//! number for the README.
+//! Spins up a local HTTP/1.1 **keep-alive** server (thread per connection,
+//! any number of connections in flight) and measures pages/sec at varying
+//! site sizes with the engine's fetch concurrency pinned to 4. Peak RSS is
+//! read from `/proc/self/status` (`VmHWM`).
+//!
+//! The server handles connections concurrently and reuses them across
+//! requests, so measured throughput is bounded by the engine pipeline
+//! (fetch → parse → analyze → store), not by connection setup or a serial
+//! accept loop. Server-side counters (`server-reqs`, `max-concurrent`) are
+//! printed alongside each result as evidence of real fetch overlap: if
+//! `max-concurrent` never exceeds 1, the engine did not overlap fetches and
+//! the number is NOT a concurrent-throughput measurement.
 //!
 //! ```sh
 //! cargo run --release -p crawlkit-engine --example throughput_bench
@@ -23,54 +31,60 @@ use crawlkit_engine::storage_trait::StorageBackend;
 use crawlkit_engine::CrawlConfig;
 
 // ---------------------------------------------------------------------------
-// Minimal HTTP server (adapted from parallel_pipeline_tests)
+// Minimal concurrent HTTP server (keep-alive, thread per connection)
 // ---------------------------------------------------------------------------
 
+#[derive(Default)]
 struct ServerConfig {
-    per_request_delay: Duration,
     support_etag: bool,
     deny_crawl: bool,
 }
 
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            per_request_delay: Duration::ZERO,
-            support_etag: false,
-            deny_crawl: false,
-        }
-    }
-}
-
 struct TestServer {
     url_root: String,
-    _max_concurrent: Arc<AtomicUsize>,
+    requests_served: Arc<AtomicUsize>,
+    max_concurrent: Arc<AtomicUsize>,
 }
 
 impl TestServer {
+    /// Binds an ephemeral port and serves `page_count` fixture pages.
+    ///
+    /// The accept loop runs on its own thread; every accepted connection is
+    /// handed to a fresh thread that serves requests in a keep-alive loop.
+    /// Connections therefore never serialize behind each other and the
+    /// server imposes no per-request connection-setup cost.
     fn start(page_count: usize, cfg: ServerConfig) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
+        let requests_served = Arc::new(AtomicUsize::new(0));
         let max_concurrent = Arc::new(AtomicUsize::new(0));
         let in_flight = Arc::new(AtomicUsize::new(0));
 
-        let thread_max = Arc::clone(&max_concurrent);
-        let thread_in_flight = Arc::clone(&in_flight);
+        let t_requests = Arc::clone(&requests_served);
+        let t_max = Arc::clone(&max_concurrent);
+        let t_flight = Arc::clone(&in_flight);
         let cfg = Arc::new(cfg);
-        std::thread::spawn(move || {
-            for stream in listener.incoming().flatten() {
-                let max = Arc::clone(&thread_max);
-                let flight = Arc::clone(&thread_in_flight);
-                let cfg = Arc::clone(&cfg);
-                std::thread::spawn(move || {
-                    serve_connection(stream, page_count, &cfg, &max, &flight);
-                });
-            }
-        });
+        std::thread::Builder::new()
+            .name("bench-accept".into())
+            .spawn(move || {
+                for stream in listener.incoming().flatten() {
+                    let requests = Arc::clone(&t_requests);
+                    let max = Arc::clone(&t_max);
+                    let flight = Arc::clone(&t_flight);
+                    let cfg = Arc::clone(&cfg);
+                    let _ = std::thread::Builder::new()
+                        .name("bench-conn".into())
+                        .spawn(move || {
+                            serve_connection(stream, page_count, &cfg, &requests, &max, &flight);
+                        });
+                }
+            })
+            .unwrap();
 
         Self {
             url_root: format!("http://127.0.0.1:{port}"),
-            _max_concurrent: max_concurrent,
+            requests_served,
+            max_concurrent,
         }
     }
 
@@ -79,42 +93,60 @@ impl TestServer {
     }
 }
 
+/// Serves one connection until the client closes it (HTTP/1.1 keep-alive).
 fn serve_connection(
     mut stream: TcpStream,
     page_count: usize,
     cfg: &ServerConfig,
-    max_concurrent: &Arc<AtomicUsize>,
-    in_flight: &Arc<AtomicUsize>,
+    requests_served: &AtomicUsize,
+    max_concurrent: &AtomicUsize,
+    in_flight: &AtomicUsize,
 ) {
-    let mut buf = [0u8; 4096];
-    let Ok(n) = stream.read(&mut buf) else {
-        return;
-    };
-    let request = String::from_utf8_lossy(&buf[..n]).to_string();
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(30)));
+    let _ = stream.set_nodelay(true);
+    let mut buf: Vec<u8> = Vec::with_capacity(8192);
+    let mut chunk = [0u8; 4096];
 
-    let current = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
-    max_concurrent.fetch_max(current, Ordering::SeqCst);
+    loop {
+        // Read until the full request header block (…\r\n\r\n) has arrived.
+        buf.clear();
+        loop {
+            match stream.read(&mut chunk) {
+                Ok(0) | Err(_) => return, // client closed / errored
+                Ok(n) => {
+                    buf.extend_from_slice(&chunk[..n]);
+                    if buf.windows(4).any(|w| w == b"\r\n\r\n") {
+                        break;
+                    }
+                }
+            }
+        }
 
-    if cfg.per_request_delay > Duration::ZERO {
-        std::thread::sleep(cfg.per_request_delay);
+        let current = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+        max_concurrent.fetch_max(current, Ordering::SeqCst);
+
+        let request = String::from_utf8_lossy(&buf);
+        let (path, if_none_match) = parse_request(&request);
+        let (status, headers, body) = route(
+            &path,
+            page_count,
+            cfg.support_etag,
+            cfg.deny_crawl,
+            if_none_match,
+        );
+
+        // No `Connection: close` — the client's pool can reuse this socket.
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n{headers}\r\n{body}",
+            body.len()
+        );
+        let wrote_ok = stream.write_all(response.as_bytes()).is_ok();
+        in_flight.fetch_sub(1, Ordering::SeqCst);
+        requests_served.fetch_add(1, Ordering::SeqCst);
+        if !wrote_ok {
+            return;
+        }
     }
-
-    let (path, if_none_match) = parse_request(&request);
-    let (status, headers, body) = route(
-        &path,
-        page_count,
-        cfg.support_etag,
-        cfg.deny_crawl,
-        if_none_match,
-    );
-
-    let response = format!(
-        "HTTP/1.1 {status}\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: {}\r\n{headers}Connection: close\r\n\r\n{body}",
-        body.len()
-    );
-    let _ = stream.write_all(response.as_bytes());
-    let _ = stream.flush();
-    in_flight.fetch_sub(1, Ordering::SeqCst);
 }
 
 fn parse_request(request: &str) -> (String, Option<String>) {
@@ -206,27 +238,28 @@ fn respond(
 }
 
 // ---------------------------------------------------------------------------
-// RSS measurement (Linux only)
+// Peak RSS measurement (Linux: VmHWM from /proc/self/status)
 // ---------------------------------------------------------------------------
 
 #[cfg(target_os = "linux")]
-fn get_process_rss_bytes() -> u64 {
-    std::fs::read_to_string("/proc/self/statm")
-        .ok()
-        .and_then(|s| {
-            let fields: Vec<&str> = s.split_whitespace().collect();
-            if fields.len() >= 2 {
-                let pages: u64 = fields[1].parse().ok()?;
-                Some(pages * 4096)
-            } else {
-                None
-            }
-        })
-        .unwrap_or(0)
+fn get_peak_rss_bytes() -> u64 {
+    let status = std::fs::read_to_string("/proc/self/status").unwrap_or_default();
+    for line in status.lines() {
+        if let Some(rest) = line.strip_prefix("VmHWM:") {
+            let kb: u64 = rest
+                .trim()
+                .trim_end_matches("kB")
+                .trim()
+                .parse()
+                .unwrap_or(0);
+            return kb * 1024;
+        }
+    }
+    0
 }
 
 #[cfg(not(target_os = "linux"))]
-fn get_process_rss_bytes() -> u64 {
+fn get_peak_rss_bytes() -> u64 {
     0
 }
 
@@ -253,54 +286,72 @@ fn shared_storage() -> Arc<dyn StorageBackend> {
     Arc::new(Storage::new_in_memory().unwrap())
 }
 
-fn main() {
-    println!("crawlkit throughput benchmark");
-    println!("============================");
+/// Runs one crawl against a fresh fixture server and prints the result row.
+fn bench_once(rt: &tokio::runtime::Runtime, n: usize, concurrency: usize) {
+    let server = TestServer::start(n, ServerConfig::default());
+    let engine = CrawlEngine::new_shared(engine_config(n + 1, concurrency), shared_storage());
 
-    // Warm up — build the engine once to amortize one-time costs
-    let _ = CrawlEngine::new(
-        CrawlEngineConfig::default(),
-        Storage::new_in_memory().unwrap(),
-    );
+    let start = Instant::now();
+    let output = rt.block_on(engine.run(&server.index_url()));
+    let elapsed = start.elapsed();
 
-    let page_counts = [10, 25, 50];
-    for &n in &page_counts {
-        let server = TestServer::start(n, ServerConfig::default());
-        let storage = shared_storage();
-        let config = engine_config(n + 1, 8); // +1 for the index page
-        let engine = CrawlEngine::new_shared(config, storage);
-
-        let start = Instant::now();
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let output = rt.block_on(engine.run(&server.index_url()));
-        let elapsed = start.elapsed();
-
-        match output {
-            Ok(o) => {
-                let pps = o.pages_crawled as f64 / elapsed.as_secs_f64();
-                println!(
-                    "n={n}: {} pages in {:.2}s = {:.1} pages/sec",
-                    o.pages_crawled,
-                    elapsed.as_secs_f64(),
-                    pps
+    match output {
+        Ok(o) => {
+            let pps = o.pages_crawled as f64 / elapsed.as_secs_f64();
+            let served = server.requests_served.load(Ordering::SeqCst);
+            let overlap = server.max_concurrent.load(Ordering::SeqCst);
+            println!(
+                "n={n:<4} conc={concurrency}  {:>4} pages in {:>6.2}s  = {:>7.1} pages/sec   \
+                 [server: {served} reqs, max {overlap} concurrent]",
+                o.pages_crawled,
+                elapsed.as_secs_f64(),
+                pps
+            );
+            if o.pages_crawled != n + 1 {
+                eprintln!(
+                    "  WARNING: expected {} crawled pages, got {} (skipped/dup/failed) — number may be inflated",
+                    n + 1,
+                    o.pages_crawled
                 );
             }
-            Err(e) => eprintln!("n={n}: FAILED: {e}"),
+            if overlap < 2 {
+                eprintln!(
+                    "  WARNING: server never observed more than {overlap} concurrent request — fetches did not overlap"
+                );
+            }
         }
+        Err(e) => eprintln!("n={n}: FAILED: {e}"),
+    }
+}
+
+fn main() {
+    println!("crawlkit throughput benchmark (engine-limited)");
+    println!("==============================================");
+    println!(
+        "server: local HTTP/1.1 keep-alive, thread per connection (concurrent, no per-request connection setup)"
+    );
+
+    // Warm-up: one unmeasured crawl to amortize allocator/analyzer-registry
+    // and OS cold-start costs. Results below are steady-state numbers.
+    {
+        let server = TestServer::start(25, ServerConfig::default());
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let engine = CrawlEngine::new_shared(engine_config(26, 4), shared_storage());
+        let _ = rt.block_on(engine.run(&server.index_url()));
     }
 
-    // Peak RSS at 50 pages
-    println!("\n--- Peak RSS (50 pages) ---");
-    let server = TestServer::start(50, ServerConfig::default());
-    let storage = shared_storage();
-    let config = engine_config(51, 8);
-    let engine = CrawlEngine::new_shared(config, storage);
-    let rss_before = get_process_rss_bytes();
+    let rss_before = get_peak_rss_bytes();
     let rt = tokio::runtime::Runtime::new().unwrap();
-    let _ = rt.block_on(engine.run(&server.index_url()));
-    let rss_after = get_process_rss_bytes();
+
+    println!("\n--- Pages/sec at concurrency=4 ---");
+    for &n in &[50usize, 100, 500] {
+        bench_once(&rt, n, 4);
+    }
+
+    println!("\n--- Peak RSS ---");
+    let rss_after = get_peak_rss_bytes();
     println!(
-        "Peak RSS: {:.1} MB (delta: {:.1} MB)",
+        "Peak RSS: {:.1} MB (delta since start: {:.1} MB)",
         rss_after as f64 / 1_048_576.0,
         (rss_after.saturating_sub(rss_before)) as f64 / 1_048_576.0
     );

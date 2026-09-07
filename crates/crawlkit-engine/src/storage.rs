@@ -487,21 +487,28 @@ impl Storage {
             .query_map([], |row| row.get::<_, String>(1))?
             .collect::<Result<Vec<_>, _>>()?;
 
-        let new_columns = [
-            "has_structured_data",
-            "schema_types",
-            "viewport_ok",
-            "has_csp",
-            "has_hsts",
-            "images_total",
-            "images_missing_alt",
-            "h1_count",
-            "heading_count",
-            "extractions",
+        // Column types must match how the values are bound (integers for
+        // booleans/counts) and read (`Option<i64>` in `row_to_page_data`).
+        // TEXT affinity would coerce stored integers to strings and break
+        // integer reads with `InvalidColumnType`.
+        let new_columns: [(&str, &str); 10] = [
+            ("has_structured_data", "INTEGER"),
+            ("schema_types", "TEXT"),
+            ("viewport_ok", "INTEGER"),
+            ("has_csp", "INTEGER"),
+            ("has_hsts", "INTEGER"),
+            ("images_total", "INTEGER"),
+            ("images_missing_alt", "INTEGER"),
+            ("h1_count", "INTEGER"),
+            ("heading_count", "INTEGER"),
+            ("extractions", "TEXT"),
         ];
-        for col in new_columns {
+        for (col, col_type) in new_columns {
             if !columns.contains(&col.to_string()) {
-                conn.execute(&format!("ALTER TABLE pages ADD COLUMN {} TEXT", col), [])?;
+                conn.execute(
+                    &format!("ALTER TABLE pages ADD COLUMN {col} {col_type}"),
+                    [],
+                )?;
             }
         }
 
@@ -1830,6 +1837,7 @@ impl crate::storage_trait::StorageBackend for Storage {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use chrono::TimeZone;
 
     fn test_page(id: &str, url: &str, status: u16) -> PageData {
         PageData {
@@ -2155,5 +2163,106 @@ mod tests {
             .get_latest_conditional("https://example.com/unknown")
             .unwrap();
         assert!(result.is_none());
+    }
+
+    /// Build a `PageData` with every field populated (non-None), to verify
+    /// that all values survive the write/read cycle with matching types.
+    fn full_page(id: &str, url: &str) -> PageData {
+        PageData {
+            id: id.to_string(),
+            url: Url::parse(url).unwrap(),
+            final_url: Url::parse("https://example.com/final").unwrap(),
+            status_code: 201,
+            title: Some("Full Page".to_string()),
+            description: Some("A page with every field populated".to_string()),
+            canonical_url: Some(Url::parse("https://example.com/canonical").unwrap()),
+            word_count: Some(812),
+            load_time_ms: Some(321),
+            body_size: Some(98_765),
+            fetched_at: Utc.timestamp_opt(1_735_689_600, 123_456_789).unwrap(),
+            links: vec![],
+            tenant_id: Some("tenant-a".to_string()),
+            etag: Some("\"full-etag\"".to_string()),
+            last_modified: Some("Wed, 01 Jan 2025 00:00:00 GMT".to_string()),
+            cwv_lcp: Some(1234.5),
+            cwv_cls: Some(0.025),
+            cwv_inp: Some(87.5),
+            has_structured_data: Some(true),
+            schema_types: Some("Article,BreadcrumbList".to_string()),
+            viewport_ok: Some(true),
+            has_csp: Some(false),
+            has_hsts: Some(true),
+            images_total: Some(14),
+            images_missing_alt: Some(3),
+            h1_count: Some(1),
+            heading_count: Some(12),
+            extractions: Some(r#"[["price",["9.99","19.99"]]]"#.to_string()),
+        }
+    }
+
+    #[test]
+    fn test_page_data_full_roundtrip() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let page = full_page("p-full", "https://example.com/full");
+        storage.insert_page(&crawl_id, &page).unwrap();
+
+        // get_pages bypasses the LRU cache, so this exercises the DB read path.
+        let mut pages = storage.get_pages(&crawl_id, 10).unwrap();
+        assert_eq!(pages.len(), 1);
+        let got = pages.remove(0);
+
+        assert_eq!(got.id, page.id);
+        assert_eq!(got.url, page.url);
+        assert_eq!(got.final_url, page.final_url);
+        assert_eq!(got.status_code, page.status_code);
+        assert_eq!(got.title, page.title);
+        assert_eq!(got.description, page.description);
+        assert_eq!(got.canonical_url, page.canonical_url);
+        assert_eq!(got.word_count, page.word_count);
+        assert_eq!(got.load_time_ms, page.load_time_ms);
+        assert_eq!(got.body_size, page.body_size);
+        assert_eq!(got.fetched_at, page.fetched_at);
+        assert_eq!(got.tenant_id, page.tenant_id);
+        assert_eq!(got.etag, page.etag);
+        assert_eq!(got.last_modified, page.last_modified);
+        assert_eq!(got.cwv_lcp, page.cwv_lcp);
+        assert_eq!(got.cwv_cls, page.cwv_cls);
+        assert_eq!(got.cwv_inp, page.cwv_inp);
+        assert_eq!(got.has_structured_data, page.has_structured_data);
+        assert_eq!(got.schema_types, page.schema_types);
+        assert_eq!(got.viewport_ok, page.viewport_ok);
+        assert_eq!(got.has_csp, page.has_csp);
+        assert_eq!(got.has_hsts, page.has_hsts);
+        assert_eq!(got.images_total, page.images_total);
+        assert_eq!(got.images_missing_alt, page.images_missing_alt);
+        assert_eq!(got.h1_count, page.h1_count);
+        assert_eq!(got.heading_count, page.heading_count);
+        assert_eq!(got.extractions, page.extractions);
+    }
+
+    #[test]
+    fn test_page_data_full_roundtrip_batch_insert() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let page = full_page("p-batch", "https://example.com/batch");
+        storage.insert_pages(&crawl_id, std::slice::from_ref(&page)).unwrap();
+
+        let pages = storage.get_pages(&crawl_id, 10).unwrap();
+        assert_eq!(pages.len(), 1);
+        let got = &pages[0];
+
+        assert_eq!(got.has_structured_data, page.has_structured_data);
+        assert_eq!(got.schema_types, page.schema_types);
+        assert_eq!(got.viewport_ok, page.viewport_ok);
+        assert_eq!(got.has_csp, page.has_csp);
+        assert_eq!(got.has_hsts, page.has_hsts);
+        assert_eq!(got.images_total, page.images_total);
+        assert_eq!(got.images_missing_alt, page.images_missing_alt);
+        assert_eq!(got.h1_count, page.h1_count);
+        assert_eq!(got.heading_count, page.heading_count);
+        assert_eq!(got.extractions, page.extractions);
     }
 }

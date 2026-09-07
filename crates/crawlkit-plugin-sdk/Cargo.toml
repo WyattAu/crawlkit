@@ -25,9 +25,21 @@ redundant_clone = "warn"
 unused_async = "warn"
 if_not_else = "warn"
 
+[features]
+# WASI Preview 2 component-model support, used by the `wasi-*` examples.
+# Requires wasmtime >= 47 with component-model support. The core WASM ABI
+# (and this crate's library code) does not depend on wasmtime at all.
+wasi = ["dep:wasmtime", "dep:wasmtime-wasi"]
+
 [dependencies]
 crawlkit-types = { path = "../crawlkit-types" }
 serde.workspace = true
 serde_json.workspace = true
+# Optional: component-model host bindings for the `wasi-*` examples
+# (wasmtime::component::Component / bindgen!).
+wasmtime = { workspace = true, optional = true, features = ["component-model"] }
+# Optional: WASI host implementations (wasi:cli, wasi:io, ...) for running
+# components that import standard WASI interfaces.
+wasmtime-wasi = { workspace = true, optional = true }
 
 [dev-dependencies]

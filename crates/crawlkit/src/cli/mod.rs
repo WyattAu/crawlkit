@@ -14,6 +14,8 @@ pub mod log_analyze;
 #[cfg(feature = "full")]
 pub mod plugin;
 #[cfg(feature = "full")]
+pub mod rank;
+#[cfg(feature = "full")]
 pub mod report;
 #[cfg(feature = "full")]
 pub mod trend;
@@ -395,6 +397,13 @@ pub enum Commands {
         /// Maximum number of results
         #[arg(long, default_value = "100")]
         limit: usize,
+    },
+
+    /// Track keyword rankings across search engines
+    #[cfg(feature = "full")]
+    Rank {
+        #[command(subcommand)]
+        command: crate::cli::rank::RankCommands,
     },
 }
 

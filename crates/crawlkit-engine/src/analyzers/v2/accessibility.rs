@@ -279,10 +279,14 @@ impl Analyzer for LinkTextQualityAnalyzerV2 {
         let mut empty_count = 0;
         for link in &ctx.page.links {
             let text = link.text.trim().to_lowercase();
-            if text.is_empty() && link.aria_label.is_none() {
+            // aria-label (or an image alt) provides the accessible name, so
+            // a link with either is not "empty" even without visible text.
+            if text.is_empty() && link.aria_label.is_none() && link.img_alt.is_none() {
                 empty_count += 1;
             }
-            if generic.contains(&text.as_str()) {
+            // aria-label overrides visible text for assistive technology,
+            // so a link with an aria-label is not flagged as generic.
+            if link.aria_label.is_none() && generic.contains(&text.as_str()) {
                 generic_count += 1;
             }
         }
@@ -336,6 +340,11 @@ impl Analyzer for ImageAltTextDeepAnalyzerV2 {
         let mut missing = 0;
         let mut generic = 0;
         for img in &ctx.page.images {
+            // aria-hidden="true" removes the image from the accessibility
+            // tree entirely, so alt text is irrelevant for such images.
+            if img.aria_hidden {
+                continue;
+            }
             if !img.has_alt && img.alt.is_empty() {
                 missing += 1;
             } else if ["image", "photo", "picture", "img"]
@@ -1451,8 +1460,12 @@ impl Analyzer for LinkTextGenericDeepValidator {
             .links
             .iter()
             .filter(|l| {
-                let text = l.text.trim().to_lowercase();
-                generic.contains(&text.as_str())
+                // aria-label overrides the visible text for screen readers,
+                // so a link with a descriptive aria-label is not generic.
+                l.aria_label.is_none() && {
+                    let text = l.text.trim().to_lowercase();
+                    generic.contains(&text.as_str())
+                }
             })
             .count();
         if generic_count > 0 {
@@ -1492,7 +1505,13 @@ impl Analyzer for LinkTextEmptyDeepValidator {
             .page
             .links
             .iter()
-            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+            .filter(|l| {
+                l.text.trim().is_empty()
+                    && l.aria_label.is_none()
+                    // A link wrapping an image gets its accessible name
+                    // from the image's alt attribute.
+                    && l.img_alt.is_none()
+            })
             .count();
         if empty_count > 0 {
             findings.push(Finding {
@@ -1579,7 +1598,9 @@ impl Analyzer for ImageAltMissingDeepValidator {
             .page
             .images
             .iter()
-            .filter(|i| !i.has_alt && i.alt.is_empty())
+            // aria-hidden images are removed from the accessibility tree and
+            // do not require alt text.
+            .filter(|i| !i.aria_hidden && !i.has_alt && i.alt.is_empty())
             .count();
         if missing > 0 {
             findings.push(Finding {
@@ -1618,7 +1639,9 @@ impl Analyzer for ImageAltEmptyDeepValidator {
             .page
             .images
             .iter()
-            .filter(|i| i.has_alt && i.alt.is_empty())
+            // An aria-hidden image is author-declared decorative, so an
+            // empty alt is intentional rather than a gap.
+            .filter(|i| !i.aria_hidden && i.has_alt && i.alt.is_empty())
             .count();
         if empty > 0 {
             findings.push(Finding {
@@ -1659,7 +1682,9 @@ impl Analyzer for ImageAltDecorativePatternValidator {
             .images
             .iter()
             .filter(|i| {
-                i.has_alt && !i.alt.is_empty() && {
+                // Generic alt text is only a problem if the image is actually
+                // exposed to assistive technology.
+                !i.aria_hidden && i.has_alt && !i.alt.is_empty() && {
                     let lower = i.alt.to_lowercase();
                     decorative_patterns.iter().any(|p| lower == *p)
                 }
@@ -1733,9 +1758,19 @@ impl Analyzer for FocusTrapMissingValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let has_dialog =
-                body.contains("role=\"dialog\"") || body.contains("role=\"alertdialog\"");
-            let has_aria_modal = body.contains("aria-modal=\"true\"");
+            // Match actual dialog elements via the DOM; a raw `contains` would
+            // also match `role="dialog"` inside comments, scripts, or text.
+            let doc = scraper::Html::parse_document(body);
+            let (Ok(dialog_sel), Ok(modal_sel)) = (
+                scraper::Selector::parse("[role=\"dialog\"], [role=\"alertdialog\"]"),
+                scraper::Selector::parse(
+                    "[role=\"dialog\"][aria-modal=\"true\"], [role=\"alertdialog\"][aria-modal=\"true\"]",
+                ),
+            ) else {
+                return findings;
+            };
+            let has_dialog = doc.select(&dialog_sel).next().is_some();
+            let has_aria_modal = doc.select(&modal_sel).next().is_some();
             if has_dialog && !has_aria_modal {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -2128,6 +2163,7 @@ impl Analyzer for FormLabelsDeepDeepValidator {
                         | Some("image")
                 ) && !i.has_label
                     && i.aria_label.is_none()
+                    && i.aria_labelledby.is_none()
                     && i.id.is_none()
             })
             .count();
@@ -2234,7 +2270,9 @@ impl Analyzer for LinkTextQualityDeepValidator {
             .page
             .links
             .iter()
-            .filter(|l| generic.contains(&l.text.trim().to_lowercase().as_str()))
+            .filter(|l| {
+                l.aria_label.is_none() && generic.contains(&l.text.trim().to_lowercase().as_str())
+            })
             .count();
         if generic_count > 0 {
             findings.push(Finding {
@@ -2271,7 +2309,14 @@ impl Analyzer for ImageAltTextDeepDeepValidator {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let no_alt = ctx.page.images.iter().filter(|i| !i.has_alt).count();
+        // aria-hidden images are removed from the accessibility tree and do
+        // not require alt text.
+        let no_alt = ctx
+            .page
+            .images
+            .iter()
+            .filter(|i| !i.aria_hidden && !i.has_alt)
+            .count();
         if no_alt > 0 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -2287,7 +2332,7 @@ impl Analyzer for ImageAltTextDeepDeepValidator {
             .page
             .images
             .iter()
-            .filter(|i| i.has_alt && i.alt.trim().is_empty())
+            .filter(|i| !i.aria_hidden && i.has_alt && i.alt.trim().is_empty())
             .count();
         if empty_alt > 0 {
             findings.push(Finding {
@@ -2526,6 +2571,7 @@ impl Analyzer for FormLabelsDeepDeepDeepValidator {
             .filter(|i| {
                 !i.has_label
                     && i.aria_label.is_none()
+                    && i.aria_labelledby.is_none()
                     && i.id.is_none()
                     && i.input_type.as_deref() != Some("hidden")
             })
@@ -2656,7 +2702,14 @@ impl Analyzer for ImageAltTextDeepDeepDeepValidator {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        let no_alt = ctx.page.images.iter().filter(|i| !i.has_alt).count();
+        // aria-hidden images are removed from the accessibility tree and do
+        // not require alt text.
+        let no_alt = ctx
+            .page
+            .images
+            .iter()
+            .filter(|i| !i.aria_hidden && !i.has_alt)
+            .count();
         if no_alt > 0 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -2844,7 +2897,9 @@ impl Analyzer for AnchorTextGenericDeepValidator {
             .page
             .links
             .iter()
-            .filter(|l| generic.contains(&l.text.trim().to_lowercase().as_str()))
+            .filter(|l| {
+                l.aria_label.is_none() && generic.contains(&l.text.trim().to_lowercase().as_str())
+            })
             .count();
         if generic_count > 0 {
             findings.push(Finding {
@@ -4077,6 +4132,170 @@ mod tests {
         let mut p = make_page("https://example.com");
         p.landmarks = vec!["Complementary".into()];
         assert!(LandmarkComplementaryDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression tests: context-aware accessibility checks
+    // ---------------------------------------------------------------------------
+
+    fn make_link(
+        text: &str,
+        aria_label: Option<&str>,
+        img_alt: Option<&str>,
+    ) -> crate::parser::ExtractedLink {
+        crate::parser::ExtractedLink {
+            href: "https://example.com/page".into(),
+            text: text.into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: aria_label.map(String::from),
+            img_alt: img_alt.map(String::from),
+        }
+    }
+
+    fn make_image(has_alt: bool, alt: &str, aria_hidden: bool) -> crate::parser::ExtractedImage {
+        crate::parser::ExtractedImage {
+            src: "img.jpg".into(),
+            alt: alt.into(),
+            has_alt,
+            width: None,
+            height: None,
+            is_lazy_loaded: false,
+            aria_hidden,
+        }
+    }
+
+    #[test]
+    fn test_focus_trap_ignores_role_in_comments_and_scripts() {
+        let p = make_page("https://example.com");
+        // `role="dialog"` appears only in a comment, an inline script, and
+        // plain text — no actual dialog element exists.
+        let body = r#"<html><body>
+            <!-- <div role="dialog"></div> -->
+            <script>var tpl = '<div role="dialog"></div>';</script>
+            <p>The role="dialog" pattern opens modals.</p>
+        </body></html>"#;
+        assert!(FocusTrapMissingValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_focus_trap_detects_real_dialog_element() {
+        let p = make_page("https://example.com");
+        let body = r#"<div role="dialog"><p>Content</p></div>"#;
+        let f = FocusTrapMissingValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].code, "FOCTR001");
+    }
+    #[test]
+    fn test_focus_trap_aria_modal_must_be_on_dialog() {
+        let p = make_page("https://example.com");
+        // aria-modal on an unrelated element does not trap dialog focus.
+        let body = r#"<div role="dialog"></div><span aria-modal="true"></span>"#;
+        let f = FocusTrapMissingValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(!f.is_empty());
+    }
+    #[test]
+    fn test_image_alt_missing_ignores_aria_hidden_images() {
+        let mut p = make_page("https://example.com");
+        p.images = vec![make_image(false, "", true)];
+        assert!(ImageAltTextDeepAnalyzerV2::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(ImageAltMissingDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(ImageAltTextDeepDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(ImageAltTextDeepDeepDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+    #[test]
+    fn test_image_alt_missing_still_flags_visible_images() {
+        let mut p = make_page("https://example.com");
+        p.images = vec![make_image(false, "", false)];
+        let f = ImageAltMissingDeepValidator::new().analyze(&make_ctx(&p, None));
+        assert!(!f.is_empty());
+        assert_eq!(f[0].code, "IMGALTMISS-V6116");
+    }
+    #[test]
+    fn test_image_alt_empty_ignores_aria_hidden_images() {
+        let mut p = make_page("https://example.com");
+        p.images = vec![make_image(true, "", true)];
+        assert!(ImageAltEmptyDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+    #[test]
+    fn test_link_generic_text_with_aria_label_is_not_flagged() {
+        let mut p = make_page("https://example.com");
+        p.links = vec![make_link(
+            "read more",
+            Some("Read the full pricing guide"),
+            None,
+        )];
+        assert!(LinkTextQualityAnalyzerV2::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(LinkTextGenericDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(LinkTextQualityDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+    #[test]
+    fn test_link_generic_text_without_aria_label_is_still_flagged() {
+        let mut p = make_page("https://example.com");
+        p.links = vec![make_link("read more", None, None)];
+        let f = LinkTextQualityAnalyzerV2::new().analyze(&make_ctx(&p, None));
+        assert!(!f.is_empty());
+        assert_eq!(f[0].code, "LINKTQ-V2001");
+    }
+    #[test]
+    fn test_link_empty_text_with_img_alt_is_not_flagged() {
+        let mut p = make_page("https://example.com");
+        p.links = vec![make_link("", None, Some("Home"))];
+        assert!(LinkTextQualityAnalyzerV2::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(LinkTextEmptyDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+    #[test]
+    fn test_form_labels_aria_labelledby_counts_as_label() {
+        let input = |aria_labelledby: Option<&str>| crate::parser::ExtractedInput {
+            input_type: Some("text".into()),
+            name: Some("email".into()),
+            id: None,
+            has_label: false,
+            aria_label: None,
+            aria_labelledby: aria_labelledby.map(String::from),
+            aria_describedby: None,
+            placeholder: None,
+            required: false,
+        };
+        let form = crate::parser::ExtractedForm {
+            action: None,
+            method: "post".into(),
+            input_count: 1,
+            has_file_input: false,
+            has_search_input: false,
+            inputs: vec![input(Some("hint-id"))],
+            has_fieldset: false,
+            has_legend: false,
+        };
+        let mut p = make_page("https://example.com");
+        p.forms = vec![form];
+        assert!(FormLabelsDeepDeepValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+        assert!(FormLabelsDeepDeepDeepValidator::new()
             .analyze(&make_ctx(&p, None))
             .is_empty());
     }

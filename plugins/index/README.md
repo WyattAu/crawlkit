@@ -26,6 +26,12 @@ install location: `~/.crawlkit/plugins`.
 | title-length | 1.0.0 | Flags missing and oversized `<title>` elements |
 | viewport-checker | 1.0.0 | Flags missing viewport meta tags and fixed-width viewports |
 | soft-404 | 1.0.0 | Flags error pages that were still analyzed (host context API) |
+| meta-description-checker | 1.0.0 | Flags missing, short, and overlong meta descriptions |
+| heading-structure | 1.0.0 | Flags multiple H1s, skipped heading levels, and heading-free pages |
+
+The first three plugins build from SDK examples; `meta-description-checker`
+and `heading-structure` build from standalone crates under `plugins/`.
+`scripts/build-plugin-index.sh` rebuilds and re-signs all of them.
 
 ## Maintenance
 

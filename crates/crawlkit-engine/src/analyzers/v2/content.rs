@@ -284,7 +284,9 @@ impl Analyzer for ArticleMissingDatePublishedValidatorV2 {
             }
             if sd.data.get("datePublished").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Google's Article guidelines mark datePublished as
+                    // recommended only; the schema stays valid without it.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "ARTDT-V2001".to_string(),
                     title: "Article missing datePublished".to_string(),
@@ -324,7 +326,9 @@ impl Analyzer for ArticleMissingAuthorValidatorV2 {
             }
             if sd.data.get("author").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Google's Article guidelines mark author as recommended
+                    // only; the schema stays valid without it.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "ARTAUTH-V2001".to_string(),
                     title: "Article missing author".to_string(),
@@ -562,5 +566,34 @@ mod tests {
         assert!(ArticleMissingAuthorValidatorV2::new()
             .analyze(&make_ctx(&p, None))
             .is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: Google's Article guidelines mark datePublished/author as
+    // recommended only, so missing-property findings must be Info, not Warning.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_article_date_published_missing_is_info_severity() {
+        let mut p = make_page("https://example.com/art");
+        p.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".into()),
+            r#type: Some("Article".into()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let f = ArticleMissingDatePublishedValidatorV2::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
+    }
+    #[test]
+    fn test_article_author_missing_is_info_severity() {
+        let mut p = make_page("https://example.com/art");
+        p.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".into()),
+            r#type: Some("Article".into()),
+            data: serde_json::json!({"@type": "Article"}),
+        }];
+        let f = ArticleMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
     }
 }

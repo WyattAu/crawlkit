@@ -185,6 +185,76 @@ impl GscClient {
         })
     }
 
+    /// Fetch (query, page, avg position) triples for a date range.
+    ///
+    /// Queries the analytics API with both `query` and `page`
+    /// dimensions, preserving the row-level pairing that
+    /// [`GscAnalytics`](GscAnalytics) splits apart. Useful for rank
+    /// tracking where the page that ranks for a keyword matters.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GscError`] if the API call or parsing fails.
+    pub async fn get_query_page_rows(
+        &self,
+        start_date: &str,
+        end_date: &str,
+    ) -> Result<Vec<GscQueryPageRow>, GscError> {
+        let encoded_site = urlencoding::encode(&self.site_url);
+        let url = format!(
+            "https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query"
+        );
+
+        let body = serde_json::json!({
+            "startDate": start_date,
+            "endDate": end_date,
+            "dimensions": ["query", "page"],
+            "rowLimit": 25000,
+            "startRow": 0,
+        });
+
+        let response = self
+            .http_client
+            .post(&url)
+            .bearer_auth(&self.access_token)
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| GscError::RequestFailed(e.to_string()))?;
+
+        let status = response.status();
+        if !status.is_success() {
+            let text = response.text().await.unwrap_or_default();
+            return Err(GscError::ApiError {
+                status: status.as_u16(),
+                body: text,
+            });
+        }
+
+        let data: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| GscError::ParseError(e.to_string()))?;
+
+        let rows = data["rows"].as_array().cloned().unwrap_or_default();
+
+        Ok(rows
+            .iter()
+            .filter_map(|row| {
+                let keys = row["keys"].as_array()?;
+                let query = keys.first()?.as_str()?.to_string();
+                let page = keys.get(1)?.as_str()?.to_string();
+                Some(GscQueryPageRow {
+                    query,
+                    page,
+                    clicks: row["clicks"].as_u64().unwrap_or(0),
+                    impressions: row["impressions"].as_u64().unwrap_or(0),
+                    position: row["position"].as_f64().unwrap_or(0.0),
+                })
+            })
+            .collect())
+    }
+
     /// Fetch top queries for the site.
     pub async fn top_queries(
         &self,
@@ -346,6 +416,24 @@ pub struct GscRow {
     /// Click-through rate (0.0–1.0).
     pub ctr: f64,
     /// Average position in search results.
+    pub position: f64,
+}
+
+/// A (query, page) pair with click/impression/position metrics.
+///
+/// Preserves the row-level pairing that [`GscAnalytics`] splits into
+/// separate `queries` and `pages` lists.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GscQueryPageRow {
+    /// The search query.
+    pub query: String,
+    /// The page URL that appeared for the query.
+    pub page: String,
+    /// Number of clicks.
+    pub clicks: u64,
+    /// Number of impressions.
+    pub impressions: u64,
+    /// Average position for this query/page pair.
     pub position: f64,
 }
 

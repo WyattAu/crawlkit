@@ -176,6 +176,80 @@ pub trait StorageBackend: Send + Sync {
         baseline_crawl_id: &str,
         target_crawl_id: &str,
     ) -> Result<crate::compare::CrawlDiff, StorageError>;
+
+    /// Create a rank-tracking project for `domain` and return its ID.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn add_rank_project(
+        &self,
+        _domain: &str,
+        _search_engine: &str,
+        _device: &str,
+        _locale: &str,
+    ) -> Result<String, StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// Add a keyword to a rank project and return its ID.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn add_rank_keyword(
+        &self,
+        _project_id: &str,
+        _keyword: &str,
+        _target_url: Option<&str>,
+    ) -> Result<String, StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// List all rank projects.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn list_rank_projects(&self) -> Result<Vec<crate::rank::RankProject>, StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// List keywords for a rank project.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn list_rank_keywords(
+        &self,
+        _project_id: &str,
+    ) -> Result<Vec<crate::rank::RankKeyword>, StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// Record an observed keyword position.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn record_rank_position(&self, _pos: &crate::rank::RankPosition) -> Result<(), StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// Get position history for a keyword over the trailing `days` days.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn get_rank_history(
+        &self,
+        _keyword_id: &str,
+        _days: u32,
+    ) -> Result<Vec<crate::rank::RankPosition>, StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
+
+    /// Remove a keyword and its recorded positions.
+    ///
+    /// Backends without rank-tracking support return
+    /// [`StorageError::Unsupported`].
+    fn remove_rank_keyword(&self, _id: &str) -> Result<(), StorageError> {
+        Err(StorageError::Unsupported("rank tracking".to_string()))
+    }
 }
 
 /// Create an in-memory storage backend suitable for testing.

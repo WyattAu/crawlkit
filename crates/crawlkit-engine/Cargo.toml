@@ -78,7 +78,17 @@ default = ["full"]
 full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry"]
 unstable = ["full"]
 wasm = []
-wasi-preview2 = ["wasmtime/component-model"]
+wasi-preview2 = [
+    "wasmtime/component-model",
+    "wasmtime-wasi",
+    "wasmtime-wasi-http",
+    "http",
+    "http-body",
+    "http-body-util",
+    "hyper",
+    "bytes",
+    "tracing",
+]
 postgres = ["sqlx", "tokio"]
 profiling = ["dhat"]
 observability = ["opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk"]
@@ -117,6 +127,12 @@ aes-gcm = { version = "0.10", optional = true }
 getrandom = { version = "0.2", optional = true }
 dirs = { version = "5.0", optional = true }
 wasmtime = { workspace = true, optional = true }
+wasmtime-wasi = { workspace = true, optional = true }
+wasmtime-wasi-http = { workspace = true, optional = true }
+http = { workspace = true, optional = true }
+http-body = { workspace = true, optional = true }
+http-body-util = { workspace = true, optional = true }
+hyper = { workspace = true, optional = true }
 quick-xml = { version = "0.41", optional = true }
 rayon = { version = "1", optional = true }
 libloading = { version = "0.8", optional = true }

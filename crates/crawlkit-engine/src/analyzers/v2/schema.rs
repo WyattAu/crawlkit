@@ -304,7 +304,9 @@ impl Analyzer for JobPostingValidThroughValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // validThrough is recommended (not required) by Google's
+                    // JobPosting guidelines.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "JOBVT-V5001".to_string(),
                     title: "JobPosting missing validThrough".to_string(),
@@ -746,7 +748,9 @@ impl Analyzer for EventOrganizerValidatorV5 {
                         .map_or(true, |s| s.is_empty())
                     {
                         findings.push(Finding {
-                            severity: Severity::Warning,
+                            // organizer is recommended (not required) by
+                            // Google's Event guidelines.
+                            severity: Severity::Info,
                             category: IssueCategory::Schema,
                             code: "EVTORG-V5001".to_string(),
                             title: "Event organizer missing name".to_string(),
@@ -758,7 +762,9 @@ impl Analyzer for EventOrganizerValidatorV5 {
                 }
             } else {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // organizer is recommended (not required) by Google's
+                    // Event guidelines.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "EVTORG-V5002".to_string(),
                     title: "Event missing organizer".to_string(),
@@ -1428,7 +1434,9 @@ impl Analyzer for FoodEstablishmentMissingMenuValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // hasMenu is a nice-to-have for local business listings;
+                    // no Google rich result requires it.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "FEMENU-V6005".to_string(),
                     title: "FoodEstablishment missing menu".to_string(),
@@ -1594,7 +1602,9 @@ impl Analyzer for SportsActivityLocationMissingSportValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // sport is descriptive metadata; omitting it does not
+                    // invalidate the schema or break any rich result.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "SASPORT-V6009".to_string(),
                     title: "SportsActivityLocation missing sport".to_string(),
@@ -1858,7 +1868,9 @@ impl Analyzer for SportsEventMissingSportValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // sport is descriptive metadata on a sports event;
+                    // omitting it does not invalidate the schema.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "SESPORT-V6015".to_string(),
                     title: "SportsEvent missing sport".to_string(),
@@ -2239,7 +2251,9 @@ impl Analyzer for BookMissingAuthorValidator {
             }
             if sd.data.get("author").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // author is recommended (not required) for Book; the
+                    // schema stays valid without it.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "BOOKAUTH-V6024".to_string(),
                     title: "Book missing author".to_string(),
@@ -2366,7 +2380,9 @@ impl Analyzer for MovieMissingDirectorValidator {
             }
             if sd.data.get("director").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // director is recommended (not required) for Movie; the
+                    // schema stays valid without it.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "MOVDIR-V6027".to_string(),
                     title: "Movie missing director".to_string(),
@@ -2571,7 +2587,8 @@ impl Analyzer for MusicRecordingMissingByArtistValidator {
             }
             if sd.data.get("byArtist").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // byArtist is a nice-to-have credit on a music recording.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "MUSART-V6032".to_string(),
                     title: "MusicRecording missing byArtist".to_string(),
@@ -2688,7 +2705,8 @@ impl Analyzer for ServiceMissingProviderValidator {
             }
             if sd.data.get("provider").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // provider is a nice-to-have attribution on Service.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "SVCPRV-V6035".to_string(),
                     title: "Service missing provider".to_string(),
@@ -2727,7 +2745,7 @@ impl Analyzer for HealthPlanMissingProviderValidator {
             }
             if sd.data.get("provider").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "HPPRV-V6036".to_string(),
                     title: "HealthPlan missing provider".to_string(),
@@ -2805,7 +2823,7 @@ impl Analyzer for InvoiceMissingAccountValidator {
             }
             if sd.data.get("account").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "INVACCT-V6038".to_string(),
                     title: "Invoice missing account".to_string(),
@@ -2849,7 +2867,7 @@ impl Analyzer for InvoiceMissingPaymentDueDateValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "INVPAY-V6039".to_string(),
                     title: "Invoice missing paymentDueDate".to_string(),
@@ -3815,7 +3833,7 @@ impl Analyzer for CarMissingModelValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "CARMODEL001".to_string(),
                     title: "Car missing model".to_string(),
@@ -3854,7 +3872,7 @@ impl Analyzer for CarMissingManufacturerValidator {
             }
             if sd.data.get("manufacturer").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "CARMFR001".to_string(),
                     title: "Car missing manufacturer".to_string(),
@@ -4054,7 +4072,7 @@ impl Analyzer for HealthPlanMissingHealthPlanIdValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "HPID001".to_string(),
                     title: "HealthPlan missing healthPlanId".to_string(),
@@ -4142,7 +4160,7 @@ impl Analyzer for PermitMissingValidFromValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "PERMFROM001".to_string(),
                     title: "Permit missing validFrom".to_string(),
@@ -4386,7 +4404,7 @@ impl Analyzer for WebAPIDocumentationMissingValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WAPIDOCS001".to_string(),
                     title: "WebAPI missing documentation".to_string(),
@@ -4469,7 +4487,9 @@ impl Analyzer for WebPageElementMissingAccessibleNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // WebPageElement has no dedicated rich result; an
+                    // accessible name is a nice-to-have, not a failure.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WPELACC001".to_string(),
                     title: "WebPageElement missing name".to_string(),
@@ -4508,7 +4528,8 @@ impl Analyzer for WorkerMissingOccupationValidator {
             }
             if sd.data.get("occupation").is_none() && sd.data.get("jobTitle").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // occupation/jobTitle is a nice-to-have detail on Worker.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WOCCUP001".to_string(),
                     title: "Worker missing occupation/jobTitle".to_string(),
@@ -4642,7 +4663,9 @@ impl Analyzer for DatasetMissingDistributionValidator {
             match sd.data.get("distribution") {
                 None | Some(serde_json::Value::Null) => {
                     findings.push(Finding {
-                        severity: Severity::Warning,
+                        // distribution is recommended (not required) by
+                        // Google's Dataset guidelines.
+                        severity: Severity::Info,
                         category: IssueCategory::Schema,
                         code: "DATDIST001".to_string(),
                         title: "Dataset missing distribution".to_string(),
@@ -4655,7 +4678,9 @@ impl Analyzer for DatasetMissingDistributionValidator {
                     if let Some(arr) = v.as_array() {
                         if arr.is_empty() {
                             findings.push(Finding {
-                                severity: Severity::Warning,
+                                // distribution is recommended (not required)
+                                // by Google's Dataset guidelines.
+                                severity: Severity::Info,
                                 category: IssueCategory::Schema,
                                 code: "DATDIST001".to_string(),
                                 title: "Dataset has empty distribution".to_string(),
@@ -4927,7 +4952,7 @@ impl Analyzer for CarMissingModelValidatorV2 {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "CARMODEL-V2001".to_string(),
                     title: "Car missing model".to_string(),
@@ -5050,7 +5075,7 @@ impl Analyzer for MovieMissingDirectorValidatorV2 {
             }
             if sd.data.get("director").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "MOVDIR-V2001".to_string(),
                     title: "Movie missing director".to_string(),
@@ -5089,7 +5114,7 @@ impl Analyzer for BookMissingAuthorValidatorV2 {
             }
             if sd.data.get("author").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "BOOKAUTH-V2001".to_string(),
                     title: "Book missing author".to_string(),
@@ -5206,7 +5231,7 @@ impl Analyzer for ServiceMissingProviderValidatorV2 {
             }
             if sd.data.get("provider").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "SVCPRV-V2001".to_string(),
                     title: "Service missing provider".to_string(),
@@ -5245,7 +5270,7 @@ impl Analyzer for HealthPlanMissingProviderValidatorV2 {
             }
             if sd.data.get("provider").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "HPPRV-V2001".to_string(),
                     title: "HealthPlan missing provider".to_string(),
@@ -5284,7 +5309,7 @@ impl Analyzer for InvoiceMissingAccountValidatorV2 {
             }
             if sd.data.get("accountId").is_none() && sd.data.get("account").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "INVACCT-V2001".to_string(),
                     title: "Invoice missing account".to_string(),
@@ -5324,7 +5349,7 @@ impl Analyzer for PermitMissingPermitNumberValidatorV2 {
             }
             if sd.data.get("permitNumber").is_none() && sd.data.get("identifier").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "PERMNUM-V2001".to_string(),
                     title: "Permit missing permitNumber".to_string(),
@@ -5688,7 +5713,7 @@ impl Analyzer for WorkerMissingJobTitleValidatorV2 {
             }
             if sd.data.get("jobTitle").is_none() {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WORKJOB-V2001".to_string(),
                     title: "Worker missing jobTitle".to_string(),
@@ -9003,4 +9028,74 @@ mod tests {
     }
 
     // ===== V8 Security Validators (25) tests =====
+
+    // ---------------------------------------------------------------------------
+    // Regression tests: severity calibration for missing-property findings.
+    // Rule: schema-invalid without it => Error; Google rich result breaks =>
+    // Warning; recommended / nice-to-have => Info.
+    // ---------------------------------------------------------------------------
+
+    fn one_sd(r#type: &str, data: serde_json::Value) -> crate::parser::ParsedPage {
+        let mut p = make_page("https://example.com/sd");
+        p.structured_data = vec![StructuredData {
+            context: Some("https://schema.org".into()),
+            r#type: Some(r#type.to_string()),
+            data,
+        }];
+        p
+    }
+
+    #[test]
+    fn test_jobposting_valid_through_missing_is_info() {
+        let p = one_sd("JobPosting", serde_json::json!({"@type": "JobPosting"}));
+        let f = JobPostingValidThroughValidator::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].code, "JOBVT-V5001");
+        assert_eq!(f[0].severity, Severity::Info);
+    }
+    #[test]
+    fn test_event_organizer_missing_is_info() {
+        let p = one_sd("Event", serde_json::json!({"@type": "Event"}));
+        let f = EventOrganizerValidatorV5::new().analyze(&make_ctx(&p, None));
+        assert!(!f.is_empty());
+        assert!(f.iter().all(|x| x.severity == Severity::Info));
+    }
+    #[test]
+    fn test_event_start_date_missing_stays_warning() {
+        let p = one_sd("Event", serde_json::json!({"@type": "Event"}));
+        let f = EventMissingStartDateValidator::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Warning);
+    }
+    #[test]
+    fn test_book_author_v8_missing_is_info() {
+        let p = one_sd("Book", serde_json::json!({"@type": "Book"}));
+        let f = BookMissingAuthorValidatorV2::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
+    }
+    #[test]
+    fn test_movie_director_v8_missing_is_info() {
+        let p = one_sd("Movie", serde_json::json!({"@type": "Movie"}));
+        let f = MovieMissingDirectorValidatorV2::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
+    }
+    #[test]
+    fn test_dataset_distribution_missing_is_info_but_description_warning() {
+        let p = one_sd("Dataset", serde_json::json!({"@type": "Dataset"}));
+        let dist = DatasetMissingDistributionValidator::new().analyze(&make_ctx(&p, None));
+        assert!(!dist.is_empty());
+        assert!(dist.iter().all(|x| x.severity == Severity::Info));
+        let desc = DatasetMissingDescriptionValidator::new().analyze(&make_ctx(&p, None));
+        assert_eq!(desc.len(), 1);
+        assert_eq!(desc[0].severity, Severity::Warning);
+    }
+    #[test]
+    fn test_worker_job_title_v8_missing_is_info() {
+        let p = one_sd("Worker", serde_json::json!({"@type": "Worker"}));
+        let f = WorkerMissingJobTitleValidatorV2::new().analyze(&make_ctx(&p, None));
+        assert_eq!(f.len(), 1);
+        assert_eq!(f[0].severity, Severity::Info);
+    }
 }

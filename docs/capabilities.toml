@@ -218,4 +218,4 @@ evidence = [
   "crates/crawlkit-engine/src/plugin/mod.rs",
 ]
 requirements = ["wasi-preview2 feature"]
-notes = "Component-model loading and analysis invocation are implemented; WASI CLI command and HTTP outcall gates are planned pending the wasmtime-wasi crate."
+notes = "Component-model loading, analysis invocation, WASI CLI (bounded stdout/stderr capture, no fs/env/sockets) and HTTP outcalls (deny-by-default capability, SSRF-validated, 10s timeouts, 1 MiB response cap, no redirects) are implemented via wasmtime-wasi/wasmtime-wasi-http v47."

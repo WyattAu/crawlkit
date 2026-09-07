@@ -1,5 +1,6 @@
 [workspace]
 members = ["crates/*"]
+exclude = ["plugins"]
 resolver = "2"
 
 [workspace.lints.rust]
@@ -53,7 +54,12 @@ toml = "0.8"
 dashmap = "6"
 parking_lot = "0.12"
 wasmtime = "47"
-wasmtime-wasi = "47"
+wasmtime-wasi = { version = "47", default-features = false, features = ["p2"] }
+wasmtime-wasi-http = { version = "47", default-features = false, features = ["p2", "default-send-request"] }
+http = "1"
+http-body = "1"
+http-body-util = "0.1"
+hyper = { version = "1", default-features = false }
 scraper = "0.22"
 ego-tree = "0.10"
 csv = "1"

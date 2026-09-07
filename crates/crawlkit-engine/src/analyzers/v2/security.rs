@@ -19,6 +19,31 @@
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
+/// Count insecure `http://` references in element attribute values.
+///
+/// Only attribute values (`src`/`href`/`action`/...) of elements matching
+/// `selector` are inspected. Matching the raw body text would also hit
+/// `http://` inside code samples, documentation, and comments — a common
+/// false positive on HTTPS pages.
+fn count_insecure_attr_refs(body: &str, selector: &str, attrs: &[&str]) -> usize {
+    let Ok(sel) = scraper::Selector::parse(selector) else {
+        return 0;
+    };
+    let doc = scraper::Html::parse_document(body);
+    doc.select(&sel)
+        .map(|el| el.value())
+        .map(|el| {
+            attrs
+                .iter()
+                .filter(|attr| {
+                    el.attr(attr)
+                        .is_some_and(|v| v.trim_start().to_lowercase().starts_with("http://"))
+                })
+                .count()
+        })
+        .sum()
+}
+
 pub struct CspDirectiveAnalyzerV2;
 impl Default for CspDirectiveAnalyzerV2 {
     fn default() -> Self {
@@ -255,8 +280,11 @@ impl Analyzer for MixedContentDetectionAnalyzerV2 {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_count = lower.matches("http://").count();
+            let http_count = count_insecure_attr_refs(
+                body,
+                "[src], [href], [action]",
+                &["src", "href", "action"],
+            );
             if http_count > 5 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -268,7 +296,8 @@ impl Analyzer for MixedContentDetectionAnalyzerV2 {
                     recommendation: "Change all URLs to HTTPS.".to_string(),
                 });
             }
-            if !lower.contains("upgrade-insecure-requests") && http_count > 0 {
+            let upgrade_hint = body.to_lowercase().contains("upgrade-insecure-requests");
+            if !upgrade_hint && http_count > 0 {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
@@ -1897,11 +1926,7 @@ impl Analyzer for MixedContentIframeValidator {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_iframes = lower
-                .matches("<iframe")
-                .filter(|_| body.to_lowercase().contains("http://"))
-                .count();
+            let http_iframes = count_insecure_attr_refs(body, "iframe", &["src"]);
             if http_iframes > 0 {
                 findings.push(Finding {
                     severity: Severity::Critical,
@@ -3072,10 +3097,8 @@ impl Analyzer for MixedContentIframeDeepValidator {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_iframe_count = lower.matches("<iframe").count();
-            let http_in_iframes = body.matches("http://").count();
-            if http_iframe_count > 0 && http_in_iframes > 0 {
+            let http_iframe_count = count_insecure_attr_refs(body, "iframe", &["src"]);
+            if http_iframe_count > 0 {
                 findings.push(Finding {
                     severity: Severity::Critical,
                     category: IssueCategory::Security,
@@ -4109,10 +4132,8 @@ impl Analyzer for MixedContentIframeDeepDeepValidator {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_iframe_count = lower.matches("<iframe").count();
-            let http_in_iframes = lower.matches("http://").count();
-            if http_iframe_count > 0 && http_in_iframes > 0 {
+            let http_iframe_count = count_insecure_attr_refs(body, "iframe", &["src"]);
+            if http_iframe_count > 0 {
                 findings.push(Finding { severity: Severity::Critical, category: IssueCategory::Security, code: "MIXIFRAME-V2001".to_string(), title: "Mixed content in iframes (deep-deep)".to_string(), description: format!("Found {http_iframe_count} iframe(s) with HTTP resources on HTTPS page in deep analysis."), url: url.clone(), recommendation: "Change all iframe sources to HTTPS.".to_string() });
             }
         }
@@ -5808,6 +5829,99 @@ mod tests {
         assert!(MixedContentIframeDeepValidator::new()
             .analyze(&ctx)
             .is_empty());
+    }
+    // ---------------------------------------------------------------------------
+    // Regression: mixed-content checks must only look at resource attribute
+    // values (src/href/action), never at raw body text. `http://` inside code
+    // samples, comments, or scripts on an HTTPS page used to be flagged.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_mixed_iframe_http_in_text_only_is_not_flagged() {
+        let p = make_page("https://example.com");
+        // Secure iframe; `http://` appears only in text, a comment, and
+        // inline script — none of which are mixed content.
+        let body = r#"<html><body>
+            <!-- docs: curl http://old-api.example.com -->
+            <script>var legacy = "http://legacy.example.com";</script>
+            <iframe src="https://safe.com/frame"></iframe>
+            <pre>fetch("http://example.com/legacy")</pre>
+            <p>See http://example.com for details.</p>
+        </body></html>"#;
+        let ctx = AnalysisContext {
+            page: &p,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        assert!(MixedContentIframeValidator::new().analyze(&ctx).is_empty());
+        assert!(MixedContentIframeDeepValidator::new()
+            .analyze(&ctx)
+            .is_empty());
+        assert!(MixedContentIframeDeepDeepValidator::new()
+            .analyze(&ctx)
+            .is_empty());
+    }
+    #[test]
+    fn test_mixed_iframe_v6_detects_insecure_src() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body><iframe src="http://evil.com/frame"></iframe></body></html>"#;
+        let ctx = AnalysisContext {
+            page: &p,
+            body: Some(body),
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            body_size: None,
+            compressed_size: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let f = MixedContentIframeValidator::new().analyze(&ctx);
+        assert!(!f.is_empty());
+        assert_eq!(f[0].code, "MIXIFRAME-V6068");
+    }
+    #[test]
+    fn test_mixed_iframe_dd_v8_ignores_text_urls() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body>
+            <script>var u = "http://example.com";</script>
+            <iframe src="https://safe.com"></iframe>
+        </body></html>"#;
+        let f = MixedContentIframeDeepDeepValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.is_empty());
+    }
+    #[test]
+    fn test_mixed_content_v2_ignores_text_urls() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body>
+            <pre>http://a.example.com http://b.example.com http://c.example.com</pre>
+            <p>Docs at http://d.example.com http://e.example.com http://f.example.com</p>
+        </body></html>"#;
+        let f = MixedContentDetectionAnalyzerV2::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.is_empty());
+    }
+    #[test]
+    fn test_mixed_content_v2_counts_resource_attrs() {
+        let p = make_page("https://example.com");
+        let mut body = String::from("<html><body>");
+        for i in 0..6 {
+            body.push_str(&format!(r#"<img src="http://img{i}.example.com/x.png">"#));
+        }
+        body.push_str("</body></html>");
+        let f = MixedContentDetectionAnalyzerV2::new().analyze(&make_ctx(&p, Some(&body)));
+        assert!(!f.is_empty());
+        assert_eq!(f[0].code, "MIXCONT-V2001");
     }
     #[test]
     fn test_cors_wildcard_deep() {

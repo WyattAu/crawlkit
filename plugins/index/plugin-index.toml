@@ -36,3 +36,29 @@ wasm_path = "artifacts/soft-404-1.0.0.wasm"
 wasm_hash = "506a644e8bbc5deabe7e3e776d1a515d067dca37fb02b291761039eceb850666"
 signature = "f1130ca56d5607afb64343d5f5095299e6a2ace9dabdba854eff8c52fa6cca4f6f0cbf51c783fa5ab1b28bca8e2d1306d0840ad48b6289042a5206f0c176e10c"
 signed_by = "12a7a8db5aabb20b"
+
+[[plugin]]
+name = "meta-description-checker"
+version = "1.0.0"
+api_version = "1.0"
+author = "crawlkit"
+description = "Flags missing, short, and overlong meta descriptions"
+license = "Apache-2.0"
+categories = ["seo"]
+wasm_path = "artifacts/meta-description-checker-1.0.0.wasm"
+wasm_hash = "505407a8381bda7bb9480bc294f344e105258fc36992e7b25e674ea655c2aad5"
+signature = "6afb3d589c6bb684bd64a463a98bbeb3b34883667222134c22b6ace394349ff6bae4510504cc8e9622aec5643c769df4a3412d4d3838c3181c6d399053ba4204"
+signed_by = "12a7a8db5aabb20b"
+
+[[plugin]]
+name = "heading-structure"
+version = "1.0.0"
+api_version = "1.0"
+author = "crawlkit"
+description = "Flags multiple H1s, skipped heading levels, and heading-free pages"
+license = "Apache-2.0"
+categories = ["structure"]
+wasm_path = "artifacts/heading-structure-1.0.0.wasm"
+wasm_hash = "4ccf36c1b3fa931a3f9e5ecc1f054dc8be7ccca150919e81629ab83cc02c4289"
+signature = "fa3ab5184f4b3512b05b745ab1d0f45cc7b91a36fe09dd531a4b930f7357dd4ba0eb3d8a35788d112edbc72f4d70bd0c94fcd7ae0d270c0907b28e5758ea2a02"
+signed_by = "12a7a8db5aabb20b"

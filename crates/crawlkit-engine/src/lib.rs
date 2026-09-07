@@ -211,6 +211,13 @@ pub mod post_crawl;
 /// and analyzes ranking positions and changes.
 #[cfg(feature = "full")]
 pub mod query_tracker;
+/// Keyword rank tracking across search engines.
+///
+/// Pluggable [`SerpProvider`](rank::SerpProvider) abstraction with
+/// DuckDuckGo (HTML scrape) and Google Search Console backends,
+/// position history storage, and trend analysis.
+#[cfg(feature = "full")]
+pub mod rank;
 /// SSRF (Server-Side Request Forgery) validation for URLs.
 ///
 /// Shared validation used by both the plugin network guard and the API
@@ -413,7 +420,7 @@ pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
 #[cfg(feature = "full")]
-pub use gsc::{GscAnalytics, GscClient, GscError, GscRow, UrlInspection};
+pub use gsc::{GscAnalytics, GscClient, GscError, GscQueryPageRow, GscRow, UrlInspection};
 #[cfg(feature = "full")]
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};
 #[cfg(feature = "full")]
@@ -422,6 +429,13 @@ pub use js_render_decision::{JsRenderDecision, JsRenderDecisionEngine, SpaIndica
 pub use trends::{
     analyze_trends, compute_health_score, trend_to_json, trend_to_markdown, CrawlSnapshot,
     TrendAnalysis, TrendDirection, TrendError, TrendPoint, TrendSummary,
+};
+
+#[cfg(feature = "full")]
+pub use rank::{
+    host_of, url_matches_target, DuckDuckGoProvider, GscSerpProvider, OrganicResult, RankError,
+    RankKeyword, RankPosition, RankProject, RankSnapshot, RankTracker, RankTrend,
+    RankTrendDirection, SerpProvider,
 };
 
 #[cfg(feature = "full")]

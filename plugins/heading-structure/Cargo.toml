@@ -1,0 +1,30 @@
+[package]
+name = "heading-structure"
+version = "1.0.0"
+edition = "2021"
+rust-version = "1.94.0"
+authors = ["Wyatt Au"]
+license = "Apache-2.0"
+description = "crawlkit WASM plugin: flags broken heading hierarchies (multiple H1, skipped levels)"
+repository = "https://github.com/WyattAu/crawlkit"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[lints.rust]
+unsafe_code = "allow" # export_analyzer! emits the raw WASM ABI surface
+
+[lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+exit = "deny"
+modulo_arithmetic = "warn"
+redundant_clone = "warn"
+unused_async = "warn"
+if_not_else = "warn"
+
+[dependencies]
+crawlkit-plugin-sdk = { path = "../../crates/crawlkit-plugin-sdk" }
+serde_json = "1"

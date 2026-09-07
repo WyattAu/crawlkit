@@ -29,6 +29,20 @@ fn seed(hex: &str) -> [u8; 32] {
         .unwrap()
 }
 
+/// True if the wasm32-unknown-unknown target is installed.
+fn wasm32_target_available() -> bool {
+    let installed = std::process::Command::new("rustup")
+        .args(["target", "list", "--installed"])
+        .output()
+        .ok();
+    let Some(output) = installed else {
+        return false;
+    };
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .any(|l| l.starts_with("wasm32-unknown-unknown"))
+}
+
 /// Build an SDK example to wasm32 (same pattern as the wasm_abi_tests
 /// conformance suite; skipped if the target is missing).
 fn build_example(target_dir: &std::path::Path, example: &str) -> Option<std::path::PathBuf> {
@@ -39,14 +53,7 @@ fn build_example(target_dir: &std::path::Path, example: &str) -> Option<std::pat
         .unwrap()
         .to_path_buf();
 
-    let installed = std::process::Command::new("rustup")
-        .args(["target", "list", "--installed"])
-        .output()
-        .ok()?;
-    if !String::from_utf8_lossy(&installed.stdout)
-        .lines()
-        .any(|l| l.starts_with("wasm32-unknown-unknown"))
-    {
+    if !wasm32_target_available() {
         return None;
     }
 
@@ -75,6 +82,54 @@ fn build_example(target_dir: &std::path::Path, example: &str) -> Option<std::pat
             .join("examples")
             .join(format!("{example}.wasm")),
     )
+}
+
+/// Build a standalone first-party plugin crate (`plugins/<name>`) to
+/// wasm32 (skipped if the target is missing, like `build_example`).
+fn build_plugin_crate(
+    target_dir: &std::path::Path,
+    name: &str,
+    release: bool,
+) -> Option<std::path::PathBuf> {
+    let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap();
+    let workspace_root = std::path::Path::new(&manifest_dir)
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_path_buf();
+
+    if !wasm32_target_available() {
+        return None;
+    }
+
+    let manifest = workspace_root.join("plugins").join(name).join("Cargo.toml");
+    let mut command = std::process::Command::new("cargo");
+    command
+        .current_dir(&workspace_root)
+        .args(["build", "--manifest-path"])
+        .arg(&manifest)
+        .args(["--target", "wasm32-unknown-unknown", "--target-dir"])
+        .arg(target_dir);
+    if release {
+        command.arg("--release");
+    }
+    let status = command.status().ok()?;
+    if !status.success() {
+        return None;
+    }
+
+    let profile = if release { "release" } else { "debug" };
+    let profile_dir = target_dir.join("wasm32-unknown-unknown").join(profile);
+    let exact = profile_dir.join(format!("{}.wasm", name.replace('-', "_")));
+    if exact.exists() {
+        return Some(exact);
+    }
+    // Defensive fallback: first .wasm artifact in the profile dir.
+    std::fs::read_dir(&profile_dir)
+        .ok()?
+        .flatten()
+        .map(|entry| entry.path())
+        .find(|path| path.extension().is_some_and(|ext| ext == "wasm"))
 }
 
 /// Build the SDK basic-plugin example to wasm32.
@@ -301,6 +356,14 @@ fn artifact_source_resolution_matrix() {
     );
 }
 
+/// Where a first-party plugin's wasm artifact comes from: an SDK example
+/// target, or a standalone plugin crate under `plugins/`.
+#[derive(Clone, Copy)]
+enum PluginSource {
+    Example(&'static str),
+    Crate(&'static str),
+}
+
 /// Builds and signs the first-party plugin index into
 /// `$FIRST_PARTY_INDEX_DIR` (repository path: plugins/index). Artifacts
 /// are release-built wasm32 and signed with the trusted dev key.
@@ -315,28 +378,42 @@ fn dump_first_party_index() {
     let dir = std::env::var("FIRST_PARTY_INDEX_DIR").expect("FIRST_PARTY_INDEX_DIR not set");
     let tmp = tempfile::tempdir().unwrap();
 
-    // (example name, published name, version, description, categories)
-    let specs: &[(&str, &str, &str, &str, &str)] = &[
+    // (source, published name, version, description, categories)
+    let specs: &[(PluginSource, &str, &str, &str, &str)] = &[
         (
-            "basic-plugin",
+            PluginSource::Example("basic-plugin"),
             "title-length",
             "1.0.0",
             "Flags missing and oversized <title> elements",
             "seo",
         ),
         (
-            "viewport-checker",
+            PluginSource::Example("viewport-checker"),
             "viewport-checker",
             "1.0.0",
             "Flags missing viewport meta tags and fixed-width viewports",
             "mobile",
         ),
         (
-            "soft-404",
+            PluginSource::Example("soft-404"),
             "soft-404",
             "1.0.0",
             "Flags error pages that were still analyzed (host context API)",
             "seo",
+        ),
+        (
+            PluginSource::Crate("meta-description-checker"),
+            "meta-description-checker",
+            "1.0.0",
+            "Flags missing, short, and overlong meta descriptions",
+            "seo",
+        ),
+        (
+            PluginSource::Crate("heading-structure"),
+            "heading-structure",
+            "1.0.0",
+            "Flags multiple H1s, skipped heading levels, and heading-free pages",
+            "structure",
         ),
     ];
 
@@ -344,38 +421,46 @@ fn dump_first_party_index() {
     std::fs::create_dir_all(dest.join("artifacts")).unwrap();
 
     let mut index = String::new();
-    for (example, name, version, description, category) in specs {
-        let target_dir = tmp.path().join(*example);
-        let built = build_example(&target_dir, example).expect("wasm32 build");
-        // Rebuild in release profile for the published artifact.
-        let workspace_root =
-            std::path::Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str())
-                .ancestors()
-                .nth(2)
-                .unwrap()
-                .to_path_buf();
-        let status = std::process::Command::new("cargo")
-            .current_dir(&workspace_root)
-            .args([
-                "build",
-                "-p",
-                "crawlkit-plugin-sdk",
-                "--release",
-                "--example",
-                example,
-                "--target",
-                "wasm32-unknown-unknown",
-                "--target-dir",
-            ])
-            .arg(&target_dir)
-            .status()
-            .unwrap();
-        assert!(status.success(), "release build failed for {example}");
-        let release_wasm = target_dir
-            .join("wasm32-unknown-unknown")
-            .join("release")
-            .join("examples")
-            .join(format!("{example}.wasm"));
+    for (source, name, version, description, category) in specs {
+        let target_dir = tmp.path().join(*name);
+        let release_wasm = match *source {
+            PluginSource::Example(example) => {
+                let built = build_example(&target_dir, example).expect("wasm32 build");
+                // Rebuild in release profile for the published artifact.
+                let workspace_root =
+                    std::path::Path::new(std::env::var("CARGO_MANIFEST_DIR").unwrap().as_str())
+                        .ancestors()
+                        .nth(2)
+                        .unwrap()
+                        .to_path_buf();
+                let status = std::process::Command::new("cargo")
+                    .current_dir(&workspace_root)
+                    .args([
+                        "build",
+                        "-p",
+                        "crawlkit-plugin-sdk",
+                        "--release",
+                        "--example",
+                        example,
+                        "--target",
+                        "wasm32-unknown-unknown",
+                        "--target-dir",
+                    ])
+                    .arg(&target_dir)
+                    .status()
+                    .unwrap();
+                assert!(status.success(), "release build failed for {example}");
+                let _ = built;
+                target_dir
+                    .join("wasm32-unknown-unknown")
+                    .join("release")
+                    .join("examples")
+                    .join(format!("{example}.wasm"))
+            }
+            PluginSource::Crate(crate_name) => {
+                build_plugin_crate(&target_dir, crate_name, true).expect("wasm32 build")
+            }
+        };
         let wasm_bytes = std::fs::read(&release_wasm).unwrap();
         let (wasm_hash, signature, signed_by) =
             sign_plugin_wasm(&wasm_bytes, &seed(TRUSTED_SEED_HEX));
@@ -397,7 +482,6 @@ fn dump_first_party_index() {
              signed_by = \"{signed_by}\"\n\n"
         ));
         println!("signed {name} {version}: {wasm_hash}");
-        let _ = built;
     }
     std::fs::write(
         dest.join("plugin-index.toml"),
@@ -565,4 +649,96 @@ fn soft404_plugin_uses_host_context_end_to_end() {
         .analyze("<html>whatever</html>", "https://example.com")
         .unwrap();
     assert_eq!(r, "[]", "no context must degrade cleanly: {r}");
+}
+
+/// Materialize a minimal signed manifest fixture for `wasm_bytes` and
+/// load it under the default Required policy.
+fn load_signed_plugin(dir: &std::path::Path, name: &str, wasm_bytes: &[u8]) -> WasmPlugin {
+    let (wasm_hash, signature, signed_by) = sign_plugin_wasm(wasm_bytes, &seed(TRUSTED_SEED_HEX));
+    let plugin_dir = dir.join(name);
+    std::fs::create_dir_all(&plugin_dir).unwrap();
+    std::fs::write(plugin_dir.join("plugin.wasm"), wasm_bytes).unwrap();
+    std::fs::write(
+        plugin_dir.join("crawlkit-plugin.toml"),
+        format!(
+            "[plugin]\nname = \"{name}\"\nversion = \"1.0.0\"\napi_version = \"1.0\"\nauthor = \"test\"\ndescription = \"functional fixture\"\nlicense = \"Apache-2.0\"\nwasm_hash = \"{wasm_hash}\"\nsignature = \"{signature}\"\nsigned_by = \"{signed_by}\"\n\n[plugin.entry]\nwasm = \"plugin.wasm\"\n\n[plugin.analyzer]\nname = \"{name}\"\ncategories = [\"functional\"]\n"
+        ),
+    )
+    .unwrap();
+    WasmPlugin::load(&plugin_dir).expect("load under Required policy")
+}
+
+/// Functional check of the meta-description-checker first-party plugin:
+/// META001 (missing), META002 (short), META003 (overlong), and clean for
+/// an in-range description, through the real host ABI.
+#[test]
+fn meta_description_plugin_functional() {
+    let target_dir = std::env::temp_dir().join("crawlkit-meta-desc-test");
+    let Some(wasm_path) = build_plugin_crate(&target_dir, "meta-description-checker", false) else {
+        eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+        return;
+    };
+    let wasm_bytes = std::fs::read(&wasm_path).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut plugin = load_signed_plugin(dir.path(), "meta-description-checker", &wasm_bytes);
+
+    let missing = "<html><head><title>x</title></head><body></body></html>";
+    let r = plugin.analyze(missing, "https://example.com").unwrap();
+    assert!(r.contains("META001"), "missing must fire META001: {r}");
+    assert!(r.contains("\"error\""), "missing must be an error: {r}");
+
+    let short = format!("<meta name=\"description\" content=\"{}\">", "a".repeat(50));
+    let r = plugin.analyze(&short, "https://example.com").unwrap();
+    assert!(r.contains("META002"), "short must fire META002: {r}");
+
+    let long = format!(
+        "<meta name=\"description\" content=\"{}\">",
+        "a".repeat(200)
+    );
+    let r = plugin.analyze(&long, "https://example.com").unwrap();
+    assert!(r.contains("META003"), "overlong must fire META003: {r}");
+
+    let good = format!(
+        "<meta name=\"description\" content=\"{}\">",
+        "a".repeat(100)
+    );
+    let r = plugin.analyze(&good, "https://example.com").unwrap();
+    assert_eq!(r, "[]", "in-range description must be clean: {r}");
+}
+
+/// Functional check of the heading-structure first-party plugin:
+/// HEAD001 (multiple H1), HEAD002 (skipped level), HEAD003 (no
+/// headings), and clean for a consecutive outline, through the real
+/// host ABI.
+#[test]
+fn heading_structure_plugin_functional() {
+    let target_dir = std::env::temp_dir().join("crawlkit-heading-test");
+    let Some(wasm_path) = build_plugin_crate(&target_dir, "heading-structure", false) else {
+        eprintln!("skipping: wasm32-unknown-unknown build unavailable");
+        return;
+    };
+    let wasm_bytes = std::fs::read(&wasm_path).unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let mut plugin = load_signed_plugin(dir.path(), "heading-structure", &wasm_bytes);
+
+    let multiple_h1 = "<html><body><h1>A</h1><h2>B</h2><h1>C</h1></body></html>";
+    let r = plugin.analyze(multiple_h1, "https://example.com").unwrap();
+    assert!(r.contains("HEAD001"), "multiple H1 must fire HEAD001: {r}");
+
+    let skipped = "<html><body><h1>A</h1><h3>B</h3></body></html>";
+    let r = plugin.analyze(skipped, "https://example.com").unwrap();
+    assert!(
+        r.contains("HEAD002"),
+        "skipped level must fire HEAD002: {r}"
+    );
+    assert!(r.contains("\"warning\""), "skip must be a warning: {r}");
+
+    let no_headings = "<html><body><p>Plain text</p></body></html>";
+    let r = plugin.analyze(no_headings, "https://example.com").unwrap();
+    assert!(r.contains("HEAD003"), "no headings must fire HEAD003: {r}");
+    assert!(r.contains("\"info\""), "no headings must be info: {r}");
+
+    let clean = "<html><body><h1>A</h1><h2>B</h2><h3>C</h3></body></html>";
+    let r = plugin.analyze(clean, "https://example.com").unwrap();
+    assert_eq!(r, "[]", "consecutive outline must be clean: {r}");
 }

@@ -233,6 +233,8 @@ async fn main() -> Result<()> {
             )
             .await
         }
+        #[cfg(feature = "full")]
+        Commands::Rank { command } => cli::rank::run(command).await,
     }
 }
 

@@ -22,6 +22,14 @@ pub enum StorageError {
     #[error("invalid URL in database: {0}")]
     InvalidUrl(#[from] url::ParseError),
 
+    /// The operation is not supported by this storage backend.
+    #[error("operation not supported by this backend: {0}")]
+    Unsupported(String),
+
+    /// A stored timestamp could not be parsed.
+    #[error("invalid timestamp in database: {0}")]
+    InvalidTimestamp(String),
+
     /// PostgreSQL database error.
     #[cfg(feature = "postgres")]
     #[error("postgresql error: {0}")]
@@ -470,6 +478,48 @@ impl Storage {
                 UNIQUE(page_id)
             );
 
+            CREATE TABLE IF NOT EXISTS rank_projects (
+                id            TEXT PRIMARY KEY,
+                domain        TEXT NOT NULL,
+                search_engine TEXT NOT NULL DEFAULT 'duckduckgo',
+                device        TEXT NOT NULL DEFAULT 'desktop',
+                locale        TEXT NOT NULL DEFAULT 'en-US',
+                created_at    DATETIME NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS rank_keywords (
+                id              TEXT PRIMARY KEY,
+                project_id      TEXT NOT NULL REFERENCES rank_projects(id),
+                keyword         TEXT NOT NULL,
+                target_url      TEXT,
+                enabled         BOOLEAN NOT NULL DEFAULT 1,
+                last_checked_at DATETIME,
+                created_at      DATETIME NOT NULL,
+                UNIQUE(project_id, keyword)
+            );
+
+            CREATE TABLE IF NOT EXISTS rank_positions (
+                id         TEXT PRIMARY KEY,
+                keyword_id TEXT NOT NULL REFERENCES rank_keywords(id),
+                checked_at DATETIME NOT NULL,
+                position   INTEGER,
+                url        TEXT,
+                title      TEXT,
+                source     TEXT NOT NULL,
+                UNIQUE(keyword_id, checked_at, source)
+            );
+
+            CREATE TABLE IF NOT EXISTS query_positions (
+                query      TEXT NOT NULL,
+                date       TEXT NOT NULL,
+                source     TEXT NOT NULL,
+                clicks     INTEGER NOT NULL DEFAULT 0,
+                impressions INTEGER NOT NULL DEFAULT 0,
+                position   REAL NOT NULL DEFAULT 0,
+                ctr        REAL NOT NULL DEFAULT 0,
+                PRIMARY KEY (query, date, source)
+            );
+
             CREATE INDEX IF NOT EXISTS idx_pages_crawl ON pages(crawl_id);
             CREATE INDEX IF NOT EXISTS idx_pages_tenant ON pages(tenant_id);
             CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_url);
@@ -478,6 +528,8 @@ impl Storage {
             CREATE INDEX IF NOT EXISTS idx_findings_category ON findings(category);
             CREATE INDEX IF NOT EXISTS idx_findings_severity ON findings(severity);
             CREATE INDEX IF NOT EXISTS idx_findings_tenant ON findings(tenant_id);
+            CREATE INDEX IF NOT EXISTS idx_rank_keywords_project ON rank_keywords(project_id);
+            CREATE INDEX IF NOT EXISTS idx_rank_positions_keyword ON rank_positions(keyword_id, checked_at);
             ",
         )?;
 
@@ -1588,6 +1640,195 @@ impl Storage {
     }
 }
 
+impl Storage {
+    /// Create a new rank-tracking project and return its ID.
+    ///
+    /// Part of the rank tracker storage API; see [`crate::rank`].
+    pub fn add_rank_project(
+        &self,
+        domain: &str,
+        search_engine: &str,
+        device: &str,
+        locale: &str,
+    ) -> Result<String, StorageError> {
+        let id = uuid::Uuid::new_v4().to_string();
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO rank_projects (id, domain, search_engine, device, locale, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                id,
+                domain,
+                search_engine,
+                device,
+                locale,
+                Utc::now().to_rfc3339()
+            ],
+        )?;
+        Ok(id)
+    }
+
+    /// Add a keyword to a rank project and return its ID.
+    ///
+    /// Adding the same `(project_id, keyword)` pair twice is idempotent:
+    /// the existing keyword's ID is returned and no row changes.
+    pub fn add_rank_keyword(
+        &self,
+        project_id: &str,
+        keyword: &str,
+        target_url: Option<&str>,
+    ) -> Result<String, StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+        "INSERT OR IGNORE INTO rank_keywords (id, project_id, keyword, target_url, enabled, created_at)
+         VALUES (?1, ?2, ?3, ?4, 1, ?5)",
+        params![
+            uuid::Uuid::new_v4().to_string(),
+            project_id,
+            keyword,
+            target_url,
+            Utc::now().to_rfc3339()
+        ],
+    )?;
+        let id: String = conn.query_row(
+            "SELECT id FROM rank_keywords WHERE project_id = ?1 AND keyword = ?2",
+            params![project_id, keyword],
+            |row| row.get(0),
+        )?;
+        Ok(id)
+    }
+
+    /// List all rank projects, oldest first.
+    pub fn list_rank_projects(&self) -> Result<Vec<crate::rank::RankProject>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, domain, search_engine, device, locale
+         FROM rank_projects ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(crate::rank::RankProject {
+                id: row.get(0)?,
+                domain: row.get(1)?,
+                search_engine: row.get(2)?,
+                device: row.get(3)?,
+                locale: row.get(4)?,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// List keywords for a rank project, oldest first.
+    pub fn list_rank_keywords(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<crate::rank::RankKeyword>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT id, project_id, keyword, target_url, enabled
+         FROM rank_keywords WHERE project_id = ?1 ORDER BY created_at ASC",
+        )?;
+        let rows = stmt.query_map(params![project_id], |row| {
+            Ok(crate::rank::RankKeyword {
+                id: row.get(0)?,
+                project_id: row.get(1)?,
+                keyword: row.get(2)?,
+                target_url: row.get(3)?,
+                enabled: row.get::<_, Option<i64>>(4)?.unwrap_or(1) != 0,
+            })
+        })?;
+        Ok(rows.collect::<Result<Vec<_>, _>>()?)
+    }
+
+    /// Record an observed keyword position and stamp the keyword as checked.
+    pub fn record_rank_position(
+        &self,
+        pos: &crate::rank::RankPosition,
+    ) -> Result<(), StorageError> {
+        let checked_at = pos.checked_at.to_rfc3339();
+        let conn = self.conn.lock();
+        conn.execute(
+        "INSERT OR REPLACE INTO rank_positions (id, keyword_id, checked_at, position, url, title, source)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![
+            uuid::Uuid::new_v4().to_string(),
+            pos.keyword_id,
+            checked_at,
+            pos.position.map(i64::from),
+            pos.url,
+            pos.title,
+            pos.source,
+        ],
+    )?;
+        conn.execute(
+            "UPDATE rank_keywords SET last_checked_at = ?1 WHERE id = ?2",
+            params![checked_at, pos.keyword_id],
+        )?;
+        Ok(())
+    }
+
+    /// Get position history for a keyword over the trailing `days` days,
+    /// oldest first.
+    pub fn get_rank_history(
+        &self,
+        keyword_id: &str,
+        days: u32,
+    ) -> Result<Vec<crate::rank::RankPosition>, StorageError> {
+        let cutoff = (Utc::now() - chrono::Duration::days(i64::from(days))).to_rfc3339();
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT keyword_id, checked_at, position, url, title, source
+         FROM rank_positions
+         WHERE keyword_id = ?1 AND checked_at >= ?2
+         ORDER BY checked_at ASC",
+        )?;
+        let rows: Vec<(
+            String,
+            String,
+            Option<i64>,
+            Option<String>,
+            Option<String>,
+            String,
+        )> = stmt
+            .query_map(params![keyword_id, cutoff], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, Option<i64>>(2)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, String>(5)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        rows.into_iter()
+            .map(|(keyword_id, checked_at, position, url, title, source)| {
+                Ok(crate::rank::RankPosition {
+                    keyword_id,
+                    checked_at: DateTime::parse_from_rfc3339(&checked_at)
+                        .map_err(|e| StorageError::InvalidTimestamp(e.to_string()))?
+                        .with_timezone(&Utc),
+                    position: position.map(|v| v as u16),
+                    url,
+                    title,
+                    source,
+                })
+            })
+            .collect()
+    }
+
+    /// Remove a keyword and its recorded positions.
+    pub fn remove_rank_keyword(&self, id: &str) -> Result<(), StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "DELETE FROM rank_positions WHERE keyword_id = ?1",
+            params![id],
+        )?;
+        conn.execute("DELETE FROM rank_keywords WHERE id = ?1", params![id])?;
+        Ok(())
+    }
+}
+
 /// CrUX metrics for a single page.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CruxMetrics {
@@ -1600,6 +1841,52 @@ pub struct CruxMetrics {
 }
 
 impl crate::storage_trait::StorageBackend for Storage {
+    fn add_rank_project(
+        &self,
+        domain: &str,
+        search_engine: &str,
+        device: &str,
+        locale: &str,
+    ) -> Result<String, StorageError> {
+        Storage::add_rank_project(self, domain, search_engine, device, locale)
+    }
+
+    fn add_rank_keyword(
+        &self,
+        project_id: &str,
+        keyword: &str,
+        target_url: Option<&str>,
+    ) -> Result<String, StorageError> {
+        Storage::add_rank_keyword(self, project_id, keyword, target_url)
+    }
+
+    fn list_rank_projects(&self) -> Result<Vec<crate::rank::RankProject>, StorageError> {
+        Storage::list_rank_projects(self)
+    }
+
+    fn list_rank_keywords(
+        &self,
+        project_id: &str,
+    ) -> Result<Vec<crate::rank::RankKeyword>, StorageError> {
+        Storage::list_rank_keywords(self, project_id)
+    }
+
+    fn record_rank_position(&self, pos: &crate::rank::RankPosition) -> Result<(), StorageError> {
+        Storage::record_rank_position(self, pos)
+    }
+
+    fn get_rank_history(
+        &self,
+        keyword_id: &str,
+        days: u32,
+    ) -> Result<Vec<crate::rank::RankPosition>, StorageError> {
+        Storage::get_rank_history(self, keyword_id, days)
+    }
+
+    fn remove_rank_keyword(&self, id: &str) -> Result<(), StorageError> {
+        Storage::remove_rank_keyword(self, id)
+    }
+
     fn start_crawl(
         &self,
         seed_url: &str,
@@ -2248,7 +2535,9 @@ mod tests {
         let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
 
         let page = full_page("p-batch", "https://example.com/batch");
-        storage.insert_pages(&crawl_id, std::slice::from_ref(&page)).unwrap();
+        storage
+            .insert_pages(&crawl_id, std::slice::from_ref(&page))
+            .unwrap();
 
         let pages = storage.get_pages(&crawl_id, 10).unwrap();
         assert_eq!(pages.len(), 1);
@@ -2264,5 +2553,150 @@ mod tests {
         assert_eq!(got.h1_count, page.h1_count);
         assert_eq!(got.heading_count, page.heading_count);
         assert_eq!(got.extractions, page.extractions);
+    }
+
+    // ---- Rank tracker storage tests ----
+
+    fn test_position(
+        keyword_id: &str,
+        position: Option<u16>,
+        minutes_ago: i64,
+    ) -> crate::rank::RankPosition {
+        crate::rank::RankPosition {
+            keyword_id: keyword_id.to_string(),
+            checked_at: Utc::now() - chrono::Duration::minutes(minutes_ago),
+            position,
+            url: position.map(|_| "https://example.com/page".to_string()),
+            title: position.map(|_| "Example Page".to_string()),
+            source: "duckduckgo".to_string(),
+        }
+    }
+
+    #[test]
+    fn test_rank_project_crud() {
+        let storage = Storage::new_in_memory().unwrap();
+
+        let id = storage
+            .add_rank_project("example.com", "duckduckgo", "desktop", "en-US")
+            .unwrap();
+        assert!(!id.is_empty());
+
+        let projects = storage.list_rank_projects().unwrap();
+        assert_eq!(projects.len(), 1);
+        assert_eq!(projects[0].domain, "example.com");
+        assert_eq!(projects[0].search_engine, "duckduckgo");
+        assert_eq!(projects[0].device, "desktop");
+        assert_eq!(projects[0].locale, "en-US");
+    }
+
+    #[test]
+    fn test_rank_keyword_crud() {
+        let storage = Storage::new_in_memory().unwrap();
+        let project_id = storage
+            .add_rank_project("example.com", "gsc", "mobile", "en-US")
+            .unwrap();
+
+        let kw_id = storage
+            .add_rank_keyword(&project_id, "rust seo", Some("https://example.com/tools"))
+            .unwrap();
+        assert!(!kw_id.is_empty());
+
+        // Duplicate add is idempotent and returns the same ID.
+        let kw_id_again = storage
+            .add_rank_keyword(&project_id, "rust seo", None)
+            .unwrap();
+        assert_eq!(kw_id, kw_id_again);
+
+        let keywords = storage.list_rank_keywords(&project_id).unwrap();
+        assert_eq!(keywords.len(), 1);
+        assert_eq!(keywords[0].keyword, "rust seo");
+        assert_eq!(
+            keywords[0].target_url.as_deref(),
+            Some("https://example.com/tools")
+        );
+        assert!(keywords[0].enabled);
+    }
+
+    #[test]
+    fn test_rank_position_record_and_history() {
+        let storage = Storage::new_in_memory().unwrap();
+        let project_id = storage
+            .add_rank_project("example.com", "duckduckgo", "desktop", "en-US")
+            .unwrap();
+        let kw_id = storage.add_rank_keyword(&project_id, "rust", None).unwrap();
+
+        storage
+            .record_rank_position(&test_position(&kw_id, Some(5), 60 * 24 * 10))
+            .unwrap();
+        storage
+            .record_rank_position(&test_position(&kw_id, Some(3), 60 * 24))
+            .unwrap();
+        storage
+            .record_rank_position(&test_position(&kw_id, None, 30))
+            .unwrap();
+
+        // 5-day window excludes the 10-day-old record.
+        let history = storage.get_rank_history(&kw_id, 5).unwrap();
+        assert_eq!(history.len(), 2);
+        assert_eq!(history[0].position, Some(3));
+        assert!(history[0].url.is_some());
+        // Most recent check: not ranked.
+        assert_eq!(history[1].position, None);
+
+        // Full window includes everything, oldest first.
+        let full = storage.get_rank_history(&kw_id, 30).unwrap();
+        assert_eq!(full.len(), 3);
+        assert_eq!(full[0].position, Some(5));
+        assert_eq!(full[0].source, "duckduckgo");
+
+        // last_checked_at was stamped.
+        let conn = storage.conn();
+        let last: Option<String> = conn
+            .query_row(
+                "SELECT last_checked_at FROM rank_keywords WHERE id = ?1",
+                params![kw_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(last.is_some());
+    }
+
+    #[test]
+    fn test_rank_remove_keyword() {
+        let storage = Storage::new_in_memory().unwrap();
+        let project_id = storage
+            .add_rank_project("example.com", "duckduckgo", "desktop", "en-US")
+            .unwrap();
+        let kw_id = storage
+            .add_rank_keyword(&project_id, "seo tools", None)
+            .unwrap();
+        storage
+            .record_rank_position(&test_position(&kw_id, Some(7), 0))
+            .unwrap();
+
+        storage.remove_rank_keyword(&kw_id).unwrap();
+
+        assert!(storage.list_rank_keywords(&project_id).unwrap().is_empty());
+        assert!(storage.get_rank_history(&kw_id, 30).unwrap().is_empty());
+
+        // Removing again is a no-op.
+        storage.remove_rank_keyword(&kw_id).unwrap();
+    }
+
+    #[test]
+    fn test_query_positions_table_exists() {
+        let storage = Storage::new_in_memory().unwrap();
+        let conn = storage.conn();
+        let today = chrono::Utc::now().format("%Y-%m-%d").to_string();
+        conn.execute(
+            "INSERT OR REPLACE INTO query_positions (query, date, source, clicks, impressions, position, ctr)
+             VALUES (?1, ?2, 'gsc', ?3, ?4, ?5, ?6)",
+            params!["test query", today, 10, 100, 4.5, 0.1],
+        )
+        .unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM query_positions", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
     }
 }

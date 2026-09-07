@@ -19,6 +19,10 @@ import type {
   CreateScheduleRequest,
   BacklinksResponse,
   AuditEvent,
+  Insight,
+  MarketplacePlugin,
+  PluginDownloadResponse,
+  PluginRatingResponse,
 } from '../models/types';
 
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -88,6 +92,10 @@ class ApiClient {
 
   async getBacklinks(crawlId: string): Promise<BacklinksResponse> {
     return this.request<BacklinksResponse>('GET', `/api/v1/crawls/${crawlId}/backlinks`);
+  }
+
+  async getInsights(crawlId: string): Promise<Insight[]> {
+    return this.request<Insight[]>('GET', `/api/v1/crawls/${crawlId}/insights`);
   }
 
   async listCrawls(): Promise<CrawlResult[]> {
@@ -179,6 +187,56 @@ class ApiClient {
 
   async getAuditEvents(): Promise<AuditEvent[]> {
     return this.request<AuditEvent[]>('GET', '/api/v1/audit');
+  }
+
+  // Marketplace
+
+  async listMarketplacePlugins(): Promise<MarketplacePlugin[]> {
+    return this.request<MarketplacePlugin[]>('GET', '/api/v1/marketplace/plugins');
+  }
+
+  async getMarketplacePlugin(name: string): Promise<MarketplacePlugin> {
+    return this.request<MarketplacePlugin>('GET', `/api/v1/marketplace/plugins/${encodeURIComponent(name)}`);
+  }
+
+  async searchMarketplacePlugins(
+    q?: string,
+    category?: string
+  ): Promise<MarketplacePlugin[]> {
+    const params = new URLSearchParams();
+    if (q) params.set('q', q);
+    if (category) params.set('category', category);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    return this.request<MarketplacePlugin[]>(
+      'GET',
+      `/api/v1/marketplace/plugins/search${suffix}`
+    );
+  }
+
+  async trackPluginDownload(name: string): Promise<PluginDownloadResponse> {
+    return this.request<PluginDownloadResponse>(
+      'POST',
+      `/api/v1/marketplace/plugins/${encodeURIComponent(name)}/download`
+    );
+  }
+
+  async verifyMarketplacePlugin(name: string): Promise<MarketplacePlugin> {
+    return this.request<MarketplacePlugin>(
+      'POST',
+      `/api/v1/marketplace/plugins/${encodeURIComponent(name)}/verify`
+    );
+  }
+
+  async ratePlugin(
+    name: string,
+    rating: number,
+    comment?: string
+  ): Promise<PluginRatingResponse> {
+    return this.request<PluginRatingResponse>(
+      'POST',
+      `/api/v1/marketplace/plugins/${encodeURIComponent(name)}/rate`,
+      { rating, comment }
+    );
   }
 
   // Metrics (Prometheus text format)

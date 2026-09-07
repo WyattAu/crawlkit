@@ -3,6 +3,7 @@ export const routes = {
   dashboard: '/dashboard',
   crawls: '/crawls',
   results: (id: string) => `/results/${id}`,
+  insights: '/insights',
   users: '/users',
   settings: '/settings',
 } as const;

@@ -144,3 +144,50 @@ export interface AuditEvent {
   event: string;
   details: string;
 }
+
+export interface MarketplacePlugin {
+  name: string;
+  version: string;
+  author: string;
+  description: string;
+  license: string;
+  categories: string[];
+  tags: string[];
+  downloads: number;
+  rating: number;
+  rating_count: number;
+  verified: boolean;
+  changelog?: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PluginDownloadResponse {
+  name: string;
+  downloads: number;
+}
+
+export interface PluginRatingResponse {
+  name: string;
+  rating: number;
+  rating_count: number;
+  average_rating: number;
+}
+
+export type InsightPriority = 'critical' | 'high' | 'medium' | 'low';
+
+export type InsightEffort = 'quick' | 'moderate' | 'significant';
+
+export type InsightCategory = 'technical' | 'content' | 'seo' | 'security' | 'performance';
+
+export interface Insight {
+  title: string;
+  description: string;
+  priority: InsightPriority;
+  impact_score: number;
+  effort: InsightEffort;
+  affected_pages: number;
+  finding_codes: string[];
+  recommendation: string;
+  category: InsightCategory;
+}

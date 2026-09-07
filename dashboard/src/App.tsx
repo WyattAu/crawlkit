@@ -9,8 +9,10 @@ const LoginPage = lazy(() => import('./pages/LoginPage'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage'));
 const CrawlsPage = lazy(() => import('./pages/CrawlsPage'));
 const ResultsPage = lazy(() => import('./pages/ResultsPage'));
+const InsightsPage = lazy(() => import('./pages/InsightsPage'));
 const UsersPage = lazy(() => import('./pages/UsersPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const MarketplacePage = lazy(() => import('./pages/MarketplacePage'));
 
 function PageLoader() {
   return (
@@ -40,6 +42,8 @@ function App() {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="crawls" element={<CrawlsPage />} />
               <Route path="results/:id" element={<ResultsPage />} />
+              <Route path="marketplace" element={<MarketplacePage />} />
+              <Route path="insights" element={<InsightsPage />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="settings" element={<SettingsPage />} />
             </Route>

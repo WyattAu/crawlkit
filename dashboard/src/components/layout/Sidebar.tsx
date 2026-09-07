@@ -1,9 +1,11 @@
 import { NavLink, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Bug, Users, Settings } from 'lucide-react';
+import { LayoutDashboard, Bug, Lightbulb, Store, Users, Settings } from 'lucide-react';
 
 const navItems = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/crawls', icon: Bug, label: 'Crawls' },
+  { to: '/marketplace', icon: Store, label: 'Marketplace' },
+  { to: '/insights', icon: Lightbulb, label: 'Insights' },
   { to: '/users', icon: Users, label: 'Users' },
   { to: '/settings', icon: Settings, label: 'Settings' },
 ];

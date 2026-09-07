@@ -1,0 +1,166 @@
+name: 'crawlkit Scan'
+description: 'Run crawlkit SEO analysis on a website and post results as a PR comment'
+inputs:
+  url:
+    description: 'URL to crawl'
+    required: true
+  max-pages:
+    description: 'Maximum pages to crawl'
+    required: false
+    default: '50'
+  fail-on-critical:
+    description: 'Fail the workflow if critical issues found'
+    required: false
+    default: 'true'
+  crawlkit-version:
+    description: 'crawlkit version to use'
+    required: false
+    default: 'latest'
+
+outputs:
+  critical:
+    description: 'Number of critical issues found'
+    value: ${{ steps.crawl.outputs.critical }}
+  total-issues:
+    description: 'Total number of issues found'
+    value: ${{ steps.crawl.outputs.total_issues }}
+  pages:
+    description: 'Number of pages crawled'
+    value: ${{ steps.crawl.outputs.pages }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install crawlkit
+      shell: bash
+      env:
+        CRAWLKIT_VERSION: ${{ inputs.crawlkit-version }}
+      run: |
+        if [ "$CRAWLKIT_VERSION" = "latest" ]; then
+          cargo install crawlkit --locked
+        else
+          cargo install crawlkit --locked --version "$CRAWLKIT_VERSION"
+        fi
+
+    - name: Run crawl
+      id: crawl
+      shell: bash
+      env:
+        CRAWLKIT_URL: ${{ inputs.url }}
+        CRAWLKIT_MAX_PAGES: ${{ inputs.max-pages }}
+      run: |
+        crawlkit crawl "$CRAWLKIT_URL" \
+          --max-pages "$CRAWLKIT_MAX_PAGES" \
+          --format json \
+          --output ./crawlkit-results
+
+        # Extract summary counts. findings.json is an array of findings with
+        # a "severity" field; crawl-results.json is the CLI summary written
+        # in --format json mode.
+        CRITICAL=$(jq '[.[]? | select(.severity? == "critical")] | length' \
+          ./crawlkit-results/findings.json 2>/dev/null || echo 0)
+        TOTAL_ISSUES=$(jq -r '.total_issues // 0' \
+          ./crawlkit-results/crawl-results.json 2>/dev/null || echo 0)
+        PAGES=$(jq -r '.pages_crawled // 0' \
+          ./crawlkit-results/crawl-results.json 2>/dev/null || echo 0)
+
+        echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+        echo "total_issues=$TOTAL_ISSUES" >> "$GITHUB_OUTPUT"
+        echo "pages=$PAGES" >> "$GITHUB_OUTPUT"
+
+    - name: Fail on critical issues
+      if: inputs.fail-on-critical == 'true'
+      shell: bash
+      env:
+        CRITICAL: ${{ steps.crawl.outputs.critical }}
+      run: |
+        if [ "$CRITICAL" -gt 0 ]; then
+          echo "::error::crawlkit found $CRITICAL critical issue(s)"
+          exit 1
+        fi
+
+    - name: Comment on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- crawlkit-scan-results -->';
+          const dir = './crawlkit-results';
+
+          let summary = {};
+          try {
+            summary = JSON.parse(fs.readFileSync(`${dir}/crawl-results.json`, 'utf8'));
+          } catch (e) { /* summary optional */ }
+
+          let findings = [];
+          try {
+            const raw = JSON.parse(fs.readFileSync(`${dir}/findings.json`, 'utf8'));
+            if (Array.isArray(raw)) findings = raw;
+          } catch (e) { /* findings optional */ }
+
+          const emoji = { critical: '🔴', error: '🟠', warning: '🟡', info: '🔵' };
+          const bySeverity = {};
+          for (const f of findings) {
+            bySeverity[f.severity] = (bySeverity[f.severity] || 0) + 1;
+          }
+
+          let body = `${marker}\n`;
+          body += '## 🕷️ crawlkit SEO Scan Results\n\n';
+          body += '| Metric | Value |\n|---|---|\n';
+          body += `| Pages crawled | ${summary.pages_crawled ?? 'n/a'} |\n`;
+          body += `| Total issues | ${summary.total_issues ?? findings.length} |\n`;
+          for (const sev of ['critical', 'error', 'warning', 'info']) {
+            if (bySeverity[sev]) body += `| ${emoji[sev]} ${sev} | ${bySeverity[sev]} |\n`;
+          }
+          body += '\n';
+
+          const top = findings.slice(0, 20);
+          if (top.length > 0) {
+            body += '<details open>\n<summary><strong>Top findings</strong> (first 20)</summary>\n\n';
+            body += '| Severity | Code | Title |\n|---|---|---|\n';
+            for (const f of top) {
+              const title = String(f.title ?? '').replace(/\|/g, '\\|').slice(0, 120);
+              const url = String(f.url ?? '').replace(/\|/g, '\\|');
+              body += `| ${emoji[f.severity] ?? '•'} ${f.severity ?? '?'} | \`${f.code ?? '?'}\` | ${title} <sub>${url}</sub> |\n`;
+            }
+            body += '\n</details>\n\n';
+          } else {
+            body += '✅ No findings reported.\n\n';
+          }
+
+          body += '<sub>Posted by the `crawlkit-scan` composite action · ' +
+            new Date().toISOString() + '</sub>';
+
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existing = comments.find((c) => c.body && c.body.includes(marker));
+
+          if (existing) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existing.id,
+              body,
+            });
+            core.info(`Updated existing crawlkit comment ${existing.id}`);
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+            core.info('Created crawlkit PR comment');
+          }
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      with:
+        name: crawlkit-results
+        path: ./crawlkit-results
+        if-no-files-found: ignore

@@ -4963,7 +4963,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
-                is_module: false,
+            is_module: false,
         }];
         let f = SriValidator::new().analyze(&make_ctx(
             &p,

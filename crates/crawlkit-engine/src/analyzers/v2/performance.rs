@@ -391,7 +391,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
-                is_module: false,
+            is_module: false,
         }];
         let f = ScriptAsyncDeferValidator::new().analyze(&make_ctx(&p, None));
         assert!(!f.is_empty());
@@ -405,7 +405,7 @@ mod tests {
             defer: false,
             script_type: None,
             has_integrity: false,
-                is_module: false,
+            is_module: false,
         }];
         assert!(ScriptAsyncDeferValidator::new()
             .analyze(&make_ctx(&p, None))

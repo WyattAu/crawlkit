@@ -62,6 +62,36 @@ name = "metrics_export"
 path = "examples/metrics_export.rs"
 required-features = ["full"]
 
+[[example]]
+name = "benchmark_crawl"
+path = "examples/benchmark_crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "export_all_formats"
+path = "examples/export_all_formats.rs"
+required-features = ["full"]
+
+[[example]]
+name = "incremental_crawl"
+path = "examples/incremental_crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "monitored_crawl"
+path = "examples/monitored_crawl.rs"
+required-features = ["full"]
+
+[[example]]
+name = "plugin_development"
+path = "examples/plugin_development.rs"
+required-features = ["full"]
+
+[[example]]
+name = "tenant_crawl"
+path = "examples/tenant_crawl.rs"
+required-features = ["full"]
+
 [dependencies]
 crawlkit-engine = { path = "../crawlkit-engine", default-features = false }
 tokio.workspace = true

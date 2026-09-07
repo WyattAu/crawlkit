@@ -1257,12 +1257,16 @@ mod tests {
         let cases: Vec<(&str, Vec<IpAddr>)> = vec![
             ("evil.example.com", vec![IpAddr::from([10, 0, 0, 5])]),
             ("rebind.example.com", vec![IpAddr::from([192, 168, 1, 1])]),
-            ("metassrf.example.com", vec![IpAddr::from([169, 254, 169, 254])]),
+            (
+                "metassrf.example.com",
+                vec![IpAddr::from([169, 254, 169, 254])],
+            ),
             ("loopback.example.com", vec![IpAddr::from([127, 0, 0, 1])]),
             ("cgnat.example.com", vec![IpAddr::from([100, 64, 0, 1])]),
-            ("v6ula.example.com", vec![IpAddr::from([
-                0xfd00, 0, 0, 0, 0, 0, 0, 0x0001,
-            ])]),
+            (
+                "v6ula.example.com",
+                vec![IpAddr::from([0xfd00, 0, 0, 0, 0, 0, 0, 0x0001])],
+            ),
         ];
         for (host, ips) in cases {
             let err = validate_resolved_ips(host, &ips).expect_err("must be blocked");
@@ -1296,13 +1300,14 @@ mod tests {
         let cases: Vec<(&str, Vec<IpAddr>)> = vec![
             ("example.com", vec![IpAddr::from([93, 184, 216, 34])]),
             ("dns.example.com", vec![IpAddr::from([8, 8, 8, 8])]),
-            ("multi.example.com", vec![
-                IpAddr::from([1, 1, 1, 1]),
-                IpAddr::from([8, 8, 4, 4]),
-            ]),
-            ("v6.example.com", vec![IpAddr::from([
-                0x2606, 0x4700, 0, 0, 0, 0, 0, 0x1111,
-            ])]),
+            (
+                "multi.example.com",
+                vec![IpAddr::from([1, 1, 1, 1]), IpAddr::from([8, 8, 4, 4])],
+            ),
+            (
+                "v6.example.com",
+                vec![IpAddr::from([0x2606, 0x4700, 0, 0, 0, 0, 0, 0x1111])],
+            ),
         ];
         for (host, ips) in cases {
             assert!(

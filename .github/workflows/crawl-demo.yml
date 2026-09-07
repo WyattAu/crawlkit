@@ -1,0 +1,64 @@
+name: crawlkit Demo Scan
+
+# Demonstration of the `crawlkit-scan` composite action defined in
+# .github/actions/crawlkit-scan/. Trigger manually with a target URL, or
+# let it run on PRs touching the action itself so changes to the action
+# are exercised end-to-end.
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to crawl'
+        required: false
+        default: 'https://example.com'
+      max-pages:
+        description: 'Maximum pages to crawl'
+        required: false
+        default: '50'
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/actions/crawlkit-scan/**'
+      - '.github/workflows/crawl-demo.yml'
+
+concurrency:
+  group: crawl-demo-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  scan:
+    name: crawlkit Scan Demo
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+
+      - name: Run crawlkit scan
+        id: scan
+        uses: ./.github/actions/crawlkit-scan
+        with:
+          url: ${{ github.event.inputs.url || 'https://example.com' }}
+          max-pages: ${{ github.event.inputs.max-pages || '50' }}
+          fail-on-critical: 'true'
+          crawlkit-version: 'latest'
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "### crawlkit demo scan"
+            echo ""
+            echo "- Pages crawled: ${{ steps.scan.outputs.pages || 'n/a' }}"
+            echo "- Total issues: ${{ steps.scan.outputs['total-issues'] || 'n/a' }}"
+            echo "- Critical: ${{ steps.scan.outputs.critical || '0' }}"
+          } >> "$GITHUB_STEP_SUMMARY"

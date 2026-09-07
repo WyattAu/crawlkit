@@ -1507,6 +1507,224 @@ async fn marketplace_test_plugin_returns_passed_for_existing_plugin() {
     assert_eq!(status, StatusCode::NOT_FOUND);
 }
 
+#[tokio::test]
+async fn marketplace_download_tracking_increments_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("u1");
+    seed_plugin(&test.state, "meta-checker", 0.0);
+
+    for expected in 1..=3 {
+        let (status, body) = test
+            .send(test.authed(
+                &token,
+                "POST",
+                "/api/v1/marketplace/plugins/meta-checker/download",
+                None,
+            ))
+            .await;
+        assert_eq!(status, StatusCode::OK);
+        assert_eq!(body["name"], "meta-checker");
+        assert_eq!(body["downloads"], expected);
+    }
+
+    let stored = test
+        .state
+        .marketplace
+        .plugins
+        .read()
+        .get("meta-checker")
+        .cloned()
+        .unwrap();
+    assert_eq!(stored.downloads, 3);
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/marketplace/plugins/missing/download",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert!(body["error"]
+        .as_str()
+        .unwrap_or_default()
+        .contains("not found"));
+}
+
+#[tokio::test]
+async fn marketplace_search_filters_by_query_category_and_permission() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("u1", "tenant-a", "viewer", "password123!X"));
+    let token = test.token_for("u1");
+    seed_plugin(&test.state, "meta-checker", 0.0);
+    test.state.marketplace.plugins.write().insert(
+        "viewport-checker".to_string(),
+        crawlkit_api::types::MarketplacePlugin {
+            categories: vec!["mobile".to_string()],
+            description: "Viewport audits for phones".to_string(),
+            ..seed_plugin_template("viewport-checker")
+        },
+    );
+
+    // Blank query returns everything.
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/marketplace/plugins/search?q=", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body.as_array().unwrap().len(), 2);
+
+    // Name substring, case-insensitive.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/search?q=checker",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let names = plugin_names(&body);
+    assert_eq!(names.len(), 2);
+
+    // Description keyword matches only one plugin.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/search?q=viewport",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(plugin_names(&body), vec!["viewport-checker".to_string()]);
+
+    // Category filter is exact.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/search?category=mobile",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(plugin_names(&body), vec!["viewport-checker".to_string()]);
+
+    // Query + category combine.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/search?q=meta&category=seo",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(plugin_names(&body), vec!["meta-checker".to_string()]);
+
+    // No match yields an empty list, not an error.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/marketplace/plugins/search?q=nonexistent",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(body.as_array().unwrap().is_empty());
+}
+
+fn seed_plugin_template(name: &str) -> crawlkit_api::types::MarketplacePlugin {
+    crawlkit_api::types::MarketplacePlugin {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        author: "author".to_string(),
+        description: String::new(),
+        license: "MIT".to_string(),
+        categories: Vec::new(),
+        tags: vec!["meta".to_string()],
+        downloads: 0,
+        rating: 0.0,
+        rating_count: 1,
+        verified: true,
+        created_at: chrono::Utc::now().to_rfc3339(),
+        updated_at: chrono::Utc::now().to_rfc3339(),
+    }
+}
+
+fn plugin_names(body: &Value) -> Vec<String> {
+    body.as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|plugin| plugin["name"].as_str())
+        .map(str::to_string)
+        .collect()
+}
+
+#[tokio::test]
+async fn marketplace_verify_requires_admin_and_sets_badge() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+    let editor_token = test.token_for("editor");
+    let admin_token = test.token_for("root");
+    seed_plugin(&test.state, "meta-checker", 0.0);
+    // seed_plugin marks verified=true; reset it so the badge flip is observable.
+    test.state
+        .marketplace
+        .plugins
+        .write()
+        .get_mut("meta-checker")
+        .unwrap()
+        .verified = false;
+
+    // Editors hold marketplace:read but not marketplace:write.
+    let (status, _) = test
+        .send(test.authed(
+            &editor_token,
+            "POST",
+            "/api/v1/marketplace/plugins/meta-checker/verify",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+
+    let (status, body) = test
+        .send(test.authed(
+            &admin_token,
+            "POST",
+            "/api/v1/marketplace/plugins/meta-checker/verify",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["verified"], true);
+
+    let (status, _) = test
+        .send(test.authed(
+            &admin_token,
+            "POST",
+            "/api/v1/marketplace/plugins/missing/verify",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+}
+
 // ---------------------------------------------------------------------------
 // API keys
 // ---------------------------------------------------------------------------

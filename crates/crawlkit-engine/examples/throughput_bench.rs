@@ -72,11 +72,14 @@ impl TestServer {
                     let max = Arc::clone(&t_max);
                     let flight = Arc::clone(&t_flight);
                     let cfg = Arc::clone(&cfg);
-                    let _ = std::thread::Builder::new()
-                        .name("bench-conn".into())
-                        .spawn(move || {
-                            serve_connection(stream, page_count, &cfg, &requests, &max, &flight);
-                        });
+                    let _ =
+                        std::thread::Builder::new()
+                            .name("bench-conn".into())
+                            .spawn(move || {
+                                serve_connection(
+                                    stream, page_count, &cfg, &requests, &max, &flight,
+                                );
+                            });
                 }
             })
             .unwrap();

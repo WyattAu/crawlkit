@@ -13,7 +13,7 @@ use prometheus_client::metrics::gauge::Gauge;
 use prometheus_client::metrics::histogram::{exponential_buckets, Histogram};
 use prometheus_client::registry::Registry;
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 
 use crawlkit_engine::storage_trait::StorageBackend;
 use crawlkit_engine::AccessLogger;
@@ -657,6 +657,27 @@ pub struct SubmitPluginRequest {
     pub tags: Vec<String>,
     pub repository: Option<String>,
     pub homepage: Option<String>,
+}
+
+/// Query parameters for marketplace plugin search.
+#[derive(Debug, Clone, Deserialize, ToSchema, IntoParams)]
+pub struct PluginSearchQuery {
+    /// Free-text query matched case-insensitively against plugin names,
+    /// descriptions, authors, and tags.
+    #[serde(default)]
+    pub q: Option<String>,
+    /// Only return plugins carrying this category
+    /// (case-insensitive exact match).
+    #[serde(default)]
+    pub category: Option<String>,
+}
+
+/// Response returned after a plugin download is recorded.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct PluginDownloadResponse {
+    pub name: String,
+    /// Updated total download count.
+    pub downloads: u64,
 }
 
 #[derive(Clone)]

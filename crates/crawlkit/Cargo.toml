@@ -95,7 +95,7 @@ required-features = ["full"]
 [dependencies]
 crawlkit-engine = { path = "../crawlkit-engine", default-features = false }
 tokio.workspace = true
-clap.workspace = true
+clap = { workspace = true, features = ["env"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 anyhow.workspace = true

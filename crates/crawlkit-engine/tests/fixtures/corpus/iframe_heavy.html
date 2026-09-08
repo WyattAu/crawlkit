@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Marathon Training Hub — Plans, Tracking &amp; Community</title>
+    <meta name="description" content="Marathon Training Hub: proven 16-week plans, pace calculators, embedded route maps, and video coaching sessions for your next 26.2.">
+    <link rel="canonical" href="https://marathonhub.app/embeds">
+    <meta name="twitter:card" content="player">
+    <meta name="twitter:player" content="https://marathonhub.app/embed/pace-demo">
+    <meta name="twitter:player:width" content="480">
+    <meta name="twitter:player:height" content="270">
+    <link rel="stylesheet" href="/css/hub.css">
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" class="logo">MarathonHub</a>
+        <nav aria-label="Primary">
+            <a href="/plans">Plans</a>
+            <a href="/tools">Tools</a>
+            <a href="/community">Community</a>
+            <a href="/embeds" aria-current="page">Embeds &amp; Demos</a>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Embeds, demos, and course fly-throughs</h1>
+        <p>Everything below is embedded third-party or same-origin content used across our
+           coaching pages. This page collects them all for documentation.</p>
+
+        <section class="embed-video">
+            <h2>Coach video: perfecting your form</h2>
+            <iframe src="https://www.youtube.com/embed/dQw4w9WgXcQ"
+                    width="640" height="360" loading="lazy"
+                    title="Coaching session video: perfecting your running form"
+                    allow="accelerometer; autoplay; encrypted-media; picture-in-picture"
+                    allowfullscreen></iframe>
+
+            <h2>Race day prep Q&amp;A</h2>
+            <iframe src="https://www.youtube-nocookie.com/embed/5qap5aO4i9A"
+                    width="640" height="360" loading="lazy"
+                    title="Race day preparation Q&amp;A with coach Dana"
+                    allowfullscreen></iframe>
+
+            <!-- Intentionally missing title attribute (accessibility issue) -->
+            <h2>Weekly highlights recap</h2>
+            <iframe src="https://www.youtube.com/embed/live_stream?channel=UCmarathonhub"
+                    width="640" height="360" loading="lazy"
+                    allowfullscreen></iframe>
+        </section>
+
+        <section class="embed-map">
+            <h2>Course maps</h2>
+            <iframe src="https://maps.google.com/maps?q=central%20park%20loop&t=&z=13&output=embed"
+                    width="640" height="480" loading="lazy"
+                    title="Central Park loop course map"
+                    referrerpolicy="no-referrer-when-downgrade"></iframe>
+
+            <iframe src="https://maps.google.com/maps?q=boston%20marathon%20route&t=&z=10&output=embed"
+                    width="640" height="480" loading="lazy"
+                    title="Boston Marathon route map"></iframe>
+        </section>
+
+        <section class="embed-same-origin">
+            <h2>Same-origin tools</h2>
+            <iframe src="/embed/pace-calculator"
+                    width="480" height="320" loading="lazy"
+                    title="Pace calculator widget"></iframe>
+
+            <iframe src="/embed/splits-demo"
+                    width="480" height="320"></iframe>
+
+            <h3>Training plan preview</h3>
+            <iframe src="/plans/16-week-intermediate?embed=1"
+                    width="800" height="600" loading="lazy"
+                    title="16-week intermediate training plan preview"
+                    sandbox="allow-scripts allow-forms"></iframe>
+        </section>
+
+        <section class="embed-audio">
+            <h2>Podcast player</h2>
+            <iframe src="https://open.spotify.com/embed/episode/4rOoJ6Egrf8K2IrywzwOMk"
+                    width="480" height="152" loading="lazy"
+                    title="The Long Run podcast: taper week strategies"
+                    allow="encrypted-media"></iframe>
+        </section>
+
+        <section class="notes">
+            <h2>Embedding guidelines</h2>
+            <p>All third-party embeds must lazy-load and carry a descriptive title for
+               screen-reader users. Same-origin embeds should include a sandbox attribute
+               unless they need cookies. See the
+               <a href="/docs/embed-standards">embed standards doc</a>.</p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 MarathonHub · <a href="/privacy">Privacy</a></p>
+    </footer>
+</body>
+</html>

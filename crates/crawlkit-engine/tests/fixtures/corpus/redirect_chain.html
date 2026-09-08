@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Meta refresh: client-side redirect after 5 seconds to a relative target -->
+    <meta http-equiv="refresh" content="5;url=/target">
+    <title>Notice — Ticketwire Maintenance</title>
+    <meta name="robots" content="noindex,follow">
+    <!-- Canonical points to a different domain: strong cross-domain consolidation signal -->
+    <link rel="canonical" href="https://www.ticketwire.com/notice/maintenance">
+    <link rel="alternate" hreflang="en" href="https://www.ticketwire.com/notice/maintenance">
+    <link rel="stylesheet" href="/assets/css/notice.css">
+    <style>
+        .notice-page { max-width: 46rem; margin: 0 auto; padding: 2rem 1rem; }
+        .countdown-pill {
+            display: inline-block; background: #fef3c7; color: #92400e;
+            border-radius: 999px; padding: 0.25rem 0.9rem; font-weight: 600;
+        }
+        .timeline { border-left: 3px solid #cbd5e1; margin: 1rem 0; padding-left: 1.25rem; }
+        .timeline li { margin-bottom: 0.75rem; list-style: none; position: relative; }
+        .timeline li::before {
+            content: ""; position: absolute; left: -1.44rem; top: 0.4rem;
+            width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #64748b;
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" class="logo">Ticketwire</a>
+        <nav aria-label="Primary">
+            <a href="/events">Events</a>
+            <a href="/venues">Venues</a>
+            <a href="/support">Support</a>
+            <a href="/gift-cards">Gift Cards</a>
+        </nav>
+        <a href="/cart" class="cart-link">Cart (0)</a>
+    </header>
+
+    <main class="notice-page">
+        <h1>You're being redirected</h1>
+        <p>This page has moved. You will be taken to the new location automatically in
+           <span class="countdown">5</span> seconds.</p>
+        <p>If you are not redirected, <a href="/target">continue to the notice page</a>.</p>
+
+        <section class="maintenance-details">
+            <h2>Scheduled maintenance — September 14, 2026</h2>
+            <p>We are performing scheduled maintenance on the ticketing API. Purchases may
+               be unavailable during the window below. Existing orders are unaffected,
+               e-tickets remain valid, and barcode entry at venues will continue to work
+               throughout the maintenance period.</p>
+            <ul class="timeline">
+                <li><time datetime="2026-09-14T01:30:00Z">01:30 UTC</time> — Read-only mode
+                    enabled for the order API; purchase attempts show a friendly notice.</li>
+                <li><time datetime="2026-09-14T02:00:00Z">02:00 UTC</time> — Full maintenance
+                    window begins; API returns 503 with Retry-After headers.</li>
+                <li><time datetime="2026-09-14T03:30:00Z">03:30 UTC</time> — Scheduled
+                    verification of payment webhooks and seat-inventory sync.</li>
+                <li><time datetime="2026-09-14T04:00:00Z">04:00 UTC</time> — Expected
+                    completion and restoration of full purchase flows.</li>
+            </ul>
+            <table>
+                <caption>Services affected during the maintenance window</caption>
+                <thead>
+                    <tr><th scope="col">Service</th><th scope="col">Impact</th><th scope="col">Workaround</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Purchase checkout</td><td>Unavailable</td><td>Retry after 04:00 UTC</td></tr>
+                    <tr><td>Seat selection maps</td><td>Read-only</td><td>None needed</td></tr>
+                    <tr><td>E-ticket downloads</td><td>Available</td><td>—</td></tr>
+                    <tr><td>Refund processing</td><td>Delayed</td><td>Requests queue automatically</td></tr>
+                </tbody>
+            </table>
+        </section>
+
+        <section class="faq">
+            <h2>Common questions</h2>
+            <dl>
+                <dt>Will my tickets still work?</dt>
+                <dd>Yes. All e-tickets issued before the maintenance window remain valid and
+                    scannable at the venue.</dd>
+                <dt>I was mid-checkout when the site went down. What now?</dt>
+                <dd>No charge was made. After 04:00 UTC your seat hold will be restored for
+                    an additional 30 minutes; look for the "resume checkout" banner.</dd>
+                <dt>How do I reach a human?</dt>
+                <dd>Support chat and phone lines stay open around the clock; see the contact
+                    section below for current wait times.</dd>
+            </dl>
+        </section>
+
+        <section class="contact-help">
+            <h2>Need help now?</h2>
+            <p>Contact support at <a href="mailto:support@ticketwire.example">support@ticketwire.example</a>
+               or call <a href="tel:+18005550199">1-800-555-0199</a>. Current average wait:
+               6 minutes. Wait times are longer than usual during maintenance windows, and
+               our <a href="https://status.ticketwire.com" rel="noopener">status page</a>
+               posts live incident updates every 15 minutes.</p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div>
+                <h3>Company</h3>
+                <a href="/about">About Ticketwire</a><br>
+                <a href="/careers">Careers</a><br>
+                <a href="/press">Press room</a>
+            </div>
+            <div>
+                <h3>Support</h3>
+                <a href="/support">Help center</a><br>
+                <a href="/refunds">Refund policy</a><br>
+                <a href="/accessibility">Accessibility</a>
+            </div>
+        </div>
+        <p>&copy; 2026 Ticketwire Inc. · <a href="/privacy">Privacy</a> ·
+           <a href="/terms">Terms of service</a></p>
+    </footer>
+    <script>
+        // Progressive enhancement for the countdown display
+        (function () {
+            var el = document.querySelector(".countdown");
+            if (!el) return;
+            var n = 5;
+            var t = setInterval(function () {
+                n -= 1;
+                if (n <= 0) { clearInterval(t); return; }
+                el.textContent = String(n);
+            }, 1000);
+        })();
+    </script>
+</body>
+</html>

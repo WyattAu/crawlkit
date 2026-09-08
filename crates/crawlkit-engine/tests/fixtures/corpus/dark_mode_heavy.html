@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Obsidian Terminal — Dark-first developer notes</title>
+    <meta name="description" content="Obsidian Terminal is a dark-first note-taking app for developers with Vim keybindings, Markdown export, and local-first sync.">
+    <link rel="canonical" href="https://obsidianterminal.dev/features/dark-mode">
+    <meta name="color-scheme" content="dark">
+    <meta name="theme-color" content="#1a1a1a">
+    <meta property="og:title" content="Obsidian Terminal — Dark-first developer notes">
+    <meta property="og:description" content="Vim keybindings, Markdown export, local-first sync.">
+    <meta property="og:url" content="https://obsidianterminal.dev/features/dark-mode">
+    <link rel="stylesheet" href="/css/base.css">
+    <style>
+        /* ------------------------------------------------------------------
+           Dark theme tokens (design system v3)
+           ------------------------------------------------------------------ */
+        :root {
+            --color-bg: #1a1a1a;
+            --color-bg-elevated: #242424;
+            --color-bg-inset: #121212;
+            --color-text: #f0f0f0;
+            --color-text-muted: #a0a0a0;
+            --color-text-faint: #6e6e6e;
+            --color-accent: #7dd3fc;
+            --color-accent-strong: #38bdf8;
+            --color-success: #4ade80;
+            --color-warning: #fbbf24;
+            --color-danger: #f87171;
+            --border-subtle: #333333;
+            --shadow-1: 0 1px 2px rgb(0 0 0 / 60%);
+        }
+
+        html, body {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            color-scheme: dark;
+        }
+
+        body {
+            font-family: "JetBrains Mono", ui-monospace, monospace;
+            font-size: 15px;
+            line-height: 1.6;
+            margin: 0;
+        }
+
+        a { color: #7dd3fc; }
+        a:visited { color: #c084fc; }
+
+        .site-header {
+            background-color: #242424;
+            color: #f0f0f0;
+            border-bottom: 1px solid #333;
+            padding: 0.75rem 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .hero {
+            background:
+                radial-gradient(ellipse at 20% 0%, rgb(56 189 248 / 12%), transparent 55%),
+                radial-gradient(ellipse at 80% 100%, rgb(192 132 252 / 10%), transparent 55%),
+                #1a1a1a;
+            color: #f0f0f0;
+            padding: 4rem 1.5rem;
+            text-align: center;
+        }
+
+        .hero h1 {
+            color: #f0f0f0;
+            font-size: 2.4rem;
+            margin: 0 0 0.5rem;
+            font-weight: 700;
+        }
+
+        .hero .tagline { color: #a0a0a0; font-size: 1.1rem; }
+
+        .card {
+            background-color: #242424;
+            border: 1px solid #333;
+            border-radius: 10px;
+            padding: 1.25rem;
+            box-shadow: var(--shadow-1);
+            color: #e5e5e5;
+        }
+
+        .card h3 { color: #f0f0f0; margin-top: 0; }
+        .card p { color: #a0a0a0; }
+
+        pre, code {
+            background-color: #121212;
+            color: #d1d5db;
+            border-radius: 6px;
+        }
+
+        pre {
+            padding: 1rem;
+            overflow-x: auto;
+            border: 1px solid #2a2a2a;
+        }
+
+        pre .token-keyword { color: #c084fc; }
+        pre .token-string  { color: #4ade80; }
+        pre .token-comment { color: #6e6e6e; font-style: italic; }
+
+        .btn-primary {
+            background-color: #38bdf8;
+            color: #0b0b0b;
+            border: none;
+            border-radius: 6px;
+            padding: 0.65rem 1.4rem;
+            font-weight: 600;
+        }
+
+        .btn-ghost {
+            background: transparent;
+            color: #7dd3fc;
+            border: 1px solid #38bdf8;
+            border-radius: 6px;
+            padding: 0.65rem 1.4rem;
+        }
+
+        .contrast-demo-bad {
+            background-color: #1a1a1a;
+            color: #555555; /* deliberately low-contrast example */
+            padding: 1rem;
+            border: 1px dashed #f87171;
+        }
+
+        .contrast-demo-good {
+            background-color: #1a1a1a;
+            color: #f0f0f0;
+            padding: 1rem;
+            border: 1px dashed #4ade80;
+        }
+
+        @media (prefers-color-scheme: light) {
+            /* App is dark-first; light scheme intentionally keeps dark canvas but
+               relaxes elevation contrast. */
+            html[data-theme="auto"] body { background-color: #161616; }
+        }
+
+        @media (max-width: 640px) {
+            .hero h1 { font-size: 1.6rem; }
+            .feature-grid { grid-template-columns: 1fr; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                transition-duration: 0.01ms !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" style="color: #f0f0f0; text-decoration: none; font-weight: 700;">Obsidian Terminal</a>
+        <nav aria-label="Primary" style="display: flex; gap: 1.25rem;">
+            <a href="/features" aria-current="page" style="color: #7dd3fc;">Features</a>
+            <a href="/docs" style="color: #a0a0a0;">Docs</a>
+            <a href="/pricing" style="color: #a0a0a0;">Pricing</a>
+            <a href="/changelog" style="color: #a0a0a0;">Changelog</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Your notes, at terminal velocity</h1>
+            <p class="tagline">A dark-first markdown workspace with Vim keybindings and
+               local-first sync. Built for people who live in the terminal.</p>
+            <p>
+                <a href="/download" class="btn-primary">Download for free</a>
+                <a href="/docs/quickstart" class="btn-ghost">Read the quickstart</a>
+            </p>
+        </section>
+
+        <section style="padding: 0 1.5rem;">
+            <h2>Why dark-first?</h2>
+            <p>Most note apps bolt on a dark mode as an afterthought and ship washed-out
+               grays and inaccessible contrast ratios. Obsidian Terminal is designed on a
+               dark canvas from day one: every token in our design system is tuned for
+               <code style="background-color: #121212;">#1a1a1a</code>, and we validate all
+               text/background pairs against WCAG AA before each release.</p>
+
+            <div class="feature-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem;">
+                <div class="card">
+                    <h3>Vim everywhere</h3>
+                    <p>Modal editing with registers, marks, and macros in the editor, the
+                       command palette, and even the settings search.</p>
+                </div>
+                <div class="card">
+                    <h3>Local-first sync</h3>
+                    <p>Plain-text Markdown on disk. End-to-end encrypted sync between
+                       devices with no vendor lock-in.</p>
+                </div>
+                <div class="card">
+                    <h3>Terminal-native</h3>
+                    <p>A TUI companion client over SSH so your notes are available on any
+                       box you can shell into.</p>
+                </div>
+            </div>
+        </section>
+
+        <section style="padding: 2rem 1.5rem;">
+            <h2>Contrast check</h2>
+            <p>We publish the contrast ratios of our core palette. The failing sample below
+               is rendered at exactly 2.4:1 — the kind of gray-on-dark text that keeps us
+               awake at night.</p>
+            <div class="contrast-demo-bad">#555555 on #1a1a1a — fails WCAG AA (2.4:1). Do not ship.</div>
+            <p style="margin: 0.5rem 0;"></p>
+            <div class="contrast-demo-good">#f0f0f0 on #1a1a1a — passes WCAG AAA (17.4:1).</div>
+        </section>
+
+        <section style="padding: 0 1.5rem 3rem;">
+            <h2>Quickstart</h2>
+            <pre><code><span class="token-comment"># install the CLI</span>
+brew install obsidian-terminal/tap/ot
+
+<span class="token-comment"># create a vault and open the TUI</span>
+ot init ~/notes
+ot open ~/notes
+
+<span class="token-keyword">alias</span> notes=<span class="token-string">"ot open ~/notes"</span></code></pre>
+        </section>
+    </main>
+
+    <footer class="site-footer" style="background-color: #121212; color: #a0a0a0; padding: 2rem 1.5rem; border-top: 1px solid #333;">
+        <p style="margin: 0;">&copy; 2026 Obsidian Terminal ·
+           <a href="/privacy" style="color: #7dd3fc;">Privacy</a> ·
+           <a href="/accessibility" style="color: #7dd3fc;">Accessibility statement</a></p>
+    </footer>
+</body>
+</html>

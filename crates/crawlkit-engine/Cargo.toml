@@ -30,6 +30,10 @@ name = "analyzer_registry_contract_tests"
 required-features = ["full"]
 
 [[test]]
+name = "corpus_tests"
+required-features = ["full"]
+
+[[test]]
 name = "backlink_integration_tests"
 required-features = ["full"]
 

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="referrer" content="same-origin">
+    <link rel="icon" href="/static/favicon.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/vue-loading-overlay@6/dist/vue-loading.css">
+    <link rel="stylesheet" href="/static/css/app.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3.4.21/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue-router@4.3.0/dist/vue-router.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/pinia@2.1.7/dist/pinia.iife.prod.js"></script>
+</head>
+<body>
+    <div id="app">
+        <div class="boot-placeholder">
+            <div class="boot-spinner"></div>
+            <p class="boot-note">Loading application&hellip;</p>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        "use strict";
+        var App = {
+            name: "ShopFront",
+            data: function () {
+                return {
+                    cart: { items: [], subtotal: 0, currency: "EUR" },
+                    session: null,
+                    ready: false,
+                    categories: [
+                        { slug: "electronics", label: "Electronics" },
+                        { slug: "home-garden", label: "Home & Garden" },
+                        { slug: "sports", label: "Sports & Outdoors" },
+                        { slug: "toys", label: "Toys & Games" }
+                    ]
+                };
+            },
+            computed: {
+                itemCount: function () {
+                    return this.cart.items.reduce(function (n, it) { return n + it.qty; }, 0);
+                }
+            },
+            methods: {
+                addToCart: function (sku, qty) {
+                    this.$store.addToCart(sku, qty);
+                    this.$toast("Added to cart");
+                },
+                checkout: function () {
+                    this.$router.push({ name: "checkout" });
+                }
+            },
+            mounted: function () {
+                var self = this;
+                fetch("/api/session", { credentials: "same-origin" })
+                    .then(function (r) { return r.json(); })
+                    .then(function (s) { self.session = s; self.ready = true; })
+                    .catch(function () { self.ready = true; });
+            },
+            template: "#tpl-shopfront"
+        };
+        var routes = [
+            { path: "/", name: "home", component: App },
+            { path: "/c/:slug", name: "category", component: App },
+            { path: "/p/:sku", name: "product", component: App },
+            { path: "/cart", name: "cart", component: App },
+            { path: "/checkout", name: "checkout", component: App }
+        ];
+        var app = Vue.createApp(App);
+        app.use(VueRouter.createRouter({
+            history: VueRouter.createWebHistory("/shop/"),
+            routes: routes
+        }));
+        app.use(Pinia.createPinia());
+        app.mount("#app");
+    })();
+    </script>
+
+    <script type="text/x-template" id="tpl-shopfront">
+        <div class="shopfront">
+            <header class="shop-header">
+                <a class="logo" href="/shop/">ShopFront</a>
+                <nav class="cat-nav">
+                    <a v-for="c in categories" :key="c.slug" :href="'/shop/c/' + c.slug">{{ c.label }}</a>
+                </nav>
+                <div class="cart-widget">
+                    <span class="cart-count">{{ itemCount }}</span>
+                </div>
+            </header>
+            <main class="shop-main">
+                <router-view :key="$route.fullPath"></router-view>
+            </main>
+            <footer class="shop-footer">
+                <p>&copy; ShopFront B.V. — KvK 12345678</p>
+            </footer>
+        </div>
+    </script>
+
+    <style>
+        .boot-placeholder {
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; min-height: 100vh; color: #556;
+        }
+        .boot-spinner {
+            width: 40px; height: 40px; border: 3px solid #dde;
+            border-top-color: #7c3aed; border-radius: 50%;
+            animation: spin 0.9s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .shop-header { display: flex; align-items: center; gap: 2rem; padding: 0.75rem 1.5rem; }
+        .cat-nav a { margin-right: 1rem; text-decoration: none; color: #222; }
+    </style>
+</body>
+</html>

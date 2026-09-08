@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!-- Content-Security-Policy delivered via meta tag (discouraged but real-world common) -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.vaultguard.io; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://cdn.vaultguard.io; font-src 'self' https://fonts.vaultguard.io; connect-src 'self' https://api.vaultguard.io; frame-ancestors 'none'; base-uri 'self'; form-action 'self'">
+    <meta http-equiv="X-Content-Type-Options" content="nosniff">
+    <meta http-equiv="Referrer-Policy" content="strict-origin-when-cross-origin">
+    <meta http-equiv="X-XSS-Protection" content="1; mode=block">
+    <meta http-equiv="X-Frame-Options" content="DENY">
+    <meta http-equiv="Cross-Origin-Opener-Policy" content="same-origin">
+    <meta http-equiv="Cross-Origin-Resource-Policy" content="same-origin">
+    <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(self), usb=()">
+    <meta http-equiv="X-Permitted-Cross-Domain-Policies" content="none">
+    <meta http-equiv="Cross-Origin-Embedder-Policy" content="require-corp">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <title>VaultGuard Identity — Secure your workforce access</title>
+    <meta name="description" content="VaultGuard Identity provides SSO, MFA, and least-privilege access management for security-conscious organizations. SOC 2 Type II certified.">
+    <link rel="canonical" href="https://vaultguard.io/security">
+    <link rel="preload" href="/fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/assets/css/security.css" integrity="sha384-oqVuAfXRKap7fdgcCY5uykM6+R9GqQ8K/uxy9rx7HNQlGYl1kPzQhoQwx3d1tKkF" crossorigin="anonymous">
+    <style>
+        /* Inline critical CSS permitted by CSP 'unsafe-inline' for style-src */
+        .badge-row { display: flex; gap: 1rem; flex-wrap: wrap; }
+        .badge { border: 1px solid #ccc; border-radius: 6px; padding: .5rem 1rem; }
+        .csrf-note { font-size: .85rem; color: #555; }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" class="logo">VaultGuard</a>
+        <nav aria-label="Primary">
+            <a href="/product">Product</a>
+            <a href="/security" aria-current="page">Security</a>
+            <a href="/pricing">Pricing</a>
+            <a href="/docs">Docs</a>
+        </nav>
+        <a href="/login" class="btn-primary">Sign in</a>
+    </header>
+
+    <main>
+        <section class="hero">
+            <h1>Security is the product</h1>
+            <p>VaultGuard enforces phishing-resistant MFA, hardware-key attestation, and
+               just-in-time elevation for every privileged session.</p>
+            <div class="badge-row">
+                <span class="badge">SOC 2 Type II</span>
+                <span class="badge">ISO 27001</span>
+                <span class="badge">FedRAMP Moderate (In Process)</span>
+                <span class="badge">HIPAA BAA Available</span>
+            </div>
+        </section>
+
+        <section class="headers-disclosure">
+            <h2>Transport &amp; header hardening</h2>
+            <p>Every VaultGuard endpoint ships with strict transport security. Our public
+               endpoints return HSTS with a one-year max-age, include the
+               <code>preload</code> directive, and are submitted to the Chromium HSTS
+               preload list. Content is served with <code>Strict-Transport-Security:
+               max-age=31536000; includeSubDomains; preload</code>.</p>
+            <ul>
+                <li>TLS 1.3 only — TLS 1.0/1.1 and RC4/3DES cipher suites are rejected at the edge</li>
+                <li>OCSP stapling with must-staple certificates</li>
+                <li>Certificate transparency monitoring for all *.vaultguard.io issuance</li>
+                <li>Expect-CT enforcement during migration (now default-deny)</li>
+            </ul>
+        </section>
+
+        <section class="login-demo">
+            <h2>Try the secure console</h2>
+            <p>The demo console below posts to a sandbox tenant. The form carries a
+               per-session CSRF token and is protected by SameSite=Strict cookies.</p>
+            <form action="/api/demo-login" method="post" id="demo-login-form">
+                <input type="hidden" name="csrf_token"
+                       value="d4f1a09c7b5e4382a1c0f6de8b93a77c2e5b10d4f89a4c6bb3e2f17a90c8d5e6">
+                <input type="hidden" name="session_nonce" value="8f14e45fceea167a5a36dedd4bea2543">
+                <div class="form-row">
+                    <label for="demo-email">Work email</label>
+                    <input type="email" id="demo-email" name="email" required
+                           autocomplete="email" placeholder="you@company.com">
+                </div>
+                <div class="form-row">
+                    <label for="demo-org">Organization slug</label>
+                    <input type="text" id="demo-org" name="org" required
+                           pattern="[a-z0-9-]{3,32}" autocomplete="off">
+                </div>
+                <div class="form-row">
+                    <label for="demo-otp">Authenticator code</label>
+                    <input type="text" id="demo-otp" name="otp" inputmode="numeric"
+                           pattern="[0-9]{6}" maxlength="6" autocomplete="one-time-code">
+                </div>
+                <fieldset>
+                    <legend>WebAuthn options</legend>
+                    <label><input type="checkbox" name="prefer_passkey" checked> Prefer passkeys over TOTP</label>
+                    <label><input type="checkbox" name="require_attestation"> Require hardware attestation</label>
+                </fieldset>
+                <button type="submit">Continue to demo</button>
+                <p class="csrf-note">Submitting this form sends only the listed fields plus a
+                   signed CSRF token. No tracking scripts are loaded on this page.</p>
+            </form>
+        </section>
+
+        <section class="disclosure">
+            <h2>Responsible disclosure</h2>
+            <p>Report vulnerabilities to <a href="mailto:security@vaultguard.io">security@vaultguard.io</a>.
+               We commit to a 24-hour acknowledgement and publish advisories within 90 days
+               of a fix. Our PGP key fingerprint is published at
+               <a href="/.well-known/security.txt">/.well-known/security.txt</a>.</p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 VaultGuard Identity, Inc.</p>
+        <nav aria-label="Legal">
+            <a href="/privacy">Privacy</a>
+            <a href="/terms">Terms</a>
+            <a href="/security.txt">security.txt</a>
+        </nav>
+    </footer>
+
+    <script src="https://cdn.vaultguard.io/js/webauthn.min.js"
+            integrity="sha384-9cXv375VxXbWOWQzpzZKa1YaNqRYu8ZL1T6Yy5J5m+u1sJ7B9Xf7oQZ0jH3WQGhR"
+            crossorigin="anonymous" defer></script>
+    <script src="/assets/js/demo-login.js" defer></script>
+</body>
+</html>

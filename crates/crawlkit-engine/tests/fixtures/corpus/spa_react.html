@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Acme Dashboard — Analytics for Modern Teams</title>
+    <meta name="robots" content="index,follow">
+    <meta name="theme-color" content="#111827">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Acme">
+    <meta name="application-name" content="Acme Dashboard">
+    <meta name="format-detection" content="telephone=no">
+    <link rel="icon" href="/favicon.ico" sizes="any">
+    <link rel="icon" href="/icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#5bbad5">
+    <link rel="preconnect" href="https://api.acme-dashboard.io" crossorigin>
+    <link rel="preconnect" href="https://cdn.acme-dashboard.io" crossorigin>
+    <link rel="dns-prefetch" href="https://fonts.acme-dashboard.io">
+    <link rel="preload" href="/static/js/bundle.4f7a2c.js" as="script">
+    <link rel="preload" href="/static/js/vendors.9d1e88.js" as="script">
+    <link rel="preload" href="/static/css/main.a1b2c3d4.css" as="style">
+    <link rel="preload" href="/static/fonts/Inter-Variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="/static/css/main.a1b2c3d4.css">
+    <style>
+        #root:empty::after {
+            content: "";
+            display: block;
+            width: 48px;
+            height: 48px;
+            margin: 40vh auto 0;
+            border: 3px solid #e5e7eb;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: app-boot-spin 0.8s linear infinite;
+        }
+        @keyframes app-boot-spin {
+            to { transform: rotate(360deg); }
+        }
+        html, body { margin: 0; padding: 0; height: 100%; }
+        body { font-family: Inter, system-ui, -apple-system, sans-serif; background: #f9fafb; }
+    </style>
+    <script>window.__ENV__ = "production";</script>
+    <script>window.__BUILD_ID__ = "build-20260831-a7f3c9";</script>
+    <script type="module" src="/static/js/vendors.9d1e88.js"></script>
+    <script type="module" src="/static/js/bundle.4f7a2c.js"></script>
+</head>
+<body>
+    <noscript>
+        <div style="max-width: 42rem; margin: 4rem auto; padding: 0 1rem; text-align: center;">
+            <h1>JavaScript is required</h1>
+            <p>Acme Dashboard is a single-page application and needs JavaScript enabled
+               to render the analytics workspace. Please enable JavaScript and reload
+               the page to continue.</p>
+            <p><a href="https://www.enable-javascript.io/">How to enable JavaScript</a></p>
+        </div>
+    </noscript>
+    <div id="root"></div>
+    <div id="modal-root"></div>
+    <div id="toast-root" aria-live="polite"></div>
+    <script id="__NEXT_DATA__" type="application/json">
+    {
+        "props": {
+            "pageProps": {
+                "user": null,
+                "workspace": null,
+                "featureFlags": {
+                    "newDashboard": true,
+                    "betaReports": false,
+                    "aiInsights": true,
+                    "legacyFunnel": false
+                },
+                "initialLocale": "en-US",
+                "serverTime": "2026-09-01T09:15:22Z",
+                "announcements": [
+                    {
+                        "id": "ann-2026-09",
+                        "title": "Scheduled maintenance",
+                        "body": "The reporting API will be read-only on Sept 12 between 02:00–04:00 UTC.",
+                        "level": "warning"
+                    }
+                ]
+            },
+            "__N_SSG": true
+        },
+        "page": "/",
+        "query": {},
+        "buildId": "build-20260831-a7f3c9",
+        "isFallback": false,
+        "gssp": false,
+        "runtimeConfig": {
+            "apiBase": "/api/v2",
+            "cdnBase": "https://cdn.acme-dashboard.io",
+            "sentry": { "enabled": true, "sampleRate": 0.15 }
+        },
+        "locale": "en-US",
+        "locales": ["en-US", "fr-FR", "de-DE", "es-ES", "ja-JP"],
+        "defaultLocale": "en-US"
+    }
+    </script>
+    <script>
+    (function () {
+        "use strict";
+        var cfg = {
+            apiBase: "https://api.acme-dashboard.io/v2",
+            cdnBase: "https://cdn.acme-dashboard.io",
+            sentryDsn: "https://abc123def456@sentry.io/42",
+            analyticsId: "UA-000000-2",
+            segmentKey: "s2gm3ntK3y",
+            stripeKey: "pk_live_51AcmeDashboard",
+            features: ["dashboard", "reports", "alerts", "exports"]
+        };
+        window.__APP_CONFIG__ = cfg;
+        window.addEventListener("error", function (e) {
+            if (window.__sentryQueue) { window.__sentryQueue.push(e); }
+        });
+        if ("serviceWorker" in navigator) {
+            window.addEventListener("load", function () {
+                navigator.serviceWorker.register("/sw.js").catch(function () { /* noop */ });
+            });
+        }
+        if ("IntersectionObserver" in window === false) {
+            document.documentElement.className += " no-io";
+        }
+    })();
+    </script>
+    <script defer src="https://static.cloudflareinsights.com/beacon.min.js"
+            data-cf-beacon='{"token": "cfbeacon123"}'></script>
+</body>
+</html>

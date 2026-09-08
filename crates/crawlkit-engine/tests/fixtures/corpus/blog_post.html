@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>How We Cut Our CI Pipeline From 40 Minutes to 6 — Engineering at Northwind</title>
+    <meta name="description" content="A detailed post-mortem of how the Northwind platform team reduced CI wall-clock time by 85% through test sharding, remote caching, dependency graph analysis, and ruthless flaky-test triage.">
+    <link rel="canonical" href="https://northwind.dev/blog/ci-pipeline-40-minutes-to-6">
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="How We Cut Our CI Pipeline From 40 Minutes to 6">
+    <meta property="og:description" content="Test sharding, remote caching, dependency graph analysis, and ruthless flaky-test triage.">
+    <meta property="og:url" content="https://northwind.dev/blog/ci-pipeline-40-minutes-to-6">
+    <meta property="og:image" content="https://cdn.northwind.dev/blog/ci-pipeline-cover.png">
+    <meta property="article:published_time" content="2026-07-12T08:00:00Z">
+    <meta property="article:modified_time" content="2026-08-03T14:22:00Z">
+    <meta property="article:author" content="Priya Raghavan">
+    <meta property="article:section" content="Platform Engineering">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:creator" content="@priya_builds">
+    <link rel="alternate" type="application/rss+xml" title="Northwind Engineering Blog" href="/blog/feed.xml">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "BlogPosting",
+        "headline": "How We Cut Our CI Pipeline From 40 Minutes to 6",
+        "description": "A detailed post-mortem of how the Northwind platform team reduced CI wall-clock time by 85%.",
+        "image": "https://cdn.northwind.dev/blog/ci-pipeline-cover.png",
+        "datePublished": "2026-07-12T08:00:00Z",
+        "dateModified": "2026-08-03T14:22:00Z",
+        "wordCount": 2140,
+        "keywords": ["CI", "continuous integration", "test sharding", "remote caching", "build performance"],
+        "articleSection": "Platform Engineering",
+        "author": {
+            "@type": "Person",
+            "name": "Priya Raghavan",
+            "url": "https://northwind.dev/authors/priya-raghavan",
+            "jobTitle": "Staff Platform Engineer"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Northwind",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "https://cdn.northwind.dev/logo-512.png"
+            }
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "https://northwind.dev/blog/ci-pipeline-40-minutes-to-6"
+        }
+    }
+    </script>
+    <link rel="stylesheet" href="/blog/assets/post.css">
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" class="site-logo">Northwind Engineering</a>
+        <nav aria-label="Primary">
+            <a href="/blog">Blog</a>
+            <a href="/blog/archive">Archive</a>
+            <a href="/careers">Careers</a>
+        </nav>
+    </header>
+
+    <main class="post" itemscope itemtype="https://schema.org/BlogPosting">
+        <article>
+            <header class="post-header">
+                <p class="post-meta">
+                    <time datetime="2026-07-12T08:00:00Z" itemprop="datePublished">July 12, 2026</time>
+                    · Updated <time datetime="2026-08-03T14:22:00Z" itemprop="dateModified">August 3, 2026</time>
+                    · <a href="/authors/priya-raghavan" rel="author" itemprop="author">Priya Raghavan</a>
+                    · 11 min read
+                </p>
+                <h1 itemprop="headline">How We Cut Our CI Pipeline From 40 Minutes to 6</h1>
+                <img src="https://cdn.northwind.dev/blog/ci-pipeline-cover.png"
+                     alt="Gantt chart comparing pipeline stages before and after optimization, with the after bar dramatically shorter"
+                     width="1200" height="630" itemprop="image">
+            </header>
+
+            <nav class="toc" aria-label="Table of contents">
+                <h2>Contents</h2>
+                <ol>
+                    <li><a href="#the-problem">The problem: a 40-minute wall</a></li>
+                    <li><a href="#measurement">Step one: measure everything</a></li>
+                    <li><a href="#sharding">Test sharding with historical timing data</a></li>
+                    <li><a href="#caching">Remote build and test caching</a></li>
+                    <li><a href="#flaky-tests">Killing flaky tests for good</a></li>
+                    <li><a href="#results">Results and what we would do differently</a></li>
+                </ol>
+            </nav>
+
+            <h2 id="the-problem">The problem: a 40-minute wall</h2>
+            <p>Every engineer at Northwind knew the ritual. You open a pull request, write a
+               careful description, request review, and then you wait. And wait. Our CI pipeline
+               had crept upward for three years until the median wall-clock time to a green
+               checkmark reached forty minutes and eleven seconds. Developers had learned to
+               context-switch away mid-review, and our pull requests sat open for an average of
+               fourteen hours before first review. The pipeline was not just slow; it was
+               quietly reshaping how the entire organization worked.</p>
+            <p>We set a hard target at the start of the quarter: median pipeline under ten
+               minutes, p95 under fifteen, without cutting coverage below the 82% gate. This
+               post is the full story of how we got to six minutes median — what worked, what
+               was a waste of effort, and the surprising cultural problems that surfaced along
+               the way.</p>
+
+            <h2 id="measurement">Step one: measure everything</h2>
+            <p>Before touching a single configuration file, we spent two weeks building a
+               pipeline telemetry dashboard. Every job emitted a structured timing event:
+               queue delay, environment setup, dependency restore, compile, test execution,
+               artifact upload, and teardown. Within a week we had thirty thousand pipeline
+               runs instrumented, and the data overturned several assumptions.</p>
+            <p>The compile phase, which everyone assumed was the bottleneck, took a median of
+               only four minutes. The real monster was test execution: twenty-two minutes at
+               the median, with a long tail of JavaScript integration suites that each spun up
+               their own containerized Postgres. Worse, queue delay averaged nine minutes
+               during peak hours because our runners were provisioned for a concurrent load
+               profile from 2023.</p>
+            <figure>
+                <img src="https://cdn.northwind.dev/blog/ci-stage-timings.png"
+                     alt="Box plots of pipeline stage durations showing test execution dominating at 22 minutes median"
+                     width="1100" height="700" loading="lazy">
+                <figcaption>Median stage durations across 30,041 pipeline runs, May 2026.
+                    Test execution dwarfs every other stage.</figcaption>
+            </figure>
+            <p>The lesson: instrument before you optimize. We would have wasted a quarter
+               caching compiles when the actual problem was test scheduling and queue capacity.</p>
+
+            <h2 id="sharding">Test sharding with historical timing data</h2>
+            <p>Our monorepo held roughly 14,000 test cases across Jest, pytest, and Go test.
+               The original CI config split tests into eight shards by directory, which
+               balanced file count but not execution time. One shard always drew the payment
+               integration suite and ran eleven minutes longer than the others.</p>
+            <p>We replaced directory sharding with timing-weighted sharding. Each test case
+               reports its duration to our telemetry pipeline, and the sharder packs shards
+               greedily, longest first, targeting a per-shard budget of four minutes. The
+               implementation is about two hundred lines of Python and reads a parquet file
+               of timing history that the CI system refreshes after every main-branch run.</p>
+            <pre><code>def shard(tests, budget_s=240.0, shards=8):
+    ordered = sorted(tests, key=lambda t: -t.p50_duration)
+    groups = [[] for _ in range(shards)]
+    totals = [0.0] * shards
+    for t in ordered:
+        i = min(range(shards), key=lambda k: totals[k])
+        groups[i].append(t)
+        totals[i] += t.p50_duration
+    return groups</code></pre>
+            <p>The first run of the new sharder cut test execution from twenty-two minutes to
+               seven and a half. The greedy packing isn't optimal, but it is deterministic and
+               easy to debug, which mattered more to us than squeezing out the final
+               percentage point that an exact solver would provide.</p>
+
+            <h3>Handling newly added tests</h3>
+            <p>New test cases have no timing history. We solved this pragmatically: unobserved
+               tests get a conservative default estimate of the p75 duration for their test
+               type, and their first real timing sample corrects the estimate on the next run.
+               This meant the shard balance degraded gracefully on branches that added many
+               tests rather than falling off a cliff.</p>
+
+            <h2 id="caching">Remote build and test caching</h2>
+            <p>With execution balanced, the next target was redundant work. Every pull request
+               rebuilt compiler artifacts and re-ran tests for code paths the changes could not
+               possibly reach. We introduced a content-addressed remote cache keyed on the
+               transitive input hash of each build target.</p>
+            <p>Dependency compilation hit rates were excellent from day one: 94% of
+               pull-request builds restored their full toolchain and third-party dependencies
+               from cache. Test result caching was harder. We only cache test results for
+               targets whose transitive closure of source files is unchanged, which required
+               generating a precise dependency graph. For our Go services we used the native
+               build list; for TypeScript we wrote a tsconfig-paths aware graph builder; for
+               Python we gave up on precise graphs and rely on sharding alone.</p>
+            <figure>
+                <img src="https://cdn.northwind.dev/blog/cache-hit-rates.png"
+                     alt="Line chart of cache hit rates rising from zero to 94 percent over six weeks of rollout"
+                     width="1100" height="650" loading="lazy">
+                <figcaption>Restore hit rate for dependency and artifact caches during rollout.</figcaption>
+            </figure>
+            <p>If you are evaluating this approach, budget real time for cache eviction
+               policy. We initially kept entries for thirty days and filled a two-terabyte
+               bucket in eleven days. We now keep main-branch artifacts for thirty days and
+               branch artifacts for four, which holds steady at about 600 GB.</p>
+
+            <h2 id="flaky-tests">Killing flaky tests for good</h2>
+            <p>A six-minute pipeline is worthless if 8% of runs fail spuriously. Our flake
+               rate at the start of the quarter was 7.9%, which meant nearly every developer
+               hit a red build that "just needs a retry" every week. Retries masked the
+               problem and added minutes of hidden latency.</p>
+            <p>We ran a four-week flake elimination push with three policies:</p>
+            <ol>
+                <li><strong>Automatic quarantine.</strong> Any test that fails and then passes
+                    on the same commit without a code change is quarantined within the hour.
+                    Quarantined tests run on a nightly schedule and post a daily digest.</li>
+                <li><strong>Root-cause review, not retry review.</strong> Every quarantined
+                    test gets an owner and a two-week deadline. The owning team either fixes
+                    the test, fixes the product bug it exposed, or deletes the test with a
+                    documented rationale.</li>
+                <li><strong>No new time-based assertions.</strong> Tests that assert elapsed
+                    time, animation frames, or debounce windows must use virtual clocks. The
+                    linter rejects real-clock sleeps in test code.</li>
+            </ol>
+            <p>The flake rate fell from 7.9% to 0.4% in six weeks. Roughly a third of
+               quarantined tests turned out to be exposing genuine race conditions in the
+               product — including a session-token refresh bug that had been silently
+               logging out about forty users a day.</p>
+            <blockquote>
+                <p>Flaky tests are not a testing problem. They are nondeterminism leaking out
+                of your system, and the pipeline is just the first place anyone notices.</p>
+                <cite>— Priya Raghavan</cite>
+            </blockquote>
+
+            <h3>What did not work</h3>
+            <p>Two investments underdelivered. First, moving the largest integration suites to
+               a container-native runner saved only forty seconds per suite once sharding
+               existed; the migration cost two engineer-weeks. Second, an experiment with
+               ML-based test selection predicted skipped tests with good precision but the
+               engineering cost of maintaining feature flags around every skip was
+               unsupportable. We shelved both after measuring them honestly.</p>
+
+            <h2 id="results">Results and what we would do differently</h2>
+            <p>The final numbers, measured across the four weeks following full rollout:</p>
+            <table>
+                <caption>Pipeline performance before and after optimization</caption>
+                <thead>
+                    <tr><th scope="col">Metric</th><th scope="col">Before</th><th scope="col">After</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>Median wall-clock</td><td>40m 11s</td><td>6m 02s</td></tr>
+                    <tr><td>p95 wall-clock</td><td>63m 40s</td><td>11m 18s</td></tr>
+                    <tr><td>Median queue delay</td><td>9m 05s</td><td>11s</td></tr>
+                    <tr><td>Flake rate</td><td>7.9%</td><td>0.4%</td></tr>
+                    <tr><td>Median time to first review</td><td>14.2 hours</td><td>3.1 hours</td></tr>
+                </tbody>
+            </table>
+            <p>The review-latency improvement was the payoff nobody predicted. When feedback
+               arrives in minutes, authors stay in context, reviewers triage while the change
+               is fresh, and stacks of dependent pull requests merge the same day.</p>
+            <p>If we started over, we would do measurement first (we did), sharding second
+               (we did), and skip the container-runner migration entirely until the last
+               possible moment. The unglamorous truth is that balanced scheduling and honest
+               flake triage delivered 80% of the win, and everything else was polish.</p>
+            <p>Want to dig into the sharder? It is open source under
+               <a href="https://github.com/northwind/ci-sharder" rel="noopener">northwind/ci-sharder</a>,
+               and the telemetry schema is documented in our
+               <a href="https://northwind.dev/docs/ci-telemetry">pipeline telemetry docs</a>.
+               For background on why slow feedback loops compound, we recommend the
+               research summary in <a href="https://queue.acm.org/detail.cfm?id=3454157" rel="noopener">ACM Queue</a>
+               and the <a href="https://dora.dev/research/" rel="noopener">DORA research program</a>
+               findings on deployment frequency.</p>
+        </article>
+
+        <aside class="related-posts">
+            <h2>Related reading</h2>
+            <ul>
+                <li><a href="/blog/monorepo-at-scale">Running a 3,000-engineer monorepo</a></li>
+                <li><a href="/blog/observability-budgets">Error budgets for build systems</a></li>
+                <li><a href="/blog/flaky-database-tests">Why your database tests flake</a></li>
+            </ul>
+        </aside>
+    </main>
+
+    <footer class="site-footer">
+        <p>&copy; 2026 Northwind Labs.</p>
+    </footer>
+    <script src="/blog/assets/highlight.js" defer></script>
+</body>
+</html>

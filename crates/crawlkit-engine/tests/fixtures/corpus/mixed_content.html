@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Harbor Point Credit Union — Online Banking</title>
+    <meta name="description" content="Harbor Point Credit Union online banking: check balances, transfer funds, and pay bills securely.">
+    <link rel="canonical" href="https://harborpointcu.org/login">
+    <meta name="robots" content="noindex">
+    <!-- All resources below intentionally served over HTTP to simulate mixed content -->
+    <link rel="stylesheet" href="http://cdn.harborpointcu.org/css/bootstrap-3.4.min.css">
+    <link rel="stylesheet" href="http://fonts.harborpointcu.org/opensans.css">
+    <link rel="stylesheet" href="http://cdn.harborpointcu.org/css/legacy-overrides.css">
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' http: https: 'unsafe-inline'">
+</head>
+<body class="banking-login">
+    <header class="site-header">
+        <img src="http://cdn.harborpointcu.org/img/logo-full.png" alt="Harbor Point Credit Union" width="240" height="60">
+        <nav class="quick-nav" aria-label="Quick links">
+            <a href="/rates">Rates</a>
+            <a href="/locations">Locations</a>
+            <a href="/contact">Contact</a>
+        </nav>
+        <p class="fdic-note">Deposits insured to $250,000 by NCUA</p>
+    </header>
+
+    <main class="login-main">
+        <section class="login-panel">
+            <h1>Online banking sign-in</h1>
+            <p class="security-note">Look for the padlock icon before entering your credentials.
+               Harbor Point will never ask for your full PIN online.</p>
+            <form action="http://www.harborpointcu.org/auth/login" method="post" id="login-form" autocomplete="off">
+                <input type="hidden" name="csrf" value="legacy-csrf-token-2026">
+                <div class="form-row">
+                    <label for="member-id">Member ID</label>
+                    <input type="text" id="member-id" name="member_id" required>
+                </div>
+                <div class="form-row">
+                    <label for="password">Password</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <div class="form-row">
+                    <input type="checkbox" id="remember-device" name="remember">
+                    <label for="remember-device">Remember this device for 30 days</label>
+                </div>
+                <button type="submit" class="btn-login">Sign in</button>
+            </form>
+            <p class="help-links">
+                <a href="https://harborpointcu.org/forgot-password">Forgot password?</a> ·
+                <a href="https://harborpointcu.org/enroll">Enroll in online banking</a> ·
+                <a href="https://harborpointcu.org/security">Security center</a>
+            </p>
+        </section>
+
+        <section class="rates-panel">
+            <h2>Current rates</h2>
+            <table>
+                <caption>Deposit and loan rates as of September 2026</caption>
+                <thead>
+                    <tr><th scope="col">Product</th><th scope="col">Rate</th><th scope="col">APY</th></tr>
+                </thead>
+                <tbody>
+                    <tr><td>High-Yield Savings</td><td>4.02%</td><td>4.10%</td></tr>
+                    <tr><td>12-Month CD</td><td>4.28%</td><td>4.35%</td></tr>
+                    <tr><td>60-Month CD</td><td>3.82%</td><td>3.90%</td></tr>
+                    <tr><td>30-Year Fixed Mortgage</td><td>6.125%</td><td>—</td></tr>
+                    <tr><td>New Auto Loan (48 mo)</td><td>5.49%</td><td>—</td></tr>
+                </tbody>
+            </table>
+            <p><img src="http://cdn.harborpointcu.org/img/promo-cd-banner.jpg"
+                    alt="12-month CD promotional banner: 4.35 percent APY" width="600" height="180"></p>
+            <p>Rates subject to change without notice. Early withdrawal penalties may apply
+               to share certificates. Membership eligibility required.</p>
+        </section>
+
+        <section class="widget-panel">
+            <h2>Financial news feed</h2>
+            <iframe src="http://feeds.harborpointcu.org/widgets/market-summary"
+                    width="560" height="320" title="Market summary widget"></iframe>
+            <p>Rates shown are for members in good standing. APY = Annual Percentage Yield.
+               Fees may reduce earnings. Ask a representative for details.</p>
+        </section>
+
+        <section class="legacy-video">
+            <h2>How to enroll (video)</h2>
+            <iframe src="http://videos.harborpointcu.org/embed/enrollment-tutorial"
+                    width="560" height="315" title="Enrollment tutorial video"></iframe>
+            <h2>Mobile app preview</h2>
+            <iframe src="http://videos.harborpointcu.org/embed/mobile-app-demo"
+                    width="560" height="315" title="Mobile banking app demo"></iframe>
+        </section>
+
+        <section class="branch-locator">
+            <h2>Find a branch or ATM</h2>
+            <iframe src="http://maps.harborpointcu.org/widgets/branch-locator"
+                    width="560" height="400" title="Branch and ATM locator map"></iframe>
+            <ul class="branch-list">
+                <li>Harbor Point Main Branch — 400 Harbor Blvd, open Mon–Fri 9am–5pm, Sat 9am–1pm</li>
+                <li>Westside Express Branch — 1180 Commerce Way, lobby open Mon–Fri 10am–4pm</li>
+                <li>Lakeside Kiosk — inside Lakeside Market, ATM only, 24/7</li>
+            </ul>
+        </section>
+
+        <section class="disclosures">
+            <h2>Disclosures</h2>
+            <p>Federally insured by NCUA. Equal Housing Lender. Loan approval subject to
+               credit approval and program guidelines. Third-party links are provided for
+               convenience; Harbor Point does not manage the content of external sites.
+               If you are using a screen reader and need assistance with this page, call
+               the accessibility line at <a href="tel:+18005550201">1-800-555-0201</a>.</p>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div>
+                <h3>Banking</h3>
+                <a href="/checking">Checking</a><br>
+                <a href="/savings">Savings</a><br>
+                <a href="/loans">Loans &amp; credit</a>
+            </div>
+            <div>
+                <h3>Support</h3>
+                <a href="https://harborpointcu.org/contact">Contact us</a><br>
+                <a href="https://harborpointcu.org/faq">FAQ</a><br>
+                <a href="https://harborpointcu.org/fraud-report">Report fraud</a>
+            </div>
+        </div>
+        <p>&copy; 2026 Harbor Point Credit Union · Routing 302175991 ·
+           <a href="https://harborpointcu.org/privacy">Privacy</a> ·
+           <a href="https://harborpointcu.org/security">Security center</a></p>
+    </footer>
+
+    <script src="http://cdn.harborpointcu.org/js/jquery-1.12.4.min.js"></script>
+    <script src="http://cdn.harborpointcu.org/js/bootstrap-3.4.min.js"></script>
+    <script src="http://cdn.harborpointcu.org/js/login-validation.js"></script>
+    <script src="http://cdn.harborpointcu.org/js/branch-locator.js"></script>
+    <script src="https://www.google-analytics.com/analytics.js" async></script>
+</body>
+</html>

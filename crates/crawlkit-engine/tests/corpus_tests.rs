@@ -17,11 +17,10 @@
 //!     dump_corpus_findings -- --ignored --nocapture
 //! ```
 //!
-//! Known harness artifact: fixtures are served at
-//! `https://example.com/<fixture>.html`, so canonical tags pointing at each
-//! fixture's fictional production domain (summitoutfitters.com, etc.)
-//! legitimately trigger cross-domain canonical codes (CANCON003). These are
-//! expected here and deliberately excluded from the manifest.
+//! The harness serves fixtures at `https://example.com/<fixture>.html` but
+//! each fixture's `<link rel="canonical">` points at its fictional production
+//! domain. To avoid harness-artifact findings (e.g. CANCON003), the page URL
+//! is rewritten to the fixture's canonical URL whenever one is present.
 
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
@@ -76,11 +75,29 @@ fn fixture_paths() -> Vec<PathBuf> {
 }
 
 /// Parse a fixture and run the complete analyzer registry against it.
+///
+/// The page URL defaults to `https://example.com/<file_name>` but is
+/// rewritten to the fixture's canonical URL when present, so canonical-vs-page
+/// analyzers see a self-consistent harness (mirroring production, where a
+/// page is fetched from its canonical address).
 fn analyze_fixture(registry: &AnalyzerRegistry, path: &Path) -> Vec<String> {
     let html = std::fs::read_to_string(path).expect("fixture must be readable");
     let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-    let url = Url::parse(&format!("https://example.com/{file_name}")).unwrap();
-    let page = HtmlParser::parse(&html, &url);
+    let fallback_url = Url::parse(&format!("https://example.com/{file_name}")).unwrap();
+
+    // First pass discovers the canonical URL (if any) so the analyzed page
+    // URL matches it; fixtures without a canonical keep the fallback URL.
+    let probe = HtmlParser::parse(&html, &fallback_url);
+    let url = probe
+        .meta
+        .canonical
+        .clone()
+        .unwrap_or_else(|| fallback_url.clone());
+    let page = if url.as_str() == fallback_url.as_str() {
+        probe
+    } else {
+        HtmlParser::parse(&html, &url)
+    };
 
     let ctx = AnalysisContext {
         page: &page,

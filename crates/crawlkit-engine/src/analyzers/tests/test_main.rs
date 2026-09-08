@@ -1452,6 +1452,47 @@ fn test_structured_data_missing_type() {
 }
 
 #[test]
+fn test_structured_data_graph_types_are_not_missing_type() {
+    // A `@graph` wrapper carries the typed nodes; a missing root-level
+    // @type must NOT fire SD004.
+    let mut page = make_page("https://example.com");
+    page.structured_data = vec![StructuredData {
+        context: Some("https://schema.org".to_string()),
+        r#type: None,
+        data: serde_json::json!({
+            "@context": "https://schema.org",
+            "@graph": [
+                {"@type": "Organization", "name": "Example Corp"},
+                {"@type": "WebSite", "url": "https://example.com"}
+            ]
+        }),
+    }];
+    let ctx = make_ctx(&page, Some(200));
+    let findings = StructuredDataValidator::new().analyze(&ctx);
+    assert!(
+        !findings.iter().any(|f| f.code == "SD004"),
+        "@graph with typed entries must not fire SD004: {findings:?}"
+    );
+}
+
+#[test]
+fn test_structured_data_graph_without_types_still_fires_sd004() {
+    // @graph present but no typed entries: the missing-@type error stands.
+    let mut page = make_page("https://example.com");
+    page.structured_data = vec![StructuredData {
+        context: Some("https://schema.org".to_string()),
+        r#type: None,
+        data: serde_json::json!({
+            "@context": "https://schema.org",
+            "@graph": [{"name": "untyped node"}]
+        }),
+    }];
+    let ctx = make_ctx(&page, Some(200));
+    let findings = StructuredDataValidator::new().analyze(&ctx);
+    assert!(findings.iter().any(|f| f.code == "SD004"));
+}
+
+#[test]
 fn test_structured_data_unknown_type() {
     let mut page = make_page("https://example.com");
     page.structured_data = vec![StructuredData {

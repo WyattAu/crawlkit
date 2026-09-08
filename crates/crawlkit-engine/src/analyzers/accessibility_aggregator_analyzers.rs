@@ -218,6 +218,11 @@ impl AccessibilityAnalyzer {
     fn check_form_labels(&self, ctx: &AnalysisContext, url: &str, f: &mut Vec<Finding>) {
         for form in &ctx.page.forms {
             for input in &form.inputs {
+                // Hidden inputs are never rendered or focusable, so they do
+                // not require an accessible name (WCAG H44 / HTML spec).
+                if input.input_type.as_deref() == Some("hidden") {
+                    continue;
+                }
                 if !input.has_label {
                     let desc = match (&input.name, &input.input_type) {
                         (Some(n), Some(t)) => format!("input (name={n}, type={t})"),

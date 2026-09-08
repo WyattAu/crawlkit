@@ -211,11 +211,14 @@ fn mixed_content_flags_http_asset_on_https_page() {
 }
 
 #[test]
-fn tabindex_flags_positive_and_negative_usage() {
+fn tabindex_flags_positive_but_not_negative_usage() {
     let mut page = page_at("https://example.com");
     page.has_positive_tabindex = true;
     page.tabindex_negative_count = 2;
     let f = TabindexAnalyzer::new().analyze(&ctx(&page, Some(200), &[], None));
     assert!(f.iter().any(|f| f.code == "TABINDEX001"), "{f:?}");
-    assert!(f.iter().any(|f| f.code == "TABINDEX002"), "{f:?}");
+    assert!(
+        !f.iter().any(|f| f.code == "TABINDEX002"),
+        "tabindex=-1 is valid and must not fire: {f:?}"
+    );
 }

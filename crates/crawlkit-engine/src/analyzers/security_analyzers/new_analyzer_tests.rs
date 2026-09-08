@@ -954,14 +954,16 @@ fn test_tabindex_positive() {
 }
 
 #[test]
-fn test_tabindex_negative() {
+fn test_tabindex_negative_does_not_fire() {
     let mut page = make_page("https://example.com");
     page.tabindex_negative_count = 5;
     let ctx = make_ctx(&page, Some(200), &[], None);
-    assert!(TabindexAnalyzer::new()
-        .analyze(&ctx)
-        .iter()
-        .any(|f| f.code == "TABINDEX002"));
+    let findings = TabindexAnalyzer::new().analyze(&ctx);
+    assert!(
+        !findings.iter().any(|f| f.code == "TABINDEX002"),
+        "tabindex=-1 is valid and must not fire: {findings:?}"
+    );
+    assert!(findings.is_empty());
 }
 
 #[test]
@@ -972,7 +974,7 @@ fn test_tabindex_both() {
     let ctx = make_ctx(&page, Some(200), &[], None);
     let findings = TabindexAnalyzer::new().analyze(&ctx);
     assert!(findings.iter().any(|f| f.code == "TABINDEX001"));
-    assert!(findings.iter().any(|f| f.code == "TABINDEX002"));
+    assert!(!findings.iter().any(|f| f.code == "TABINDEX002"));
 }
 
 #[test]

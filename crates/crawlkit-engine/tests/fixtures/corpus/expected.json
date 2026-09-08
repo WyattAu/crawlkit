@@ -1,0 +1,102 @@
+{
+  "spa_react.html": {
+    "must_have": ["METADESCMISS001", "HEAD001", "CANMISS001", "SD001", "A11Y006"],
+    "must_not_have": ["META001", "TITLEMISS001", "LANG001", "MIXSCR001", "MOB001"],
+    "notes": "React SPA shell: title + viewport exist, but no meta description, no headings, no canonical, no JSON-LD, and no main landmark. LANG001/META001 must be absent because lang=en and <title> are present."
+  },
+  "spa_vue.html": {
+    "must_have": ["META001", "TITLEMISS001", "HEAD001", "METADESCMISS001", "LANG001"],
+    "must_not_have": ["IMG001", "MIXSCR001", "MOB001", "ROBOTS001"],
+    "notes": "Vue SPA intentionally ships without <title>, meta description, or html lang — all three omissions must be detected. Viewport exists, so MOB001 must not fire."
+  },
+  "ecommerce_product.html": {
+    "must_have": ["SCNEST001", "IMG003", "KW001", "LINK001"],
+    "must_not_have": ["OFFER001", "SD001", "SD004", "CANCON003", "THIN002", "IMG001", "MOB001"],
+    "notes": "Complete Product schema inside an @graph wrapper (no root @type), with valid Offer and aggregateRating. OFFER001 (offer error) must NOT fire; SD001 must NOT fire because JSON-LD exists; SD004 must NOT fire because @graph entries carry @type. CANCON003 must NOT fire because the harness serves the page from its canonical URL."
+  },
+  "blog_post.html": {
+    "must_have": ["IMG003", "A11Y008", "SKIPLINK001", "KW001", "LINK001"],
+    "must_not_have": ["THIN002", "METADESCMISS001", "TITLEMISS001", "MOB001", "SD001"],
+    "notes": "2000+ word article with BlogPosting JSON-LD: content-rich page must not trigger THIN002; has nav landmark but no skip link, so A11Y008 and SKIPLINK001 must both fire."
+  },
+  "corporate_about.html": {
+    "must_have": ["A11Y008", "SKIPLINK001", "IMG003", "KW001"],
+    "must_not_have": ["SD001", "THIN002", "MOB001", "IMG001", "METADESCMISS001"],
+    "notes": "Organization schema present (so no SD001); all images have alt text; meta description exists. Skip-link omissions (A11Y008 + SKIPLINK001) are the archetype's known gap."
+  },
+  "security_heavy.html": {
+    "must_have": ["SD001"],
+    "must_not_have": ["FLABEL001", "A11Y011", "FORMLAB001", "MIXSCR001", "METADESCMISS001", "ROBOTS001", "IMG001"],
+    "notes": "Security-meta page with a WebAuthn demo form. Its fieldset checkboxes use implicit <label><input> nesting and its hidden CSRF inputs never need accessible names, so none of the unlabeled-input codes (FLABEL001/A11Y011/FORMLAB001) may fire. No JSON-LD, but description exists and all resources are HTTPS."
+  },
+  "multi_language.html": {
+    "must_have": ["A11Y008", "SKIPLINK001", "IMG003", "KW001", "LINK001"],
+    "must_not_have": ["HREF001", "HREFXD001", "HREFMISS001", "CLANG001", "MOB001"],
+    "notes": "Reciprocal hreflang cluster (fr/en/de/es + x-default) with html lang=fr matching the fr hreflang: all hreflang-error and content-language-mismatch codes must be absent."
+  },
+  "accessibility_focused.html": {
+    "must_have": ["LINK001", "KW001", "READ001"],
+    "must_not_have": ["A11Y001", "A11Y002", "A11Y006", "A11Y008", "SKIPLINK001", "IMG001", "TABINDEX002"],
+    "notes": "Exemplary accessibility page: skip link, main landmark, headings, labeled inputs, alt text. The core assertion is the ABSENCE of every basic a11y error code. TABINDEX002 must NOT fire: the main landmark's tabindex=-1 is a valid, intentional skip-link target pattern."
+  },
+  "minimal_landing.html": {
+    "must_have": ["METADESCMISS001", "HEAD001", "THIN002", "CANMISS001", "MOB001"],
+    "must_not_have": ["ROBOTS001", "MIXSCR001", "CLANG001"],
+    "notes": "Intentionally thin landing page: no description, no headings, no canonical, no viewport, under 100 words. HTTP-only-resource codes must be absent (single HTTPS external link)."
+  },
+  "error_404_content.html": {
+    "must_have": ["HTTP007", "ROBOTS001", "METADESCMISS001", "THIN002", "SD001"],
+    "must_not_have": ["MIXSCR001", "MOB001"],
+    "notes": "Soft 404: error-page content served as 200. HTTP007 (soft-404 detection) and ROBOTS001 (noindex meta) are the archetype's defining findings."
+  },
+  "dark_mode_heavy.html": {
+    "must_have": ["SD001", "KW001", "LINK001"],
+    "must_not_have": ["THIN002", "METADESCMISS001", "IMG001", "MIXSCR001"],
+    "notes": "Style-block-heavy dark theme page. Validates that extensive CSS does not corrupt text extraction: meta description intact, word count above thin threshold, no HTTP resources."
+  },
+  "schema_rich.html": {
+    "must_have": ["LBPI-V2001", "OLOGO001", "VIDTHUMB-V5001", "ELINK001"],
+    "must_not_have": ["SD001", "THIN002", "METADESCMISS001", "MOB001", "IMG001"],
+    "notes": "Five JSON-LD blocks (LocalBusiness, WebSite+SearchAction, BreadcrumbList, FAQPage, VideoObject). SCNEST001 confirms nested-schema detection; SD001 must be absent."
+  },
+  "redirect_chain.html": {
+    "must_have": ["HREF001", "HREFXD001", "ROBOTS001", "METADESCMISS001"],
+    "must_not_have": ["MIXSCR001", "MOB001", "HREFMISS001"],
+    "notes": "Meta refresh + cross-domain canonical + single hreflang without x-default: HREF001/HREFXD001 must fire while HREFMISS001 (no hreflang at all) must not."
+  },
+  "media_heavy.html": {
+    "must_have": ["IMG001", "IMG003", "IMG005", "ASYNC001", "SCRIPT002"],
+    "must_not_have": ["METADESCMISS001", "MOB001", "MIXSCR001"],
+    "notes": "34 images (two without alt, gif/bmp/data-URI mix, many lazy) plus blocking scripts: IMG001, IMG003, IMG005, ASYNC001, and SCRIPT002 must all fire."
+  },
+  "pagination_page.html": {
+    "must_have": ["META005", "TITLE002", "SKIPLINK001", "KW001"],
+    "must_not_have": ["THIN002", "METADESCMISS001", "MOB001", "IMG001"],
+    "notes": "Page 2 of 5 with rel=prev/next and self canonical: 118-char description triggers META005 (too short), 62-char title triggers TITLE002; content is substantive enough to avoid THIN002."
+  },
+  "mixed_content.html": {
+    "must_have": ["MIXED001", "MIXSCR001", "MIXIMG001", "MIXIFRAME001", "MIXFRM001"],
+    "must_not_have": ["MOB001", "METADESCMISS001", "IMG001", "ROBOTS001", "FLABEL001", "A11Y011", "FORMLAB001", "CANCON003"],
+    "notes": "HTTPS page URL with HTTP script/style/image/iframe/form-action resources: the full mixed-content family (MIXED001 plus per-resource-type codes) must fire. ROBOTS001 must NOT fire: the page is a /login utility page where noindex is intentional. The hidden CSRF input and explicitly labeled inputs must not fire unlabeled-input codes."
+  },
+  "amp_page.html": {
+    "must_have": ["RNUT001", "A11Y008", "META005", "KW001"],
+    "must_not_have": ["THIN002", "METADESCMISS001", "MOB001", "SD001"],
+    "notes": "AMP recipe page with Recipe JSON-LD missing nutrition info (RNUT001). Boilerplate and amp-img tags must not break description extraction or word counting."
+  },
+  "empty_page.html": {
+    "must_have": ["META001", "TITLEMISS001", "HEAD001", "LANG001", "SD001"],
+    "must_not_have": ["IMG001", "MIXSCR001", "ROBOTS001", "CLANG001"],
+    "notes": "Bare <html><head><title></title></head><body></body></html>: empty title must be treated as missing (META001 + TITLEMISS001), no lang attribute, no headings, no JSON-LD."
+  },
+  "unicode_heavy.html": {
+    "must_have": ["CLANG001", "HREF001", "HREFXD001", "TITLE001", "KW001"],
+    "must_not_have": ["MIXSCR001", "MOB001", "THIN002", "IMG001"],
+    "notes": "CJK/RTL/emoji content with html lang=zh-Hans but no matching zh hreflang: CLANG001 must fire. Analysers must handle multibyte text without crashing or missing the description."
+  },
+  "iframe_heavy.html": {
+    "must_have": ["THIN002", "KW001", "LINK001", "SD001"],
+    "must_not_have": ["MIXSCR001", "MOB001", "METADESCMISS001", "IMG001"],
+    "notes": "Eight iframes (YouTube, Google Maps, same-origin) dominate the page: iframe content must NOT be counted as page text, keeping the word count in thin-content territory."
+  }
+}

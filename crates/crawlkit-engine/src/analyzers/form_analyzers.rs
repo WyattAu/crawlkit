@@ -33,6 +33,11 @@ impl Analyzer for FormLabelAnalyzer {
 
         for form in &ctx.page.forms {
             for input in &form.inputs {
+                // Hidden inputs are never rendered or focusable, so they do
+                // not require an accessible name (WCAG H44 / HTML spec).
+                if input.input_type.as_deref() == Some("hidden") {
+                    continue;
+                }
                 if !input.has_label {
                     let aria_has_name = input
                         .aria_label

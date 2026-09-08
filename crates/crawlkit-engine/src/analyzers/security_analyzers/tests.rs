@@ -1,8 +1,9 @@
 use super::*;
 use crate::analyzers::{
-    AriaRolesAnalyzer, CookieAnalyzer, FocusManagementAnalyzer, FormLabelAnalyzer,
-    HeadingOrderAnalyzer, ImageAccessibilityAnalyzer, LandmarkRegionsAnalyzer,
-    LinkAccessibilityAnalyzer, TableAccessibilityAnalyzer,
+    AccessibilityAnalyzer, AriaRolesAnalyzer, CookieAnalyzer, FocusManagementAnalyzer,
+    FormLabelAnalyzer, FormLabelAssociationAnalyzer, HeadingOrderAnalyzer,
+    ImageAccessibilityAnalyzer, LandmarkRegionsAnalyzer, LinkAccessibilityAnalyzer,
+    TableAccessibilityAnalyzer,
 };
 use crate::analyzers::{
     ContentSecurityPolicyAnalyzer, ContentTypeSniffingAnalyzer, CrossOriginEmbedderPolicyAnalyzer,
@@ -1553,6 +1554,90 @@ fn test_form_label_unnamed_input() {
     assert!(findings.iter().any(|f| f.code == "FLABEL001"));
     let f = findings.iter().find(|f| f.code == "FLABEL001").unwrap();
     assert!(f.description.contains("input (type=\"text\")"));
+}
+
+// ===== Form-label false-positive regression tests =====
+//
+// WCAG allows implicit labeling (input nested inside <label>) and hidden
+// inputs never need accessible names. Neither pattern may fire the
+// unlabeled-input findings.
+
+fn parse_form_fixture(html: &str) -> ParsedPage {
+    use crate::parser::HtmlParser;
+    let url = Url::parse("https://example.com/form").unwrap();
+    HtmlParser::parse(html, &url)
+}
+
+fn form_label_ctx<'a>(html: &'a str, page: &'a ParsedPage) -> crate::analyzers::AnalysisContext<'a> {
+    crate::analyzers::AnalysisContext {
+        page,
+        body: Some(html),
+        status_code: Some(200),
+        headers: &[],
+        response_time: None,
+        redirect_chain: &[],
+        robots_txt: None,
+        body_size: None,
+        compressed_size: None,
+        server: None,
+        content_type: None,
+        rendered: None,
+    }
+}
+
+#[test]
+fn test_form_label_implicit_label_not_flagged() {
+    let html = r#"<html><body><form action="/" method="post">
+        <label><input type="checkbox" name="agree"> I agree</label>
+        <button type="submit">Continue</button>
+    </form></body></html>"#;
+    let page = parse_form_fixture(html);
+    let ctx = form_label_ctx(html, &page);
+
+    assert!(
+        !page.forms.is_empty(),
+        "parser must extract the form for this regression test"
+    );
+    assert!(
+        page.forms[0]
+            .inputs
+            .iter()
+            .all(|i| i.has_label),
+        "implicit <label><input> nesting must mark the input as labeled"
+    );
+
+    let flabel = FormLabelAnalyzer::new().analyze(&ctx);
+    let a11y = AccessibilityAnalyzer::new().analyze(&ctx);
+    let formlab = FormLabelAssociationAnalyzer::new().analyze(&ctx);
+    assert!(
+        !flabel.iter().any(|f| f.code == "FLABEL001")
+            && !a11y.iter().any(|f| f.code == "A11Y011")
+            && !formlab.iter().any(|f| f.code == "FORMLAB001"),
+        "implicitly labeled input must not fire unlabeled findings: \
+         flabel={flabel:?} a11y={a11y:?} formlab={formlab:?}"
+    );
+}
+
+#[test]
+fn test_form_label_hidden_input_not_flagged() {
+    let html = r#"<html><body><form action="/" method="post">
+        <input type="hidden" name="csrf_token" value="abc123">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email">
+    </form></body></html>"#;
+    let page = parse_form_fixture(html);
+    let ctx = form_label_ctx(html, &page);
+
+    let flabel = FormLabelAnalyzer::new().analyze(&ctx);
+    let a11y = AccessibilityAnalyzer::new().analyze(&ctx);
+    let formlab = FormLabelAssociationAnalyzer::new().analyze(&ctx);
+    assert!(
+        !flabel.iter().any(|f| f.code == "FLABEL001")
+            && !a11y.iter().any(|f| f.code == "A11Y011")
+            && !formlab.iter().any(|f| f.code == "FORMLAB001"),
+        "hidden inputs never need accessible names: \
+         flabel={flabel:?} a11y={a11y:?} formlab={formlab:?}"
+    );
 }
 
 // ===== TableAccessibilityAnalyzer tests =====

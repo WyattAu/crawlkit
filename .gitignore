@@ -27,6 +27,8 @@ Thumbs.db
 !crates/*/Cargo.json
 !package.json
 !package-lock.json
+# Corpus expectation manifest required by tests/corpus_tests.rs
+!crates/crawlkit-engine/tests/fixtures/corpus/expected.json
 
 # SQLite databases
 *.db

@@ -35,6 +35,10 @@ impl Analyzer for TabindexAnalyzer {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
 
+        // Only positive tabindex is an accessibility issue. tabindex=-1 is a
+        // valid, intentional pattern (removes from tab order while keeping
+        // the element programmatically focusable), so negative counts must
+        // not produce findings.
         if ctx.page.has_positive_tabindex {
             findings.push(Finding {
                 severity: Severity::Error,
@@ -48,25 +52,6 @@ impl Analyzer for TabindexAnalyzer {
                 url: url.clone(),
                 recommendation: "Use tabindex=\"0\" to add elements to the natural tab \
                                  order or tabindex=\"-1\" for programmatic focus only."
-                    .to_string(),
-            });
-        }
-
-        if ctx.page.tabindex_negative_count > 0 {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Accessibility,
-                code: "TABINDEX002".to_string(),
-                title: "Elements removed from tab order with tabindex=-1".to_string(),
-                description: format!(
-                    "{} element(s) use tabindex=-1, removing them from the tab \
-                         order. This is acceptable for programmatically focused elements \
-                         but should not be used to hide interactive content.",
-                    ctx.page.tabindex_negative_count
-                ),
-                url: url.clone(),
-                recommendation: "Ensure elements with tabindex=-1 are not interactive \
-                                     elements that users need to reach."
                     .to_string(),
             });
         }

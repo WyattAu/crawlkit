@@ -211,8 +211,19 @@ impl Analyzer for StructuredDataValidator {
             }
 
             // Validate @type
-            match &sd.r#type {
-                None => {
+            //
+            // A `@graph` wrapper carries the typed nodes downstream, so a
+            // missing root-level `@type` is only an error when `@graph` is
+            // absent (or contains no typed entries).
+            let has_graph_types = sd
+                .data
+                .get("@graph")
+                .and_then(|g| g.as_array())
+                .map(|arr| arr.iter().any(|item| item.get("@type").is_some()))
+                .unwrap_or(false);
+
+            match (&sd.r#type, has_graph_types) {
+                (None, false) => {
                     findings.push(Finding {
                         severity: Severity::Error,
                         category: IssueCategory::Schema,
@@ -224,7 +235,8 @@ impl Analyzer for StructuredDataValidator {
                             .to_string(),
                     });
                 }
-                Some(type_val) => {
+                (None, true) => {}
+                (Some(type_val), _) => {
                     if !RECOGNIZED_TYPES.contains(&type_val.as_str()) {
                         findings.push(Finding {
                             severity: Severity::Warning,

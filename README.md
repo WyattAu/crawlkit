@@ -135,16 +135,16 @@ output_dir = "./crawl-results"
 
 ## Performance
 
-> All numbers measured on local hardware. See [benchmarks/measured-v5.3.0.md](docs/benchmarks/measured-v5.3.0.md) for methodology.
+> All numbers measured on local hardware. See [benchmarks/measured-v5.1.0.md](docs/benchmarks/measured-v5.1.0.md) for methodology and load caveats.
 
 | Metric | Value |
 |--------|-------|
-| Throughput (TestServer, 10 pages) | 301.5 pages/sec |
-| Binary size | Workload/toolchain dependent; see the reproducible benchmark artifact |
-| Startup time | Workload/toolchain dependent; see the reproducible benchmark artifact |
-| HTML parse (5 KB) | 610 µs |
-| Full analyzer suite (200 analyzers) | 1.48 ms/page |
-| PageRank (100 nodes, 20 iterations) | 981 µs |
+| Throughput (TestServer, 50–500 pages, conc=4) | 128.9–191.0 pages/sec |
+| Binary size (release, LTO+strip) | 24.6 MiB |
+| Startup time (median, N=50) | 4.1 ms |
+| HTML parse (5 KB) | 594 µs |
+| Full analyzer suite (registry) | 2.09 ms/page |
+| PageRank (100 nodes, 20 iterations) | 912 µs |
 
 Run benchmarks:
 

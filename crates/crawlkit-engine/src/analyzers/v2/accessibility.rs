@@ -1,5 +1,6 @@
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::manual_range_contains,
     clippy::redundant_closure,
     clippy::collapsible_if,
@@ -18,6 +19,67 @@
 )]
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
+
+/// Extracts actual CSS from a page as individual rule blocks.
+///
+/// Blocks come from `<style>` element contents and inline `style`
+/// attributes, lowercased. Matching raw body text instead also hit HTML
+/// comments, code samples, and script strings — flagging pages whose only
+/// "problem" was a mention of CSS in prose.
+fn style_rule_blocks(body: &str) -> Vec<String> {
+    let doc = scraper::Html::parse_document(body);
+    let mut blocks = Vec::new();
+    let style_sel = scraper::Selector::parse("style").expect("static selector");
+    for el in doc.select(&style_sel) {
+        let css = el.text().collect::<String>().to_lowercase();
+        for block in css.split('}') {
+            let block = block.trim();
+            if !block.is_empty() {
+                blocks.push(block.to_string());
+            }
+        }
+    }
+    let any_sel = scraper::Selector::parse("*").expect("static selector");
+    for el in doc.select(&any_sel) {
+        if let Some(style) = el.value().attr("style") {
+            let style = style.trim().to_lowercase();
+            if !style.is_empty() {
+                blocks.push(style);
+            }
+        }
+    }
+    blocks
+}
+
+/// True when a single CSS rule block declares both a light foreground and a
+/// light background — a strong light-on-light contrast signal. Cross-block
+/// co-occurrence (e.g. white text in one rule, white background in another)
+/// is NOT a contrast problem and must not be flagged.
+fn has_light_on_light_block(blocks: &[String]) -> bool {
+    blocks.iter().any(|b| {
+        let compact: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+        // Replace `background-color` first so the foreground patterns cannot
+        // substring-match inside background declarations.
+        let no_bg = compact.replace("background-color", "bg");
+        let fg_light = ["color:#fff", "color:#ffffff", "color:white"]
+            .iter()
+            .any(|p| no_bg.contains(p));
+        let bg_light = ["bg:#fff", "bg:#ffffff", "bg:white"]
+            .iter()
+            .any(|p| no_bg.contains(p));
+        fg_light && bg_light
+    })
+}
+
+/// True when a CSS rule block targets anchor (`a`) elements.
+fn selector_targets_anchor(block: &str) -> bool {
+    match block.split('{').next() {
+        Some(sel) => sel
+            .split([' ', ',', '>', '+', '~', ':', '.'])
+            .any(|tok| tok.trim() == "a"),
+        None => false,
+    }
+}
 
 pub struct AriaLandmarksAnalyzerV2;
 impl Default for AriaLandmarksAnalyzerV2 {
@@ -464,9 +526,16 @@ impl Analyzer for ColorContrastTextAnalyzerV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let hidden =
-                lower.matches("opacity:0").count() + lower.matches("visibility:hidden").count();
+            // Inspect real CSS only: `opacity: 0` (with a space) in a rule
+            // was previously missed while the same string in a comment or
+            // code sample was flagged.
+            let hidden = style_rule_blocks(body)
+                .iter()
+                .filter(|b| {
+                    let compact: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+                    compact.contains("opacity:0") || compact.contains("visibility:hidden")
+                })
+                .count();
             if hidden > 0 {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -502,8 +571,14 @@ impl Analyzer for ColorContrastLinkAnalyzerV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            if lower.contains("text-decoration: none") && lower.contains("color:") {
+            // "text-decoration: none" and a color declaration must co-occur
+            // in a single rule; previously ANY occurrence anywhere (comments,
+            // code samples, unrelated elements) flagged the whole page.
+            let underline_removed = style_rule_blocks(body).iter().any(|b| {
+                let compact: String = b.chars().filter(|c| !c.is_whitespace()).collect();
+                compact.contains("text-decoration:none") && compact.contains("color:")
+            });
+            if underline_removed {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Accessibility,
@@ -2804,10 +2879,11 @@ impl Analyzer for ColorContrastTextDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let light_on_light = lower.contains("color: #fff")
-                && lower.contains("background-color: #fff")
-                || lower.contains("color: white") && lower.contains("background-color: white");
+            // Light foreground and light background must appear in the SAME
+            // rule; white text in one rule and a white background in another
+            // (e.g. a dark header on a white page) is not a contrast issue.
+            let blocks = style_rule_blocks(body);
+            let light_on_light = has_light_on_light_block(&blocks);
             if light_on_light {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -2844,11 +2920,12 @@ impl Analyzer for ColorContrastLinkDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let light_link = (lower.contains("a { color: #fff")
-                || lower.contains("a {color: white"))
-                && (lower.contains("background-color: #fff")
-                    || lower.contains("background-color: white"));
+            // The light foreground and light background must appear in one
+            // rule that actually targets anchor elements; a mention of
+            // `a { color: #fff` in a code sample no longer triggers this.
+            let light_link = style_rule_blocks(body).iter().any(|b| {
+                selector_targets_anchor(b) && has_light_on_light_block(std::slice::from_ref(b))
+            });
             if light_link {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -4297,6 +4374,86 @@ mod tests {
             .is_empty());
         assert!(FormLabelsDeepDeepDeepValidator::new()
             .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: CSS-based checks must inspect real CSS (style elements and
+    // inline style attributes) rather than raw body text, and contrast checks
+    // must require foreground/background to co-occur in one rule.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_contrast_deep_ignores_css_in_comments_and_code() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body>
+            <!-- style: color: #fff on background-color: #fff -->
+            <pre>a { color: #fff; background-color: #fff; }</pre>
+            <script>var css = "color: #fff; background-color: #fff";</script>
+        </body></html>"#;
+        assert!(ColorContrastTextDeepValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+        assert!(ColorContrastLinkDeepValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_contrast_deep_requires_same_rule() {
+        let p = make_page("https://example.com");
+        // White text in one rule, white background in another: not a
+        // light-on-light problem.
+        let body = r#"<html><head><style>
+            h1 { color: #fff; }
+            .page { background-color: #fff; }
+        </style></head><body></body></html>"#;
+        assert!(ColorContrastTextDeepValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_contrast_deep_detects_same_rule_light_on_light() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><head><style>
+            .badge { color: #fff; background-color: #fff; }
+        </style></head><body></body></html>"#;
+        let f = ColorContrastTextDeepValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.iter().any(|x| x.code == "COLRCT-V2001"));
+    }
+    #[test]
+    fn test_link_contrast_deep_detects_light_anchor_rule() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><head><style>
+            a { color: #fff; background-color: #fff; }
+        </style></head><body></body></html>"#;
+        let f = ColorContrastLinkDeepValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.iter().any(|x| x.code == "COLRCL-V2001-DEEP"));
+    }
+    #[test]
+    fn test_link_underline_v2_ignores_prose_mentions() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body>
+            <p>Remember: text-decoration: none removes underlines, and color: matters.</p>
+        </body></html>"#;
+        assert!(ColorContrastLinkAnalyzerV2::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_hidden_text_v2_detects_spaced_property() {
+        let p = make_page("https://example.com");
+        // "opacity: 0" with a space was previously missed.
+        let body = r#"<html><head><style>
+            .sr-only { opacity: 0; }
+        </style></head><body></body></html>"#;
+        let f = ColorContrastTextAnalyzerV2::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.iter().any(|x| x.code == "COLRCT-V2003"));
+    }
+    #[test]
+    fn test_hidden_text_v2_ignores_comment_mention() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body><!-- never use visibility:hidden for screen readers --></body></html>"#;
+        assert!(ColorContrastTextAnalyzerV2::new()
+            .analyze(&make_ctx(&p, Some(body)))
             .is_empty());
     }
 }

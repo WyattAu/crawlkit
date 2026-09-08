@@ -179,12 +179,16 @@ fn canonical_self_reference_ddd_is_exact_duplicate_of_deep_deep() {
 #[test]
 fn canonical_chain_ddd_is_subset_of_deep_deep() {
     let p = page();
-    // Curly quotes are only detected by the deep-deep variant.
+    // Curly-quoted rel values (`rel=“canonical”`) are not valid
+    // canonical link elements: both generations now correctly ignore them.
     let curly =
         r#"<link rel=“canonical” href="https://a.com"><link rel=“canonical” href="https://b.com">"#;
     let dd = CanonicalChainDeepDeepValidator::new().analyze(&ctx(&p, &[], curly));
     let ddd = CanonicalChainDeepDeepDeepValidator::new().analyze(&ctx(&p, &[], curly));
-    assert_eq!(dd.len(), 1, "deep-deep detects curly-quote duplicates");
+    assert!(
+        dd.is_empty(),
+        "curly-quoted rel is not a valid canonical element"
+    );
     assert!(
         ddd.is_empty(),
         "deep-deep-deep must stay silent (subset property): {ddd:?}"

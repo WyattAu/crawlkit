@@ -1,5 +1,6 @@
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::manual_range_contains,
     clippy::redundant_closure,
     clippy::collapsible_if,
@@ -296,7 +297,27 @@ impl Analyzer for MixedContentDetectionAnalyzerV2 {
                     recommendation: "Change all URLs to HTTPS.".to_string(),
                 });
             }
-            let upgrade_hint = body.to_lowercase().contains("upgrade-insecure-requests");
+            // The upgrade directive lives in a CSP — either the response
+            // header or a <meta http-equiv="Content-Security-Policy"> tag.
+            // Matching raw body text also hit docs and code samples.
+            let csp_header = ctx
+                .headers
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
+                .map(|(_, v)| v.as_str())
+                .unwrap_or("");
+            let upgrade_hint = csp_header.to_lowercase().contains("upgrade-insecure-requests")
+                || scraper::Html::parse_document(body)
+                    .select(
+                        &scraper::Selector::parse("meta[http-equiv]").expect("static selector"),
+                    )
+                    .filter(|el| {
+                        el.value()
+                            .attr("http-equiv")
+                            .map_or(false, |h| h.eq_ignore_ascii_case("content-security-policy"))
+                    })
+                    .filter_map(|el| el.value().attr("content"))
+                    .any(|c| c.to_lowercase().contains("upgrade-insecure-requests"));
             if !upgrade_hint && http_count > 0 {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -1479,9 +1500,10 @@ impl Analyzer for MixedContentScriptValidatorV5 {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_scripts =
-                lower.matches("src=\"http://").count() + lower.matches("src='http://").count();
+            // Only script element src attributes count as mixed content;
+            // raw string matching also hits `src="http://` inside comments,
+            // code samples, and inline JavaScript strings.
+            let http_scripts = count_insecure_attr_refs(body, "script[src]", &["src"]);
             if http_scripts > 0 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -1520,9 +1542,13 @@ impl Analyzer for MixedContentStylesheetValidator {
             return findings;
         }
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let http_css =
-                lower.matches("href=\"http://").count() + lower.matches("href='http://").count();
+            // Only stylesheet link hrefs count; matching every `href="http://`
+            // also flagged ordinary HTTP anchors and code samples.
+            let http_css = count_insecure_attr_refs(
+                body,
+                "link[rel~='stylesheet']",
+                &["href"],
+            );
             if http_css > 0 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -1557,24 +1583,28 @@ impl Analyzer for SriValidator {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let _script_count = lower.matches("<script").count();
-            let sri_count = lower.matches("integrity=").count();
-            let external_scripts = ctx.page.scripts.iter().filter(|s| s.src.is_some()).count();
-            if external_scripts > 0 && sri_count == 0 {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Security,
-                    code: "SRI-V5001".to_string(),
-                    title: "No SRI on external scripts".to_string(),
-                    description: format!(
-                        "{external_scripts} external script(s) without integrity."
-                    ),
-                    url: url.clone(),
-                    recommendation: "Add integrity attribute to external scripts.".to_string(),
-                });
-            }
+        // Use the parsed script elements: counting `integrity=` in the raw
+        // body also matched code samples and documentation text, which made
+        // genuinely-unprotected scripts look protected.
+        let external_scripts = ctx.page.scripts.iter().filter(|s| s.src.is_some()).count();
+        let sri_scripts = ctx
+            .page
+            .scripts
+            .iter()
+            .filter(|s| s.src.is_some() && s.has_integrity)
+            .count();
+        if external_scripts > 0 && sri_scripts == 0 {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Security,
+                code: "SRI-V5001".to_string(),
+                title: "No SRI on external scripts".to_string(),
+                description: format!(
+                    "{external_scripts} external script(s) without integrity."
+                ),
+                url: url.clone(),
+                recommendation: "Add integrity attribute to external scripts.".to_string(),
+            });
         }
         findings
     }
@@ -4991,6 +5021,70 @@ mod tests {
             Some("<script src=\"https://cdn.com/lib.js\"></script>"),
         ));
         assert!(!f.is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: mixed-content script/stylesheet checks must only look at
+    // resource element attributes, never raw body text. `src="http://` inside
+    // comments, code samples, or JS strings used to be flagged.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_mixed_script_v5_ignores_text_urls() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><body>
+            <script>var legacy = "src='http://legacy.example.com/x.js'";</script>
+            <pre>embed code: &lt;script src="http://widgets.example.com/x.js"&gt;</pre>
+        </body></html>"#;
+        assert!(MixedContentScriptValidatorV5::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_mixed_css_v5_ignores_anchors_and_text() {
+        let p = make_page("https://example.com");
+        // An HTTP *anchor* link is not a mixed-content stylesheet.
+        let body = r#"<html><body>
+            <a href="http://example.com/legacy">Legacy docs</a>
+            <p>Docs mention href="http://example.com/x.css"</p>
+        </body></html>"#;
+        assert!(MixedContentStylesheetValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_mixed_css_v5_detects_insecure_stylesheet() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><head><link rel='stylesheet' href='http://evil.com/x.css'></head><body></body></html>"#;
+        let f = MixedContentStylesheetValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(!f.is_empty());
+        assert_eq!(f[0].code, "MIXCSS-V5001");
+    }
+    #[test]
+    fn test_sri_v5_not_satisfied_by_text_mentions() {
+        let mut p = make_page("https://example.com");
+        p.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("https://cdn.com/lib.js".into()),
+            r#async: false,
+            defer: false,
+            script_type: None,
+            has_integrity: false,
+            is_module: false,
+        }];
+        // The word `integrity=` in documentation text does not protect the
+        // script; the parsed has_integrity flag is false.
+        let body = r#"<p>Docs: add integrity=sha384-... attributes.</p>
+            <script src="https://cdn.com/lib.js"></script>"#;
+        let f = SriValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(!f.is_empty());
+    }
+    #[test]
+    fn test_mixed_content_v2_upgrade_hint_from_meta_csp() {
+        let p = make_page("https://example.com");
+        let body = r#"<html><head><meta http-equiv="Content-Security-Policy"
+            content="upgrade-insecure-requests"></head>
+            <body><img src="http://example.com/a.png"></body></html>"#;
+        let f = MixedContentDetectionAnalyzerV2::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.iter().all(|x| x.code != "MIXCONT-V2005"));
     }
 
     // ===== SEO V5 Tests =====

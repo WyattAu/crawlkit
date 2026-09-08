@@ -16,6 +16,7 @@
     clippy::redundant_clone,
     clippy::useless_conversion
 )]
+use super::{is_html_response, is_success_page};
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
@@ -37,6 +38,11 @@ impl Analyzer for ContentFreshnessScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // Freshness only applies to HTML documents with a successful status;
+        // error pages and API payloads have no publish date to evaluate.
+        if !is_html_response(ctx) || !is_success_page(ctx) {
+            return findings;
+        }
         let mut date_found = false;
         for sd in &ctx.page.structured_data {
             if let Some(dp) = sd.data.get("datePublished").and_then(|v| v.as_str()) {
@@ -45,7 +51,8 @@ impl Analyzer for ContentFreshnessScoreAnalyzer {
                     if let Ok(parsed) =
                         chrono::NaiveDate::parse_from_str(&dp[..dp.len().min(10)], "%Y-%m-%d")
                     {
-                        let today = chrono::NaiveDate::from_ymd_opt(2026, 8, 30).unwrap_or(parsed);
+                        // Compare against today, not a frozen audit date.
+                        let today = chrono::Utc::now().date_naive();
                         let age = (today - parsed).num_days();
                         if age > 365 {
                             findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Content, code: "FRESHSC002".to_string(), title: "Content is over a year old".to_string(), description: format!("Content date is {age} days old. Outdated content may rank lower."), url: url.clone(), recommendation: "Update the content and refresh the date.".to_string() });
@@ -99,6 +106,11 @@ impl Analyzer for HeadingStructureScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // Error pages and non-HTML documents legitimately lack headings;
+        // flagging them is noise, not an SEO issue.
+        if !is_html_response(ctx) || !is_success_page(ctx) {
+            return findings;
+        }
         if ctx.page.headings.is_empty() {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -181,6 +193,9 @@ impl Analyzer for LinkQualityScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        if !is_html_response(ctx) || !is_success_page(ctx) {
+            return findings;
+        }
         if ctx.page.links.is_empty() {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -215,7 +230,13 @@ impl Analyzer for LinkQualityScoreAnalyzer {
             .page
             .links
             .iter()
-            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+            // An image link is accessible when its image carries alt text,
+            // so only links lacking text, aria-label, AND img alt are gaps.
+            .filter(|l| {
+                l.text.trim().is_empty()
+                    && l.aria_label.is_none()
+                    && l.img_alt.as_ref().map_or(true, |a| a.trim().is_empty())
+            })
             .count();
         if empty_text > 0 {
             findings.push(Finding {
@@ -250,6 +271,11 @@ impl Analyzer for SchemaCoverageScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // Structured-data coverage is only expected on HTML documents that
+        // resolved successfully.
+        if !is_html_response(ctx) || !is_success_page(ctx) {
+            return findings;
+        }
         if ctx.page.structured_data.is_empty() {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -304,6 +330,11 @@ impl Analyzer for SecurityScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // Security headers on redirects (3xx) and error pages (4xx/5xx) are
+        // not representative: evaluate the final destination only.
+        if !is_success_page(ctx) {
+            return findings;
+        }
         let mut score: u32 = 100;
         let mut issues: Vec<String> = Vec::new();
         if !ctx
@@ -393,6 +424,11 @@ impl Analyzer for AccessibilityScoreAnalyzer {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // Accessibility applies to rendered HTML documents, not to error
+        // responses or non-HTML payloads.
+        if !is_html_response(ctx) || !is_success_page(ctx) {
+            return findings;
+        }
         let mut score: u32 = 100;
         let mut issues: Vec<String> = Vec::new();
         if !ctx.page.has_lang_attribute {
@@ -446,6 +482,26 @@ impl Analyzer for AccessibilityScoreAnalyzer {
 // =========================================================================
 // Security V2 Analyzers
 // =========================================================================
+
+/// Extracts the registrable TLD of a link's host.
+///
+/// Matching the raw href with `contains(".ru")` also hits path or query
+/// fragments like `/page.ru.html` or `?ref=.ru` — only the host suffix is
+/// a real TLD signal.
+fn link_host_tld_in(href: &str, tlds: &[&str]) -> bool {
+    let after_scheme = href.split("://").nth(1).unwrap_or(href);
+    let host = after_scheme
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .split('@')
+        .next_back()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let host = host.split(':').next().unwrap_or(&host);
+    tlds.iter()
+        .any(|tld| host.ends_with(tld) && host.len() > tld.len())
+}
 
 pub struct ExternalLinksAuthorityScoreValidator;
 impl Default for ExternalLinksAuthorityScoreValidator {
@@ -549,7 +605,7 @@ impl Analyzer for ExternalLinksAuthorityScoreDeepValidator {
                 .count();
             let suspicious_count = external
                 .iter()
-                .filter(|href| low_authority.iter().any(|tld| href.contains(tld)))
+                .filter(|href| link_host_tld_in(href, &low_authority))
                 .count();
             if authority_count == 0 && external.len() > 5 {
                 findings.push(Finding {
@@ -974,4 +1030,104 @@ mod tests {
     }
 
     // ===== V8 Content Validators (30) tests =====
+
+    // ---------------------------------------------------------------------------
+    // Regression: image links are accessible through their img alt text.
+    // They must not be reported as "links without anchor text".
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_link_quality_img_alt_link_is_accessible() {
+        let mut p = make_page("https://example.com");
+        p.links = vec![crate::parser::ExtractedLink {
+            href: "https://example.com/logo".into(),
+            text: "".into(),
+            rel: vec![],
+            is_external: false,
+            aria_label: None,
+            img_alt: Some("Acme logo".into()),
+        }];
+        let f = LinkQualityScoreAnalyzer::new().analyze(&make_ctx(&p, None));
+        assert!(f.iter().all(|x| x.code != "LINKSC003"));
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: score analyzers must skip error pages (4xx/5xx) — security
+    // headers, headings, links, and schema on a 404 page are not findings.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_score_analyzers_skip_error_pages() {
+        let p = make_page("https://example.com/missing");
+        let ctx = AnalysisContext {
+            status_code: Some(404),
+            ..make_ctx(&p, None)
+        };
+        assert!(SecurityScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(HeadingStructureScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(LinkQualityScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(SchemaCoverageScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(AccessibilityScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ContentFreshnessScoreAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: page-structure analyzers must skip non-HTML content types
+    // (e.g. JSON API responses crawled by mistake).
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_score_analyzers_skip_non_html_content() {
+        let p = make_page("https://example.com/api");
+        let ctx = AnalysisContext {
+            content_type: Some("application/json; charset=utf-8"),
+            ..make_ctx(&p, Some(r#"{"status": "ok"}"#))
+        };
+        assert!(HeadingStructureScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(SchemaCoverageScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(AccessibilityScoreAnalyzer::new().analyze(&ctx).is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: suspicious-TLD detection must only consider the link host,
+    // not path fragments like "/page.ru.html".
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_suspicious_tld_ignores_path_fragments() {
+        let mut p = make_page("https://example.com");
+        p.links = (0..5)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://link{i}.com/docs/page.ru.html"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None));
+        assert!(f.iter().all(|x| x.code != "EXTAUTHDP002"));
+    }
+    #[test]
+    fn test_suspicious_tld_still_flags_real_tld() {
+        let mut p = make_page("https://example.com");
+        let mut links: Vec<crate::parser::ExtractedLink> = (0..4)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://plain{i}.com/page"),
+                text: format!("Link {i}"),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        links.push(crate::parser::ExtractedLink {
+            href: "https://malicious.ru/page".into(),
+            text: "Link".into(),
+            rel: vec![],
+            is_external: true,
+            aria_label: None,
+            img_alt: None,
+        });
+        p.links = links;
+        let f = ExternalLinksAuthorityScoreDeepValidator::new().analyze(&make_ctx(&p, None));
+        assert!(f.iter().any(|x| x.code == "EXTAUTHDP002"));
+    }
 }

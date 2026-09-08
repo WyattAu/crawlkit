@@ -1,5 +1,6 @@
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::manual_range_contains,
     clippy::redundant_closure,
     clippy::collapsible_if,
@@ -18,6 +19,25 @@
 )]
 use crate::analyzers::{robots_txt_star_blanket_disallows_all, AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
+
+/// Counts real `<link rel="canonical">` elements in an HTML document.
+///
+/// Counting the raw string `rel="canonical"` also matched comments, code
+/// samples, and documentation text — flagging single-canonical pages as
+/// having duplicates.
+fn count_canonical_links(body: &str) -> usize {
+    let sel = scraper::Selector::parse("link").expect("static selector");
+    scraper::Html::parse_document(body)
+        .select(&sel)
+        .filter(|el| {
+            el.value()
+                .attr("rel")
+                .map_or(false, |r| {
+                    r.split_whitespace().any(|t| t.eq_ignore_ascii_case("canonical"))
+                })
+        })
+        .count()
+}
 
 pub struct TitleAnalysisDeepAnalyzerV2;
 impl Default for TitleAnalysisDeepAnalyzerV2 {
@@ -63,7 +83,15 @@ impl Analyzer for TitleAnalysisDeepAnalyzerV2 {
                 recommendation: "Shorten to under 60 characters.".to_string(),
             });
         }
-        if title.to_lowercase() == title || title.to_uppercase() == title {
+        // Only flag casing issues on multi-word titles with real letters:
+        // acronym titles ("NASA") and numeric titles ("2026") are all-caps
+        // or cased-agnostic by nature, not SEO mistakes.
+        let has_cased_letters = title.chars().any(|c| c.is_alphabetic());
+        let multi_word = title.split_whitespace().count() >= 2;
+        if has_cased_letters
+            && multi_word
+            && (title.to_lowercase() == title || title.to_uppercase() == title)
+        {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Seo,
@@ -196,7 +224,10 @@ impl Analyzer for SitemapCoverageDeepAnalyzerV2 {
             let lower = robots.to_lowercase();
             if !lower.contains("sitemap:") {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Declaring the sitemap in robots.txt is optional —
+                    // submitting it via Search Console / ping endpoints is an
+                    // equally valid route, so this is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Seo,
                     code: "SITEMAPDEEP-V2001".to_string(),
                     title: "No sitemap in robots.txt".to_string(),
@@ -547,21 +578,23 @@ impl Analyzer for PaginationDepthAnalyzerV2 {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
-        if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let has_pagination =
-                lower.contains("page=") || lower.contains("p=") || lower.contains("start=");
-            if has_pagination {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Seo,
-                    code: "PAGDEP-V2001".to_string(),
-                    title: "Paginated URL detected".to_string(),
-                    description: "URL appears to be paginated.".to_string(),
-                    url: url.clone(),
-                    recommendation: "Consider rel=next/prev for paginated content.".to_string(),
-                });
-            }
+        // Pagination is a property of the URL, not of the body text. Matching
+        // the raw body fired on any page whose docs, comments, or scripts
+        // mention "page=", "p=", or "start=".
+        let lower_url = url.to_lowercase();
+        let has_pagination = lower_url.contains("page=")
+            || lower_url.contains("p=")
+            || lower_url.contains("start=");
+        if has_pagination {
+            findings.push(Finding {
+                severity: Severity::Info,
+                category: IssueCategory::Seo,
+                code: "PAGDEP-V2001".to_string(),
+                title: "Paginated URL detected".to_string(),
+                description: "URL appears to be paginated.".to_string(),
+                url: url.clone(),
+                recommendation: "Consider rel=next/prev for paginated content.".to_string(),
+            });
         }
         findings
     }
@@ -833,10 +866,26 @@ impl Analyzer for OpenSearchDescriptionValidatorV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            if lower.contains("opensearchdescription") {
-                // OpenSearch reference exists on page
-            } else {
+            // Look for a real OpenSearch <link> element (rel="search" or the
+            // OpenSearch MIME type). Raw-text matching also matched comments
+            // and prose while missing single-quoted attributes.
+            let sel = scraper::Selector::parse("link").expect("static selector");
+            let has_opensearch = scraper::Html::parse_document(body)
+                .select(&sel)
+                .any(|el| {
+                    let rel_is_search = el
+                        .value()
+                        .attr("rel")
+                        .map_or(false, |r| {
+                            r.split_whitespace().any(|t| t.eq_ignore_ascii_case("search"))
+                        });
+                    let type_is_opensearch = el.value().attr("type").map_or(false, |t| {
+                        t.to_lowercase()
+                            .contains("application/opensearchdescription+xml")
+                    });
+                    rel_is_search || type_is_opensearch
+                });
+            if !has_opensearch {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Seo,
@@ -1537,29 +1586,30 @@ impl Analyzer for CanonicalChainValidatorV5 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(canonical) = &ctx.page.meta.canonical {
-            let canonical_str = canonical.as_str();
-            if let Some(body) = ctx.body {
-                let lower = body.to_lowercase();
-                let canonical_in_body = format!("href=\"{}\"", canonical_str.to_lowercase());
-                if lower.contains(&canonical_in_body) {
-                    // Self-referencing - that's expected
-                } else if canonical_str != url {
-                    // Canonical points elsewhere, which is fine but we can flag chains
-                    if lower.contains("rel=\"canonical\"") {
-                        findings.push(Finding {
-                            severity: Severity::Info,
-                            category: IssueCategory::Seo,
-                            code: "CANCHAIN-V5001".to_string(),
-                            title: "Canonical points off-page".to_string(),
-                            description: format!(
-                                "Canonical '{}' doesn't match current URL.",
-                                canonical_str
-                            ),
-                            url: url.clone(),
-                            recommendation: "Ensure no canonical chains exist.".to_string(),
-                        });
-                    }
-                }
+            // Compare the parsed canonical with the page URL. The old check
+            // confirmed self-reference with a raw `href="..."` body match,
+            // which missed single-quoted or reordered attributes and then
+            // flagged genuinely self-referencing pages as "off-page".
+            let is_self = canonical.as_str() == url
+                || url::Url::parse(url).ok().zip(url::Url::parse(canonical.as_str()).ok())
+                    .map_or(false, |(page, can)| {
+                        page.path() == can.path()
+                            && page.query() == can.query()
+                            && page.host_str() == can.host_str()
+                    });
+            if !is_self {
+                findings.push(Finding {
+                    severity: Severity::Info,
+                    category: IssueCategory::Seo,
+                    code: "CANCHAIN-V5001".to_string(),
+                    title: "Canonical points off-page".to_string(),
+                    description: format!(
+                        "Canonical '{}' doesn't match current URL.",
+                        canonical.as_str()
+                    ),
+                    url: url.clone(),
+                    recommendation: "Ensure no canonical chains exist.".to_string(),
+                });
             }
         }
         findings
@@ -1748,7 +1798,10 @@ impl Analyzer for SitemapCoverageValidatorV5 {
             let lower = robots.to_lowercase();
             if !lower.contains("sitemap:") {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Declaring the sitemap in robots.txt is optional (see
+                    // SitemapCoverageDeepAnalyzerV2) — informational, not a
+                    // defect.
+                    severity: Severity::Info,
                     category: IssueCategory::Seo,
                     code: "SITEMAPCOV-V5001".to_string(),
                     title: "No sitemap in robots.txt".to_string(),
@@ -2266,8 +2319,10 @@ impl Analyzer for CanonicalChainDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let canonical_count =
-                body.matches("rel=\"canonical\"").count() + body.matches("rel='canonical'").count();
+            // Count real <link rel="canonical"> elements; counting the raw
+            // string also matched code samples and docs that mention the
+            // attribute, flagging single-canonical pages as duplicates.
+            let canonical_count = count_canonical_links(body);
             if canonical_count > 1 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -3287,9 +3342,8 @@ impl Analyzer for CanonicalChainDeepDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let canonical_count = body.matches("rel=\"canonical\"").count()
-                + body.matches("rel='canonical'").count()
-                + body.matches("rel=\u{201c}canonical\u{201d}").count();
+            // See CanonicalChainDeepValidator: count real link elements.
+            let canonical_count = count_canonical_links(body);
             if canonical_count > 1 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -4073,8 +4127,8 @@ impl Analyzer for CanonicalChainDeepDeepDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let canonical_count =
-                body.matches("rel=\"canonical\"").count() + body.matches("rel='canonical'").count();
+            // See CanonicalChainDeepValidator: count real link elements.
+            let canonical_count = count_canonical_links(body);
             if canonical_count > 1 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -4621,7 +4675,13 @@ impl Analyzer for InternalLinkQualityDeepValidator {
             }
             let empty_text = internal
                 .iter()
-                .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none())
+                // Image links are accessible via their img alt text; only
+                // links missing text, aria-label, AND img alt are gaps.
+                .filter(|l| {
+                    l.text.trim().is_empty()
+                        && l.aria_label.is_none()
+                        && l.img_alt.as_ref().map_or(true, |a| a.trim().is_empty())
+                })
                 .count();
             if empty_text > 0 {
                 findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ-V2002".to_string(), title: "Internal links without anchor text (deep)".to_string(), description: format!("{empty_text} internal link(s) have no text or aria-label in deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all internal links.".to_string() });

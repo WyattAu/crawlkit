@@ -1,5 +1,6 @@
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::manual_range_contains,
     clippy::redundant_closure,
     clippy::collapsible_if,
@@ -38,8 +39,17 @@ impl Analyzer for PreconnectHintValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let has_preconnect = lower.contains("rel=\"preconnect\"");
+            // Inspect actual <link rel> elements, not raw text: a comment or
+            // code sample mentioning rel="preconnect" is not a hint, and
+            // single-quoted / multi-value rel attributes are still valid.
+            let sel = scraper::Selector::parse("link").expect("static selector");
+            let has_preconnect = scraper::Html::parse_document(body)
+                .select(&sel)
+                .any(|el| {
+                    el.value()
+                        .attr("rel")
+                        .map_or(false, |r| r.split_whitespace().any(|t| t == "preconnect"))
+                });
             let external = ctx.page.links.iter().filter(|l| l.is_external).count();
             if external > 3 && !has_preconnect {
                 findings.push(Finding {
@@ -76,8 +86,18 @@ impl Analyzer for DnsPrefetchHintValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(body) = ctx.body {
-            let lower = body.to_lowercase();
-            let has_prefetch = lower.contains("rel=\"dns-prefetch\"");
+            // See PreconnectHintValidator: match real <link rel> elements,
+            // including single-quoted and multi-value rel attributes.
+            let sel = scraper::Selector::parse("link").expect("static selector");
+            let has_prefetch = scraper::Html::parse_document(body)
+                .select(&sel)
+                .any(|el| {
+                    el.value()
+                        .attr("rel")
+                        .map_or(false, |r| {
+                            r.split_whitespace().any(|t| t == "dns-prefetch")
+                        })
+                });
             let external = ctx.page.links.iter().filter(|l| l.is_external).count();
             if external > 5 && !has_prefetch {
                 findings.push(Finding {
@@ -118,7 +138,9 @@ impl Analyzer for ScriptAsyncDeferValidator {
             .page
             .scripts
             .iter()
-            .filter(|s| s.src.is_some() && !s.r#async && !s.defer)
+            // ES modules (<script type="module">) are deferred by default
+            // and never block parsing, so they are not render-blocking.
+            .filter(|s| s.src.is_some() && !s.r#async && !s.defer && !s.is_module)
             .count();
         if blocking > 0 {
             findings.push(Finding {
@@ -500,4 +522,83 @@ mod tests {
     }
 
     // ===== V6 Content Validators Tests =====
+
+    // ---------------------------------------------------------------------------
+    // Regression: <script type="module"> is deferred by default and must not
+    // be reported as render-blocking.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_script_async_v5_module_not_blocking() {
+        let mut p = make_page("https://example.com");
+        p.scripts = vec![crate::parser::ScriptInfo {
+            src: Some("https://cdn.com/app.mjs".into()),
+            r#async: false,
+            defer: false,
+            script_type: Some("module".into()),
+            has_integrity: false,
+            is_module: true,
+        }];
+        assert!(ScriptAsyncDeferValidator::new()
+            .analyze(&make_ctx(&p, None))
+            .is_empty());
+    }
+
+    // ---------------------------------------------------------------------------
+    // Regression: resource hints must be detected from real <link rel>
+    // elements — single-quoted and multi-value rel attributes count, while
+    // the same text inside comments or code samples does not.
+    // ---------------------------------------------------------------------------
+    #[test]
+    fn test_preconnect_v5_detects_single_quoted_rel() {
+        let mut p = make_page("https://example.com");
+        p.links = (0..4)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://cdn{i}.com"),
+                text: "".into(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let body = r#"<html><head><link rel='preconnect' href='https://cdn0.com'></head><body></body></html>"#;
+        assert!(PreconnectHintValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
+    #[test]
+    fn test_preconnect_v5_ignores_text_mention() {
+        let mut p = make_page("https://example.com");
+        p.links = (0..4)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://cdn{i}.com"),
+                text: "".into(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let body = r#"<html><body><!-- TODO: add <link rel="preconnect"> hints --></body></html>"#;
+        let f = PreconnectHintValidator::new().analyze(&make_ctx(&p, Some(body)));
+        assert!(f.iter().any(|x| x.code == "PRECON-V5001"));
+    }
+    #[test]
+    fn test_dns_prefetch_v5_detects_single_quoted_rel() {
+        let mut p = make_page("https://example.com");
+        p.links = (0..6)
+            .map(|i| crate::parser::ExtractedLink {
+                href: format!("https://host{i}.com"),
+                text: "".into(),
+                rel: vec![],
+                is_external: true,
+                aria_label: None,
+                img_alt: None,
+            })
+            .collect();
+        let body = r#"<html><head><link rel='dns-prefetch' href='https://host0.com'></head><body></body></html>"#;
+        assert!(DnsPrefetchHintValidator::new()
+            .analyze(&make_ctx(&p, Some(body)))
+            .is_empty());
+    }
 }

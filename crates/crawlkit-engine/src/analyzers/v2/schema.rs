@@ -1,5 +1,6 @@
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::manual_range_contains,
     clippy::redundant_closure,
     clippy::collapsible_if,
@@ -1263,7 +1264,9 @@ impl Analyzer for CreativeWorkMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // CreativeWork is not a Google rich-result type and
+                    // schema.org does not require name; missing name is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "CWNAME-V6001".to_string(),
                     title: "CreativeWork missing name".to_string(),
@@ -1648,7 +1651,9 @@ impl Analyzer for CivicStructureMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // CivicStructure is not a Google rich-result type and
+                    // schema.org does not require name; missing name is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "CVNAME-V6010".to_string(),
                     title: "CivicStructure missing name".to_string(),
@@ -1692,7 +1697,9 @@ impl Analyzer for LandformMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Landform is not a Google rich-result type and schema.org
+                    // does not require name; missing name is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "LFNAME-V6011".to_string(),
                     title: "Landform missing name".to_string(),
@@ -1736,7 +1743,9 @@ impl Analyzer for LandmarkMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // LandmarksOrHistoricalBuildings is not a Google rich-result
+                    // type and schema.org does not require name; informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "LMNAME-V6012".to_string(),
                     title: "Landmark missing name".to_string(),
@@ -1780,7 +1789,9 @@ impl Analyzer for TouristAttractionMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // TouristAttraction has no published Google rich-result
+                    // requirements for name; schema.org treats it as optional.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "TANAME-V6013".to_string(),
                     title: "TouristAttraction missing name".to_string(),
@@ -1824,7 +1835,9 @@ impl Analyzer for TouristDestinationMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // TouristDestination has no published Google rich-result
+                    // requirements for name; schema.org treats it as optional.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "TDNAME-V6014".to_string(),
                     title: "TouristDestination missing name".to_string(),
@@ -1914,7 +1927,9 @@ impl Analyzer for SportsEventMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // SportsEvent is not a Google rich-result type; schema.org
+                    // does not require name, so this is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "SENAME-V6016".to_string(),
                     title: "SportsEvent missing name".to_string(),
@@ -1958,7 +1973,9 @@ impl Analyzer for EducationalOrganizationMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // EducationalOrganization is not a Google rich-result type;
+                    // schema.org does not require name.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "EDUNAME-V6017".to_string(),
                     title: "EducationalOrganization missing name".to_string(),
@@ -2002,7 +2019,9 @@ impl Analyzer for NGOMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // NGO is not a Google rich-result type; schema.org does not
+                    // require name, so this is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "NGONAME-V6018".to_string(),
                     title: "NGO missing name".to_string(),
@@ -2046,7 +2065,9 @@ impl Analyzer for PerformingArtsSeriesMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // PerformingArtsSeries is not a Google rich-result type;
+                    // schema.org does not require name.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "PASNAME-V6019".to_string(),
                     title: "PerformingArtsSeries missing name".to_string(),
@@ -2090,7 +2111,9 @@ impl Analyzer for BroadcastEventMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Standalone BroadcastEvent is not a Google rich-result type;
+                    // schema.org does not require name.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "BENAME-V6020".to_string(),
                     title: "BroadcastEvent missing name".to_string(),
@@ -3238,7 +3261,9 @@ impl Analyzer for WorkersUnionMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // WorkersUnion is not a Google rich-result type; schema.org
+                    // does not require name, so this is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WUNAME-V6048".to_string(),
                     title: "WorkersUnion missing name".to_string(),
@@ -3370,7 +3395,9 @@ impl Analyzer for WebPageElementMissingNameValidator {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // WebPageElement is an abstract schema.org type with no
+                    // Google rich-result requirements; missing name is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WPELNAME-V6051".to_string(),
                     title: "WebPageElement missing name".to_string(),
@@ -4778,7 +4805,9 @@ impl Analyzer for HowToMissingStepValidator {
             match sd.data.get("step") {
                 None => {
                     findings.push(Finding {
-                        severity: Severity::Error,
+                        // step is required for Google HowTo rich results; Warning is
+                        // the ceiling for rich-result-required properties.
+                        severity: Severity::Warning,
                         category: IssueCategory::Schema,
                         code: "HOWSTEP001".to_string(),
                         title: "HowTo missing step".to_string(),
@@ -4791,7 +4820,9 @@ impl Analyzer for HowToMissingStepValidator {
                     if let Some(arr) = steps.as_array() {
                         if arr.is_empty() {
                             findings.push(Finding {
-                                severity: Severity::Error,
+                                // step is required for Google HowTo rich results; Warning is
+                        // the ceiling for rich-result-required properties.
+                        severity: Severity::Warning,
                                 category: IssueCategory::Schema,
                                 code: "HOWSTEP001".to_string(),
                                 title: "HowTo has empty step array".to_string(),
@@ -5552,7 +5583,9 @@ impl Analyzer for WorkersUnionMissingNameValidatorV2 {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // WorkersUnion is not a Google rich-result type (see
+                    // WUNAME-V6048); missing name is informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "WUNAME-V2001".to_string(),
                     title: "WorkersUnion missing name".to_string(),
@@ -5757,7 +5790,9 @@ impl Analyzer for OrganizationMissingNameValidatorV2 {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Organization name is recommended, not required: Google's
+                    // Organization docs require logo and url, but not name.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "ORGNAME-V2001".to_string(),
                     title: "Organization missing name".to_string(),
@@ -5801,7 +5836,9 @@ impl Analyzer for PersonMissingNameValidatorV2 {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Warning,
+                    // Person is not a Google rich-result type by itself and
+                    // schema.org does not require name; informational.
+                    severity: Severity::Info,
                     category: IssueCategory::Schema,
                     code: "PERSNAME-V2001".to_string(),
                     title: "Person missing name".to_string(),
@@ -5845,7 +5882,9 @@ impl Analyzer for JobPostingMissingTitleValidatorV2 {
                 .map_or(true, |s| s.is_empty())
             {
                 findings.push(Finding {
-                    severity: Severity::Critical,
+                    // JobPosting title is required for Google rich results, but a
+                    // missing title is a data-quality issue, not a critical defect.
+                    severity: Severity::Warning,
                     category: IssueCategory::Schema,
                     code: "JOBTITLE-V2001".to_string(),
                     title: "JobPosting missing title".to_string(),
@@ -9097,5 +9136,66 @@ mod tests {
         let f = WorkerMissingJobTitleValidatorV2::new().analyze(&make_ctx(&p, None));
         assert_eq!(f.len(), 1);
         assert_eq!(f[0].severity, Severity::Info);
+    }
+    // ---------------------------------------------------------------------------
+    // Regression tests: severity calibration for recommended-but-optional schema
+    // properties. Types without a Google rich-result requirement must yield Info,
+    // while rich-result-required properties stay at Warning (never Critical/Error).
+    // ---------------------------------------------------------------------------
+    #[cfg(test)]
+    mod severity_calibration_tests {
+        use super::*;
+
+        fn check_severity(validator: &dyn Analyzer, typ: &str, code: &str, expected: Severity) {
+            let p = one_sd(typ, serde_json::json!({"@type": typ}));
+            let f = validator.analyze(&make_ctx(&p, None));
+            assert_eq!(f.len(), 1, "{code}: expected exactly one finding");
+            assert_eq!(f[0].code, code);
+            assert_eq!(f[0].severity, expected, "{code}: wrong severity");
+        }
+
+        #[test]
+        fn optional_properties_without_rich_result_requirements_are_info() {
+            check_severity(&CreativeWorkMissingNameValidator, "CreativeWork", "CWNAME-V6001", Severity::Info);
+            check_severity(&CivicStructureMissingNameValidator, "CivicStructure", "CVNAME-V6010", Severity::Info);
+            check_severity(&LandformMissingNameValidator, "Landform", "LFNAME-V6011", Severity::Info);
+            check_severity(&LandmarkMissingNameValidator, "LandmarksOrHistoricalBuildings", "LMNAME-V6012", Severity::Info);
+            check_severity(&TouristAttractionMissingNameValidator, "TouristAttraction", "TANAME-V6013", Severity::Info);
+            check_severity(&TouristDestinationMissingNameValidator, "TouristDestination", "TDNAME-V6014", Severity::Info);
+            check_severity(&SportsEventMissingNameValidator, "SportsEvent", "SENAME-V6016", Severity::Info);
+            check_severity(&EducationalOrganizationMissingNameValidator, "EducationalOrganization", "EDUNAME-V6017", Severity::Info);
+            check_severity(&NGOMissingNameValidator, "NGO", "NGONAME-V6018", Severity::Info);
+            check_severity(&PerformingArtsSeriesMissingNameValidator, "PerformingArtsSeries", "PASNAME-V6019", Severity::Info);
+            check_severity(&BroadcastEventMissingNameValidator, "BroadcastEvent", "BENAME-V6020", Severity::Info);
+            check_severity(&WorkersUnionMissingNameValidator, "WorkersUnion", "WUNAME-V6048", Severity::Info);
+            check_severity(&WebPageElementMissingNameValidator, "WebPageElement", "WPELNAME-V6051", Severity::Info);
+            check_severity(&WorkersUnionMissingNameValidatorV2, "WorkersUnion", "WUNAME-V2001", Severity::Info);
+        }
+
+        #[test]
+        fn organization_and_person_names_are_recommended_only() {
+            // Google's Organization docs require logo/url; name is recommended.
+            check_severity(&OrganizationMissingNameValidatorV2, "Organization", "ORGNAME-V2001", Severity::Info);
+            check_severity(&PersonMissingNameValidatorV2, "Person", "PERSNAME-V2001", Severity::Info);
+        }
+
+        #[test]
+        fn rich_result_required_properties_stay_at_warning_ceiling() {
+            // JobPosting title is required for Google rich results — but that
+            // caps at Warning, not Critical.
+            check_severity(&JobPostingMissingTitleValidatorV2, "JobPosting", "JOBTITLE-V2001", Severity::Warning);
+            // HowTo step is required for Google rich results — Warning, not Error.
+            let p = one_sd("HowTo", serde_json::json!({"@type": "HowTo"}));
+            let f = HowToMissingStepValidator::new().analyze(&make_ctx(&p, None));
+            assert!(!f.is_empty());
+            assert!(f.iter().all(|x| x.severity == Severity::Warning));
+        }
+
+        #[test]
+        fn required_for_rich_results_stays_warning() {
+            // Course name and Recipe name are required by Google's docs.
+            check_severity(&CourseMissingNameValidatorV2, "Course", "COURSENAME-V2001", Severity::Warning);
+            check_severity(&RecipeMissingNameValidatorV2, "Recipe", "RECIPENAME-V2001", Severity::Warning);
+        }
     }
 }

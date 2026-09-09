@@ -112,10 +112,10 @@ opentelemetry = { version = "0.32", optional = true }
 opentelemetry_sdk = { version = "0.32", features = ["trace"], optional = true }
 opentelemetry-stdout = { version = "0.32", features = ["trace"], optional = true }
 sentry = { version = "0.49", default-features = false, features = ["backtrace", "panic", "rustls"], optional = true }
-ed25519-dalek = { version = "2", optional = true }
-rand = { version = "0.8", optional = true }
+ed25519-dalek = { version = "3", optional = true }
+rand = { version = "0.10", optional = true }
 sha2 = { workspace = true, optional = true }
-dirs = { version = "5", optional = true }
+dirs = { version = "7", optional = true }
 envstack = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }
 

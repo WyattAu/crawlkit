@@ -66,8 +66,11 @@ Per-source rate limits alone permit distributed abuse of one victim: N attack
 subnets each within their own limit still DDoS a small site. Therefore:
 
 - A **global, persistent, per-target-host budget** is enforced before any
-  request to that host: a sliding-window cap of **20 pages / 10 minutes per
-  target host** (configurable downward per deployment, never upward).
+  request to that host: a sliding-window cap of **30 requests / 10 minutes
+  per target host** (configurable downward per deployment, never upward).
+  The floor of 30 is not arbitrary: one complete scan consumes a robots.txt
+  fetch plus up to 25 page fetches, so the window must accommodate at least
+  one full scan plus headroom for concurrent legitimate submitters.
 - The budget is enforced in **shared state** (Redis or the API's existing
   queue infrastructure), not in per-process memory, so it holds across
   scanner replicas.
@@ -84,9 +87,10 @@ target serializes across all submitters — is acceptable for a teaser surface.
 
 ### 3. Hard crawl bounds
 
-- **≤ 25 pages** per scan (hard ceiling enforced in the engine config, not by
-  politeness). Depth ≤ 4. One URL per submission. No cross-domain links are
-  followed beyond the submitted host.
+- **≤ 25 pages** per scan (hard ceiling enforced in the scan engine, not by
+  politeness; the per-target budget of 30 requests/10 min is sized so one
+  full scan always fits — robots fetch + 25 pages). Depth ≤ 4. One URL per
+  submission. No cross-domain links are followed beyond the submitted host.
 - **≤ 30 s wall-clock** per scan and ≤ 512 MB memory per scan worker; the
   worker is killed at the bound and the partial result is returned with an
   explicit truncation notice.

@@ -287,4 +287,49 @@ mod tests {
         let toml = "[counts]\nanalyzer_count = 42\n[other]\nanalyzer_count = 99\n";
         assert_eq!(extract_count(toml, "analyzer_count"), Some(42));
     }
+
+    #[test]
+    fn extract_count_ignores_inline_comments() {
+        let toml = "[counts]\nanalyzer_count = 42 # kept current by CI\n";
+        assert_eq!(extract_count(toml, "analyzer_count"), Some(42));
+    }
+
+    #[test]
+    fn extract_count_rejects_non_numeric_value() {
+        let toml = "[counts]\nanalyzer_count = \"many\"\n";
+        assert_eq!(extract_count(toml, "analyzer_count"), None);
+    }
+
+    #[test]
+    fn drift_check_fails_when_section_missing() {
+        let errs = check_drift("[commands]\nnames = [\"crawl\"]\n").unwrap_err();
+        assert_eq!(errs.len(), 4, "all four keys must be reported: {errs:?}");
+        assert!(errs.iter().all(|e| e.contains("missing from committed")));
+    }
+
+    #[test]
+    fn drift_check_fails_on_empty_input() {
+        let errs = check_drift("").unwrap_err();
+        assert_eq!(errs.len(), 4);
+    }
+
+    #[test]
+    fn drift_check_accepts_extra_committed_keys() {
+        // Extra keys in the committed table (e.g. hand-added notes) must not
+        // fail the check; only the four generated keys are authoritative.
+        let toml = format!(
+            "[counts]\n{}extra_note = 1\n",
+            render_toml().strip_prefix("[counts]\n").unwrap()
+        );
+        assert!(check_drift(&toml).is_ok());
+    }
+
+    #[test]
+    fn drift_check_error_names_both_values() {
+        let toml = "[counts]\nanalyzer_count = 999999\n";
+        let errs = check_drift(toml).unwrap_err();
+        let line = errs.iter().find(|e| e.contains("analyzer_count")).unwrap();
+        assert!(line.contains("committed 999999"), "must show committed value: {line}");
+        assert!(line.contains("generated"), "must show generated value: {line}");
+    }
 }

@@ -1,0 +1,46 @@
+[package]
+name = "crawlkit-scanner"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Hosted free-scan scanner service (ADR-012): bounded, read-only single-URL audits"
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
+homepage.workspace = true
+
+[lints]
+workspace = true
+
+[lib]
+name = "crawlkit_scanner"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crawlkit-scanner"
+path = "src/main.rs"
+
+[dependencies]
+crawlkit-engine = { path = "../crawlkit-engine" }
+crawlkit-types = { path = "../crawlkit-types" }
+axum = { version = "0.8", features = ["macros"] }
+tokio.workspace = true
+tower = { version = "0.5", features = ["util"] }
+http.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+dashmap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+chrono.workspace = true
+url.workspace = true
+thiserror.workspace = true
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+rand = "0.8"
+base64 = "0.22"
+
+[dev-dependencies]
+# tower "util" provides ServiceExt::oneshot for router tests above.

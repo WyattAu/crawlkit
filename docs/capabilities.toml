@@ -139,6 +139,17 @@ evidence = [
 ]
 notes = "Enabled per-crawl via the --monitor flag; alerts are severity-graded (info/warning/critical) against the previous crawl diff."
 
+[capabilities.hosted_scanner]
+status = "prototype"
+evidence = [
+  "crates/crawlkit-scanner/src/guard.rs",
+  "crates/crawlkit-scanner/src/bounds.rs",
+  "crates/crawlkit-scanner/src/scan.rs",
+  "crates/crawlkit-scanner/src/fetcher.rs",
+  ".adrs/ADR-012-hosted-scanner-trust-boundary.md",
+]
+notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store; shared backend required before multi-replica). Not yet publicly deployed."
+
 [capabilities.log_analysis]
 status = "stable"
 evidence = [

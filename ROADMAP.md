@@ -746,7 +746,10 @@ Document and test:
 **Priority:** P2/P3
 **Exit condition:** Only pursue features with demonstrated user value and maintained ownership.
 
-Candidate work:
+Candidate work is scoped and sequenced in [docs/PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md), which
+adopts a hybrid positioning (CI-native OSS through 5.3.x, enterprise unlock at 6.0.0) and records
+the Phase 7 candidacy record for the hosted-scanner candidate. The candidacy requirements below
+remain the entry condition for every item.
 
 - client-library parity;
 - scheduled crawls;

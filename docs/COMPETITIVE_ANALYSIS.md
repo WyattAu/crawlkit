@@ -1,5 +1,10 @@
 # Competitive Analysis
 
+> **Superseded:** This 8-competitor analysis is retained for historical footnote integrity.
+> The current comparison is [docs/COMPETITIVE_MATRIX.md](COMPETITIVE_MATRIX.md) (20 competitors,
+> capability + architecture discrepancies, gap-closure plan) and the adopted positioning lives in
+> [docs/PRODUCT_STRATEGY.md](PRODUCT_STRATEGY.md).
+
 **Last Updated:** 2026-08-30
 **Methodology:** Feature-by-feature comparison based primarily on vendor documentation. A source URL demonstrates that a capability is documented; it does not independently verify performance, pricing, completeness, or the absence of a feature. Competitor performance/resource figures are excluded unless independently reproducible under a stated workload.
 

@@ -912,6 +912,7 @@ dependencies = [
  "opentelemetry_sdk",
  "predicates",
  "rand 0.8.7",
+ "reqwest 0.12.28",
  "sentry",
  "serde",
  "serde_json",

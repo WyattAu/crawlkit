@@ -72,6 +72,7 @@ crawlkit report crawl1/ --format html --output report.html
 | `crawlkit crawl` | Crawl a website and run analyzers |
 | `crawlkit compare` | Diff two crawl snapshots |
 | `crawlkit report` | Generate report from crawl data |
+| `crawlkit schedule` | Manage recurring crawls on a crawlkit-api server (add/list/enable/disable/remove) |
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -115,7 +116,13 @@ formats = ["json", "sqlite", "html"]
 output_dir = "./crawl-results"
 ```
 
-## Analyzers (31)
+## Analyzers
+
+Analyzer and finding-code counts are **generated from the registry**, not
+hand-maintained: see the `[counts]` table in
+[docs/capabilities.toml](docs/capabilities.toml), which CI keeps in sync with
+the live registry via the `manifest_drift_check` gate (ROADMAP Phase 0.1).
+Census profile: `full` (all groups enabled) on a representative page.
 
 | Category | Analyzers |
 |----------|-----------|
@@ -216,7 +223,8 @@ abort a crawl.
 |----------|------|
 | Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
 | Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) |
-| Competitive Analysis | [docs/COMPETITIVE_ANALYSIS.md](docs/COMPETITIVE_ANALYSIS.md) |
+| Product Strategy | [docs/PRODUCT_STRATEGY.md](docs/PRODUCT_STRATEGY.md) |
+| Competitive Matrix (20 tools) | [docs/COMPETITIVE_MATRIX.md](docs/COMPETITIVE_MATRIX.md) |
 | ADR-001 | [docs/ADR-001-crawler-architecture.md](docs/ADR-001-crawler-architecture.md) |
 | Benchmarks | [docs/benchmarks.md](docs/benchmarks.md) |
 | Getting Started | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) |

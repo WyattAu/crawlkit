@@ -18,6 +18,8 @@ pub mod rank;
 #[cfg(feature = "full")]
 pub mod report;
 #[cfg(feature = "full")]
+pub mod schedule;
+#[cfg(feature = "full")]
 pub mod trend;
 #[cfg(feature = "full")]
 pub mod util;
@@ -404,6 +406,83 @@ pub enum Commands {
     Rank {
         #[command(subcommand)]
         command: crate::cli::rank::RankCommands,
+    },
+
+    /// Manage recurring crawls on a crawlkit-api server
+    #[cfg(feature = "full")]
+    Schedule {
+        #[command(subcommand)]
+        command: ScheduleCommands,
+    },
+}
+
+/// Subcommands for managing recurring crawls against a crawlkit-api server.
+///
+/// Credentials: CRAWLKIT_API_KEY (X-API-Key) or CRAWLKIT_JWT (Bearer).
+#[cfg(feature = "full")]
+#[derive(Subcommand)]
+pub enum ScheduleCommands {
+    /// Create a recurring crawl schedule (minimum interval: 60 seconds)
+    Add {
+        /// Base URL of the crawlkit-api server
+        #[arg(long, default_value = "http://localhost:8080")]
+        api: String,
+
+        /// Starting URL for the scheduled crawl
+        url: String,
+
+        /// Seconds between crawl runs (>= 60)
+        #[arg(long, default_value_t = 3600)]
+        interval_secs: u64,
+
+        /// Maximum pages per run
+        #[arg(long, default_value_t = 100)]
+        max_pages: usize,
+
+        /// Delay between requests in milliseconds
+        #[arg(long, default_value_t = 500)]
+        delay_ms: u64,
+
+        /// Concurrent fetchers per run
+        #[arg(long, default_value_t = 4)]
+        concurrency: usize,
+    },
+
+    /// List schedules visible to your credentials
+    List {
+        /// Base URL of the crawlkit-api server
+        #[arg(long, default_value = "http://localhost:8080")]
+        api: String,
+    },
+
+    /// Enable a paused schedule
+    Enable {
+        /// Base URL of the crawlkit-api server
+        #[arg(long, default_value = "http://localhost:8080")]
+        api: String,
+
+        /// Schedule ID
+        id: String,
+    },
+
+    /// Pause a schedule without deleting it
+    Disable {
+        /// Base URL of the crawlkit-api server
+        #[arg(long, default_value = "http://localhost:8080")]
+        api: String,
+
+        /// Schedule ID
+        id: String,
+    },
+
+    /// Permanently remove a schedule
+    Remove {
+        /// Base URL of the crawlkit-api server
+        #[arg(long, default_value = "http://localhost:8080")]
+        api: String,
+
+        /// Schedule ID
+        id: String,
     },
 }
 

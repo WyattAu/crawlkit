@@ -488,6 +488,15 @@ pub mod crawl_map;
 pub mod extraction;
 /// Log analysis: crawler breakdown, status codes, top URLs, and error reporting.
 pub mod log_analyzer;
+/// Machine-readable capability manifest generated from the analyzer
+/// registry (ROADMAP Phase 0.1).
+///
+/// Provides [`generate`](manifest::generate) for census counts,
+/// [`render_toml`](manifest::render_toml) for the `docs/capabilities.toml`
+/// `[counts]` table, and [`check_drift`](manifest::check_drift) for the CI
+/// documentation-drift gate.
+#[cfg(feature = "full")]
+pub mod manifest;
 /// Web server access log parsing for Nginx/Apache combined and JSON formats.
 pub mod log_parser;
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).

@@ -11,6 +11,18 @@ version = "5.0.0"
 msrv = "1.94.0"
 license = "Apache-2.0"
 
+# Generated counts — DO NOT hand-edit.
+# Regenerate with: cargo run -p crawlkit-engine --example manifest_drift_check -- --print
+# CI fails on drift with the live analyzer registry (ROADMAP Phase 0.1).
+[counts]
+analyzer_count = 778
+unique_analyzer_types = 778
+# Distinct finding codes emitted by the default registry on a representative
+# census page (see crawlkit_engine::manifest::generate). This is a lower bound
+# on the total check inventory, not the full catalogue size.
+finding_code_count = 137
+profile_count = 4
+
 [claims]
 unsafe_scope = "Unsafe code is denied in ordinary core code; scoped unsafe FFI exists in ABI/plugin components."
 performance_scope = "Performance is workload-dependent and must be reported with reproducible benchmark metadata."
@@ -28,6 +40,8 @@ names = [
   "log-analyze",
   "trend",
   "gsc",
+  "rank",
+  "schedule",
 ]
 
 [capabilities.crawler]

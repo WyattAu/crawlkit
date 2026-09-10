@@ -460,6 +460,21 @@ pub trait Analyzer: Send + Sync {
 
     /// Analyze a page and return any findings/issues.
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding>;
+
+    /// Returns the concrete type name of this analyzer.
+    ///
+    /// Used by the capability manifest (Phase 0.1) to deduplicate analyzer
+    /// instances by type for the `unique_analyzer_types` count. The default
+    /// implementation derives the name from [`std::any::type_name`], which
+    /// is stable within a single compiled binary — the only context in which
+    /// the manifest is generated.
+    fn type_name(&self) -> &str {
+        let full = std::any::type_name::<Self>();
+        match full.rsplit_once("::") {
+            Some((_, last)) => last,
+            None => full,
+        }
+    }
 }
 
 /// Stop words for keyword density analysis (common English words).
@@ -482,9 +497,13 @@ pub(crate) const STOP_WORDS: &[&str] = &[
 /// Registry of SEO analyzers that can be run against crawled pages.
 ///
 /// Manages a collection of [`Analyzer`] implementations and runs them
-/// in parallel using rayon. The default registry includes 423 analyzers
-/// covering HTTP, SEO, content, links, images, security, accessibility,
-/// social media, AI-specific checks, and structured data validation.
+/// in parallel using rayon. The default registry size is version-dependent;
+/// do not hard-code it here — consult the generated counts in
+/// `docs/capabilities.toml` (`[counts]` table, maintained by
+/// [`crate::manifest`] and the `manifest_drift_check` example) for the
+/// authoritative numbers. Analyzers cover HTTP, SEO, content, links,
+/// images, security, accessibility, social media, AI-specific checks,
+/// and structured data validation.
 ///
 /// # Examples
 ///
@@ -1571,6 +1590,16 @@ impl AnalyzerRegistry {
     /// previously registered analyzers.
     pub fn register(&mut self, analyzer: Box<dyn Analyzer>) {
         self.analyzers.push(analyzer);
+    }
+
+    /// Returns the concrete type name of every registered analyzer, in
+    /// registration order.
+    ///
+    /// Used by [`crate::manifest`] for the type-level census; duplicates in
+    /// the returned slice indicate intentionally registered duplicate
+    /// instances of one type.
+    pub fn analyzer_type_names(&self) -> Vec<String> {
+        self.analyzers.iter().map(|a| a.type_name().to_owned()).collect()
     }
 
     /// Run all analyzers on a page and collect findings.

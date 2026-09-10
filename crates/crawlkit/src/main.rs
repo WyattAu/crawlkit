@@ -31,6 +31,8 @@ use tracing_subscriber::Layer;
 #[cfg(feature = "full")]
 use cli::Config;
 use cli::{Cli, Commands};
+#[cfg(feature = "full")]
+use cli::ScheduleCommands;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -235,6 +237,40 @@ async fn main() -> Result<()> {
         }
         #[cfg(feature = "full")]
         Commands::Rank { command } => cli::rank::run(command).await,
+        #[cfg(feature = "full")]
+        Commands::Schedule { command } => {
+            use cli::schedule::ScheduleAction;
+            let action = match command {
+                ScheduleCommands::Add {
+                    api,
+                    url,
+                    interval_secs,
+                    max_pages,
+                    delay_ms,
+                    concurrency,
+                } => ScheduleAction::Add {
+                    base: api,
+                    url,
+                    interval_secs,
+                    max_pages,
+                    delay_ms,
+                    concurrency,
+                },
+                ScheduleCommands::List { api } => ScheduleAction::List { base: api },
+                ScheduleCommands::Enable { api, id } => ScheduleAction::Enable {
+                    base: api,
+                    id,
+                    enabled: true,
+                },
+                ScheduleCommands::Disable { api, id } => ScheduleAction::Enable {
+                    base: api,
+                    id,
+                    enabled: false,
+                },
+                ScheduleCommands::Remove { api, id } => ScheduleAction::Remove { base: api, id },
+            };
+            cli::schedule::run(action).await
+        }
     }
 }
 

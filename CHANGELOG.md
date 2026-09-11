@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0-alpha.2] - 2026-09-12
+
+### Added
+- **Slack + Teams alert channels** (ADR-014, the 5.3.0 ladder item): provider-native renderers
+  (pure functions) delivered over the existing loop-retry pipeline with webhook-identical retry
+  classification (transport + 5xx/429 retryable, other 4xx fatal)
+- `POST/GET /api/v1/alert-channels` and `DELETE /api/v1/alert-channels/{id}`: channel CRUD with
+  credential-store integration and per-channel delivery health in listings
+
+### Security
+- Channel endpoint URLs (Slack/Teams webhook URLs grant posting rights) live in the encrypted
+  credential store, referenced by connector name — never stored in channel config, echoed in API
+  responses, or logged; transport errors are URL-scrubbed before materialization (reqwest error
+  strings embed request URLs), pinned by test
+- Credential store is constructed in the API binary from `CRAWLKIT_ENCRYPTION_KEY`; deployments
+  without a key have channels explicitly unavailable rather than storing plaintext
+
+### Changed
+- Per-channel health tracking (consecutive failures, last success/failure, sanitized last error)
+  surfaced in `GET /api/v1/alert-channels`; repeated failures escalate to an error-level log
+  signal so a dead webhook is visible, not silent (ADR-014 §2)
+- Crawl completion and failure fan out to alert channels alongside webhooks
+
 ## [5.3.0-alpha.1] - 2026-09-11
 
 ### Added — "Connectors" rolling prerelease (docs/PRODUCT_STRATEGY.md §3)

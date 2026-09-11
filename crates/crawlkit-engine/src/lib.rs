@@ -153,10 +153,6 @@ pub mod determinism;
 /// a crawl ID to prevent collisions between different crawl sessions.
 #[cfg(feature = "unstable")]
 pub mod distributed_queue;
-/// Redis-backed global per-target politeness budget for the hosted
-/// scanner (ADR-015 §6, ADR-012).
-#[cfg(feature = "unstable")]
-pub mod politeness;
 /// DNS resolution cache and prefetching.
 ///
 /// Concurrent DNS cache with configurable TTL and background prefetching
@@ -203,6 +199,10 @@ pub mod js_render_decision;
 /// that can drive alerting and webhook delivery.
 #[cfg(feature = "full")]
 pub mod monitoring;
+/// Redis-backed global per-target politeness budget for the hosted
+/// scanner (ADR-015 §6, ADR-012).
+#[cfg(feature = "unstable")]
+pub mod politeness;
 /// Post-crawl analysis for cross-page SEO checks.
 ///
 /// Runs after a crawl completes to detect site-wide issues like
@@ -492,6 +492,8 @@ pub mod crawl_map;
 pub mod extraction;
 /// Log analysis: crawler breakdown, status codes, top URLs, and error reporting.
 pub mod log_analyzer;
+/// Web server access log parsing for Nginx/Apache combined and JSON formats.
+pub mod log_parser;
 /// Machine-readable capability manifest generated from the analyzer
 /// registry (ROADMAP Phase 0.1).
 ///
@@ -501,8 +503,6 @@ pub mod log_analyzer;
 /// documentation-drift gate.
 #[cfg(feature = "full")]
 pub mod manifest;
-/// Web server access log parsing for Nginx/Apache combined and JSON formats.
-pub mod log_parser;
 /// HTML meta tag extraction (title, description, OG, Twitter Cards, hreflang).
 ///
 /// Provides MetaTags with helper methods for checking

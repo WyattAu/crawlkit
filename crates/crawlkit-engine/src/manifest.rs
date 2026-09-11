@@ -108,7 +108,10 @@ pub fn generate() -> CapabilityManifest {
     let html = format!("{html}{body_words}</p>");
     let page = crate::parser::HtmlParser::parse(&html, &url);
     let headers: Vec<(String, String)> = vec![
-        ("content-type".to_string(), "text/html; charset=utf-8".to_string()),
+        (
+            "content-type".to_string(),
+            "text/html; charset=utf-8".to_string(),
+        ),
         ("cache-control".to_string(), "max-age=3600".to_string()),
     ];
     let redirect_chain: Vec<crate::RedirectHop> = Vec::new();
@@ -119,7 +122,9 @@ pub fn generate() -> CapabilityManifest {
         headers: &headers,
         response_time: Some(std::time::Duration::from_millis(120)),
         redirect_chain: &redirect_chain,
-        robots_txt: Some("User-agent: *\nDisallow: /private\nSitemap: https://example.com/sitemap.xml"),
+        robots_txt: Some(
+            "User-agent: *\nDisallow: /private\nSitemap: https://example.com/sitemap.xml",
+        ),
         body_size: Some(html.len()),
         compressed_size: Some(html.len()),
         server: Some("example"),
@@ -161,10 +166,7 @@ pub fn render_toml() -> String {
         "unique_analyzer_types = {}\n",
         m.unique_analyzer_types
     ));
-    out.push_str(&format!(
-        "finding_code_count = {}\n",
-        m.finding_code_count
-    ));
+    out.push_str(&format!("finding_code_count = {}\n", m.finding_code_count));
     out.push_str(&format!("profile_count = {}\n", m.profile_count));
     out
 }
@@ -329,7 +331,13 @@ mod tests {
         let toml = "[counts]\nanalyzer_count = 999999\n";
         let errs = check_drift(toml).unwrap_err();
         let line = errs.iter().find(|e| e.contains("analyzer_count")).unwrap();
-        assert!(line.contains("committed 999999"), "must show committed value: {line}");
-        assert!(line.contains("generated"), "must show generated value: {line}");
+        assert!(
+            line.contains("committed 999999"),
+            "must show committed value: {line}"
+        );
+        assert!(
+            line.contains("generated"),
+            "must show generated value: {line}"
+        );
     }
 }

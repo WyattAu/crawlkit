@@ -476,9 +476,7 @@ impl WasiPlugin {
             .get_func(&mut store, ANALYZE_EXPORT)
             .or_else(|| instance.get_func(&mut store, LEGACY_ANALYZE_EXPORT))
             .ok_or_else(|| {
-                PluginError::AnalysisFailed(format!(
-                    "Component does not export {ANALYZE_EXPORT}"
-                ))
+                PluginError::AnalysisFailed(format!("Component does not export {ANALYZE_EXPORT}"))
             })?;
 
         let mut results = [wasmtime::component::Val::Bool(false)];

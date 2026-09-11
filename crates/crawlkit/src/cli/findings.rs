@@ -50,8 +50,7 @@ mod schema_conformance {
             .join("../../docs/schema/findings.schema.json");
         let raw = std::fs::read_to_string(&path)
             .unwrap_or_else(|e| panic!("schema file missing at {}: {e}", path.display()));
-        serde_json::from_str(&raw)
-            .unwrap_or_else(|e| panic!("schema file is not valid JSON: {e}"))
+        serde_json::from_str(&raw).unwrap_or_else(|e| panic!("schema file is not valid JSON: {e}"))
     });
 
     fn sample_finding() -> Finding {
@@ -74,14 +73,37 @@ mod schema_conformance {
     #[allow(dead_code)]
     #[derive(Debug)]
     enum ValidationError {
-        NotObject { path: String },
-        NotString { path: String },
-        NotArray { path: String },
-        MissingRequired { path: String, key: String },
-        UnexpectedProperty { path: String, key: String },
-        NotInEnum { path: String, value: String },
-        PatternMismatch { path: String, value: String, pattern: String },
-        TooShort { path: String, value: String, min: usize },
+        NotObject {
+            path: String,
+        },
+        NotString {
+            path: String,
+        },
+        NotArray {
+            path: String,
+        },
+        MissingRequired {
+            path: String,
+            key: String,
+        },
+        UnexpectedProperty {
+            path: String,
+            key: String,
+        },
+        NotInEnum {
+            path: String,
+            value: String,
+        },
+        PatternMismatch {
+            path: String,
+            value: String,
+            pattern: String,
+        },
+        TooShort {
+            path: String,
+            value: String,
+            min: usize,
+        },
     }
 
     fn resolve_ref<'a>(schema: &'a Value, r: &str) -> &'a Value {
@@ -139,8 +161,17 @@ mod schema_conformance {
             // one `custom:` prefix branch; check membership without a regex
             // engine.
             let fixed = [
-                "http", "seo", "content", "links", "images", "schema", "security", "performance",
-                "mobile", "accessibility", "social",
+                "http",
+                "seo",
+                "content",
+                "links",
+                "images",
+                "schema",
+                "security",
+                "performance",
+                "mobile",
+                "accessibility",
+                "social",
             ];
             let ok = fixed.contains(&s)
                 || s.strip_prefix("custom:")
@@ -201,7 +232,12 @@ mod schema_conformance {
         }
         if type_name(v) == "array" {
             if let Some(items) = schema.get("items") {
-                for (i, item) in v.as_array().unwrap_or_else(|| panic!("checked array")).iter().enumerate() {
+                for (i, item) in v
+                    .as_array()
+                    .unwrap_or_else(|| panic!("checked array"))
+                    .iter()
+                    .enumerate()
+                {
                     validate(items, item, &format!("{path}[{i}]"), errors);
                 }
             }
@@ -225,7 +261,9 @@ mod schema_conformance {
     #[test]
     fn canonical_finding_json_validates() {
         let f = sample_finding();
-        assert_valid(&serde_json::json!({ "findings": [finding_json("https://example.com/", &f)] }));
+        assert_valid(
+            &serde_json::json!({ "findings": [finding_json("https://example.com/", &f)] }),
+        );
     }
 
     #[test]
@@ -237,9 +275,16 @@ mod schema_conformance {
             .unwrap_or_else(|| panic!("finding is an object"))
             .insert("element".to_string(), Value::String("div".to_string()));
         let mut errors = Vec::new();
-        validate(&SCHEMA, &serde_json::json!({ "findings": [v] }), "$", &mut errors);
+        validate(
+            &SCHEMA,
+            &serde_json::json!({ "findings": [v] }),
+            "$",
+            &mut errors,
+        );
         assert!(
-            errors.iter().any(|e| matches!(e, ValidationError::UnexpectedProperty { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::UnexpectedProperty { .. })),
             "extra key must violate the closed finding schema: {errors:?}"
         );
     }
@@ -262,7 +307,9 @@ mod schema_conformance {
         let mut errors = Vec::new();
         validate(&SCHEMA, &bad, "$", &mut errors);
         assert!(
-            errors.iter().any(|e| matches!(e, ValidationError::PatternMismatch { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::PatternMismatch { .. })),
             "unknown category must fail the pattern: {errors:?}"
         );
     }
@@ -281,7 +328,9 @@ mod schema_conformance {
         let mut errors = Vec::new();
         validate(&SCHEMA, &bad, "$", &mut errors);
         assert!(
-            errors.iter().any(|e| matches!(e, ValidationError::NotInEnum { .. })),
+            errors
+                .iter()
+                .any(|e| matches!(e, ValidationError::NotInEnum { .. })),
             "severity enum must be enforced: {errors:?}"
         );
     }

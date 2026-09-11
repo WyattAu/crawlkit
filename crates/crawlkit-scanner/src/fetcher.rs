@@ -61,10 +61,7 @@ impl reqwest::dns::Resolve for GuardedResolver {
                 .filter(|addr| guard::is_allowed_ip(addr.ip()))
                 .collect();
             if addrs.is_empty() {
-                return Err(format!(
-                    "scanner policy: {host} has no permitted addresses"
-                )
-                .into());
+                return Err(format!("scanner policy: {host} has no permitted addresses").into());
             }
             Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
         })
@@ -187,7 +184,11 @@ impl PinnedFetcher {
         let headers: Vec<(String, String)> = response
             .headers()
             .iter()
-            .filter_map(|(k, v)| v.to_str().ok().map(|vs| (k.as_str().to_string(), vs.to_string())))
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|vs| (k.as_str().to_string(), vs.to_string()))
+            })
             .collect();
 
         let mut body: Vec<u8> = Vec::new();
@@ -197,10 +198,12 @@ impl PinnedFetcher {
             match chunk {
                 Ok(bytes) => {
                     if (body.len() as u64) + (bytes.len() as u64) > MAX_BODY_BYTES {
-                        body.extend_from_slice(&bytes[..usize::try_from(
-                            MAX_BODY_BYTES.saturating_sub(body.len() as u64),
-                        )
-                        .unwrap_or(0)]);
+                        body.extend_from_slice(
+                            &bytes[..usize::try_from(
+                                MAX_BODY_BYTES.saturating_sub(body.len() as u64),
+                            )
+                            .unwrap_or(0)],
+                        );
                         oversized = true;
                         break;
                     }
@@ -231,7 +234,10 @@ impl PinnedFetcher {
 }
 
 impl Fetch for PinnedFetcher {
-    fn fetch<'a>(&'a self, url: &'a Url) -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>> {
+    fn fetch<'a>(
+        &'a self,
+        url: &'a Url,
+    ) -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>> {
         Box::pin(self.fetch_inner(url))
     }
 }

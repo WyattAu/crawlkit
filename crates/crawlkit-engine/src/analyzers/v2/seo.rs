@@ -30,11 +30,10 @@ fn count_canonical_links(body: &str) -> usize {
     scraper::Html::parse_document(body)
         .select(&sel)
         .filter(|el| {
-            el.value()
-                .attr("rel")
-                .map_or(false, |r| {
-                    r.split_whitespace().any(|t| t.eq_ignore_ascii_case("canonical"))
-                })
+            el.value().attr("rel").map_or(false, |r| {
+                r.split_whitespace()
+                    .any(|t| t.eq_ignore_ascii_case("canonical"))
+            })
         })
         .count()
 }
@@ -582,9 +581,8 @@ impl Analyzer for PaginationDepthAnalyzerV2 {
         // the raw body fired on any page whose docs, comments, or scripts
         // mention "page=", "p=", or "start=".
         let lower_url = url.to_lowercase();
-        let has_pagination = lower_url.contains("page=")
-            || lower_url.contains("p=")
-            || lower_url.contains("start=");
+        let has_pagination =
+            lower_url.contains("page=") || lower_url.contains("p=") || lower_url.contains("start=");
         if has_pagination {
             findings.push(Finding {
                 severity: Severity::Info,
@@ -870,21 +868,17 @@ impl Analyzer for OpenSearchDescriptionValidatorV2 {
             // OpenSearch MIME type). Raw-text matching also matched comments
             // and prose while missing single-quoted attributes.
             let sel = scraper::Selector::parse("link").expect("static selector");
-            let has_opensearch = scraper::Html::parse_document(body)
-                .select(&sel)
-                .any(|el| {
-                    let rel_is_search = el
-                        .value()
-                        .attr("rel")
-                        .map_or(false, |r| {
-                            r.split_whitespace().any(|t| t.eq_ignore_ascii_case("search"))
-                        });
-                    let type_is_opensearch = el.value().attr("type").map_or(false, |t| {
-                        t.to_lowercase()
-                            .contains("application/opensearchdescription+xml")
-                    });
-                    rel_is_search || type_is_opensearch
+            let has_opensearch = scraper::Html::parse_document(body).select(&sel).any(|el| {
+                let rel_is_search = el.value().attr("rel").map_or(false, |r| {
+                    r.split_whitespace()
+                        .any(|t| t.eq_ignore_ascii_case("search"))
                 });
+                let type_is_opensearch = el.value().attr("type").map_or(false, |t| {
+                    t.to_lowercase()
+                        .contains("application/opensearchdescription+xml")
+                });
+                rel_is_search || type_is_opensearch
+            });
             if !has_opensearch {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -1591,7 +1585,9 @@ impl Analyzer for CanonicalChainValidatorV5 {
             // which missed single-quoted or reordered attributes and then
             // flagged genuinely self-referencing pages as "off-page".
             let is_self = canonical.as_str() == url
-                || url::Url::parse(url).ok().zip(url::Url::parse(canonical.as_str()).ok())
+                || url::Url::parse(url)
+                    .ok()
+                    .zip(url::Url::parse(canonical.as_str()).ok())
                     .map_or(false, |(page, can)| {
                         page.path() == can.path()
                             && page.query() == can.query()

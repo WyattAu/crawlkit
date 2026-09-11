@@ -594,12 +594,17 @@ mod tests {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
             .await
             .unwrap_or_else(|e| panic!("bind: {e}"));
-        let addr = listener.local_addr().unwrap_or_else(|e| panic!("addr: {e}"));
+        let addr = listener
+            .local_addr()
+            .unwrap_or_else(|e| panic!("addr: {e}"));
         let (tx, rx) = tokio::sync::mpsc::channel(1);
 
         tokio::spawn(async move {
             use tokio::io::AsyncReadExt;
-            let (mut stream, _) = listener.accept().await.unwrap_or_else(|e| panic!("accept: {e}"));
+            let (mut stream, _) = listener
+                .accept()
+                .await
+                .unwrap_or_else(|e| panic!("accept: {e}"));
             let mut buf = vec![0u8; 65536];
             let n = stream.read(&mut buf).await.unwrap_or(0);
             let _ = tx.send(buf[..n].to_vec()).await;
@@ -617,7 +622,8 @@ mod tests {
         )
         .await;
 
-        let client = GscClient::with_base_url("secret-token".into(), "https://example.com/".into(), base);
+        let client =
+            GscClient::with_base_url("secret-token".into(), "https://example.com/".into(), base);
         let err = client
             .get_search_analytics("2026-01-01", "2026-01-31")
             .await
@@ -638,8 +644,7 @@ mod tests {
 
     #[tokio::test]
     async fn gsc_malformed_json_is_parse_error_not_panic() {
-        let (base, rx) =
-            start_one_shot("200 OK", "<html>not json</html>".to_string()).await;
+        let (base, rx) = start_one_shot("200 OK", "<html>not json</html>".to_string()).await;
 
         let client = GscClient::with_base_url("t".into(), "https://example.com/".into(), base);
         let err = client
@@ -701,7 +706,10 @@ mod tests {
             .await
             .unwrap_err_else_panic();
 
-        let request = rx.recv().await.unwrap_or_else(|| panic!("server saw no request"));
+        let request = rx
+            .recv()
+            .await
+            .unwrap_or_else(|| panic!("server saw no request"));
         let request_text = String::from_utf8_lossy(&request);
 
         // Token is transmitted exactly once, as the Authorization header.

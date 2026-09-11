@@ -87,11 +87,17 @@ pub enum ScanOutcome {
     Complete(Box<ScanReport>),
     /// robots.txt disallows the submitted path for `*` (or it 404s nothing —
     /// only explicit disallow blocks; a missing robots.txt never blocks).
-    RobotsBlocked { submitted_url: String },
+    RobotsBlocked {
+        submitted_url: String,
+    },
     /// The target failed validation before any request was issued.
-    Rejected { reason: String },
+    Rejected {
+        reason: String,
+    },
     /// Scan could not run (e.g., budget exhausted before the first fetch).
-    BudgetExhausted { retry_after_secs: u64 },
+    BudgetExhausted {
+        retry_after_secs: u64,
+    },
 }
 
 /// A fetched response handed to the scan engine.
@@ -115,7 +121,8 @@ pub struct FetchOutcome {
 /// final response. Implementations must enforce the guard rules; the engine
 /// layer re-checks nothing on the hot path by design.
 pub trait Fetch: Send + Sync {
-    fn fetch<'a>(&'a self, url: &'a Url) -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>>;
+    fn fetch<'a>(&'a self, url: &'a Url)
+        -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>>;
 }
 
 /// Dependencies for one scan run.
@@ -137,12 +144,18 @@ pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) ->
 
     let url = match guard::validate_target(submitted) {
         Ok(u) => u,
-        Err(e) => return ScanOutcome::Rejected { reason: e.to_string() },
+        Err(e) => {
+            return ScanOutcome::Rejected {
+                reason: e.to_string(),
+            }
+        }
     };
     let submitted_url = url.clone();
 
     let Some(host) = scan_host(&url) else {
-        return ScanOutcome::Rejected { reason: "URL has no host".to_string() };
+        return ScanOutcome::Rejected {
+            reason: "URL has no host".to_string(),
+        };
     };
 
     // Politeness slot for the robots fetch.
@@ -160,7 +173,9 @@ pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) ->
     };
     if let Some(text) = &robots_text {
         if robots_disallows(text, url.path()) {
-            return ScanOutcome::RobotsBlocked { submitted_url: submitted_url.to_string() };
+            return ScanOutcome::RobotsBlocked {
+                submitted_url: submitted_url.to_string(),
+            };
         }
     }
 
@@ -225,7 +240,9 @@ pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) ->
                 if link.is_external {
                     continue;
                 }
-                let Ok(link_url) = Url::parse(&link.href) else { continue };
+                let Ok(link_url) = Url::parse(&link.href) else {
+                    continue;
+                };
                 if scan_host(&link_url).as_deref() != Some(host.as_str()) {
                     continue;
                 }
@@ -298,7 +315,9 @@ fn robots_disallows(robots: &str, path: &str) -> bool {
     let mut disallows: Vec<String> = Vec::new();
     for line in robots.lines() {
         let line = line.split('#').next().unwrap_or("").trim();
-        let Some((key, value)) = line.split_once(':') else { continue };
+        let Some((key, value)) = line.split_once(':') else {
+            continue;
+        };
         let key = key.trim().to_ascii_lowercase();
         let value = value.trim();
         match key.as_str() {
@@ -330,18 +349,16 @@ fn summarize(findings: &[crawlkit_types::Finding]) -> Vec<FindingSummary> {
     let mut order: Vec<String> = Vec::new();
     let mut grouped: BTreeMap<String, FindingSummary> = BTreeMap::new();
     for f in findings {
-        let entry = grouped
-            .entry(f.code.clone())
-            .or_insert_with(|| {
-                order.push(f.code.clone());
-                FindingSummary {
-                    code: f.code.clone(),
-                    severity: f.severity.as_str().to_string(),
-                    title: f.title.clone(),
-                    occurrences: 0,
-                    sample_urls: Vec::new(),
-                }
-            });
+        let entry = grouped.entry(f.code.clone()).or_insert_with(|| {
+            order.push(f.code.clone());
+            FindingSummary {
+                code: f.code.clone(),
+                severity: f.severity.as_str().to_string(),
+                title: f.title.clone(),
+                occurrences: 0,
+                sample_urls: Vec::new(),
+            }
+        });
         entry.occurrences += 1;
         if entry.sample_urls.len() < 3 && !entry.sample_urls.contains(&f.url) {
             entry.sample_urls.push(f.url.clone());
@@ -392,11 +409,7 @@ mod tests {
             url: &'a Url,
         ) -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>> {
             Box::pin(async move {
-                let key = format!(
-                    "{}{}",
-                    url.host_str().unwrap_or(""),
-                    url.path()
-                );
+                let key = format!("{}{}", url.host_str().unwrap_or(""), url.path());
                 match self.pages.get(&key) {
                     Some((status, body)) => FetchOutcome {
                         status: *status,
@@ -461,7 +474,11 @@ mod tests {
     #[tokio::test]
     async fn follows_same_host_links_up_to_depth() {
         let deps = fixture_deps(vec![
-            ("example.com/", 200, page(&["/a".to_string(), "/b".to_string()])),
+            (
+                "example.com/",
+                200,
+                page(&["/a".to_string(), "/b".to_string()]),
+            ),
             ("example.com/a", 200, page(&[])),
             ("example.com/b", 200, page(&[])),
         ]);
@@ -499,11 +516,17 @@ mod tests {
         impl BudgetStore for OnceThenFull {
             fn consume(&self, _host: &str, _now_ms: u64) -> Result<(), BudgetError> {
                 let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                if n == 0 { Ok(()) } else {
-                    Err(BudgetError::Exhausted { retry_after_secs: 60 })
+                if n == 0 {
+                    Ok(())
+                } else {
+                    Err(BudgetError::Exhausted {
+                        retry_after_secs: 60,
+                    })
                 }
             }
-            fn sweep(&self, _now_ms: u64) -> usize { 0 }
+            fn sweep(&self, _now_ms: u64) -> usize {
+                0
+            }
         }
         let deps = ScanDeps {
             fetcher: Arc::new(FixtureFetcher {
@@ -517,7 +540,10 @@ mod tests {
             panic!("expected complete, got {outcome:?}");
         };
         assert_eq!(report.pages_scanned, 0);
-        assert_eq!(report.truncated_reason, Some(TruncationReason::TargetBudget));
+        assert_eq!(
+            report.truncated_reason,
+            Some(TruncationReason::TargetBudget)
+        );
     }
 
     #[tokio::test]

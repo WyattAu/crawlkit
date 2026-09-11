@@ -1568,7 +1568,10 @@ fn parse_form_fixture(html: &str) -> ParsedPage {
     HtmlParser::parse(html, &url)
 }
 
-fn form_label_ctx<'a>(html: &'a str, page: &'a ParsedPage) -> crate::analyzers::AnalysisContext<'a> {
+fn form_label_ctx<'a>(
+    html: &'a str,
+    page: &'a ParsedPage,
+) -> crate::analyzers::AnalysisContext<'a> {
     crate::analyzers::AnalysisContext {
         page,
         body: Some(html),
@@ -1599,10 +1602,7 @@ fn test_form_label_implicit_label_not_flagged() {
         "parser must extract the form for this regression test"
     );
     assert!(
-        page.forms[0]
-            .inputs
-            .iter()
-            .all(|i| i.has_label),
+        page.forms[0].inputs.iter().all(|i| i.has_label),
         "implicit <label><input> nesting must mark the input as labeled"
     );
 

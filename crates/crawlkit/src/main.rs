@@ -30,9 +30,9 @@ use tracing_subscriber::Layer;
 
 #[cfg(feature = "full")]
 use cli::Config;
-use cli::{Cli, Commands};
 #[cfg(feature = "full")]
 use cli::ScheduleCommands;
+use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<()> {

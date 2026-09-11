@@ -36,9 +36,7 @@ async fn main() {
         }
     };
 
-    tracing::info!(
-        "crawlkit-scanner listening on {addr} — free-scan prototype (ADR-012)"
-    );
+    tracing::info!("crawlkit-scanner listening on {addr} — free-scan prototype (ADR-012)");
     if let Err(e) = axum::serve(listener, app).await {
         eprintln!("fatal: server error: {e}");
         std::process::exit(1);

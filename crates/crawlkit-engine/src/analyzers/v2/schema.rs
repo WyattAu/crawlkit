@@ -4821,8 +4821,8 @@ impl Analyzer for HowToMissingStepValidator {
                         if arr.is_empty() {
                             findings.push(Finding {
                                 // step is required for Google HowTo rich results; Warning is
-                        // the ceiling for rich-result-required properties.
-                        severity: Severity::Warning,
+                                // the ceiling for rich-result-required properties.
+                                severity: Severity::Warning,
                                 category: IssueCategory::Schema,
                                 code: "HOWSTEP001".to_string(),
                                 title: "HowTo has empty step array".to_string(),
@@ -9156,34 +9156,119 @@ mod tests {
 
         #[test]
         fn optional_properties_without_rich_result_requirements_are_info() {
-            check_severity(&CreativeWorkMissingNameValidator, "CreativeWork", "CWNAME-V6001", Severity::Info);
-            check_severity(&CivicStructureMissingNameValidator, "CivicStructure", "CVNAME-V6010", Severity::Info);
-            check_severity(&LandformMissingNameValidator, "Landform", "LFNAME-V6011", Severity::Info);
-            check_severity(&LandmarkMissingNameValidator, "LandmarksOrHistoricalBuildings", "LMNAME-V6012", Severity::Info);
-            check_severity(&TouristAttractionMissingNameValidator, "TouristAttraction", "TANAME-V6013", Severity::Info);
-            check_severity(&TouristDestinationMissingNameValidator, "TouristDestination", "TDNAME-V6014", Severity::Info);
-            check_severity(&SportsEventMissingNameValidator, "SportsEvent", "SENAME-V6016", Severity::Info);
-            check_severity(&EducationalOrganizationMissingNameValidator, "EducationalOrganization", "EDUNAME-V6017", Severity::Info);
-            check_severity(&NGOMissingNameValidator, "NGO", "NGONAME-V6018", Severity::Info);
-            check_severity(&PerformingArtsSeriesMissingNameValidator, "PerformingArtsSeries", "PASNAME-V6019", Severity::Info);
-            check_severity(&BroadcastEventMissingNameValidator, "BroadcastEvent", "BENAME-V6020", Severity::Info);
-            check_severity(&WorkersUnionMissingNameValidator, "WorkersUnion", "WUNAME-V6048", Severity::Info);
-            check_severity(&WebPageElementMissingNameValidator, "WebPageElement", "WPELNAME-V6051", Severity::Info);
-            check_severity(&WorkersUnionMissingNameValidatorV2, "WorkersUnion", "WUNAME-V2001", Severity::Info);
+            check_severity(
+                &CreativeWorkMissingNameValidator,
+                "CreativeWork",
+                "CWNAME-V6001",
+                Severity::Info,
+            );
+            check_severity(
+                &CivicStructureMissingNameValidator,
+                "CivicStructure",
+                "CVNAME-V6010",
+                Severity::Info,
+            );
+            check_severity(
+                &LandformMissingNameValidator,
+                "Landform",
+                "LFNAME-V6011",
+                Severity::Info,
+            );
+            check_severity(
+                &LandmarkMissingNameValidator,
+                "LandmarksOrHistoricalBuildings",
+                "LMNAME-V6012",
+                Severity::Info,
+            );
+            check_severity(
+                &TouristAttractionMissingNameValidator,
+                "TouristAttraction",
+                "TANAME-V6013",
+                Severity::Info,
+            );
+            check_severity(
+                &TouristDestinationMissingNameValidator,
+                "TouristDestination",
+                "TDNAME-V6014",
+                Severity::Info,
+            );
+            check_severity(
+                &SportsEventMissingNameValidator,
+                "SportsEvent",
+                "SENAME-V6016",
+                Severity::Info,
+            );
+            check_severity(
+                &EducationalOrganizationMissingNameValidator,
+                "EducationalOrganization",
+                "EDUNAME-V6017",
+                Severity::Info,
+            );
+            check_severity(
+                &NGOMissingNameValidator,
+                "NGO",
+                "NGONAME-V6018",
+                Severity::Info,
+            );
+            check_severity(
+                &PerformingArtsSeriesMissingNameValidator,
+                "PerformingArtsSeries",
+                "PASNAME-V6019",
+                Severity::Info,
+            );
+            check_severity(
+                &BroadcastEventMissingNameValidator,
+                "BroadcastEvent",
+                "BENAME-V6020",
+                Severity::Info,
+            );
+            check_severity(
+                &WorkersUnionMissingNameValidator,
+                "WorkersUnion",
+                "WUNAME-V6048",
+                Severity::Info,
+            );
+            check_severity(
+                &WebPageElementMissingNameValidator,
+                "WebPageElement",
+                "WPELNAME-V6051",
+                Severity::Info,
+            );
+            check_severity(
+                &WorkersUnionMissingNameValidatorV2,
+                "WorkersUnion",
+                "WUNAME-V2001",
+                Severity::Info,
+            );
         }
 
         #[test]
         fn organization_and_person_names_are_recommended_only() {
             // Google's Organization docs require logo/url; name is recommended.
-            check_severity(&OrganizationMissingNameValidatorV2, "Organization", "ORGNAME-V2001", Severity::Info);
-            check_severity(&PersonMissingNameValidatorV2, "Person", "PERSNAME-V2001", Severity::Info);
+            check_severity(
+                &OrganizationMissingNameValidatorV2,
+                "Organization",
+                "ORGNAME-V2001",
+                Severity::Info,
+            );
+            check_severity(
+                &PersonMissingNameValidatorV2,
+                "Person",
+                "PERSNAME-V2001",
+                Severity::Info,
+            );
         }
 
         #[test]
         fn rich_result_required_properties_stay_at_warning_ceiling() {
             // JobPosting title is required for Google rich results — but that
             // caps at Warning, not Critical.
-            check_severity(&JobPostingMissingTitleValidatorV2, "JobPosting", "JOBTITLE-V2001", Severity::Warning);
+            check_severity(
+                &JobPostingMissingTitleValidatorV2,
+                "JobPosting",
+                "JOBTITLE-V2001",
+                Severity::Warning,
+            );
             // HowTo step is required for Google rich results — Warning, not Error.
             let p = one_sd("HowTo", serde_json::json!({"@type": "HowTo"}));
             let f = HowToMissingStepValidator::new().analyze(&make_ctx(&p, None));
@@ -9194,8 +9279,18 @@ mod tests {
         #[test]
         fn required_for_rich_results_stays_warning() {
             // Course name and Recipe name are required by Google's docs.
-            check_severity(&CourseMissingNameValidatorV2, "Course", "COURSENAME-V2001", Severity::Warning);
-            check_severity(&RecipeMissingNameValidatorV2, "Recipe", "RECIPENAME-V2001", Severity::Warning);
+            check_severity(
+                &CourseMissingNameValidatorV2,
+                "Course",
+                "COURSENAME-V2001",
+                Severity::Warning,
+            );
+            check_severity(
+                &RecipeMissingNameValidatorV2,
+                "Recipe",
+                "RECIPENAME-V2001",
+                Severity::Warning,
+            );
         }
     }
 }

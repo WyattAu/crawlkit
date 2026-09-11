@@ -178,8 +178,7 @@ wasm = "wasi_title_analyzer.wasm"
 "#;
 
     const SAMPLE_URL: &str = "https://example.com/";
-    const SAMPLE_HTML: &str =
-        "<html><head></head><body><h1>hello</h1></body></html>";
+    const SAMPLE_HTML: &str = "<html><head></head><body><h1>hello</h1></body></html>";
 
     pub fn run() {
         let args: Vec<String> = std::env::args().collect();
@@ -206,10 +205,10 @@ wasm = "wasi_title_analyzer.wasm"
             .map_err(|e| format!("compile component: {e}"))?;
 
         let mut linker = wasmtime::component::Linker::<HostState>::new(&engine);
-        crawlkit::plugin::context::add_to_linker::<HostState, wasmtime::component::HasSelf<HostState>>(
-            &mut linker,
-            |state| state,
-        )
+        crawlkit::plugin::context::add_to_linker::<
+            HostState,
+            wasmtime::component::HasSelf<HostState>,
+        >(&mut linker, |state| state)
         .map_err(|e| format!("link crawlkit:plugin/context: {e}"))?;
 
         let mut store = wasmtime::Store::new(
@@ -220,11 +219,12 @@ wasm = "wasi_title_analyzer.wasm"
                 )),
             },
         );
-        store.set_fuel(50_000_000u64).map_err(|e| format!("set fuel: {e}"))?;
+        store
+            .set_fuel(50_000_000u64)
+            .map_err(|e| format!("set fuel: {e}"))?;
 
-        let analyzer =
-            CrawlkitAnalyzer::instantiate(&mut store, &component, &linker)
-                .map_err(|e| format!("instantiate: {e}"))?;
+        let analyzer = CrawlkitAnalyzer::instantiate(&mut store, &component, &linker)
+            .map_err(|e| format!("instantiate: {e}"))?;
 
         // Typed call: the outer Result is a host trap, the inner Result is
         // the WIT `result<string, string>` (findings JSON or error).

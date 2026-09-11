@@ -72,7 +72,10 @@ async fn request(
         builder = builder.body(json);
     }
 
-    let response = builder.send().await.with_context(|| format!("request to {url} failed"))?;
+    let response = builder
+        .send()
+        .await
+        .with_context(|| format!("request to {url} failed"))?;
     let status = u16::from(response.status());
     let text = response.text().await.unwrap_or_default();
     Ok((status, text))
@@ -93,7 +96,10 @@ fn print_schedule_list(body: &str) -> Result<()> {
         println!("no schedules");
         return Ok(());
     }
-    println!("{:<38} {:<45} {:>8} {:<8} NEXT RUN", "ID", "START URL", "INTERVAL", "STATE");
+    println!(
+        "{:<38} {:<45} {:>8} {:<8} NEXT RUN",
+        "ID", "START URL", "INTERVAL", "STATE"
+    );
     for r in rows {
         println!(
             "{:<38} {:<45} {:>7}s {:<8} {}",
@@ -164,24 +170,33 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
                 "request_delay_ms": delay_ms,
                 "concurrency": concurrency,
             });
-            let (status, body) = request(&base, reqwest::Method::POST, "/api/v1/schedules", Some(payload.to_string())).await?;
+            let (status, body) = request(
+                &base,
+                reqwest::Method::POST,
+                "/api/v1/schedules",
+                Some(payload.to_string()),
+            )
+            .await?;
             require_created(status, &body)
         }
         ScheduleAction::List { base } => {
-            let (status, body) = request(&base, reqwest::Method::GET, "/api/v1/schedules", None).await?;
+            let (status, body) =
+                request(&base, reqwest::Method::GET, "/api/v1/schedules", None).await?;
             if status != 200 {
                 bail!("list failed (HTTP {status}): {body}");
             }
             print_schedule_list(&body)
         }
-        ScheduleAction::Enable {
-            base,
-            id,
-            enabled,
-        } => {
+        ScheduleAction::Enable { base, id, enabled } => {
             let path = format!("/api/v1/schedules/{id}");
             let payload = serde_json::json!({ "enabled": enabled });
-            let (status, body) = request(&base, reqwest::Method::PATCH, &path, Some(payload.to_string())).await?;
+            let (status, body) = request(
+                &base,
+                reqwest::Method::PATCH,
+                &path,
+                Some(payload.to_string()),
+            )
+            .await?;
             if status == 200 {
                 println!(
                     "schedule {id} {}",
@@ -211,8 +226,14 @@ mod tests {
 
     #[test]
     fn normalize_base_strips_trailing_slash() {
-        assert_eq!(normalize_base("http://localhost:8080/"), "http://localhost:8080");
-        assert_eq!(normalize_base("http://localhost:8080"), "http://localhost:8080");
+        assert_eq!(
+            normalize_base("http://localhost:8080/"),
+            "http://localhost:8080"
+        );
+        assert_eq!(
+            normalize_base("http://localhost:8080"),
+            "http://localhost:8080"
+        );
     }
 
     #[test]
@@ -229,7 +250,10 @@ mod tests {
         std::env::remove_var("CRAWLKIT_API_KEY");
         std::env::remove_var("CRAWLKIT_JWT");
         let err = resolve_auth().unwrap_err().to_string();
-        assert!(err.contains("CRAWLKIT_API_KEY"), "error must name the env var: {err}");
+        assert!(
+            err.contains("CRAWLKIT_API_KEY"),
+            "error must name the env var: {err}"
+        );
     }
 
     #[test]

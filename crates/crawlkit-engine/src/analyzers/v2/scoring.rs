@@ -1062,11 +1062,15 @@ mod tests {
             ..make_ctx(&p, None)
         };
         assert!(SecurityScoreAnalyzer::new().analyze(&ctx).is_empty());
-        assert!(HeadingStructureScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(HeadingStructureScoreAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
         assert!(LinkQualityScoreAnalyzer::new().analyze(&ctx).is_empty());
         assert!(SchemaCoverageScoreAnalyzer::new().analyze(&ctx).is_empty());
         assert!(AccessibilityScoreAnalyzer::new().analyze(&ctx).is_empty());
-        assert!(ContentFreshnessScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(ContentFreshnessScoreAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
     }
 
     // ---------------------------------------------------------------------------
@@ -1080,7 +1084,9 @@ mod tests {
             content_type: Some("application/json; charset=utf-8"),
             ..make_ctx(&p, Some(r#"{"status": "ok"}"#))
         };
-        assert!(HeadingStructureScoreAnalyzer::new().analyze(&ctx).is_empty());
+        assert!(HeadingStructureScoreAnalyzer::new()
+            .analyze(&ctx)
+            .is_empty());
         assert!(SchemaCoverageScoreAnalyzer::new().analyze(&ctx).is_empty());
         assert!(AccessibilityScoreAnalyzer::new().analyze(&ctx).is_empty());
     }

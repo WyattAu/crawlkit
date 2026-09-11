@@ -4451,7 +4451,8 @@ mod tests {
     #[test]
     fn test_hidden_text_v2_ignores_comment_mention() {
         let p = make_page("https://example.com");
-        let body = r#"<html><body><!-- never use visibility:hidden for screen readers --></body></html>"#;
+        let body =
+            r#"<html><body><!-- never use visibility:hidden for screen readers --></body></html>"#;
         assert!(ColorContrastTextAnalyzerV2::new()
             .analyze(&make_ctx(&p, Some(body)))
             .is_empty());

@@ -971,8 +971,12 @@ mod redis_tests {
     #[ignore = "requires running Redis instance"]
     async fn priority_ordering_across_pops() {
         let q = queue("t-priority").await;
-        q.push(&entry("https://example.com/low", 128)).await.unwrap();
-        q.push(&entry("https://example.com/high", 32)).await.unwrap();
+        q.push(&entry("https://example.com/low", 128))
+            .await
+            .unwrap();
+        q.push(&entry("https://example.com/high", 32))
+            .await
+            .unwrap();
 
         let first = q.pop().await.unwrap().unwrap();
         assert_eq!(first.entry.url, "https://example.com/high");
@@ -990,10 +994,16 @@ mod redis_tests {
 
         // Attempt 1: transient -> requeued with backoff score.
         let lease = q.pop().await.unwrap().unwrap();
-        assert!(q.fail(&lease, "timeout", "conn reset", now_ms()).await.unwrap());
+        assert!(q
+            .fail(&lease, "timeout", "conn reset", now_ms())
+            .await
+            .unwrap());
         assert_eq!(q.len().await.unwrap(), 1, "requeued for retry");
         // Backoff score defers it: not yet eligible.
-        assert!(q.pop().await.unwrap().is_none(), "entry not eligible during backoff");
+        assert!(
+            q.pop().await.unwrap().is_none(),
+            "entry not eligible during backoff"
+        );
 
         // Attempt 2: simulate backoff elapsing by updating the requeued
         // member's score to 0 (ZADD on an existing member updates its score).
@@ -1014,7 +1024,10 @@ mod redis_tests {
 
         let lease2 = q.pop().await.unwrap().expect("retried entry eligible");
         assert_eq!(lease2.entry.attempt_count, 1);
-        assert!(q.fail(&lease2, "timeout", "still failing", now_ms()).await.unwrap());
+        assert!(q
+            .fail(&lease2, "timeout", "still failing", now_ms())
+            .await
+            .unwrap());
         let dead = q.dead_letters().await.unwrap();
         assert_eq!(dead.len(), 1);
         assert_eq!(dead[0].entry.attempt_count, 2);
@@ -1025,7 +1038,9 @@ mod redis_tests {
     #[ignore = "requires running Redis instance"]
     async fn fatal_failure_dead_letters_immediately() {
         let q = queue("t-fatal").await;
-        q.push(&entry("https://example.com/gone", 64)).await.unwrap();
+        q.push(&entry("https://example.com/gone", 64))
+            .await
+            .unwrap();
         let lease = q.pop().await.unwrap().unwrap();
         assert!(q.fail(&lease, "gone", "410", now_ms()).await.unwrap());
         let dead = q.dead_letters().await.unwrap();
@@ -1039,7 +1054,9 @@ mod redis_tests {
     async fn expired_lease_is_reclaimed_at_least_once() {
         let q = DistributedQueue::with_policy(&redis_url(), "t-crash", 50, 5, 100).unwrap();
         q.clear().await.unwrap();
-        q.push(&entry("https://example.com/crash", 64)).await.unwrap();
+        q.push(&entry("https://example.com/crash", 64))
+            .await
+            .unwrap();
         let lease = q.pop().await.unwrap().unwrap();
         assert_eq!(q.in_flight().await.unwrap(), 1);
 
@@ -1063,7 +1080,9 @@ mod redis_tests {
             DistributedQueue::with_policy(&redis_url(), "t-sweep", 50, 5, 100).unwrap(),
         );
         q.clear().await.unwrap();
-        q.push(&entry("https://example.com/sweep", 64)).await.unwrap();
+        q.push(&entry("https://example.com/sweep", 64))
+            .await
+            .unwrap();
         let _lease = q.pop().await.unwrap().unwrap();
         tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
@@ -1077,7 +1096,9 @@ mod redis_tests {
     #[ignore = "requires running Redis instance"]
     async fn dead_letter_redrive_resets_attempts() {
         let q = queue("t-redrive").await;
-        q.push(&entry("https://example.com/recover", 64)).await.unwrap();
+        q.push(&entry("https://example.com/recover", 64))
+            .await
+            .unwrap();
         let lease = q.pop().await.unwrap().unwrap();
         q.fail(&lease, "gone", "transient misclassification", now_ms())
             .await
@@ -1105,7 +1126,9 @@ mod redis_tests {
             DistributedQueue::with_policy(&redis_url(), "t-sweeper", 50, 5, 100).unwrap(),
         );
         q.clear().await.unwrap();
-        q.push(&entry("https://example.com/swept", 64)).await.unwrap();
+        q.push(&entry("https://example.com/swept", 64))
+            .await
+            .unwrap();
         let _lease = q.pop().await.unwrap().unwrap();
 
         let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);

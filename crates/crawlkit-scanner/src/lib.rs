@@ -16,9 +16,7 @@ pub mod guard;
 pub mod scan;
 pub mod token;
 
-pub use bounds::{
-    BudgetError, BudgetStore, InMemoryBudgetStore, MAX_PAGES, RESULT_RETENTION,
-};
+pub use bounds::{BudgetError, BudgetStore, InMemoryBudgetStore, MAX_PAGES, RESULT_RETENTION};
 pub use fetcher::PinnedFetcher;
 pub use guard::{validate_target, GuardError};
 pub use scan::{run_scan, Fetch, ScanDeps, ScanOutcome};

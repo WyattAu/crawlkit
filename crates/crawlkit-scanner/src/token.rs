@@ -40,9 +40,7 @@ pub fn new_result_token() -> String {
 /// Returns [`TokenError`] when the token is not well-formed base64url of the
 /// expected length.
 pub fn parse_result_token(token: &str) -> Result<[u8; TOKEN_BYTES], TokenError> {
-    let bytes = URL_SAFE_NO_PAD
-        .decode(token)
-        .map_err(|_| TokenError)?;
+    let bytes = URL_SAFE_NO_PAD.decode(token).map_err(|_| TokenError)?;
     if bytes.len() != TOKEN_BYTES {
         return Err(TokenError);
     }
@@ -51,8 +49,8 @@ pub fn parse_result_token(token: &str) -> Result<[u8; TOKEN_BYTES], TokenError> 
     Ok(out)
 }
 
-use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
+use base64::Engine as _;
 
 #[cfg(test)]
 mod tests {

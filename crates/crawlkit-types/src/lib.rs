@@ -163,10 +163,9 @@ impl<'de> Deserialize<'de> for IssueCategory {
                 // Old derived form: {"custom": "<name>"} for Custom payloads;
                 // unit variants serialized as {"<variant>": null}.
                 if first.0 == "custom" {
-                    let name = first
-                        .1
-                        .as_str()
-                        .ok_or_else(|| serde::de::Error::custom("custom category name must be a string"))?;
+                    let name = first.1.as_str().ok_or_else(|| {
+                        serde::de::Error::custom("custom category name must be a string")
+                    })?;
                     Ok(Self::Custom(name.to_string()))
                 } else {
                     Ok(Self::parse_category(&first.0))

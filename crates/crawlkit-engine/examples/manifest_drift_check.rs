@@ -23,10 +23,7 @@ fn main() {
         return;
     }
 
-    let manifest_path = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../docs/capabilities.toml"
-    );
+    let manifest_path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/capabilities.toml");
     let committed = match std::fs::read_to_string(manifest_path) {
         Ok(text) => text,
         Err(e) => {

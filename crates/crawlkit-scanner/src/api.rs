@@ -177,7 +177,10 @@ async fn submit_scan(
             StatusCode::TOO_MANY_REQUESTS,
             serde_json::json!({ "state": "budget_exhausted", "retry_after_secs": retry_after_secs }),
         ),
-        ScanOutcome::Complete(_) => (StatusCode::ACCEPTED, serde_json::json!({ "token": token, "result_url": format!("/scan/{token}") })),
+        ScanOutcome::Complete(_) => (
+            StatusCode::ACCEPTED,
+            serde_json::json!({ "token": token, "result_url": format!("/scan/{token}") }),
+        ),
     };
 
     // Only addressable outcomes are stored; rejected inputs and budget
@@ -190,8 +193,9 @@ async fn submit_scan(
             token.clone(),
             StoredResult {
                 outcome,
-                expires_at: chrono::Utc::now() + chrono::Duration::from_std(RESULT_RETENTION)
-                    .unwrap_or_else(|_| chrono::Duration::hours(24)),
+                expires_at: chrono::Utc::now()
+                    + chrono::Duration::from_std(RESULT_RETENTION)
+                        .unwrap_or_else(|_| chrono::Duration::hours(24)),
             },
         );
     }
@@ -200,10 +204,7 @@ async fn submit_scan(
 }
 
 /// GET /scan/{token}: return the stored result if present and unexpired.
-async fn get_result(
-    State(state): State<Arc<AppState>>,
-    Path(token): Path<String>,
-) -> Response {
+async fn get_result(State(state): State<Arc<AppState>>, Path(token): Path<String>) -> Response {
     // Shape-validate before using as a map key; malformed tokens 404 without
     // touching the store (and without leaking whether siblings exist).
     if parse_result_token(&token).is_err() {
@@ -212,10 +213,9 @@ async fn get_result(
 
     match state.results.get(&token) {
         Some(entry) => {
-            let expires_in_secs = u64::try_from(
-                (entry.expires_at - chrono::Utc::now()).num_seconds().max(0),
-            )
-            .unwrap_or(0);
+            let expires_in_secs =
+                u64::try_from((entry.expires_at - chrono::Utc::now()).num_seconds().max(0))
+                    .unwrap_or(0);
             let body = match &entry.outcome {
                 ScanOutcome::Complete(report) => ScanResultResponse {
                     state: "complete",

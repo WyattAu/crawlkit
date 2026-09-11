@@ -55,11 +55,12 @@ pub enum GuardError {
 /// Hostname targets are validated again after resolution in [`resolve_pinned`],
 /// so this function alone is not sufficient for hostname targets.
 pub fn validate_target(raw_url: &str) -> Result<Url, GuardError> {
-    let url = Url::parse(raw_url)
-        .map_err(|_| GuardError::InvalidTarget("unparseable URL"))?;
+    let url = Url::parse(raw_url).map_err(|_| GuardError::InvalidTarget("unparseable URL"))?;
 
     if url.scheme() != "http" && url.scheme() != "https" {
-        return Err(GuardError::InvalidTarget("only http and https schemes are allowed"));
+        return Err(GuardError::InvalidTarget(
+            "only http and https schemes are allowed",
+        ));
     }
     // `file:`, `data:`, `ftp:`, and any future scheme are denied above; this
     // also implicitly denies URLs without a host (`data:` etc.).
@@ -67,7 +68,9 @@ pub fn validate_target(raw_url: &str) -> Result<Url, GuardError> {
         return Err(GuardError::InvalidTarget("URL has no host"));
     }
     if !url.username().is_empty() || url.password().is_some() {
-        return Err(GuardError::InvalidTarget("credentials in URL are not allowed"));
+        return Err(GuardError::InvalidTarget(
+            "credentials in URL are not allowed",
+        ));
     }
 
     // Host presence was verified above; treat absence defensively (deny).
@@ -76,7 +79,9 @@ pub fn validate_target(raw_url: &str) -> Result<Url, GuardError> {
     };
     if let Some(ip) = literal_ip(host) {
         if !is_allowed_ip(ip) {
-            return Err(GuardError::InvalidTarget("literal IP is not a public address"));
+            return Err(GuardError::InvalidTarget(
+                "literal IP is not a public address",
+            ));
         }
     }
     Ok(url)
@@ -100,7 +105,9 @@ pub async fn resolve_pinned_async(url: &Url) -> Result<Vec<SocketAddr>, GuardErr
 
     if let Some(ip) = literal_ip(&host) {
         if !is_allowed_ip(ip) {
-            return Err(GuardError::InvalidTarget("literal IP is not a public address"));
+            return Err(GuardError::InvalidTarget(
+                "literal IP is not a public address",
+            ));
         }
         return Ok(vec![SocketAddr::new(ip, port_of(url))]);
     }
@@ -182,7 +189,7 @@ fn is_allowed_v4(v4: Ipv4Addr) -> bool {
         || (o[0] == 198 && (o[1] == 18 || o[1] == 19)) // 198.18/15 benchmarking
         || (o[0] == 198 && o[1] == 51 && o[2] == 100)  // 198.51.100/24 TEST-NET-2
         || (o[0] == 203 && o[1] == 0 && o[2] == 113)   // 203.0.113/24 TEST-NET-3
-        || (o[0] >= 240);                              // 240/4 reserved + broadcast
+        || (o[0] >= 240); // 240/4 reserved + broadcast
     !denied
 }
 
@@ -196,8 +203,7 @@ fn is_allowed_v6(v6: Ipv6Addr) -> bool {
         || (seg[0] == 0x100 && seg[1] == 0 && seg[2] == 0 && seg[3] == 0) // 100::/64 discard
         || (seg[0] == 0x2001 && seg[1] == 0xdb8)        // 2001:db8::/32 documentation
         || (seg[0] == 0x2001 && seg[1] == 0x0000)       // 2001::/32 Teredo (tunnels to v4)
-        || (seg[0] == 0x64 && seg[1] == 0xff9b && seg[2] == 0x0001)
-        ; // 64:ff9b:1::/48 local-use NAT64
+        || (seg[0] == 0x64 && seg[1] == 0xff9b && seg[2] == 0x0001); // 64:ff9b:1::/48 local-use NAT64
     !denied
 }
 
@@ -212,7 +218,11 @@ mod tests {
 
     #[test]
     fn rejects_non_http_schemes() {
-        for url in ["file:///etc/passwd", "data:text/html,x", "ftp://example.com/"] {
+        for url in [
+            "file:///etc/passwd",
+            "data:text/html,x",
+            "ftp://example.com/",
+        ] {
             assert!(validate_target(url).is_err(), "{url} must be denied");
         }
     }
@@ -249,9 +259,7 @@ mod tests {
         // enforcement point; static validation must not crash on them and the
         // resolved-address check (is_allowed_ip) denies the result.
         assert!(validate_target("http://localhost:8080/").is_ok());
-        assert!(!is_allowed_ip(
-            "127.0.0.1".parse::<IpAddr>().unwrap()
-        ));
+        assert!(!is_allowed_ip("127.0.0.1".parse::<IpAddr>().unwrap()));
     }
 
     #[test]
@@ -265,7 +273,9 @@ mod tests {
         // ::ffff:8.8.8.8 is public IPv4 behind a mapped prefix — allowed.
         assert!(is_allowed_ip("::ffff:8.8.8.8".parse::<IpAddr>().unwrap()));
         // ::ffff:192.168.0.1 is private behind a mapped prefix — denied.
-        assert!(!is_allowed_ip("::ffff:192.168.0.1".parse::<IpAddr>().unwrap()));
+        assert!(!is_allowed_ip(
+            "::ffff:192.168.0.1".parse::<IpAddr>().unwrap()
+        ));
     }
 
     #[test]

@@ -50,8 +50,8 @@
 
 #[cfg(feature = "wasi")]
 mod demo {
-    use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
 
     /// Host state for the component, mirroring
     /// `crawlkit_engine::plugin::wasi_preview2::WasiPluginState`.
@@ -119,7 +119,9 @@ mod demo {
                 allow_network: true,
             },
         );
-        store.set_fuel(MAX_FUEL).map_err(|e| format!("set fuel: {e}"))?;
+        store
+            .set_fuel(MAX_FUEL)
+            .map_err(|e| format!("set fuel: {e}"))?;
         store.set_epoch_deadline(1);
 
         let watchdog = Watchdog::spawn(engine, TIMEOUT_MS);

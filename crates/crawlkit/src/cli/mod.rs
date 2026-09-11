@@ -4,9 +4,9 @@ pub mod backlinks;
 pub mod compare;
 #[cfg(feature = "full")]
 pub mod crawl;
-pub(crate) mod findings;
 #[cfg(feature = "full")]
 pub mod crawl_map;
+pub(crate) mod findings;
 #[cfg(feature = "full")]
 pub mod gsc;
 #[cfg(feature = "full")]

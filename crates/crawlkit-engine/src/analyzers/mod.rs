@@ -1599,7 +1599,10 @@ impl AnalyzerRegistry {
     /// the returned slice indicate intentionally registered duplicate
     /// instances of one type.
     pub fn analyzer_type_names(&self) -> Vec<String> {
-        self.analyzers.iter().map(|a| a.type_name().to_owned()).collect()
+        self.analyzers
+            .iter()
+            .map(|a| a.type_name().to_owned())
+            .collect()
     }
 
     /// Run all analyzers on a page and collect findings.

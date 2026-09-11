@@ -52,9 +52,7 @@ pub const RESULT_TOKEN_BITS: usize = 128;
 pub enum BudgetError {
     /// The target's window budget is exhausted; retry after the given delay.
     #[error("target budget exhausted; retry after {retry_after_secs}s")]
-    Exhausted {
-        retry_after_secs: u64,
-    },
+    Exhausted { retry_after_secs: u64 },
 }
 
 /// Shared-state politeness budget for one target host (ADR-012 §2).

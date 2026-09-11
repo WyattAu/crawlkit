@@ -306,11 +306,11 @@ impl Analyzer for MixedContentDetectionAnalyzerV2 {
                 .find(|(k, _)| k.eq_ignore_ascii_case("Content-Security-Policy"))
                 .map(|(_, v)| v.as_str())
                 .unwrap_or("");
-            let upgrade_hint = csp_header.to_lowercase().contains("upgrade-insecure-requests")
+            let upgrade_hint = csp_header
+                .to_lowercase()
+                .contains("upgrade-insecure-requests")
                 || scraper::Html::parse_document(body)
-                    .select(
-                        &scraper::Selector::parse("meta[http-equiv]").expect("static selector"),
-                    )
+                    .select(&scraper::Selector::parse("meta[http-equiv]").expect("static selector"))
                     .filter(|el| {
                         el.value()
                             .attr("http-equiv")
@@ -1544,11 +1544,7 @@ impl Analyzer for MixedContentStylesheetValidator {
         if let Some(body) = ctx.body {
             // Only stylesheet link hrefs count; matching every `href="http://`
             // also flagged ordinary HTTP anchors and code samples.
-            let http_css = count_insecure_attr_refs(
-                body,
-                "link[rel~='stylesheet']",
-                &["href"],
-            );
+            let http_css = count_insecure_attr_refs(body, "link[rel~='stylesheet']", &["href"]);
             if http_css > 0 {
                 findings.push(Finding {
                     severity: Severity::Warning,
@@ -1599,9 +1595,7 @@ impl Analyzer for SriValidator {
                 category: IssueCategory::Security,
                 code: "SRI-V5001".to_string(),
                 title: "No SRI on external scripts".to_string(),
-                description: format!(
-                    "{external_scripts} external script(s) without integrity."
-                ),
+                description: format!("{external_scripts} external script(s) without integrity."),
                 url: url.clone(),
                 recommendation: "Add integrity attribute to external scripts.".to_string(),
             });

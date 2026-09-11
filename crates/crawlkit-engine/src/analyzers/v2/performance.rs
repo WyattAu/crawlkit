@@ -43,13 +43,11 @@ impl Analyzer for PreconnectHintValidator {
             // code sample mentioning rel="preconnect" is not a hint, and
             // single-quoted / multi-value rel attributes are still valid.
             let sel = scraper::Selector::parse("link").expect("static selector");
-            let has_preconnect = scraper::Html::parse_document(body)
-                .select(&sel)
-                .any(|el| {
-                    el.value()
-                        .attr("rel")
-                        .map_or(false, |r| r.split_whitespace().any(|t| t == "preconnect"))
-                });
+            let has_preconnect = scraper::Html::parse_document(body).select(&sel).any(|el| {
+                el.value()
+                    .attr("rel")
+                    .map_or(false, |r| r.split_whitespace().any(|t| t == "preconnect"))
+            });
             let external = ctx.page.links.iter().filter(|l| l.is_external).count();
             if external > 3 && !has_preconnect {
                 findings.push(Finding {
@@ -89,15 +87,11 @@ impl Analyzer for DnsPrefetchHintValidator {
             // See PreconnectHintValidator: match real <link rel> elements,
             // including single-quoted and multi-value rel attributes.
             let sel = scraper::Selector::parse("link").expect("static selector");
-            let has_prefetch = scraper::Html::parse_document(body)
-                .select(&sel)
-                .any(|el| {
-                    el.value()
-                        .attr("rel")
-                        .map_or(false, |r| {
-                            r.split_whitespace().any(|t| t == "dns-prefetch")
-                        })
-                });
+            let has_prefetch = scraper::Html::parse_document(body).select(&sel).any(|el| {
+                el.value()
+                    .attr("rel")
+                    .map_or(false, |r| r.split_whitespace().any(|t| t == "dns-prefetch"))
+            });
             let external = ctx.page.links.iter().filter(|l| l.is_external).count();
             if external > 5 && !has_prefetch {
                 findings.push(Finding {

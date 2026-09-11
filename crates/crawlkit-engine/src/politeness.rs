@@ -199,7 +199,10 @@ mod pure_tests {
             PolitenessBudget::normalize_target("Example.COM."),
             PolitenessBudget::normalize_target("example.com")
         );
-        assert_eq!(PolitenessBudget::normalize_target(" EXAMPLE.com "), "example.com");
+        assert_eq!(
+            PolitenessBudget::normalize_target(" EXAMPLE.com "),
+            "example.com"
+        );
         assert_ne!(
             PolitenessBudget::normalize_target("example.com"),
             PolitenessBudget::normalize_target("example.org")
@@ -209,7 +212,9 @@ mod pure_tests {
     #[test]
     fn scanner_constants_match_adr012_floor() {
         // ADR-012 invariant: budget >= robots (1) + max pages (25).
-        const { assert!(SCANNER_LIMIT >= 26); }
+        const {
+            assert!(SCANNER_LIMIT >= 26);
+        }
         assert_eq!(SCANNER_WINDOW_MS, 10 * 60 * 1000);
     }
 }
@@ -230,7 +235,10 @@ mod redis_tests {
         assert!(budget.check_and_consume(&target).await.unwrap());
         assert!(budget.check_and_consume(&target).await.unwrap());
         assert!(budget.check_and_consume(&target).await.unwrap());
-        assert!(!budget.check_and_consume(&target).await.unwrap(), "at limit");
+        assert!(
+            !budget.check_and_consume(&target).await.unwrap(),
+            "at limit"
+        );
         assert_eq!(budget.remaining(&target).await.unwrap(), 0);
     }
 
@@ -242,7 +250,10 @@ mod redis_tests {
         assert!(budget.check_and_consume(&target).await.unwrap());
         assert!(!budget.check_and_consume(&target).await.unwrap());
         tokio::time::sleep(std::time::Duration::from_millis(120)).await;
-        assert!(budget.check_and_consume(&target).await.unwrap(), "window expired");
+        assert!(
+            budget.check_and_consume(&target).await.unwrap(),
+            "window expired"
+        );
     }
 
     #[tokio::test]
@@ -253,7 +264,10 @@ mod redis_tests {
         let b = format!("test-{}-b.example", uuid::Uuid::new_v4());
         assert!(budget.check_and_consume(&a).await.unwrap());
         assert!(!budget.check_and_consume(&a).await.unwrap());
-        assert!(budget.check_and_consume(&b).await.unwrap(), "other target unaffected");
+        assert!(
+            budget.check_and_consume(&b).await.unwrap(),
+            "other target unaffected"
+        );
     }
 
     #[tokio::test]
@@ -264,6 +278,9 @@ mod redis_tests {
         let a = format!("shared-{base}.example");
         let b = format!("SHARED-{base}.example.");
         assert!(budget.check_and_consume(&a).await.unwrap());
-        assert!(!budget.check_and_consume(&b).await.unwrap(), "case/trailing-dot equal");
+        assert!(
+            !budget.check_and_consume(&b).await.unwrap(),
+            "case/trailing-dot equal"
+        );
     }
 }

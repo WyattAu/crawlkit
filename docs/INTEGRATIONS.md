@@ -44,7 +44,14 @@ The access token is transmitted exactly once per request, in the `Authorization`
 
 ## Core Web Vitals / CrUX (optional — with configuration)
 
-Field CWV data from the Chrome UX Report. `CruxClient` (`crates/crawlkit-engine/src/crux.rs`) reads `CRUX_API_KEY` or takes a key explicitly; used by `crawlkit inspect` to attach field performance data to single-page analyses. Promotion to `stable` requires the same error-path test coverage GSC received (tracked for 5.3.0).
+Field CWV data from the Chrome UX Report. **Status: stable (2026-09-11).** Two paths:
+
+- `CruxClient` (`crates/crawlkit-engine/src/crux.rs`) calls the CrUX `records:queryRecord` endpoint directly; reads `CRUX_API_KEY` or takes a key explicitly. Returns the five p75 metrics (LCP, CLS, INP, FCP, TTFB); 404 → `Ok(None)` (origin genuinely has no data).
+- `CruxAdapter` (`crates/crawlkit-engine/src/rum.rs`, via `crawlkit inspect` under the RUM feature flag) reads `PAGESPEED_API_KEY` and resolves field data through PageSpeed Insights.
+
+Error contract (both paths, tested against hermetic HTTP stubs): HTTP error statuses surface as typed errors with status + body; malformed JSON is a distinct error; connection failures map to `RequestFailed` with no panics.
+
+Token hygiene (pinned by test on both paths): the API key is sent in the `x-goog-api-key` header, never in the URL query string — reqwest error messages embed request URLs, so a query-string key would leak into logs and error output. Keys never appear in error `Display` output.
 
 ## LLM analysis (optional — with configuration)
 

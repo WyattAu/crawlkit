@@ -157,16 +157,25 @@ impl Default for GoogleAnalyticsAdapter {
 }
 
 /// CrUX (Chrome User Experience Report) adapter.
+///
+/// Token hygiene: the API key is sent in the `x-goog-api-key` header, not
+/// the URL query string — reqwest error messages embed request URLs, so a
+/// query-string key would leak into logs and error reports.
 pub struct CruxAdapter {
     /// API key for PageSpeed Insights API.
     api_key: Option<String>,
+    /// Injectable base URL for hermetic contract tests.
+    base_url: Option<String>,
 }
 
 impl CruxAdapter {
     /// Create new CrUX adapter.
     #[must_use]
     pub fn new(api_key: Option<String>) -> Self {
-        Self { api_key }
+        Self {
+            api_key,
+            base_url: None,
+        }
     }
 
     /// Create from environment variable.
@@ -174,7 +183,15 @@ impl CruxAdapter {
     pub fn from_env() -> Self {
         Self {
             api_key: std::env::var("PAGESPEED_API_KEY").ok(),
+            base_url: None,
         }
+    }
+
+    /// Set an alternate API base URL (testing).
+    #[must_use]
+    pub fn with_base_url(mut self, base_url: String) -> Self {
+        self.base_url = Some(base_url);
+        self
     }
 
     /// Check if adapter is available.
@@ -195,14 +212,18 @@ impl CruxAdapter {
         let api_key = self.api_key.as_deref().ok_or(RumError::NotConfigured)?;
         let client = reqwest::Client::new();
 
+        let base = self
+            .base_url
+            .as_deref()
+            .unwrap_or("https://www.googleapis.com/pagespeedonline/v5");
         let request_url = format!(
-            "https://www.googleapis.com/pagespeedonline/v5/runPagespeed?url={}&key={}&strategy=mobile",
-            urlencoding::encode(url),
-            api_key
+            "{base}/runPagespeed?url={}&strategy=mobile",
+            urlencoding::encode(url)
         );
 
         let response = client
             .get(&request_url)
+            .header("x-goog-api-key", api_key)
             .send()
             .await
             .map_err(|e| RumError::RequestFailed(e.to_string()))?;
@@ -321,6 +342,44 @@ mod tests {
     fn test_crux_adapter_not_available() {
         let adapter = CruxAdapter::new(None);
         assert!(!adapter.is_available());
+    }
+
+    #[tokio::test]
+    async fn crux_adapter_sends_key_as_header_never_in_url() {
+        let key = "SECRET-PSI-KEY-2a7d";
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let (mut sock, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0u8; 8192];
+            let n = sock.read(&mut buf).await.unwrap_or(0);
+            let _ = tx.send(buf[..n].to_vec());
+            let body = "{\"lighthouseResult\":{\"audits\":{}}}";
+            sock.write_all(
+                format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            )
+            .await
+            .ok();
+        });
+        let adapter =
+            CruxAdapter::new(Some(key.to_string())).with_base_url(format!("http://{addr}"));
+        let _ = adapter.fetch_crux_data("https://example.com").await;
+        let binding = rx.await.unwrap();
+        let request = String::from_utf8_lossy(&binding);
+        assert!(
+            request.contains("x-goog-api-key: SECRET-PSI-KEY-2a7d"),
+            "key must be sent as header"
+        );
+        assert!(
+            !request.lines().next().unwrap().contains(key),
+            "key leaked into request line"
+        );
     }
 
     #[tokio::test]

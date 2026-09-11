@@ -116,8 +116,13 @@ evidence = [
 promotion_notes = "Shipped 2026-09-11: canonical finding wire shape (url, severity, category, code, title, description, recommendation) published as JSON Schema draft 2020-12; conformance tests validate actual CLI emit paths (inspect + post-crawl-findings) against the committed schema via a minimal validator; crawlkit-types pins serialization shape (custom categories as 'custom:<name>' strings, legacy map form still deserializable). REST API /findings keeps storage fields (id, page_id, element) under its own OpenAPI schema."
 
 [capabilities.crux]
-status = "optional"
-evidence = ["crates/crawlkit-engine/src/crux.rs"]
+status = "stable"
+evidence = [
+  "crates/crawlkit-engine/src/crux.rs",
+  "crates/crawlkit-engine/src/rum.rs",
+  "docs/INTEGRATIONS.md",
+]
+promotion_notes = "Promoted 2026-09-11: both CrUX paths (direct API client + PSI adapter) got injectable base URLs with hermetic TCP-stub error-path tests (403/500/malformed JSON/connection-refused), parse coverage for full/partial/empty records, and a token-hygiene contract — the API key is sent as x-goog-api-key header, never in the URL query string (reqwest error strings embed URLs), pinned by test on both paths. Field CWV attaches to inspect analyses and report exports (build_cwv_summary_cards)."
 
 [capabilities.openapi_api]
 status = "stable"

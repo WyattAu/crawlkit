@@ -35,12 +35,20 @@ uuid.workspace = true
 dashmap.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+async-trait = "0.1"
 chrono.workspace = true
 url.workspace = true
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 rand = "0.8"
 base64 = "0.22"
+
+[features]
+# Multi-replica posture (ADR-015 §A1): shared-state politeness budget via
+# the engine's Redis-backed PolitenessBudget (requires the engine's
+# `unstable` feature, which enables its `politeness` module). Default
+# posture remains the in-process store.
+shared-budget = ["crawlkit-engine/unstable"]
 
 [dev-dependencies]
 # tower "util" provides ServiceExt::oneshot for router tests above.

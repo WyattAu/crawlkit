@@ -159,7 +159,7 @@ pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) ->
     };
 
     // Politeness slot for the robots fetch.
-    if let Err(e) = deps.budget.consume(&host, now_ms()) {
+    if let Err(e) = deps.budget.consume(&host, now_ms()).await {
         return budget_outcome(e);
     }
 
@@ -199,7 +199,7 @@ pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) ->
             break;
         }
         // Budget slot per page fetch (shared with concurrent submitters).
-        if let Err(e) = deps.budget.consume(&host, now_ms()) {
+        if let Err(e) = deps.budget.consume(&host, now_ms()).await {
             truncation = Some(TruncationReason::TargetBudget);
             let _ = e;
             break;
@@ -513,8 +513,9 @@ mod tests {
         // Budget that allows exactly the robots slot, then exhausts: the
         // first page fetch is refused and the scan reports TargetBudget.
         struct OnceThenFull(std::sync::atomic::AtomicUsize);
+        #[async_trait::async_trait]
         impl BudgetStore for OnceThenFull {
-            fn consume(&self, _host: &str, _now_ms: u64) -> Result<(), BudgetError> {
+            async fn consume(&self, _host: &str, _now_ms: u64) -> Result<(), BudgetError> {
                 let n = self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                 if n == 0 {
                     Ok(())
@@ -524,7 +525,7 @@ mod tests {
                     })
                 }
             }
-            fn sweep(&self, _now_ms: u64) -> usize {
+            async fn sweep(&self, _now_ms: u64) -> usize {
                 0
             }
         }

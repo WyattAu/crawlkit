@@ -55,22 +55,29 @@ pub enum BudgetError {
     Exhausted { retry_after_secs: u64 },
 }
 
-/// Shared-state politeness budget for one target host (ADR-012 §2).
+/// Shared-state politeness budget for one target host (ADR-012 §2, ADR-015 §A1).
 ///
-/// The prototype ships an in-process store (`InMemoryBudgetStore`); the ADR
-/// requires the production deployment to back this trait with shared state
-/// (Redis or the API's queue infrastructure) so the cap holds across
-/// replicas. Implementations must be atomic per host: check-and-consume may
-/// not race between replicas.
+/// Two production shapes, selected by deployment posture (ADR-015 §A1):
+///
+/// - **Single replica (default):** `InMemoryBudgetStore` — budget resets on
+///   process restart; acceptable because one replica cannot multiply its own
+///   budget.
+/// - **Multi-replica:** `RedisBudgetStore` (in `budget_redis`, behind the
+///   `shared-budget` feature) — atomic shared-state slots via the engine's
+///   `PolitenessBudget`; fail-closed on Redis outage by design.
+///
+/// Implementations must be atomic per host: check-and-consume may not race
+/// between replicas.
+#[async_trait::async_trait]
 pub trait BudgetStore: Send + Sync {
     /// Consume one slot for `host` inside the sliding window.
     ///
     /// Returns `Ok(())` when a slot was consumed, `Err(BudgetError::Exhausted)`
     /// with the retry delay when the host's window is full.
-    fn consume(&self, host: &str, now_ms: u64) -> Result<(), BudgetError>;
+    async fn consume(&self, host: &str, now_ms: u64) -> Result<(), BudgetError>;
 
     /// Drain expired entries (24h-style housekeeping). Returns entries removed.
-    fn sweep(&self, now_ms: u64) -> usize;
+    async fn sweep(&self, now_ms: u64) -> usize;
 }
 
 /// In-process budget store for the prototype and for tests.
@@ -97,8 +104,9 @@ impl Default for InMemoryBudgetStore {
     }
 }
 
+#[async_trait::async_trait]
 impl BudgetStore for InMemoryBudgetStore {
-    fn consume(&self, host: &str, now_ms: u64) -> Result<(), BudgetError> {
+    async fn consume(&self, host: &str, now_ms: u64) -> Result<(), BudgetError> {
         let window_start = now_ms.saturating_sub(BUDGET_WINDOW.as_millis() as u64);
         let mut entry = self.windows.entry(host.to_string()).or_default();
         entry.retain(|ts| *ts > window_start);
@@ -114,7 +122,7 @@ impl BudgetStore for InMemoryBudgetStore {
         Ok(())
     }
 
-    fn sweep(&self, now_ms: u64) -> usize {
+    async fn sweep(&self, now_ms: u64) -> usize {
         let window_start = now_ms.saturating_sub(BUDGET_WINDOW.as_millis() as u64);
         let mut removed = 0usize;
         for mut entry in self.windows.iter_mut() {
@@ -142,17 +150,20 @@ mod tests {
         const _: () = assert!(RESULT_TOKEN_BITS >= 128);
     }
 
-    #[test]
-    fn budget_allows_up_to_cap_then_exhausts() {
+    #[tokio::test]
+    async fn budget_allows_up_to_cap_then_exhausts() {
         let store = InMemoryBudgetStore::new();
         let now: u64 = 1_000_000;
         for i in 0..BUDGET_PAGES_PER_WINDOW {
             assert!(
-                store.consume("target.example", now + u64::from(i)).is_ok(),
+                store
+                    .consume("target.example", now + u64::from(i))
+                    .await
+                    .is_ok(),
                 "slot {i} within cap must be granted"
             );
         }
-        let err = store.consume("target.example", now).unwrap_err();
+        let err = store.consume("target.example", now).await.unwrap_err();
         let BudgetError::Exhausted { retry_after_secs } = err;
         assert!(retry_after_secs > 0);
     }
@@ -167,37 +178,37 @@ mod tests {
         );
     }
 
-    #[test]
-    fn budget_windows_are_independent_per_host() {
+    #[tokio::test]
+    async fn budget_windows_are_independent_per_host() {
         let store = InMemoryBudgetStore::new();
         let now: u64 = 2_000_000;
         for i in 0..BUDGET_PAGES_PER_WINDOW {
-            let _ = store.consume("a.example", now + u64::from(i));
+            let _ = store.consume("a.example", now + u64::from(i)).await;
         }
-        assert!(store.consume("a.example", now).is_err());
+        assert!(store.consume("a.example", now).await.is_err());
         // Different host is unaffected.
-        assert!(store.consume("b.example", now).is_ok());
+        assert!(store.consume("b.example", now).await.is_ok());
     }
 
-    #[test]
-    fn budget_slots_expire_after_window() {
+    #[tokio::test]
+    async fn budget_slots_expire_after_window() {
         let store = InMemoryBudgetStore::new();
         let now: u64 = 3_000_000;
         for i in 0..BUDGET_PAGES_PER_WINDOW {
-            let _ = store.consume("c.example", now + u64::from(i));
+            let _ = store.consume("c.example", now + u64::from(i)).await;
         }
-        assert!(store.consume("c.example", now).is_err());
+        assert!(store.consume("c.example", now).await.is_err());
         // After the window slides past all consumed slots, capacity returns.
         let later = now + BUDGET_WINDOW.as_millis() as u64 + 1;
-        assert!(store.consume("c.example", later).is_ok());
+        assert!(store.consume("c.example", later).await.is_ok());
     }
 
-    #[test]
-    fn sweep_removes_expired_entries() {
+    #[tokio::test]
+    async fn sweep_removes_expired_entries() {
         let store = InMemoryBudgetStore::new();
         let now: u64 = 4_000_000;
-        let _ = store.consume("d.example", now);
+        let _ = store.consume("d.example", now).await;
         let later = now + BUDGET_WINDOW.as_millis() as u64 + 1;
-        assert!(store.sweep(later) >= 1);
+        assert!(store.sweep(later).await >= 1);
     }
 }

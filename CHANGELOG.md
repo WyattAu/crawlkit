@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0-alpha.1] - 2026-09-11
+
+### Added — "Connectors" rolling prerelease (docs/PRODUCT_STRATEGY.md §3)
+- **Per-tenant credential store** (ADR-013 §2, the 5.3.0 secrets gate): AES-256-GCM at rest via
+  `EncryptionManager`, tenant-scoped lookups, disconnect deletes, two-phase key rotation with
+  idempotent crash-safe `rotate_all`, fail-closed writes when encryption is enabled but
+  uninitialized, and a no-secret-logging suite capturing rendered tracing output across every
+  fallible path
+- **Per-tenant crawl retention policy**: `PUT /api/v1/tenants/{id}/retention` sets the window and
+  immediately purges older crawls (audited); persisted on SQLite and PostgreSQL with idempotent
+  migration guards
+- **Redis lease queue + politeness budget** (ADR-015): atomic pop-into-lease Lua, at-least-once
+  delivery with bounded retries and dead-letter quarantine + redrive, O(1) visited set, global
+  per-target scan budget for the hosted scanner; async `ConnectionManager` surface; integration
+  suites run in CI against Redis 7
+- **Scanner shared-budget integration**: `BudgetStore` is async with a `RedisBudgetStore` behind
+  the `shared-budget` feature (fail-closed multi-replica per ADR-015 §A1); in-process store remains
+  the single-replica default
+
+### Changed
+- **CrUX promoted to stable**: injectable endpoints for both `CruxClient` and the PSI
+  `CruxAdapter`, API key moved from URL query string to the `x-goog-api-key` header (reqwest error
+  strings embed URLs — the query-string form leaked the key on failed requests), hermetic
+  error-path and token-hygiene test suites
+
+### Fixed
+- CLI failed to compile under `--no-default-features` (findings module referenced the `full`-gated
+  `post_crawl`) — broken since 5.2.0; the findings module now takes the same `full` gate
+- Release workflow no longer strands an unpublished draft when `action-gh-release` hits the
+  asset-metadata race (pinned action; publish step tolerates already-uploaded assets)
+- `docs/schema/findings.schema.json` is tracked despite the broad `*.json` ignore rule (the 5.2.0
+  schema-conformance suite panicked in CI on the missing file)
+
 ## [5.2.0] - 2026-09-11
 
 ### Added — "Truth and Surface" (CI-native positioning; docs/PRODUCT_STRATEGY.md §3)

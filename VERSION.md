@@ -1,8 +1,8 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** v5.2.0 "Truth and Surface" — released; 5.3.0 Connectors and 5.4.0 Queue/Scanner-GA in progress per docs/PRODUCT_STRATEGY.md §3
-**Version:** 5.2.0
+**Current Phase:** v5.3.0-alpha.1 "Connectors (rolling)" — prerelease; 5.3.0 Connectors and 5.4.0 Queue/Scanner-GA in progress per docs/PRODUCT_STRATEGY.md §3
+**Version:** 5.3.0-alpha.1
 **Status:** Released
 **Last Updated:** 2026-09-11
 **MSRV:** 1.94.0
@@ -69,7 +69,8 @@
 | 5.0.0 | 2026-09-06 | Breaking release on the reconciled main: analyzer finding-code ownership (833 → 778), profiles, robots.txt RFC 9309 + PostgreSQL storage fixes, `dyn StorageBackend`, crawlkit-types, `--allow-private`, auth salting Policy+Strength, envstack config, loop-retry webhook delivery, @pediment/tokens; version-tag guard + release-pipeline fixes |
 | 5.0.0 | 2026-08-27 | Breaking: unified types (crawlkit-types crate); DIP fix (dyn StorageBackend); client library completion (Python 92%, Go/Node 100%); SSRF dedup; dead code gated; docs reconciled |
 | 5.2.0 | 2026-09-11 | "Truth and Surface": manifest drift gate, schedule CLI, GSC stable, findings JSON schema, full client parity, scanner prototype (ADR-012); roadmap split into 5.3.0 Connectors + 5.4.0 Queue/Scanner-GA (ADR-013/014/015) |
+| 5.3.0-alpha.1 | 2026-09-11 | Rolling Connectors prerelease: CrUX stable (endpoint injection, key-in-header), per-tenant retention API, per-tenant encrypted credential store (ADR-013 §2), lease queue + politeness budget (ADR-015) |
 
 ---
 
-*Historical phase record; current workspace version: 5.0.0*
+*Historical phase record; current workspace version: 5.3.0-alpha.1*

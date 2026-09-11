@@ -13,6 +13,7 @@
 pub mod access_log_mw;
 pub mod auth;
 pub mod auth_mw;
+pub mod credential_store;
 pub mod handlers;
 pub mod middleware;
 pub mod oidc;

@@ -418,7 +418,9 @@ pub use determinism::DeterminismController;
 #[cfg(feature = "full")]
 pub use dns::{DnsCache, DnsError, DnsPrefetcher};
 #[cfg(feature = "full")]
-pub use encryption::{EncryptionConfig, EncryptionError, EncryptionManager};
+pub use encryption::{
+    EncryptionAlgorithm, EncryptionConfig, EncryptionError, EncryptionManager, KeySource,
+};
 #[cfg(feature = "full")]
 pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,

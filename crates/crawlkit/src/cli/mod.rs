@@ -6,6 +6,7 @@ pub mod compare;
 pub mod crawl;
 #[cfg(feature = "full")]
 pub mod crawl_map;
+#[cfg(feature = "full")]
 pub(crate) mod findings;
 #[cfg(feature = "full")]
 pub mod gsc;

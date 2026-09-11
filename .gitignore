@@ -29,6 +29,9 @@ Thumbs.db
 !package-lock.json
 # Corpus expectation manifest required by tests/corpus_tests.rs
 !crates/crawlkit-engine/tests/fixtures/corpus/expected.json
+# Published findings JSON schema — required by the CLI schema-conformance
+# tests and listed as evidence in docs/capabilities.toml
+!docs/schema/findings.schema.json
 
 # SQLite databases
 *.db

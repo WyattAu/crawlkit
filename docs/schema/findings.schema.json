@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/WyattAu/crawlkit/main/docs/schema/findings.schema.json",
+  "title": "crawlkit findings",
+  "description": "Stable wire contract for crawlkit analysis findings, emitted by `crawlkit inspect` (findings array) and `crawlkit crawl` (post-crawl-findings.json), and produced by plugin findings (which deserialize into the same Finding type). The REST API's `GET /api/v1/crawls/{id}/findings` adds storage fields (id, page_id, element) and is documented by its own OpenAPI schema. Pin an exact schema version when consuming in CI; additive changes only within a major version.",
+  "type": "object",
+  "required": ["findings"],
+  "properties": {
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "severity": {
+      "type": "string",
+      "enum": ["critical", "error", "warning", "info"],
+      "description": "Lowercase severity. Order: critical > error > warning > info."
+    },
+    "category": {
+      "type": "string",
+      "pattern": "^(http|seo|content|links|images|schema|security|performance|mobile|accessibility|social|custom:[a-zA-Z0-9_-]+)$",
+      "description": "Lowercase category string; `custom:<name>` for plugin-generated categories."
+    },
+    "code": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Stable machine-readable issue code, e.g. META001, HTTP005. Codes persist across releases; see docs/capabilities.toml [counts] for the live total."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Page the finding was produced for. Empty string is permitted when the finding applies crawl-wide (single-URL context or post-crawl analysis where the page is carried by the wrapper)."
+    },
+    "recommendation": {
+      "type": "string"
+    },
+    "finding": {
+      "type": "object",
+      "required": [
+        "severity",
+        "category",
+        "code",
+        "title",
+        "description",
+        "url",
+        "recommendation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "severity": { "$ref": "#/$defs/severity" },
+        "category": { "$ref": "#/$defs/category" },
+        "code": { "$ref": "#/$defs/code" },
+        "title": { "$ref": "#/$defs/title" },
+        "description": { "$ref": "#/$defs/description" },
+        "url": { "$ref": "#/$defs/url" },
+        "recommendation": { "$ref": "#/$defs/recommendation" }
+      }
+    }
+  }
+}

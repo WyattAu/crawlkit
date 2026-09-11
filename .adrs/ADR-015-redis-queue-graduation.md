@@ -125,6 +125,20 @@ The graduation is not complete without tests proving the contract:
 - Documented delivery semantics (at-least-once, ordering caveats: no
   cross-entry ordering guarantee) published alongside the code.
 
+## Amendment A1 (2026-09-11): deployment posture split
+
+The fail-closed rule above ("no budget record → no scan") applies **only to
+multi-replica deployments**, where shared state is the anti-distributed-abuse
+guarantee and a Redis outage must not silently degrade to per-replica
+budgets that N replicas multiply. Single-replica deployments — including the
+scanner's pre-GA configuration — MAY fall back to the in-process budget
+store with documented weaker guarantees (budget resets on process restart;
+no cross-replica accounting), because one replica cannot multiply its own
+budget. This split is recorded so the runbook can state both postures
+explicitly instead of implying one global rule. Sentinel/failover
+configuration remains the recommended multi-replica deployment shape and is
+a runbook item, not a code path.
+
 ## Consequences
 
 - 5.3.0 carries infrastructure work previously budgeted for 6.0.0; the

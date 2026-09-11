@@ -46,7 +46,15 @@ Rule: every public claim in this wedge must trace to `docs/capabilities.toml` st
 
 **Status (2026-09-11): all six items implemented.** Manifest drift gate + schedule CLI committed `c1fc0198`; scanner prototype committed `d0bd843d`; this round: GSC promoted to `stable` (error-path + token-hygiene tests, docs/INTEGRATIONS.md), findings JSON schema published (`docs/schema/findings.schema.json`) with conformance tests over real emit paths, and all three client libraries at full API surface parity (Python 92%→100%, marketplace search/rate/download/verify added to all clients). Recorded in capabilities.toml as `gsc_integration: stable`, `findings_json_schema: stable`.
 
-### 5.3.0 — "Connectors" (data fusion + workflow)
+### 5.3.0 — "Connectors" (data fusion + workflow; shipped as rolling prereleases)
+
+**Release cadence (decided 2026-09-11):** 5.3.0 ships as rolling `alpha` prereleases rather than
+one cut — CrUX → stable and per-tenant retention land first as `5.3.0-alpha.1` (promotion +
+surface work on existing internals), GA4 and alert channels follow as `5.3.0-alpha.2+` once the
+secrets-hardening gate passes. Rationale: the signed-release pipeline is the slow part of any
+cut, and practicing it on small increments before the 6.0.0 full-gate release is worth the
+overhead on its own; it also starts the §6 connector-adoption baseline earlier. The `5.3.0`
+stable cut follows once all ladder items below pass their gates.
 
 | Item | Closes | Roadmap gate | Notes |
 |---|---|---|---|
@@ -65,7 +73,7 @@ Rule: every public claim in this wedge must trace to `docs/capabilities.toml` st
 | Redis queue graduation: documented delivery semantics, leases, retries, poison handling, crash-recovery tests | AR4 (pulled forward from 6.0.0) | Phase 2.3 full acceptance; ADR-015 | Its own release so connector delivery is not coupled to infrastructure risk |
 | Hosted scanner: general availability | F9 | Full §4 checklist; shared-state budget per ADR-015 §6 | See §4; gated on queue graduation landing first |
 
-**Exit criteria:** ADR-015 §7 crash-recovery, duplicate-delivery, poison, and partition tests green in CI; documented at-least-once delivery semantics published; scanner runbook complete per Phase 5.3 and §4 checklist in full.
+**Exit criteria:** ADR-015 §7 crash-recovery, duplicate-delivery, poison, and partition tests green in CI; documented at-least-once delivery semantics published; scanner runbook (docs/SCANNER_RUNBOOK.md) complete — checklist §6 in full and the §7 ownership line signed. Scanner GA is an ops commitment: if ownership is not accepted, the scanner remains `prototype` and GA slips without blocking the rest of the ladder.
 
 ### 6.0.0 — "Scale" (enterprise unlock; major version)
 

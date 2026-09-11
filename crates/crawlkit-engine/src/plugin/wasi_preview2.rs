@@ -772,7 +772,7 @@ mod tests {
         use http_body::Body as _;
         let waker = std::task::Waker::noop();
         let mut cx = std::task::Context::from_waker(waker);
-        let mut body = response.resp.into_body();
+        let body = response.resp.into_body();
         match std::pin::pin!(body).poll_frame(&mut cx) {
             Poll::Ready(Some(Err(ErrorCode::InternalError(Some(msg))))) => {
                 assert!(msg.contains("1 MiB"), "unexpected message: {msg}");

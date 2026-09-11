@@ -51,20 +51,27 @@ Rule: every public claim in this wedge must trace to `docs/capabilities.toml` st
 | Item | Closes | Roadmap gate | Notes |
 |---|---|---|---|
 | Secrets and credential storage hardening (per-tenant connector credentials, rotation, no-secret logging verification) | F1/F2 prerequisite | Phase 1.4 acceptance | Blocks everything below |
-| GA4 connector (read-only, per-tenant OAuth) | F1 part 2 | Phase 1.4; ADR required (§7) | New external service/credential |
-| Alert channels: Slack, Teams, email — built on existing loop-retry webhook delivery | F2 | Phase 3.4 contract tests; Phase 5.1 connector-failure metrics | Webhook payload schema exists (api types.rs) |
+| GA4 connector (read-only, per-tenant OAuth) | F1 part 2 | Phase 1.4; ADR-013 | New external service/credential |
+| Alert channels: Slack, Teams, email — built on existing loop-retry webhook delivery | F2 | Phase 3.4 contract tests; Phase 5.1 connector-failure metrics; ADR-014 | Webhook payload schema exists (api types.rs) |
 | CrUX optional → stable; field CWV in HTML/MD reports | F4 | capabilities.toml status change; docs gate | `crux.rs` exists |
 | Per-tenant data-retention configuration (API + docs) | AR9 | Phase 1.4, soc2_features requirements | Purge policy exists; needs tenant-level config surface |
-| Hosted scanner: general availability | F9 | Full §4 checklist | See §4 |
 
 **Exit criteria:** connector credentials never appear in logs/errors/exports (tested); alert delivery has retry + failure metrics; CrUX data path proven by test against fixture collector (mirroring the OTel test pattern in Phase 5.2 acceptance).
+
+### 5.4.0 — "Queue and Scanner GA" (infrastructure; split from 5.3.0 by maintainer decision, 2026-09-11)
+
+| Item | Closes | Roadmap gate | Notes |
+|---|---|---|---|
+| Redis queue graduation: documented delivery semantics, leases, retries, poison handling, crash-recovery tests | AR4 (pulled forward from 6.0.0) | Phase 2.3 full acceptance; ADR-015 | Its own release so connector delivery is not coupled to infrastructure risk |
+| Hosted scanner: general availability | F9 | Full §4 checklist; shared-state budget per ADR-015 §6 | See §4; gated on queue graduation landing first |
+
+**Exit criteria:** ADR-015 §7 crash-recovery, duplicate-delivery, poison, and partition tests green in CI; documented at-least-once delivery semantics published; scanner runbook complete per Phase 5.3 and §4 checklist in full.
 
 ### 6.0.0 — "Scale" (enterprise unlock; major version)
 
 | Item | Closes | Roadmap gate | Notes |
 |---|---|---|---|
-| Redis queue graduation: documented delivery semantics, leases, retries, poison handling, crash-recovery tests | AR4 | Phase 2.3 full acceptance | ADR required (§7) |
-| Distributed mode stable; published capacity evidence (10k and 100k URL crawls with memory/fd/task bounds) | AR1 | Phase 2.4, 4.3 acceptance | `--distributed-mode` exists; graduation is the work |
+| Distributed mode stable; published capacity evidence (10k and 100k URL crawls with memory/fd/task bounds) | AR1 | Phase 2.4, 4.3 acceptance | `--distributed-mode` exists; queue semantics graduated in 5.4.0 (ADR-015); this is the stability + evidence work |
 | Warehouse exporters: BigQuery, Snowflake, S3 (Parquet), versioned schemas | AR2 | Phase 3.4; ADR for schema contract | Adds to SQLite/PG export paths |
 | Render budgets: per-crawl render quota, per-page budget, JS-error findings, rendering telemetry | F5 | Phase 4.1 benchmark class 5; Phase 5.1 metrics | Playwright path exists |
 | Usage metering + quota surface (API + dashboard) | AR8 | Phase 3.4; ADR for API changes | Replaces aspirational docs/BILLING.md |
@@ -82,13 +89,13 @@ Each item enters development only with the full Phase 7 candidacy record (user p
 Phase 7 candidacy record:
 
 - **User problem.** Every SaaS competitor's top-of-funnel is a free URL scan (matrix F9). crawlkit has no hosted surface; OSS distribution alone does not reach the buyers who evaluate via "paste a URL."
-- **Supported lifecycle.** MVP behind feature flag in 5.2.0 (prototype, internal feedback); GA in 5.3.0. Deprecation plan: the scanner is a stateless facade over `inspect` + capped crawl; decommission = remove facade, users keep CLI capability.
+- **Supported lifecycle.** MVP behind feature flag in 5.2.0 (prototype, internal feedback); GA in 5.4.0 (5.3/5.4 split, 2026-09-11). Deprecation plan: the scanner is a stateless facade over `inspect` + capped crawl; decommission = remove facade, users keep CLI capability.
 - **Security model.**
   - SSRF: shared engine policy (Phase 1.2) with private/link-local/metadata ranges denied; `allow_private` unavailable on the hosted path by construction, not by flag discipline.
   - No authentication → per-IP and per-target rate limits; global per-target politeness cap across all users (a scanner is a crawler against third-party sites; per-IP limits alone permit distributed abuse of one victim).
   - Caps: ≤25 pages per scan, render disabled by default, body-bytes and findings caps per Phase 2.4 budgets; results cached per URL for a fixed TTL.
   - Output redaction: no headers/secrets in responses beyond what the finding model exposes; API-key redaction pattern reused.
-- **Operational cost.** Egress and compute scale with adoption; mitigations are the caps above plus a daily global scan budget with graceful degradation (queue-full response, not silent truncation). Owner: maintainers; runbook required per Phase 5.3 before GA.
+- **Operational cost.** Egress and compute scale with adoption; mitigations are the caps above plus a daily global scan budget with graceful degradation (queue-full response, not silent truncation). Owner: maintainers; runbook required per Phase 5.3 before GA. Multi-replica GA depends on ADR-015 §6 (Redis shared-state politeness budget); single-replica operation remains the in-process path until that ships.
 - **API/CLI contract.** Public endpoint wraps `inspect` semantics; documented as a separate hosted-service contract — it does not extend the self-hosted API surface, so hosted changes cannot break API consumers.
 - **Test plan.** Contract tests for the facade; abuse-path tests (rate limits, caps, SSRF denial on private targets); load test at the documented daily budget.
 - **Maintenance owner.** Maintainers, with the ops runbook and monitoring dashboards (Phase 5.3, 5.1) as GA prerequisites.
@@ -108,16 +115,16 @@ Extended for this strategy: no web-wide link index; no acquisition-led suite bre
 | 5.2.0 | Public claims traceable to capabilities.toml | 100% |
 | 5.3.0 | Connector adoption (GSC/GA4/alert channels in telemetry, opt-in) | Baseline established |
 | 5.3.0 | Scanner: scan success rate, p95 latency, abuse-block rate | Runbook thresholds defined pre-GA |
+| 5.3.0 | Queue crash-recovery, duplicate-delivery, and poison tests green in CI (ADR-015 §7) | Green in CI |
 | 6.0.0 | Capacity evidence published (10k/100k) with raw artifacts | Done/not-done |
-| 6.0.0 | Distributed-mode crash-recovery and duplicate-delivery tests | Green in CI |
 
 ## 7. Decision log (ADRs required)
 
 | Trigger (ROADMAP §7) | When |
 |---|---|
-| GA4 connector — new external service and credential | 5.3.0 design |
-| Alert channel providers — new external services | 5.3.0 design |
-| Redis queue semantics — new persistence/queue semantics | 6.0.0 design |
+| GA4 connector — new external service and credential | 5.3.0 design — discharged by ADR-013 (`.adrs/ADR-013-ga4-connector.md`) |
+| Alert channel providers — new external services | 5.3.0 design — discharged by ADR-014 (`.adrs/ADR-014-alert-channels.md`) |
+| Redis queue semantics — new persistence/queue semantics | 5.4.0 design — discharged by ADR-015 (`.adrs/ADR-015-redis-queue-graduation.md`; pulled forward from 6.0.0, then given its own release in the 5.3/5.4 split) |
 | Warehouse exporter schemas — new persistence semantics | 6.0.0 design |
 | Metering/quota API — public API change | 6.0.0 design |
 | Triage workflow — storage schema change | 6.x design |

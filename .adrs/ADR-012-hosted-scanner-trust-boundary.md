@@ -1,6 +1,6 @@
 # ADR-012: Hosted Free-Scan Scanner Service
 
-**Status:** Accepted (prototype gated by 5.2.0, GA gated by 5.3.0)
+**Status:** Accepted (prototype gated by 5.2.0, GA gated by 5.4.0 per the 5.3/5.4 split — GA depends on the ADR-015 shared-state budget)
 **Date:** 2026-09-10
 **Deciders:** Product strategy (docs/PRODUCT_STRATEGY.md §4), maintainer approval
 **Related:** ADR-003 (WASM plugin sandboxing), ADR-007 (deterministic crawl output), ADR-008 (API backpressure and idempotency), docs/PRODUCT_STRATEGY.md §4 (hosted scanner candidacy record)
@@ -157,7 +157,7 @@ target serializes across all submitters — is acceptable for a teaser surface.
   the Phase 1 security audit before any public deployment.
 - **ADR triggers scheduled in PRODUCT_STRATEGY §7:** This ADR discharges the
   "hosted scanner trust boundary" trigger. The remaining trigger for scanner
-  GA (5.3.0) is the secrets/rotation hardening (Phase 1.4), which the
+  GA (5.4.0) is the secrets/rotation hardening (Phase 1.4), which the
   scanner's abuse-channel endpoint will consume.
 - **Truth baseline:** `docs/capabilities.toml` gains a
   `[capabilities.hosted_scanner]` entry with status `prototype` only when the

@@ -153,6 +153,10 @@ pub mod determinism;
 /// a crawl ID to prevent collisions between different crawl sessions.
 #[cfg(feature = "unstable")]
 pub mod distributed_queue;
+/// Redis-backed global per-target politeness budget for the hosted
+/// scanner (ADR-015 §6, ADR-012).
+#[cfg(feature = "unstable")]
+pub mod politeness;
 /// DNS resolution cache and prefetching.
 ///
 /// Concurrent DNS cache with configurable TTL and background prefetching

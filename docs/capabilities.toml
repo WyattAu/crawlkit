@@ -106,6 +106,15 @@ evidence = ["crates/crawlkit-engine/src/audit.rs"]
 status = "optional"
 evidence = ["crates/crawlkit-engine/src/encryption.rs"]
 
+[capabilities.findings_json_schema]
+status = "stable"
+evidence = [
+  "docs/schema/findings.schema.json",
+  "crates/crawlkit/src/cli/findings.rs",
+  "crates/crawlkit-types/src/lib.rs",
+]
+promotion_notes = "Shipped 2026-09-11: canonical finding wire shape (url, severity, category, code, title, description, recommendation) published as JSON Schema draft 2020-12; conformance tests validate actual CLI emit paths (inspect + post-crawl-findings) against the committed schema via a minimal validator; crawlkit-types pins serialization shape (custom categories as 'custom:<name>' strings, legacy map form still deserializable). REST API /findings keeps storage fields (id, page_id, element) under its own OpenAPI schema."
+
 [capabilities.crux]
 status = "optional"
 evidence = ["crates/crawlkit-engine/src/crux.rs"]
@@ -181,12 +190,14 @@ evidence = [
 notes = "Time-series snapshot analysis with linear regression trend projection via the trend command."
 
 [capabilities.gsc_integration]
-status = "conditional"
+status = "stable"
 evidence = [
   "crates/crawlkit-engine/src/gsc.rs",
   "crates/crawlkit/src/cli/gsc.rs",
+  "docs/INTEGRATIONS.md",
 ]
 requirements = ["Google Search Console API access", "access token (GSC_ACCESS_TOKEN or explicit)"]
+promotion_notes = "Promoted 2026-09-11: error-path tests against a local TCP stub (HTTP 403/500 surfaced as ApiError with status+body, connection refused as RequestFailed, malformed JSON as ParseError, empty rows as empty analytics), token-hygiene test (bearer header sent exactly once, token absent from error Debug output), env-var contract documented in docs/INTEGRATIONS.md."
 
 [capabilities.llm_analysis]
 status = "conditional"

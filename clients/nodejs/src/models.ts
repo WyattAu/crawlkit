@@ -157,8 +157,27 @@ export interface MarketplacePlugin {
   tags: string[];
   downloads: number;
   rating: number;
+  rating_count: number;
+  verified: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface PluginRatingRequest {
+  rating: number;
+  comment?: string;
+}
+
+export interface PluginRatingResponse {
+  name: string;
+  rating: number;
+  rating_count: number;
+  average_rating: number;
+}
+
+export interface PluginDownloadResponse {
+  name: string;
+  downloads: number;
 }
 
 export interface SubmitPluginRequest {
@@ -191,7 +210,14 @@ export interface Session {
   expires_at: string;
 }
 
+/**
+ * Plugin-defined self-test payload. The API types this as a free-form JSON
+ * object; known fields are surfaced directly, the rest via raw.
+ */
 export interface PluginTestResult {
-  success: boolean;
-  message: string;
+  status?: string;
+  findings?: number;
+  execution_time_ms?: number;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  raw: Record<string, any>;
 }

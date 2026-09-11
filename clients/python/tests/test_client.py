@@ -223,6 +223,149 @@ class TestErrorMapping(unittest.TestCase):
             self.assertTrue(issubclass(exc_type, CrawlkitError))
 
 
+class TestMarketplace(unittest.TestCase):
+    FULL_PLUGIN = {
+        "name": "title-length",
+        "description": "Checks title lengths",
+        "version": "1.2.0",
+        "author": "maintainers",
+        "license": "MIT",
+        "categories": ["seo"],
+        "tags": ["title"],
+        "downloads": 100,
+        "rating": 4.5,
+        "rating_count": 2,
+        "verified": True,
+        "created_at": "2026-01-01T00:00:00Z",
+        "updated_at": "2026-09-01T00:00:00Z",
+    }
+
+    def test_get_marketplace_plugin_full_projection(self):
+        recorder = RequestRecorder()
+
+        def handler(request):
+            recorder(request)
+            return json_response(200, self.FULL_PLUGIN)
+
+        with make_client(handler) as client:
+            plugin = client.get_marketplace_plugin("title-length")
+
+        self.assertEqual(request := recorder.requests[0].url.path,
+                         "/api/v1/marketplace/plugins/title-length")
+        self.assertEqual(plugin.name, "title-length")
+        self.assertEqual(plugin.downloads, 100)
+        self.assertEqual(plugin.rating, 4.5)
+        self.assertTrue(plugin.verified)
+
+    def test_marketplace_plugin_tolerates_unknown_fields(self):
+        payload = dict(self.FULL_PLUGIN, some_future_field="x")
+
+        def handler(request):
+            return json_response(200, payload)
+
+        with make_client(handler) as client:
+            plugin = client.get_marketplace_plugin("title-length")
+
+        self.assertEqual(plugin.name, "title-length")
+
+    def test_search_marketplace_plugins_sends_params(self):
+        recorder = RequestRecorder()
+
+        def handler(request):
+            recorder(request)
+            return json_response(200, [self.FULL_PLUGIN])
+
+        with make_client(handler) as client:
+            results = client.search_marketplace_plugins(query="title", category="seo")
+
+        request = recorder.requests[0]
+        self.assertEqual(request.url.path, "/api/v1/marketplace/plugins/search")
+        self.assertEqual(request.url.params["q"], "title")
+        self.assertEqual(request.url.params["category"], "seo")
+        self.assertEqual(len(results), 1)
+
+    def test_test_plugin_returns_raw_and_known_fields(self):
+        recorder = RequestRecorder()
+
+        def handler(request):
+            recorder(request)
+            return json_response(
+                200,
+                {"status": "passed", "findings": 0, "execution_time_ms": 15},
+            )
+
+        with make_client(handler) as client:
+            result = client.test_plugin("title-length")
+
+        request = recorder.requests[0]
+        self.assertEqual(request.method, "POST")
+        self.assertEqual(request.url.path, "/api/v1/marketplace/plugins/title-length/test")
+        self.assertEqual(result.status, "passed")
+        self.assertEqual(result.findings, 0)
+        self.assertEqual(result.execution_time_ms, 15)
+        self.assertEqual(result.raw["status"], "passed")
+
+    def test_test_plugin_plugin_defined_payload(self):
+        def handler(request):
+            return json_response(200, {"custom_metric": 42, "ok": True})
+
+        with make_client(handler) as client:
+            result = client.test_plugin("weird-plugin")
+
+        # Plugin-defined payload: unknown keys survive in raw, known fields default.
+        self.assertEqual(result.raw, {"custom_metric": 42, "ok": True})
+        self.assertEqual(result.status, "")
+        self.assertEqual(result.findings, 0)
+
+    def test_rate_plugin(self):
+        recorder = RequestRecorder()
+
+        def handler(request):
+            recorder(request)
+            return json_response(
+                200,
+                {
+                    "name": "title-length",
+                    "rating": 5.0,
+                    "rating_count": 3,
+                    "average_rating": 4.666666666666667,
+                },
+            )
+
+        with make_client(handler) as client:
+            result = client.rate_plugin("title-length", 5.0, comment="great")
+
+        body = json.loads(recorder.requests[0].content.decode("utf-8"))
+        self.assertEqual(body, {"rating": 5.0, "comment": "great"})
+        self.assertEqual(result.name, "title-length")
+        self.assertEqual(result.rating_count, 3)
+
+    def test_track_plugin_download(self):
+        recorder = RequestRecorder()
+
+        def handler(request):
+            recorder(request)
+            return json_response(200, {"name": "title-length", "downloads": 101})
+
+        with make_client(handler) as client:
+            result = client.track_plugin_download("title-length")
+
+        request = recorder.requests[0]
+        self.assertEqual(
+            request.url.path, "/api/v1/marketplace/plugins/title-length/download"
+        )
+        self.assertEqual(result.downloads, 101)
+
+    def test_verify_marketplace_plugin(self):
+        def handler(request):
+            return json_response(200, self.FULL_PLUGIN)
+
+        with make_client(handler) as client:
+            plugin = client.verify_marketplace_plugin("title-length")
+
+        self.assertTrue(plugin.verified)
+
+
 class TestContextManager(unittest.TestCase):
     def test_context_manager_closes_client(self):
         def handler(request):

@@ -29,15 +29,30 @@ pub struct GscClient {
     access_token: String,
     http_client: reqwest::Client,
     site_url: String,
+    /// API base URL. Defaults to the production endpoint; overridable so
+    /// error paths (HTTP failures, malformed responses) are testable without
+    /// hitting Google.
+    base_url: String,
 }
+
+/// Production GSC API base URL.
+const GSC_API_BASE: &str = "https://searchconsole.googleapis.com";
 
 impl GscClient {
     /// Create a new GSC client with explicit credentials.
     pub fn new(access_token: String, site_url: String) -> Self {
+        Self::with_base_url(access_token, site_url, GSC_API_BASE.to_string())
+    }
+
+    /// Create a GSC client pointed at a custom API base URL.
+    ///
+    /// Intended for tests; production callers use [`GscClient::new`].
+    pub fn with_base_url(access_token: String, site_url: String, base_url: String) -> Self {
         Self {
             access_token,
             http_client: reqwest::Client::new(),
             site_url,
+            base_url,
         }
     }
 
@@ -84,7 +99,8 @@ impl GscClient {
     ) -> Result<GscAnalytics, GscError> {
         let encoded_site = urlencoding::encode(&self.site_url);
         let url = format!(
-            "https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query"
+            "{}/webmasters/v3/sites/{encoded_site}/searchAnalytics/query",
+            self.base_url
         );
 
         let body = serde_json::json!({
@@ -202,7 +218,8 @@ impl GscClient {
     ) -> Result<Vec<GscQueryPageRow>, GscError> {
         let encoded_site = urlencoding::encode(&self.site_url);
         let url = format!(
-            "https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query"
+            "{}/webmasters/v3/sites/{encoded_site}/searchAnalytics/query",
+            self.base_url
         );
 
         let body = serde_json::json!({
@@ -298,7 +315,8 @@ impl GscClient {
     ) -> Result<UrlInspection, GscError> {
         let encoded_site = urlencoding::encode(&self.site_url);
         let inspection_url = format!(
-            "https://searchconsole.googleapis.com/webmasters/v3/sites/{encoded_site}/searchAnalytics/query"
+            "{}/webmasters/v3/sites/{encoded_site}/searchAnalytics/query",
+            self.base_url
         );
 
         let body = serde_json::json!({
@@ -367,7 +385,7 @@ impl GscClient {
 
     /// Get a list of verified sites in the GSC account.
     pub async fn list_sites(&self) -> Result<Vec<String>, GscError> {
-        let url = "https://searchconsole.googleapis.com/webmasters/v3/sites";
+        let url = format!("{}/webmasters/v3/sites", self.base_url);
 
         let response = self
             .http_client
@@ -550,5 +568,189 @@ mod tests {
         };
         let json = serde_json::to_string(&inspection).unwrap();
         assert!(json.contains("indexed"));
+    }
+
+    // --- Error-path and token-hygiene tests (capabilities.toml stable
+    // --- promotion gate). The API is stubbed with a raw TCP listener so
+    // --- these run hermetically, without Google.
+
+    /// Minimal HTTP/1.1 response written straight to a TCP connection.
+    async fn write_http_response(stream: &mut tokio::net::TcpStream, status: &str, body: &str) {
+        let response = format!(
+            "HTTP/1.1 {status}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        use tokio::io::AsyncWriteExt;
+        let _ = stream.write_all(response.as_bytes()).await;
+        let _ = stream.flush().await;
+    }
+
+    /// Start a one-shot server that replies with `status`/`body` and returns
+    /// (base_url, captured-request-receiver).
+    async fn start_one_shot(
+        status: &'static str,
+        body: String,
+    ) -> (String, tokio::sync::mpsc::Receiver<Vec<u8>>) {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .unwrap_or_else(|e| panic!("bind: {e}"));
+        let addr = listener.local_addr().unwrap_or_else(|e| panic!("addr: {e}"));
+        let (tx, rx) = tokio::sync::mpsc::channel(1);
+
+        tokio::spawn(async move {
+            use tokio::io::AsyncReadExt;
+            let (mut stream, _) = listener.accept().await.unwrap_or_else(|e| panic!("accept: {e}"));
+            let mut buf = vec![0u8; 65536];
+            let n = stream.read(&mut buf).await.unwrap_or(0);
+            let _ = tx.send(buf[..n].to_vec()).await;
+            write_http_response(&mut stream, status, &body).await;
+        });
+
+        (format!("http://{addr}"), rx)
+    }
+
+    #[tokio::test]
+    async fn gsc_http_error_surfaces_status_and_body() {
+        let (base, rx) = start_one_shot(
+            "403 Forbidden",
+            r#"{"error":{"code":403,"message":"permission denied"}}"#.to_string(),
+        )
+        .await;
+
+        let client = GscClient::with_base_url("secret-token".into(), "https://example.com/".into(), base);
+        let err = client
+            .get_search_analytics("2026-01-01", "2026-01-31")
+            .await
+            .unwrap_err_else_panic();
+
+        drop(rx);
+        match &err {
+            GscError::ApiError { status, body } => {
+                assert_eq!(*status, 403);
+                assert!(body.contains("permission denied"), "body surfaced: {body}");
+            }
+            other => panic!("expected ApiError, got: {other:?}"),
+        }
+        // Display form is what reaches CLI users.
+        let msg = err.to_string();
+        assert!(msg.contains("403"), "status in display: {msg}");
+    }
+
+    #[tokio::test]
+    async fn gsc_malformed_json_is_parse_error_not_panic() {
+        let (base, rx) =
+            start_one_shot("200 OK", "<html>not json</html>".to_string()).await;
+
+        let client = GscClient::with_base_url("t".into(), "https://example.com/".into(), base);
+        let err = client
+            .get_search_analytics("2026-01-01", "2026-01-31")
+            .await
+            .unwrap_err_else_panic();
+
+        drop(rx);
+        assert!(matches!(err, GscError::ParseError(_)), "got: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn gsc_missing_rows_yields_empty_analytics() {
+        let (base, rx) = start_one_shot("200 OK", r#"{"rows":[]}"#.to_string()).await;
+
+        let client = GscClient::with_base_url("t".into(), "https://example.com/".into(), base);
+        let analytics = client
+            .get_search_analytics("2026-01-01", "2026-01-31")
+            .await
+            .unwrap_or_else(|e| panic!("empty rows must succeed: {e}"));
+
+        drop(rx);
+        assert!(analytics.queries.is_empty());
+        assert!(analytics.pages.is_empty());
+        assert_eq!(analytics.total_clicks, 0);
+    }
+
+    #[tokio::test]
+    async fn gsc_connection_refused_maps_to_request_failed() {
+        // Port 1 on loopback: reserved, refuses connections.
+        let client = GscClient::with_base_url(
+            "t".into(),
+            "https://example.com/".into(),
+            "http://127.0.0.1:1".into(),
+        );
+        let err = client
+            .top_queries("2026-01-01", "2026-01-31", 10)
+            .await
+            .unwrap_err_else_panic();
+        assert!(matches!(err, GscError::RequestFailed(_)), "got: {err:?}");
+    }
+
+    /// Bearer token must be sent, and must never leak into error payloads.
+    #[tokio::test]
+    async fn gsc_token_sent_as_bearer_and_absent_from_errors() {
+        let (base, mut rx) = start_one_shot(
+            "500 Internal Server Error",
+            r#"{"error":"boom"}"#.to_string(),
+        )
+        .await;
+
+        let client = GscClient::with_base_url(
+            "super-secret-token-value".into(),
+            "https://example.com/".into(),
+            base,
+        );
+        let err = client
+            .get_search_analytics("2026-01-01", "2026-01-31")
+            .await
+            .unwrap_err_else_panic();
+
+        let request = rx.recv().await.unwrap_or_else(|| panic!("server saw no request"));
+        let request_text = String::from_utf8_lossy(&request);
+
+        // Token is transmitted exactly once, as the Authorization header.
+        assert!(
+            request_text.contains("authorization: Bearer super-secret-token-value"),
+            "bearer header missing from request"
+        );
+        // It appears in the headers only.
+        assert_eq!(
+            request_text.matches("super-secret-token-value").count(),
+            1,
+            "token must appear exactly once (Authorization header)"
+        );
+
+        // The error (including the raw upstream body) must not echo the token.
+        let rendered = format!("{err:?}");
+        assert!(
+            !rendered.contains("super-secret-token-value"),
+            "token leaked into error: {rendered}"
+        );
+    }
+
+    #[tokio::test]
+    async fn gsc_inspection_unindexed_url_has_zero_rows() {
+        let (base, rx) = start_one_shot("200 OK", r#"{}"#.to_string()).await;
+
+        let client = GscClient::with_base_url("t".into(), "https://example.com/".into(), base);
+        let inspection = client
+            .get_url_inspection("https://example.com/nope", "2026-01-01", "2026-01-31")
+            .await
+            .unwrap_or_else(|e| panic!("empty response must succeed: {e}"));
+
+        drop(rx);
+        assert!(!inspection.indexed);
+        assert_eq!(inspection.clicks, 0);
+    }
+
+    // Helper kept private to this module: turn a Result into its Err, or
+    // fail the test with context (unwrap/expect are denied workspace-wide).
+    trait UnwrapErrForTest<T> {
+        fn unwrap_err_else_panic(self) -> GscError;
+    }
+
+    impl<T> UnwrapErrForTest<T> for Result<T, GscError> {
+        fn unwrap_err_else_panic(self) -> GscError {
+            match self {
+                Err(e) => e,
+                Ok(_) => panic!("expected GSC error, got success"),
+            }
+        }
     }
 }

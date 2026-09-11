@@ -52,8 +52,13 @@ impl Severity {
 ///
 /// Groups related issues for filtering and reporting. Stored in the
 /// database as a lowercase string. Custom categories use a `custom:` prefix.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
+///
+/// Serializes to the same lowercase string form used by the database and
+/// every CLI/API surface (`"http"`, `"seo"`, `"custom:my-plugin"`), so the
+/// wire format matches `docs/schema/findings.schema.json`. Deserialization
+/// additionally accepts the pre-5.2 map form (`{"custom": "name"}`) from
+/// older plugin payloads.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum IssueCategory {
     /// HTTP-related issues (status codes, redirects, headers).
     Http,
@@ -129,6 +134,48 @@ impl From<&str> for IssueCategory {
     }
 }
 
+impl Serialize for IssueCategory {
+    /// Canonical wire form: the lowercase category string, `custom:` prefixed
+    /// for plugin categories. Matches `as_str()` exactly.
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_str(&self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for IssueCategory {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        /// Untagged input form: canonical string, or the pre-5.2 derived map
+        /// form (`{"custom": "name"}`).
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Str(String),
+            Map(std::collections::BTreeMap<String, serde_json::Value>),
+        }
+
+        match Raw::deserialize(deserializer)? {
+            Raw::Str(s) => Ok(Self::parse_category(&s)),
+            Raw::Map(map) => {
+                let first = map
+                    .into_iter()
+                    .next()
+                    .ok_or_else(|| serde::de::Error::custom("empty category object"))?;
+                // Old derived form: {"custom": "<name>"} for Custom payloads;
+                // unit variants serialized as {"<variant>": null}.
+                if first.0 == "custom" {
+                    let name = first
+                        .1
+                        .as_str()
+                        .ok_or_else(|| serde::de::Error::custom("custom category name must be a string"))?;
+                    Ok(Self::Custom(name.to_string()))
+                } else {
+                    Ok(Self::parse_category(&first.0))
+                }
+            }
+        }
+    }
+}
+
 /// A single finding from an analyzer.
 ///
 /// Represents a SEO or technical issue found during page analysis.
@@ -178,6 +225,88 @@ mod tests {
         let s = Severity::Error;
         let s2 = s;
         assert_eq!(s, s2);
+    }
+
+    // --- Wire-format pins (findings JSON schema contract) ---
+
+    #[test]
+    fn issue_category_serializes_to_canonical_string() {
+        assert_eq!(
+            serde_json::to_value(IssueCategory::Seo).unwrap(),
+            serde_json::json!("seo")
+        );
+        let custom = IssueCategory::Custom("my-plugin".to_string());
+        assert_eq!(
+            serde_json::to_value(&custom).unwrap(),
+            serde_json::json!("custom:my-plugin")
+        );
+    }
+
+    #[test]
+    fn issue_category_deserializes_from_canonical_string() {
+        let v: IssueCategory = serde_json::from_value(serde_json::json!("links")).unwrap();
+        assert_eq!(v, IssueCategory::Links);
+    }
+
+    #[test]
+    fn issue_category_deserializes_legacy_map_form() {
+        let v: IssueCategory =
+            serde_json::from_value(serde_json::json!({"custom": "my-plugin"})).unwrap();
+        assert_eq!(v, IssueCategory::Custom("my-plugin".to_string()));
+    }
+
+    #[test]
+    fn issue_category_rejects_empty_object() {
+        let result: Result<IssueCategory, _> = serde_json::from_value(serde_json::json!({}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn finding_json_has_exactly_schema_keys() {
+        let f = Finding {
+            severity: Severity::Warning,
+            category: IssueCategory::Seo,
+            code: "SEO001".to_string(),
+            title: "Title".to_string(),
+            description: "Description".to_string(),
+            url: "https://example.com/".to_string(),
+            recommendation: "Fix it".to_string(),
+        };
+        let v = serde_json::to_value(&f).unwrap();
+        let obj = v.as_object().unwrap();
+        let expected: std::collections::BTreeSet<&str> = [
+            "severity",
+            "category",
+            "code",
+            "title",
+            "description",
+            "url",
+            "recommendation",
+        ]
+        .into_iter()
+        .collect();
+        let actual: std::collections::BTreeSet<&str> = obj.keys().map(String::as_str).collect();
+        assert_eq!(actual, expected, "Finding wire shape drifted from schema");
+        assert_eq!(obj["severity"], "warning");
+        assert_eq!(obj["category"], "seo");
+    }
+
+    #[test]
+    fn finding_json_roundtrip() {
+        let f = Finding {
+            severity: Severity::Critical,
+            category: IssueCategory::Custom("my-plugin".to_string()),
+            code: "MY001".to_string(),
+            title: "T".to_string(),
+            description: "D".to_string(),
+            url: "https://example.com/p".to_string(),
+            recommendation: "R".to_string(),
+        };
+        let json = serde_json::to_string(&f).unwrap();
+        let f2: Finding = serde_json::from_str(&json).unwrap();
+        assert_eq!(f2.code, f.code);
+        assert_eq!(f2.category, f.category);
+        assert_eq!(f2.severity, f.severity);
     }
 
     #[test]

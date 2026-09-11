@@ -44,6 +44,8 @@ Rule: every public claim in this wedge must trace to `docs/capabilities.toml` st
 
 **Exit criteria:** Phase 0.1 acceptance (CI fails on README/manifest drift); CLI help output tested against docs; no conditional capability described as stable anywhere public.
 
+**Status (2026-09-11): all six items implemented.** Manifest drift gate + schedule CLI committed `c1fc0198`; scanner prototype committed `d0bd843d`; this round: GSC promoted to `stable` (error-path + token-hygiene tests, docs/INTEGRATIONS.md), findings JSON schema published (`docs/schema/findings.schema.json`) with conformance tests over real emit paths, and all three client libraries at full API surface parity (Python 92%→100%, marketplace search/rate/download/verify added to all clients). Recorded in capabilities.toml as `gsc_integration: stable`, `findings_json_schema: stable`.
+
 ### 5.3.0 — "Connectors" (data fusion + workflow)
 
 | Item | Closes | Roadmap gate | Notes |

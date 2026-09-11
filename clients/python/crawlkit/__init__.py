@@ -14,6 +14,9 @@ from .models import (
     Schedule,
     AuditEvent,
     MarketplacePlugin,
+    PluginDownloadResult,
+    PluginRatingResult,
+    PluginTestResult,
     Session,
 )
 from .exceptions import CrawlkitError, AuthenticationError, NotFoundError
@@ -33,6 +36,9 @@ __all__ = [
     "Schedule",
     "AuditEvent",
     "MarketplacePlugin",
+    "PluginDownloadResult",
+    "PluginRatingResult",
+    "PluginTestResult",
     "Session",
     "CrawlkitError",
     "AuthenticationError",

@@ -390,14 +390,8 @@ fn write_output(
                 .findings
                 .iter()
                 .map(|f| {
-                    serde_json::json!({
-                        "page_url": f.page_url,
-                        "severity": format!("{:?}", f.severity).to_lowercase(),
-                        "code": f.code,
-                        "title": f.title,
-                        "description": f.description,
-                        "recommendation": f.recommendation,
-                    })
+                    // Canonical wire shape per docs/schema/findings.schema.json.
+                    super::findings::post_crawl_finding_json(f)
                 })
                 .collect();
             std::fs::write(

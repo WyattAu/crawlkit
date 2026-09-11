@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"time"
 )
@@ -245,8 +246,59 @@ func (c *Client) DeleteMarketplacePlugin(ctx context.Context, name string) error
 }
 
 func (c *Client) TestPlugin(ctx context.Context, name string) (*PluginTestResult, error) {
-	var result PluginTestResult
-	err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/test", name), nil, &result)
+	var raw map[string]interface{}
+	if err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/test", name), nil, &raw); err != nil {
+		return nil, err
+	}
+	result := &PluginTestResult{Raw: raw}
+	if v, ok := raw["status"].(string); ok {
+		result.Status = v
+	}
+	if v, ok := raw["findings"].(float64); ok {
+		result.Findings = int(v)
+	}
+	if v, ok := raw["execution_time_ms"].(float64); ok {
+		result.ExecutionTimeMs = int(v)
+	}
+	return result, nil
+}
+
+// SearchMarketplacePlugins searches plugins by query and/or category.
+func (c *Client) SearchMarketplacePlugins(ctx context.Context, query, category string) ([]MarketplacePlugin, error) {
+	params := url.Values{}
+	if query != "" {
+		params.Set("q", query)
+	}
+	if category != "" {
+		params.Set("category", category)
+	}
+	path := "/api/v1/marketplace/plugins/search"
+	if encoded := params.Encode(); encoded != "" {
+		path += "?" + encoded
+	}
+	var result []MarketplacePlugin
+	err := c.get(ctx, path, &result)
+	return result, err
+}
+
+// RatePlugin submits a rating (0.0–5.0) for a plugin.
+func (c *Client) RatePlugin(ctx context.Context, name string, req PluginRatingRequest) (*PluginRatingResponse, error) {
+	var result PluginRatingResponse
+	err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/rate", name), req, &result)
+	return &result, err
+}
+
+// TrackPluginDownload records a plugin download.
+func (c *Client) TrackPluginDownload(ctx context.Context, name string) (*PluginDownloadResponse, error) {
+	var result PluginDownloadResponse
+	err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/download", name), nil, &result)
+	return &result, err
+}
+
+// VerifyMarketplacePlugin marks a plugin as verified (admin only).
+func (c *Client) VerifyMarketplacePlugin(ctx context.Context, name string) (*MarketplacePlugin, error) {
+	var result MarketplacePlugin
+	err := c.post(ctx, fmt.Sprintf("/api/v1/marketplace/plugins/%s/verify", name), nil, &result)
 	return &result, err
 }
 

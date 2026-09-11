@@ -19,6 +19,9 @@ import {
   HealthResponse,
   LoginResponse,
   MarketplacePlugin,
+  PluginDownloadResponse,
+  PluginRatingRequest,
+  PluginRatingResponse,
   SubmitPluginRequest,
   UpdateScheduleRequest,
   Session,
@@ -179,7 +182,40 @@ export class CrawlkitClient {
   }
 
   async testPlugin(name: string): Promise<PluginTestResult> {
-    return this.post(`/api/v1/marketplace/plugins/${name}/test`, {});
+    // The test result is a plugin-defined JSON object; retain it in raw.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const raw = await this.post<Record<string, any>>(
+      `/api/v1/marketplace/plugins/${name}/test`,
+      {}
+    );
+    return { ...raw, raw };
+  }
+
+  async searchMarketplacePlugins(
+    query?: string,
+    category?: string
+  ): Promise<MarketplacePlugin[]> {
+    const params = new URLSearchParams();
+    if (query !== undefined) params.set("q", query);
+    if (category !== undefined) params.set("category", category);
+    const encoded = params.toString();
+    const path = `/api/v1/marketplace/plugins/search${encoded ? `?${encoded}` : ""}`;
+    return this.get(path);
+  }
+
+  async ratePlugin(
+    name: string,
+    req: PluginRatingRequest
+  ): Promise<PluginRatingResponse> {
+    return this.post(`/api/v1/marketplace/plugins/${name}/rate`, req);
+  }
+
+  async trackPluginDownload(name: string): Promise<PluginDownloadResponse> {
+    return this.post(`/api/v1/marketplace/plugins/${name}/download`, {});
+  }
+
+  async verifyMarketplacePlugin(name: string): Promise<MarketplacePlugin> {
+    return this.post(`/api/v1/marketplace/plugins/${name}/verify`, {});
   }
 
   async updateSchedule(

@@ -161,8 +161,30 @@ type MarketplacePlugin struct {
 	Tags        []string `json:"tags"`
 	Downloads   uint64   `json:"downloads"`
 	Rating      float64  `json:"rating"`
+	RatingCount uint32   `json:"rating_count"`
+	Verified    bool     `json:"verified"`
 	CreatedAt   string   `json:"created_at"`
 	UpdatedAt   string   `json:"updated_at"`
+}
+
+// PluginRatingRequest submits a rating (0.0–5.0) for a plugin.
+type PluginRatingRequest struct {
+	Rating  float64 `json:"rating"`
+	Comment string  `json:"comment,omitempty"`
+}
+
+// PluginRatingResponse is returned after a successful rating submission.
+type PluginRatingResponse struct {
+	Name          string  `json:"name"`
+	Rating        float64 `json:"rating"`
+	RatingCount   uint32  `json:"rating_count"`
+	AverageRating float64 `json:"average_rating"`
+}
+
+// PluginDownloadResponse is returned after recording a plugin download.
+type PluginDownloadResponse struct {
+	Name      string `json:"name"`
+	Downloads uint64 `json:"downloads"`
 }
 
 type SubmitPluginRequest struct {
@@ -195,7 +217,12 @@ type Session struct {
 	ExpiresAt    time.Time `json:"expires_at"`
 }
 
+// PluginTestResult is the plugin-defined self-test payload. The API types
+// this as a free-form JSON object; known fields are surfaced directly.
 type PluginTestResult struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
+	Status           string `json:"status"`
+	Findings         int    `json:"findings"`
+	ExecutionTimeMs  int    `json:"execution_time_ms"`
+	// Raw retains the full plugin-defined payload.
+	Raw map[string]interface{} `json:"-"`
 }

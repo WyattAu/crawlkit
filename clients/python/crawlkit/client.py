@@ -17,6 +17,9 @@ from .models import (
     Schedule,
     AuditEvent,
     MarketplacePlugin,
+    PluginDownloadResult,
+    PluginRatingResult,
+    PluginTestResult,
     Session,
 )
 from .exceptions import (
@@ -300,6 +303,28 @@ class CrawlkitClient:
 
     # Marketplace
 
+    @staticmethod
+    def _marketplace_plugin(payload: Dict[str, Any]) -> MarketplacePlugin:
+        """Build a MarketplacePlugin, tolerating older servers with fewer fields."""
+        known = {
+            "name",
+            "description",
+            "version",
+            "author",
+            "license",
+            "categories",
+            "tags",
+            "downloads",
+            "rating",
+            "rating_count",
+            "verified",
+            "created_at",
+            "updated_at",
+        }
+        return MarketplacePlugin(
+            **{k: v for k, v in payload.items() if k in known}
+        )
+
     def submit_plugin(
         self, name: str, description: str, version: str
     ) -> MarketplacePlugin:
@@ -309,21 +334,79 @@ class CrawlkitClient:
             "/api/v1/marketplace/plugins",
             json={"name": name, "description": description, "version": version},
         )
-        return MarketplacePlugin(**result)
+        return self._marketplace_plugin(result)
 
     def list_marketplace_plugins(self) -> List[MarketplacePlugin]:
         """List marketplace plugins."""
         result = self._request("GET", "/api/v1/marketplace/plugins")
-        return [MarketplacePlugin(**p) for p in result]
+        return [self._marketplace_plugin(p) for p in result]
+
+    def search_marketplace_plugins(
+        self, query: Optional[str] = None, category: Optional[str] = None
+    ) -> List[MarketplacePlugin]:
+        """Search marketplace plugins by query and/or category."""
+        params: Dict[str, Any] = {}
+        if query is not None:
+            params["q"] = query
+        if category is not None:
+            params["category"] = category
+        result = self._request(
+            "GET", "/api/v1/marketplace/plugins/search", params=params
+        )
+        return [self._marketplace_plugin(p) for p in result]
 
     def get_marketplace_plugin(self, name: str) -> MarketplacePlugin:
         """Get a marketplace plugin by name."""
         result = self._request("GET", f"/api/v1/marketplace/plugins/{name}")
-        return MarketplacePlugin(**result)
+        return self._marketplace_plugin(result)
 
     def delete_marketplace_plugin(self, name: str) -> None:
         """Delete a marketplace plugin."""
         self._request("DELETE", f"/api/v1/marketplace/plugins/{name}")
+
+    def test_plugin(
+        self, name: str, payload: Optional[Dict[str, Any]] = None
+    ) -> PluginTestResult:
+        """Run a plugin's self-test. The response body is plugin-defined."""
+        result = self._request(
+            "POST", f"/api/v1/marketplace/plugins/{name}/test", json=payload or {}
+        )
+        known = {"status", "findings", "execution_time_ms"}
+        filtered = {k: v for k, v in result.items() if k in known}
+        return PluginTestResult(raw=result, **filtered)
+
+    def rate_plugin(
+        self, name: str, rating: float, comment: Optional[str] = None
+    ) -> PluginRatingResult:
+        """Submit a rating (0.0-5.0) for a plugin."""
+        body: Dict[str, Any] = {"rating": rating}
+        if comment is not None:
+            body["comment"] = comment
+        result = self._request(
+            "POST", f"/api/v1/marketplace/plugins/{name}/rate", json=body
+        )
+        return PluginRatingResult(
+            name=result["name"],
+            rating=result["rating"],
+            rating_count=result["rating_count"],
+            average_rating=result["average_rating"],
+        )
+
+    def track_plugin_download(self, name: str) -> PluginDownloadResult:
+        """Record a plugin download, incrementing its download counter."""
+        result = self._request(
+            "POST", f"/api/v1/marketplace/plugins/{name}/download"
+        )
+        return PluginDownloadResult(
+            name=result["name"], downloads=result["downloads"]
+        )
+
+    def verify_marketplace_plugin(self, name: str) -> MarketplacePlugin:
+        """Mark a plugin as verified (requires admin role)."""
+        result = self._request(
+            "POST", f"/api/v1/marketplace/plugins/{name}/verify"
+        )
+        return self._marketplace_plugin(result)
 
     # Sessions
 

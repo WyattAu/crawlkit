@@ -225,6 +225,8 @@ abort a crawl.
 | Roadmap | [docs/ROADMAP.md](docs/ROADMAP.md) |
 | Product Strategy | [docs/PRODUCT_STRATEGY.md](docs/PRODUCT_STRATEGY.md) |
 | Competitive Matrix (20 tools) | [docs/COMPETITIVE_MATRIX.md](docs/COMPETITIVE_MATRIX.md) |
+| Integrations (GSC, CrUX, LLM) | [docs/INTEGRATIONS.md](docs/INTEGRATIONS.md) |
+| Findings JSON Schema | [docs/schema/findings.schema.json](docs/schema/findings.schema.json) |
 | ADR-001 | [docs/ADR-001-crawler-architecture.md](docs/ADR-001-crawler-architecture.md) |
 | Benchmarks | [docs/benchmarks.md](docs/benchmarks.md) |
 | Getting Started | [docs/tutorials/getting-started.md](docs/tutorials/getting-started.md) |

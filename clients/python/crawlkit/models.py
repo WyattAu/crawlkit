@@ -132,11 +132,45 @@ class AuditEvent:
 
 @dataclass
 class MarketplacePlugin:
-    """A marketplace plugin."""
+    """A marketplace plugin (full API projection)."""
     name: str
     description: str = ""
     version: str = ""
     author: str = ""
+    license: str = ""
+    categories: List[str] = field(default_factory=list)
+    tags: List[str] = field(default_factory=list)
+    downloads: int = 0
+    rating: float = 0.0
+    rating_count: int = 0
+    verified: bool = False
+    created_at: str = ""
+    updated_at: str = ""
+
+
+@dataclass
+class PluginTestResult:
+    """Result of running a plugin's self-test (plugin-defined payload)."""
+    status: str = ""
+    findings: int = 0
+    execution_time_ms: int = 0
+    raw: Optional[Dict[str, Any]] = None
+
+
+@dataclass
+class PluginRatingResult:
+    """Response from submitting a plugin rating."""
+    name: str
+    rating: float
+    rating_count: int
+    average_rating: float
+
+
+@dataclass
+class PluginDownloadResult:
+    """Response from recording a plugin download."""
+    name: str
+    downloads: int
 
 
 @dataclass

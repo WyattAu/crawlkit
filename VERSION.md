@@ -33,8 +33,8 @@
 - **Analyzer Count:** Configuration/version-dependent; see `docs/capabilities.toml`
 - **Clippy Warnings:** 0 in the verified baseline
 - **Unsafe Code:** Denied in ordinary workspace code; scoped FFI exists with safety documentation
-- **Workspace Crates:** 5 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-types)
-- **Client Libraries:** Python 92%, Go 100%, Node.js 100%
+- **Workspace Crates:** 6 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-scanner, crawlkit-types)
+- **Client Libraries:** Python 100%, Go 100%, Node.js 100% (full marketplace surface incl. search/rate/download/verify as of 2026-09-11)
 
 ## Breaking Changes (v5.0.0)
 

@@ -171,14 +171,11 @@ fn build_json(
     let issues: Vec<serde_json::Value> = findings
         .iter()
         .map(|f| {
-            serde_json::json!({
-                "severity": f.severity.as_str(),
-                "category": f.category.as_str(),
-                "code": f.code,
-                "title": f.title,
-                "description": f.description,
-                "recommendation": f.recommendation,
-            })
+            // Canonical wire shape per docs/schema/findings.schema.json.
+            // Single-URL context: the page URL is the document-level "url"
+            // field; each finding carries the target URL too, so findings
+            // arrays stay conformant when merged across pages.
+            super::findings::finding_json(url_str, f)
         })
         .collect();
 

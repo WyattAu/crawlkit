@@ -92,7 +92,7 @@ Notes: a — SEORadar monitors rendered pages, not a general crawler; b — requ
 | Open source | ✅ Apache-2.0 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | CLI / headless operation | ✅ (11 commands) | ✅ (headless) | ❌ | ❌ | ⚠️ | ⚠️ | ⚠️ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | REST API | ✅ (axum, OpenAPI) | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ | ✅ | ❌ |
-| Client libraries (Go/Node/Python) | ⚠️ (Go 100%, Node 100%, Python 92%) | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ❌ |
+| Client libraries (Go/Node/Python) | ⚠️ (all at 100% API surface parity, 2026-09-11) | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ⚠️ | ⚠️ | ✅ | ⚠️ | ✅ | ⚠️ | ❌ | ❌ | ⚠️ | ❌ |
 | Multi-tenancy + RBAC | ✅ (enterprise.rs, API) | ❌ | n/a | n/a | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ❌ | n/a | ✅ | ❌ | ❌ | ✅ | ❌ |
 | SSO / OIDC | ✅ (oidc.rs) | ❌ | ✅ | ✅ | ❌ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ⚠️ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❌ | ❌ | ✅ | ❌ |
 | Encryption at rest (optional) | ✅ (feature) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |

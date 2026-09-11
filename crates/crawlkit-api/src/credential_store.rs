@@ -151,13 +151,13 @@ impl CredentialStore {
         })
         .map_err(|e| CredentialError::Crypto(Box::new(e)))?;
 
-        let ciphertext = self.manager.encrypt(&plaintext)            .map_err(|e| {
-                if self.manager.is_initialized() {
-                    CredentialError::Crypto(Box::new(e))
-                } else {
-                    CredentialError::NotInitialized
-                }
-            })?;
+        let ciphertext = self.manager.encrypt(&plaintext).map_err(|e| {
+            if self.manager.is_initialized() {
+                CredentialError::Crypto(Box::new(e))
+            } else {
+                CredentialError::NotInitialized
+            }
+        })?;
 
         self.records
             .write()

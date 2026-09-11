@@ -462,7 +462,7 @@ impl ApiStateStore for PgStateStore {
                             .map_err(PersistenceError::Sqlx)?,
                     ),
                     retention_days: row
-                        .try_get::<Option<i64>, _>("retention_days")
+                        .try_get::<Option<i32>, _>("retention_days")
                         .map_err(PersistenceError::Sqlx)?
                         .map(|v| u32::try_from(v).unwrap_or_default()),
                 })
@@ -478,7 +478,7 @@ impl ApiStateStore for PgStateStore {
         .bind(&tenant.id)
         .bind(&tenant.name)
         .bind(tenant.created_at.to_rfc3339())
-        .bind(tenant.retention_days.map(i64::from))
+        .bind(tenant.retention_days.and_then(|v| i32::try_from(v).ok()))
         .execute(&self.pool)
         .await?;
         Ok(())

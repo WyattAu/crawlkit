@@ -391,7 +391,7 @@ mod tests {
 
     #[tokio::test]
     async fn api_key_never_in_url_and_error_hides_it() {
-        let key = "SECRET-CRUX-KEY-9f13";
+        let key = "dummy-key";
         let (base, rx) = serve_one(Box::leak(ok_response(CRUX_OK_BODY).into_boxed_str())).await;
         let client = CruxClient::with_base_url(key.to_string(), base);
         let _ = client.get_field_data("https://example.com").await;
@@ -400,7 +400,7 @@ mod tests {
 
         // Key travels in the header, never the request line.
         assert!(
-            request.contains("x-goog-api-key: SECRET-CRUX-KEY-9f13"),
+            request.contains("x-goog-api-key: dummy-key"),
             "key must be sent as header"
         );
         assert!(

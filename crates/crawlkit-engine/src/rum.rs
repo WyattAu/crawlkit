@@ -346,7 +346,7 @@ mod tests {
 
     #[tokio::test]
     async fn crux_adapter_sends_key_as_header_never_in_url() {
-        let key = "SECRET-PSI-KEY-2a7d";
+        let key = "dummy-key";
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -373,7 +373,7 @@ mod tests {
         let binding = rx.await.unwrap();
         let request = String::from_utf8_lossy(&binding);
         assert!(
-            request.contains("x-goog-api-key: SECRET-PSI-KEY-2a7d"),
+            request.contains("x-goog-api-key: dummy-key"),
             "key must be sent as header"
         );
         assert!(

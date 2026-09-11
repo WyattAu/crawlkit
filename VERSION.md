@@ -1,10 +1,10 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** v5.1.0 Consolidation and Feature Completion
-**Version:** 5.1.0
+**Current Phase:** v5.2.0 "Truth and Surface" — released; 5.3.0 Connectors and 5.4.0 Queue/Scanner-GA in progress per docs/PRODUCT_STRATEGY.md §3
+**Version:** 5.2.0
 **Status:** Released
-**Last Updated:** 2026-09-07
+**Last Updated:** 2026-09-11
 **MSRV:** 1.94.0
 
 ---
@@ -21,7 +21,8 @@
 | 4 | Documentation Overhaul | Complete | 2026-07-26 | README rewritten, zero emojis, technical precision |
 | 16 | v2.1.0 Release | Complete | 2026-08-18 | Security hardening, WASM ABI conformance, persistent audit |
 | 17 | v3.0.0 Release | Complete | 2026-08-19 | Breaking engine API cleanup; plugin trust chain; determinism rails; API backpressure/idempotency; signed release artifacts |
-| 24 | v5.0.0 Ground Truth | In Progress | 2026-08-27 | Type unification (crawlkit-types); DIP fix (dyn StorageBackend); client library completion; doc reconciliation; SSRF dedup; dead code gating |
+| 24 | v5.0.0 Ground Truth | Complete | 2026-08-27 | Type unification (crawlkit-types); DIP fix (dyn StorageBackend); client library completion; doc reconciliation; SSRF dedup; dead code gating |
+| 25 | v5.2.0 Truth and Surface | Released | 2026-09-11 | Capability manifest CI drift gate; schedule CLI; GSC → stable; findings JSON schema + conformance tests; 100% client parity (Python/Go/Node); hosted-scanner prototype (ADR-012) |
 
 ## Current State
 
@@ -67,6 +68,7 @@
 | 4.4.1 | 2026-08-23 | GPG-signed checksums (first signed release); ADR-011 WASI eval; OSS-Fuzz submission kit |
 | 5.0.0 | 2026-09-06 | Breaking release on the reconciled main: analyzer finding-code ownership (833 → 778), profiles, robots.txt RFC 9309 + PostgreSQL storage fixes, `dyn StorageBackend`, crawlkit-types, `--allow-private`, auth salting Policy+Strength, envstack config, loop-retry webhook delivery, @pediment/tokens; version-tag guard + release-pipeline fixes |
 | 5.0.0 | 2026-08-27 | Breaking: unified types (crawlkit-types crate); DIP fix (dyn StorageBackend); client library completion (Python 92%, Go/Node 100%); SSRF dedup; dead code gated; docs reconciled |
+| 5.2.0 | 2026-09-11 | "Truth and Surface": manifest drift gate, schedule CLI, GSC stable, findings JSON schema, full client parity, scanner prototype (ADR-012); roadmap split into 5.3.0 Connectors + 5.4.0 Queue/Scanner-GA (ADR-013/014/015) |
 
 ---
 

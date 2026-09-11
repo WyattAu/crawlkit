@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.2.0] - 2026-09-11
+
+### Added — "Truth and Surface" (CI-native positioning; docs/PRODUCT_STRATEGY.md §3)
+- **Registry-generated capability manifest with CI drift gate**: `docs/capabilities.toml` `[counts]`
+  (82 analyzers, 778 finding codes, 12 CLI commands) is generated from the live `AnalyzerRegistry`;
+  `cargo run -p crawlkit-engine --example manifest_drift_check` fails CI on any hand-copied drift,
+  and README counts cite the manifest as the single source of truth
+- **Schedule CLI** (`crawlkit schedule add/list/enable/disable/remove`) over the existing API
+  `ScheduleConfig` endpoints; auth via `CRAWLKIT_API_KEY` (X-API-Key) or `CRAWLKIT_JWT` (Bearer)
+- **Findings JSON schema** published at `docs/schema/findings.schema.json` (draft 2020-12) with
+  conformance tests validating actual emitted payloads against it — emitter and schema cannot drift
+- **Hosted free-scan scanner prototype** (`crawlkit-scanner` crate) per ADR-012: DNS-pinned SSRF
+  denial by construction (resolver-level address filtering), global per-target politeness budget,
+  bounded BFS (25 pages / depth 4 / 30 s), 128-bit unguessable result tokens, 24 h retention
+
+### Changed — wire-format correctness
+- `IssueCategory::Custom` now serializes canonically as `"custom:x"` (previously the serde derive
+  emitted `{"custom":"x"}` while every DB/CLI path used `"custom:x"`); the legacy form still
+  deserializes for backward compatibility
+- Post-crawl findings JSON now carries `category` and uses the canonical `url` field; inspect
+  findings include `url` — all emit paths unified through shared helpers in `cli/findings.rs`
+- GSC integration promoted conditional → `stable` (error-path and token-hygiene tests, documented
+  contract in `docs/INTEGRATIONS.md`); capabilities.toml records the promotion with evidence
+
+### Fixed — client library parity
+- Python client 92% → 100%: added `test_plugin` and marketplace `search`/`rate`/`download`/`verify`
+- Go and Node clients gained the same four marketplace routes plus the `rating_count`/`verified`
+  fields they were silently missing; Node's `PluginTestResult` model now matches the handler's
+  actual response shape
+
+### Fixed — tests and CI
+- Manifest drift-check failure paths (missing counts, non-numeric values, comments, extra keys)
+  are unit-tested; a test-compile error in the schedule CLI's auth-header helper is fixed
+- 4 corpus-discovered false positives eliminated (pre-5.2.0 fixes folded in; see `03b89c47`)
+
+## [Unreleased-5.4.0]
+
+### Added — "Queue and Scanner GA" groundwork (ADR-015; 5.3/5.4 split per docs/PRODUCT_STRATEGY.md §3)
+- **Lease-based distributed queue** replacing the destructive-`ZPOPMIN` prototype: Lua-atomic
+  pop-into-lease, at-least-once delivery with concurrency-safe expiry reclamation, classified
+  retries with backoff-packed scores, capped dead-letter quarantine with operator redrive, O(1)
+  visited set, async surface over `redis::aio::ConnectionManager`, background reclaim sweeper
+- **Per-target politeness budget** in shared state (ADR-015 §6): atomic sliding-window
+  check-and-consume (30 req/10 min per target across all replicas) consumed by the hosted
+  scanner's GA gate
+- CI now actually runs the Redis-backed suites (the steps previously omitted the `unstable`
+  feature gate and selected zero tests)
+
 ## [5.0.0] - 2026-09-06
 
 ### Added — upstream main reconciliation (owner commits merged 2026-09-06)

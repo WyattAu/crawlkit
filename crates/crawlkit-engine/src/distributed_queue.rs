@@ -5,12 +5,19 @@
 //! popped URL — to at-least-once delivery with leases, bounded retries,
 //! poison quarantine, and an O(1) visited set.
 //!
+//! All operations are async over `redis::aio::ConnectionManager`
+//! (multiplexed, auto-reconnecting), per ADR-015 §5: no caller is left on
+//! blocking Redis calls inside async contexts. The graduated queue does not
+//! implement the crate's destructive `queue_trait::Queue` abstraction —
+//! that trait's pop-and-forget contract cannot express lease completion.
+//!
 //! # Delivery contract (ADR-015 §1–§3, §7)
 //!
 //! - **At-least-once delivery.** Every pop moves the entry into a per-lease
 //!   processing hash atomically (Lua); a lease that expires before completion
-//!   is reclaimed back into the pending set by a sweep. Workers MUST tolerate
-//!   duplicate delivery of the same URL.
+//!   is reclaimed back into the pending set by a sweep — run periodically by
+//!   [`run_reclaim_sweeper`] or on demand. Workers MUST tolerate duplicate
+//!   delivery of the same URL.
 //! - **Bounded retries.** Transient failures re-queue with attempt-count
 //!   backoff encoded in the sorted-set score; fatal failures never re-queue.
 //! - **Poison quarantine.** Entries exceeding [`DEFAULT_MAX_ATTEMPTS`] move
@@ -18,17 +25,20 @@
 //!   and re-drivable by operators, and the set is capped with oldest-first
 //!   eviction.
 //! - **O(1) membership.** A visited set (Redis `SADD`) replaces the old O(N)
-//!   `ZRANGE`-and-scan `contains`.
+//!   `ZRANGE`-and-scan `contains`; the visited check and pending insert are
+//!   one atomic script so a crash cannot mark a URL visited without
+//!   queueing it.
 //!
 //! # Testing (ADR-015 §7)
 //!
 //! Pure decision logic ([`classify`], [`attempts_exhausted`], backoff and
 //! score packing, payload parsing) is tested without Redis. The Lua-scripted
-//! operations are integration tests marked
+//! operations are async integration tests marked
 //! `#[ignore = "requires running Redis instance"]`; CI runs them against its
 //! Redis 7 service via `REDIS_URL`.
 
-use redis::Commands;
+use redis::aio::ConnectionManager;
+use redis::AsyncCommands;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
@@ -151,7 +161,7 @@ pub fn backoff_ms(attempt: u32, base_ms: i64, now_ms: i64) -> i64 {
     const MAX_BACKOFF_MS: i64 = 15 * 60 * 1000;
     let exp = base_ms.saturating_mul(1i64 << attempt.min(20));
     let capped = exp.min(MAX_BACKOFF_MS);
-    let jitter = (now_ms.rem_euclid(base_ms.max(1))).abs();
+    let jitter = now_ms.rem_euclid(base_ms.max(1)).abs();
     capped + jitter
 }
 
@@ -162,6 +172,30 @@ const BASE_BACKOFF_MS: i64 = 2_000;
 // Lua scripts — each operation is atomic so no crash between steps can
 // produce a lost or duplicated entry beyond the lease-expiry window.
 // ---------------------------------------------------------------------------
+
+/// Atomic push: visited-set membership check and pending insert in one step
+/// (ADR-015 §4).
+///
+/// KEYS: 1 = visited set, 2 = pending zset
+/// ARGV: 1 = url, 2 = entry_json, 3 = priority
+///
+/// Returns 1 when queued, 0 when the URL was already visited (duplicate
+/// suppressed). Atomicity closes the check-then-insert crash window: without
+/// it, a crash between SADD and ZADD would mark the URL visited forever
+/// while never queueing it.
+const LUA_PUSH: &str = r#"
+local visited = KEYS[1]
+local pending = KEYS[2]
+local url = ARGV[1]
+local entry_json = ARGV[2]
+local priority = tonumber(ARGV[3])
+
+if redis.call('SADD', visited, url) == 0 then
+  return 0
+end
+redis.call('ZADD', pending, priority, entry_json)
+return 1
+"#;
 
 /// Atomic pop into lease (ADR-015 §1).
 ///
@@ -318,6 +352,9 @@ pub const DEFAULT_MAX_ATTEMPTS: u32 = 5;
 /// Default dead-letter set cap (ADR-015 §3): oldest entries evicted first.
 pub const DEFAULT_DEAD_LETTER_CAP: usize = 10_000;
 
+/// Default reclaim-sweep interval: 5 seconds.
+pub const DEFAULT_SWEEP_INTERVAL_MS: u64 = 5_000;
+
 /// A dead-letter record: entry plus why it was quarantined.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeadLetter {
@@ -341,11 +378,13 @@ pub struct DeadLetter {
 ///   dead-lettered-at ms
 /// - `{prefix}:visited` — set of URL strings seen this crawl
 ///
-/// The lease lifecycle (`pop`/`ack`/`fail`/`reclaim_expired`) is this
-/// module's own API: the crate's destructive `Queue` trait cannot express
-/// lease completion and is deliberately not implemented (ADR-015 §5 note).
+/// All operations run on a `redis::aio::ConnectionManager` obtained once and
+/// cloned per call: the multiplexed connection supports concurrent use and
+/// reconnects transparently after Redis failover (ADR-015 §5).
+#[derive(Clone)]
 pub struct DistributedQueue {
     client: redis::Client,
+    manager: std::sync::Arc<tokio::sync::OnceCell<ConnectionManager>>,
     prefix: String,
     lease_ttl_ms: i64,
     max_attempts: u32,
@@ -354,6 +393,8 @@ pub struct DistributedQueue {
 
 impl DistributedQueue {
     /// Create a graduated queue connected to Redis with default policies.
+    ///
+    /// The connection manager connects lazily on first use.
     ///
     /// # Errors
     ///
@@ -387,6 +428,7 @@ impl DistributedQueue {
             .map_err(|e| RedisQueueError::ConnectionFailed(e.to_string()))?;
         Ok(Self {
             client,
+            manager: std::sync::Arc::new(tokio::sync::OnceCell::new()),
             prefix: format!("crawlkit:{crawl_id}"),
             lease_ttl_ms,
             max_attempts,
@@ -394,55 +436,49 @@ impl DistributedQueue {
         })
     }
 
+    /// Obtain a clone of the shared multiplexed connection manager,
+    /// connecting on first use (ADR-015 §5).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RedisQueueError::ConnectionFailed`] if the initial
+    /// connection cannot be established.
+    pub async fn manager(&self) -> Result<ConnectionManager, RedisQueueError> {
+        self.manager
+            .get_or_try_init(|| self.client.get_connection_manager())
+            .await
+            .cloned()
+            .map_err(|e| RedisQueueError::ConnectionFailed(e.to_string()))
+    }
+
     fn key(&self, suffix: &str) -> String {
         format!("{}:{suffix}", self.prefix)
     }
 
-    fn conn(&self) -> Result<redis::Connection, RedisQueueError> {
-        self.client
-            .get_connection()
-            .map_err(|e| RedisQueueError::ConnectionFailed(e.to_string()))
-    }
-
     /// Push an entry into the pending set, immediately eligible.
     ///
-    /// Also records the URL in the visited set: returns `Ok(false)` when the
-    /// URL was already seen (duplicate suppression, replacing the old O(N)
-    /// scan). Retried entries re-enter pending via the fail path and skip
-    /// this check — they are already visited by definition.
+    /// Also records the URL in the visited set atomically (one script):
+    /// returns `Ok(false)` when the URL was already seen (duplicate
+    /// suppression, replacing the old O(N) scan). Retried entries re-enter
+    /// pending via the fail path and skip this check — they are already
+    /// visited by definition.
     ///
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn push(&self, entry: &DistributedQueueEntry) -> Result<bool, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.push_with_conn(&mut conn, entry)
-    }
-
-    /// Push with an existing connection (loop-friendly).
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn push_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-        entry: &DistributedQueueEntry,
-    ) -> Result<bool, RedisQueueError> {
+    pub async fn push(&self, entry: &DistributedQueueEntry) -> Result<bool, RedisQueueError> {
         let json = serde_json::to_string(entry)
             .map_err(|e| RedisQueueError::SerializationError(e.to_string()))?;
-        let visited = self.key("visited");
-        let added: i64 = conn
-            .sadd(&visited, &entry.url)
+        let queued: i64 = redis::Script::new(LUA_PUSH)
+            .key(self.key("visited"))
+            .key(self.key("pending"))
+            .arg(&entry.url)
+            .arg(json)
+            .arg(entry.priority)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
-        if added == 0 {
-            return Ok(false);
-        }
-        let pending = self.key("pending");
-        let _: i64 = conn
-            .zadd(&pending, json, entry.priority)
-            .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
-        Ok(true)
+        Ok(queued == 1)
     }
 
     /// Atomically pop the highest-priority eligible entry into a new lease.
@@ -456,21 +492,7 @@ impl DistributedQueue {
     ///
     /// Returns [`RedisQueueError`] on connection, script, or serialization
     /// failure.
-    pub fn pop(&self) -> Result<Option<LeaseState>, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.pop_with_conn(&mut conn)
-    }
-
-    /// Pop with an existing connection. See [`DistributedQueue::pop`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection, script, or serialization
-    /// failure.
-    pub fn pop_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-    ) -> Result<Option<LeaseState>, RedisQueueError> {
+    pub async fn pop(&self) -> Result<Option<LeaseState>, RedisQueueError> {
         let payload: Option<String> = redis::Script::new(LUA_POP)
             .key(self.key("pending"))
             .key(self.key("processing"))
@@ -478,7 +500,8 @@ impl DistributedQueue {
             .arg(new_lease_id())
             .arg(now_ms())
             .arg(self.lease_ttl_ms)
-            .invoke(conn)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         match payload {
             None => Ok(None),
@@ -497,26 +520,13 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection or script failure.
-    pub fn ack(&self, lease_id: &str) -> Result<bool, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.ack_with_conn(&mut conn, lease_id)
-    }
-
-    /// Ack with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection or script failure.
-    pub fn ack_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-        lease_id: &str,
-    ) -> Result<bool, RedisQueueError> {
+    pub async fn ack(&self, lease_id: &str) -> Result<bool, RedisQueueError> {
         let n: i64 = redis::Script::new(LUA_ACK)
             .key(self.key("processing"))
             .key(self.key("leases"))
             .arg(lease_id)
-            .invoke(conn)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(n == 1)
     }
@@ -533,26 +543,8 @@ impl DistributedQueue {
     ///
     /// Returns [`RedisQueueError`] on connection, script, or serialization
     /// failure.
-    pub fn fail(
+    pub async fn fail(
         &self,
-        lease: &LeaseState,
-        kind: &str,
-        reason: &str,
-        now_ms: i64,
-    ) -> Result<bool, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.fail_with_conn(&mut conn, lease, kind, reason, now_ms)
-    }
-
-    /// Report failure with an existing connection. See [`DistributedQueue::fail`].
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection, script, or serialization
-    /// failure.
-    pub fn fail_with_conn(
-        &self,
-        conn: &mut redis::Connection,
         lease: &LeaseState,
         kind: &str,
         reason: &str,
@@ -589,37 +581,26 @@ impl DistributedQueue {
             .arg(dead_json)
             .arg(now_ms)
             .arg(self.dead_letter_cap)
-            .invoke(conn)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(n == 1)
     }
 
     /// Reclaim expired leases back into the pending set (ADR-015 §1).
     ///
-    /// Called periodically by any worker; safe to run concurrently — each
-    /// expired lease is removed from the index as it is handled, so
-    /// concurrent sweeps cannot double-requeue. Entries whose attempts are
-    /// exhausted at reclaim time are dead-lettered (crash-loop protection).
+    /// Called periodically by [`run_reclaim_sweeper`] or on demand; safe to
+    /// run concurrently — each expired lease is removed from the index as it
+    /// is handled, so concurrent sweeps cannot double-requeue. Entries whose
+    /// attempts are exhausted at reclaim time are dead-lettered (crash-loop
+    /// protection).
     ///
     /// Returns the number of reclaimed entries (dead-lettered ones excluded).
     ///
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection or script failure.
-    pub fn reclaim_expired(&self) -> Result<usize, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.reclaim_expired_with_conn(&mut conn)
-    }
-
-    /// Reclaim with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection or script failure.
-    pub fn reclaim_expired_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-    ) -> Result<usize, RedisQueueError> {
+    pub async fn reclaim_expired(&self) -> Result<usize, RedisQueueError> {
         let now = now_ms();
         let n: i64 = redis::Script::new(LUA_RECLAIM)
             .key(self.key("processing"))
@@ -630,7 +611,8 @@ impl DistributedQueue {
             .arg(self.max_attempts)
             .arg(now)
             .arg(self.dead_letter_cap)
-            .invoke(conn)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(n.max(0) as usize)
     }
@@ -640,22 +622,11 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn dead_letters(&self) -> Result<Vec<DeadLetter>, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.dead_letters_with_conn(&mut conn)
-    }
-
-    /// Dead letters with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn dead_letters_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-    ) -> Result<Vec<DeadLetter>, RedisQueueError> {
+    pub async fn dead_letters(&self) -> Result<Vec<DeadLetter>, RedisQueueError> {
+        let mut conn = self.manager().await?;
         let raw: Vec<String> = conn
             .zrange(self.key("dead"), 0, -1)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(raw
             .into_iter()
@@ -670,26 +641,13 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn redrive(&self, index: usize) -> Result<bool, RedisQueueError> {
-        let mut conn = self.conn()?;
-        self.redrive_with_conn(&mut conn, index)
-    }
-
-    /// Re-drive with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`RedisQueueError`] on connection or serialization failure.
-    pub fn redrive_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-        index: usize,
-    ) -> Result<bool, RedisQueueError> {
+    pub async fn redrive(&self, index: usize) -> Result<bool, RedisQueueError> {
+        let mut conn = self.manager().await?;
         let members: Vec<String> = conn
             .zrange(self.key("dead"), index as isize, index as isize)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
-        let member: Option<String> = members.into_iter().next();
-        let Some(member) = member else {
+        let Some(member) = members.into_iter().next() else {
             return Ok(false);
         };
         let dead_letter: DeadLetter = serde_json::from_str(&member)
@@ -701,10 +659,12 @@ impl DistributedQueue {
         let pending = self.key("pending");
         let _: i64 = conn
             .zadd(&pending, json, entry.priority)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         let dead = self.key("dead");
         let _: i64 = conn
             .zrem(&dead, &member)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(true)
     }
@@ -714,10 +674,11 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection failure.
-    pub fn len(&self) -> Result<usize, RedisQueueError> {
-        let mut conn = self.conn()?;
+    pub async fn len(&self) -> Result<usize, RedisQueueError> {
+        let mut conn = self.manager().await?;
         let n: usize = conn
             .zcard(self.key("pending"))
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(n)
     }
@@ -728,8 +689,8 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection failure.
-    pub fn is_empty(&self) -> Result<bool, RedisQueueError> {
-        self.len().map(|n| n == 0)
+    pub async fn is_empty(&self) -> Result<bool, RedisQueueError> {
+        self.len().await.map(|n| n == 0)
     }
 
     /// Number of leases currently held (awaiting ack, fail, or reclaim).
@@ -737,10 +698,11 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection failure.
-    pub fn in_flight(&self) -> Result<usize, RedisQueueError> {
-        let mut conn = self.conn()?;
+    pub async fn in_flight(&self) -> Result<usize, RedisQueueError> {
+        let mut conn = self.manager().await?;
         let n: usize = conn
             .hlen(self.key("processing"))
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(n)
     }
@@ -750,10 +712,11 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection failure.
-    pub fn contains(&self, url: &str) -> Result<bool, RedisQueueError> {
-        let mut conn = self.conn()?;
+    pub async fn contains(&self, url: &str) -> Result<bool, RedisQueueError> {
+        let mut conn = self.manager().await?;
         let is_member: bool = conn
             .sismember(self.key("visited"), url)
+            .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(is_member)
     }
@@ -763,15 +726,51 @@ impl DistributedQueue {
     /// # Errors
     ///
     /// Returns [`RedisQueueError`] on connection failure.
-    pub fn clear(&self) -> Result<(), RedisQueueError> {
-        let mut conn = self.conn()?;
+    pub async fn clear(&self) -> Result<(), RedisQueueError> {
+        let mut conn = self.manager().await?;
         for suffix in ["pending", "processing", "leases", "dead", "visited"] {
             let _: i64 = conn
                 .del(self.key(suffix))
+                .await
                 .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         }
         Ok(())
     }
+}
+
+/// Run the lease-reclamation sweep every `interval` until `shutdown` fires
+/// (ADR-015 §1). Spawn this once per process; any replica may sweep — the
+/// underlying script is concurrency-safe.
+///
+/// Returns the total number of entries reclaimed when shutdown fires.
+/// Individual sweep failures are logged and retried on the next tick; a
+/// sustained Redis outage yields zero reclaimed entries without crashing
+/// the sweeper.
+pub async fn run_reclaim_sweeper(
+    queue: std::sync::Arc<DistributedQueue>,
+    interval: std::time::Duration,
+    mut shutdown: tokio::sync::watch::Receiver<bool>,
+) -> usize {
+    let mut total = 0usize;
+    loop {
+        tokio::select! {
+            _ = shutdown.changed() => break,
+            _ = tokio::time::sleep(interval) => {
+                match queue.reclaim_expired().await {
+                    Ok(n) => {
+                        if n > 0 {
+                            tracing::debug!(reclaimed = n, "lease reclamation sweep");
+                        }
+                        total += n;
+                    }
+                    Err(e) => {
+                        tracing::warn!(error = %e, "lease reclamation sweep failed");
+                    }
+                }
+            }
+        }
+    }
+    total
 }
 
 /// Unix millis now.
@@ -929,7 +928,7 @@ mod pure_tests {
 
 // Integration tests (ADR-015 §7): require a running Redis instance. CI runs
 // these against its Redis 7 service; locally run with
-// `cargo test -p crawlkit-engine --features unstable -- --ignored`.
+// `cargo test -p crawlkit-engine --features unstable --lib distributed_queue -- --ignored`.
 #[cfg(all(test, feature = "unstable"))]
 mod redis_tests {
     use super::*;
@@ -938,9 +937,9 @@ mod redis_tests {
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string())
     }
 
-    fn queue(name: &str) -> DistributedQueue {
+    async fn queue(name: &str) -> DistributedQueue {
         let q = DistributedQueue::new(&redis_url(), name).unwrap();
-        q.clear().unwrap();
+        q.clear().await.unwrap();
         q
     }
 
@@ -948,154 +947,180 @@ mod redis_tests {
         DistributedQueueEntry::new(url, 0, priority, 1_000)
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn push_pop_ack_roundtrip() {
-        let q = queue("t-roundtrip");
-        assert!(q.push(&entry("https://example.com/a", 64)).unwrap());
-        assert!(!q.push(&entry("https://example.com/a", 64)).unwrap(), "duplicate suppressed");
+    async fn push_pop_ack_roundtrip() {
+        let q = queue("t-roundtrip").await;
+        assert!(q.push(&entry("https://example.com/a", 64)).await.unwrap());
+        assert!(
+            !q.push(&entry("https://example.com/a", 64)).await.unwrap(),
+            "duplicate suppressed"
+        );
 
-        let lease = q.pop().unwrap().expect("entry pending");
+        let lease = q.pop().await.unwrap().expect("entry pending");
         assert_eq!(lease.entry.url, "https://example.com/a");
-        assert_eq!(q.in_flight().unwrap(), 1);
-        assert_eq!(q.len().unwrap(), 0);
+        assert_eq!(q.in_flight().await.unwrap(), 1);
+        assert_eq!(q.len().await.unwrap(), 0);
 
-        assert!(q.ack(&lease.lease_id).unwrap());
-        assert_eq!(q.in_flight().unwrap(), 0);
-        assert!(q.pop().unwrap().is_none());
+        assert!(q.ack(&lease.lease_id).await.unwrap());
+        assert_eq!(q.in_flight().await.unwrap(), 0);
+        assert!(q.pop().await.unwrap().is_none());
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn priority_ordering_across_pops() {
-        let q = queue("t-priority");
-        q.push(&entry("https://example.com/low", 128)).unwrap();
-        q.push(&entry("https://example.com/high", 32)).unwrap();
+    async fn priority_ordering_across_pops() {
+        let q = queue("t-priority").await;
+        q.push(&entry("https://example.com/low", 128)).await.unwrap();
+        q.push(&entry("https://example.com/high", 32)).await.unwrap();
 
-        let first = q.pop().unwrap().unwrap();
+        let first = q.pop().await.unwrap().unwrap();
         assert_eq!(first.entry.url, "https://example.com/high");
-        let second = q.pop().unwrap().unwrap();
+        let second = q.pop().await.unwrap().unwrap();
         assert_eq!(second.entry.url, "https://example.com/low");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn transient_failure_requeues_with_backoff_then_exhausts() {
+    async fn transient_failure_requeues_with_backoff_then_exhausts() {
         let q = DistributedQueue::with_policy(&redis_url(), "t-retry", 60_000, 2, 100).unwrap();
-        q.clear().unwrap();
+        q.clear().await.unwrap();
         let e = entry("https://example.com/flaky", 64);
-        q.push(&e).unwrap();
+        q.push(&e).await.unwrap();
 
         // Attempt 1: transient -> requeued with backoff score.
-        let lease = q.pop().unwrap().unwrap();
-        assert!(q.fail(&lease, "timeout", "conn reset", now_ms()).unwrap());
-        assert_eq!(q.len().unwrap(), 1, "requeued for retry");
+        let lease = q.pop().await.unwrap().unwrap();
+        assert!(q.fail(&lease, "timeout", "conn reset", now_ms()).await.unwrap());
+        assert_eq!(q.len().await.unwrap(), 1, "requeued for retry");
         // Backoff score defers it: not yet eligible.
-        assert!(q.pop().unwrap().is_none(), "entry not eligible during backoff");
+        assert!(q.pop().await.unwrap().is_none(), "entry not eligible during backoff");
 
         // Attempt 2: simulate backoff elapsing by updating the requeued
         // member's score to 0 (ZADD on an existing member updates its score).
-        // The member string is byte-identical to what fail_with_conn stored:
-        // struct serialization is deterministic and the Redis round-trip
-        // carries the member verbatim.
+        // The member string is byte-identical to what `fail` stored: struct
+        // serialization is deterministic and the Redis round-trip carries the
+        // member verbatim.
         let requeued = {
             let mut e2 = lease.entry;
             e2.attempt_count = 1;
             serde_json::to_string(&e2).unwrap()
         };
-        let mut conn = q.client.get_connection().unwrap();
+        let mut conn = q.manager().await.unwrap();
         let _: i64 = conn
-            .zadd(q_key(&q, "pending"), &requeued, 0)
-            .map_err(|e| e.to_string()).unwrap();
-        drop(conn);
+            .zadd(q.key("pending"), &requeued, 0)
+            .await
+            .map_err(|e| e.to_string())
+            .unwrap();
 
-        let lease2 = q.pop().unwrap().expect("retried entry eligible");
+        let lease2 = q.pop().await.unwrap().expect("retried entry eligible");
         assert_eq!(lease2.entry.attempt_count, 1);
-        assert!(q.fail(&lease2, "timeout", "still failing", now_ms()).unwrap());
-        let dead = q.dead_letters().unwrap();
+        assert!(q.fail(&lease2, "timeout", "still failing", now_ms()).await.unwrap());
+        let dead = q.dead_letters().await.unwrap();
         assert_eq!(dead.len(), 1);
         assert_eq!(dead[0].entry.attempt_count, 2);
         assert_eq!(dead[0].reason, "still failing");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn fatal_failure_dead_letters_immediately() {
-        let q = queue("t-fatal");
-        q.push(&entry("https://example.com/gone", 64)).unwrap();
-        let lease = q.pop().unwrap().unwrap();
-        assert!(q.fail(&lease, "gone", "410", now_ms()).unwrap());
-        let dead = q.dead_letters().unwrap();
+    async fn fatal_failure_dead_letters_immediately() {
+        let q = queue("t-fatal").await;
+        q.push(&entry("https://example.com/gone", 64)).await.unwrap();
+        let lease = q.pop().await.unwrap().unwrap();
+        assert!(q.fail(&lease, "gone", "410", now_ms()).await.unwrap());
+        let dead = q.dead_letters().await.unwrap();
         assert_eq!(dead.len(), 1);
         assert_eq!(dead[0].reason, "410");
-        assert_eq!(q.len().unwrap(), 0, "fatal never re-queues");
+        assert_eq!(q.len().await.unwrap(), 0, "fatal never re-queues");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn expired_lease_is_reclaimed_at_least_once() {
+    async fn expired_lease_is_reclaimed_at_least_once() {
         let q = DistributedQueue::with_policy(&redis_url(), "t-crash", 50, 5, 100).unwrap();
-        q.clear().unwrap();
-        q.push(&entry("https://example.com/crash", 64)).unwrap();
-        let lease = q.pop().unwrap().unwrap();
-        assert_eq!(q.in_flight().unwrap(), 1);
+        q.clear().await.unwrap();
+        q.push(&entry("https://example.com/crash", 64)).await.unwrap();
+        let lease = q.pop().await.unwrap().unwrap();
+        assert_eq!(q.in_flight().await.unwrap(), 1);
 
         // Worker "crashes": no ack/fail. Wait past the 50 ms TTL.
-        std::thread::sleep(std::time::Duration::from_millis(80));
-        let reclaimed = q.reclaim_expired().unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        let reclaimed = q.reclaim_expired().await.unwrap();
         assert_eq!(reclaimed, 1);
-        assert_eq!(q.in_flight().unwrap(), 0);
+        assert_eq!(q.in_flight().await.unwrap(), 0);
 
         // Redelivered (at-least-once) with incremented attempt count.
-        let lease2 = q.pop().unwrap().expect("redelivered after reclaim");
+        let lease2 = q.pop().await.unwrap().expect("redelivered after reclaim");
         assert_eq!(lease2.entry.url, lease.entry.url);
         assert_eq!(lease2.entry.attempt_count, 1);
-        assert!(q.ack(&lease2.lease_id).unwrap());
+        assert!(q.ack(&lease2.lease_id).await.unwrap());
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn concurrent_sweeps_cannot_double_requeue() {
-        let q = DistributedQueue::with_policy(&redis_url(), "t-sweep", 50, 5, 100).unwrap();
-        q.clear().unwrap();
-        q.push(&entry("https://example.com/sweep", 64)).unwrap();
-        let _lease = q.pop().unwrap().unwrap();
-        std::thread::sleep(std::time::Duration::from_millis(80));
+    async fn concurrent_sweeps_cannot_double_requeue() {
+        let q = std::sync::Arc::new(
+            DistributedQueue::with_policy(&redis_url(), "t-sweep", 50, 5, 100).unwrap(),
+        );
+        q.clear().await.unwrap();
+        q.push(&entry("https://example.com/sweep", 64)).await.unwrap();
+        let _lease = q.pop().await.unwrap().unwrap();
+        tokio::time::sleep(std::time::Duration::from_millis(80)).await;
 
-        let (r1, r2) = std::thread::scope(|s| {
-            let a = s.spawn(|| q.reclaim_expired()).join().unwrap().unwrap();
-            let b = s.spawn(|| q.reclaim_expired()).join().unwrap().unwrap();
-            (a, b)
-        });
-        assert_eq!(r1 + r2, 1, "exactly one sweep reclaims the entry");
-        assert_eq!(q.len().unwrap(), 1);
+        // Two sweeps race; exactly one reclaims the entry.
+        let (a, b) = tokio::join!(q.reclaim_expired(), q.reclaim_expired());
+        assert_eq!(a.unwrap() + b.unwrap(), 1, "exactly one sweep reclaims");
+        assert_eq!(q.len().await.unwrap(), 1);
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn dead_letter_redrive_resets_attempts() {
-        let q = queue("t-redrive");
-        q.push(&entry("https://example.com/recover", 64)).unwrap();
-        let lease = q.pop().unwrap().unwrap();
-        q.fail(&lease, "gone", "transient misclassification", now_ms()).unwrap();
+    async fn dead_letter_redrive_resets_attempts() {
+        let q = queue("t-redrive").await;
+        q.push(&entry("https://example.com/recover", 64)).await.unwrap();
+        let lease = q.pop().await.unwrap().unwrap();
+        q.fail(&lease, "gone", "transient misclassification", now_ms())
+            .await
+            .unwrap();
 
-        assert!(q.redrive(0).unwrap());
-        assert!(q.dead_letters().unwrap().is_empty());
-        let lease2 = q.pop().unwrap().unwrap();
+        assert!(q.redrive(0).await.unwrap());
+        assert!(q.dead_letters().await.unwrap().is_empty());
+        let lease2 = q.pop().await.unwrap().unwrap();
         assert_eq!(lease2.entry.attempt_count, 0, "redrive resets attempts");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn contains_is_o1_visited_membership() {
-        let q = queue("t-visited");
-        assert!(!q.contains("https://example.com/x").unwrap());
-        q.push(&entry("https://example.com/x", 64)).unwrap();
-        assert!(q.contains("https://example.com/x").unwrap());
+    async fn contains_is_o1_visited_membership() {
+        let q = queue("t-visited").await;
+        assert!(!q.contains("https://example.com/x").await.unwrap());
+        q.push(&entry("https://example.com/x", 64)).await.unwrap();
+        assert!(q.contains("https://example.com/x").await.unwrap());
     }
 
-    /// Key helper for direct Redis manipulation in tests.
-    fn q_key(q: &DistributedQueue, suffix: &str) -> String {
-        format!("{}:{suffix}", q.prefix)
+    #[tokio::test]
+    #[ignore = "requires running Redis instance"]
+    async fn sweeper_reclaims_until_shutdown() {
+        let q = std::sync::Arc::new(
+            DistributedQueue::with_policy(&redis_url(), "t-sweeper", 50, 5, 100).unwrap(),
+        );
+        q.clear().await.unwrap();
+        q.push(&entry("https://example.com/swept", 64)).await.unwrap();
+        let _lease = q.pop().await.unwrap().unwrap();
+
+        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let handle = tokio::spawn(run_reclaim_sweeper(
+            std::sync::Arc::clone(&q),
+            std::time::Duration::from_millis(30),
+            shutdown_rx,
+        ));
+        // Sweeper ticks at 30 ms; lease TTL is 50 ms — allow two ticks.
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        shutdown_tx.send(true).unwrap();
+        let total = handle.await.unwrap();
+        assert!(total >= 1, "sweeper reclaimed the abandoned lease");
+        // The entry is back in pending, immediately eligible.
+        let redelivered = q.pop().await.unwrap().expect("swept entry redelivered");
+        assert_eq!(redelivered.entry.attempt_count, 1);
     }
 }

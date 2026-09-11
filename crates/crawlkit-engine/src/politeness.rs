@@ -10,6 +10,10 @@
 //! The check-and-consume step is a single Lua script — atomic, so two
 //! replicas racing for the last budget slot cannot both win.
 //!
+//! All operations are async over `redis::aio::ConnectionManager`
+//! (multiplexed, auto-reconnecting), consistent with the ADR-015 §5 queue
+//! surface.
+//!
 //! # Testing
 //!
 //! Key normalization and policy constants are tested without Redis; the
@@ -17,7 +21,8 @@
 //! per-target isolation) is an `#[ignore]`-gated integration test that CI
 //! runs against its Redis 7 service.
 
-use redis::Commands;
+use redis::aio::ConnectionManager;
+use redis::AsyncCommands;
 use thiserror::Error;
 
 /// Errors from politeness budget operations.
@@ -67,9 +72,12 @@ return 1
 /// Redis-backed per-target sliding-window budget.
 ///
 /// One instance per process; all instances pointing at the same Redis and
-/// key prefix share budgets globally (that is the point).
+/// key prefix share budgets globally (that is the point). Cloneable — each
+/// clone shares the same multiplexed connection.
+#[derive(Clone)]
 pub struct PolitenessBudget {
     client: redis::Client,
+    manager: std::sync::Arc<tokio::sync::OnceCell<ConnectionManager>>,
     key_prefix: String,
     window_ms: i64,
     limit: i64,
@@ -102,10 +110,26 @@ impl PolitenessBudget {
             .map_err(|e| PolitenessError::ConnectionFailed(e.to_string()))?;
         Ok(Self {
             client,
+            manager: std::sync::Arc::new(tokio::sync::OnceCell::new()),
             key_prefix: "crawlkit:politeness".to_string(),
             window_ms,
             limit,
         })
+    }
+
+    /// Obtain a clone of the shared multiplexed connection manager,
+    /// connecting on first use.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PolitenessError::ConnectionFailed`] if the initial
+    /// connection cannot be established.
+    pub async fn manager(&self) -> Result<ConnectionManager, PolitenessError> {
+        self.manager
+            .get_or_try_init(|| self.client.get_connection_manager())
+            .await
+            .cloned()
+            .map_err(|e| PolitenessError::ConnectionFailed(e.to_string()))
     }
 
     /// Normalize a target host for budget keying: lowercase, trailing dot
@@ -127,31 +151,15 @@ impl PolitenessBudget {
     /// # Errors
     ///
     /// Returns [`PolitenessError`] on connection or script failure.
-    pub fn check_and_consume(&self, target: &str) -> Result<bool, PolitenessError> {
-        let mut conn = self
-            .client
-            .get_connection()
-            .map_err(|e| PolitenessError::ConnectionFailed(e.to_string()))?;
-        self.check_and_consume_with_conn(&mut conn, target)
-    }
-
-    /// Consume with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PolitenessError`] on connection or script failure.
-    pub fn check_and_consume_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-        target: &str,
-    ) -> Result<bool, PolitenessError> {
+    pub async fn check_and_consume(&self, target: &str) -> Result<bool, PolitenessError> {
         let granted: i64 = redis::Script::new(LUA_CONSUME)
             .key(self.key_for(target))
             .arg(now_ms())
             .arg(self.window_ms)
             .arg(self.limit)
             .arg(uuid::Uuid::new_v4().to_string())
-            .invoke(conn)
+            .invoke_async(&mut self.manager().await?)
+            .await
             .map_err(|e| PolitenessError::OperationFailed(e.to_string()))?;
         Ok(granted == 1)
     }
@@ -161,31 +169,17 @@ impl PolitenessBudget {
     /// # Errors
     ///
     /// Returns [`PolitenessError`] on connection or script failure.
-    pub fn remaining(&self, target: &str) -> Result<i64, PolitenessError> {
-        let mut conn = self
-            .client
-            .get_connection()
-            .map_err(|e| PolitenessError::ConnectionFailed(e.to_string()))?;
-        self.remaining_with_conn(&mut conn, target)
-    }
-
-    /// Remaining with an existing connection.
-    ///
-    /// # Errors
-    ///
-    /// Returns [`PolitenessError`] on connection or script failure.
-    pub fn remaining_with_conn(
-        &self,
-        conn: &mut redis::Connection,
-        target: &str,
-    ) -> Result<i64, PolitenessError> {
+    pub async fn remaining(&self, target: &str) -> Result<i64, PolitenessError> {
+        let mut conn = self.manager().await?;
         let key = self.key_for(target);
         let now = now_ms();
-        let _: () = conn
+        let _: i64 = conn
             .zrembyscore(&key, 0, now - self.window_ms)
+            .await
             .map_err(|e| PolitenessError::OperationFailed(e.to_string()))?;
         let used: usize = conn
             .zcard(&key)
+            .await
             .map_err(|e| PolitenessError::OperationFailed(e.to_string()))?;
         Ok((self.limit - used as i64).max(0))
     }
@@ -228,48 +222,48 @@ mod redis_tests {
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1/".to_string())
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn grants_until_limit_then_denies() {
+    async fn grants_until_limit_then_denies() {
         let budget = PolitenessBudget::with_policy(&redis_url(), 60_000, 3).unwrap();
         let target = format!("test-{}-limit.example", uuid::Uuid::new_v4());
-        assert!(budget.check_and_consume(&target).unwrap());
-        assert!(budget.check_and_consume(&target).unwrap());
-        assert!(budget.check_and_consume(&target).unwrap());
-        assert!(!budget.check_and_consume(&target).unwrap(), "at limit");
-        assert_eq!(budget.remaining(&target).unwrap(), 0);
+        assert!(budget.check_and_consume(&target).await.unwrap());
+        assert!(budget.check_and_consume(&target).await.unwrap());
+        assert!(budget.check_and_consume(&target).await.unwrap());
+        assert!(!budget.check_and_consume(&target).await.unwrap(), "at limit");
+        assert_eq!(budget.remaining(&target).await.unwrap(), 0);
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn window_expiry_restores_budget() {
+    async fn window_expiry_restores_budget() {
         let budget = PolitenessBudget::with_policy(&redis_url(), 80, 1).unwrap();
         let target = format!("test-{}-window.example", uuid::Uuid::new_v4());
-        assert!(budget.check_and_consume(&target).unwrap());
-        assert!(!budget.check_and_consume(&target).unwrap());
-        std::thread::sleep(std::time::Duration::from_millis(120));
-        assert!(budget.check_and_consume(&target).unwrap(), "window expired");
+        assert!(budget.check_and_consume(&target).await.unwrap());
+        assert!(!budget.check_and_consume(&target).await.unwrap());
+        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+        assert!(budget.check_and_consume(&target).await.unwrap(), "window expired");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn budgets_are_isolated_per_target() {
+    async fn budgets_are_isolated_per_target() {
         let budget = PolitenessBudget::with_policy(&redis_url(), 60_000, 1).unwrap();
         let a = format!("test-{}-a.example", uuid::Uuid::new_v4());
         let b = format!("test-{}-b.example", uuid::Uuid::new_v4());
-        assert!(budget.check_and_consume(&a).unwrap());
-        assert!(!budget.check_and_consume(&a).unwrap());
-        assert!(budget.check_and_consume(&b).unwrap(), "other target unaffected");
+        assert!(budget.check_and_consume(&a).await.unwrap());
+        assert!(!budget.check_and_consume(&a).await.unwrap());
+        assert!(budget.check_and_consume(&b).await.unwrap(), "other target unaffected");
     }
 
-    #[test]
+    #[tokio::test]
     #[ignore = "requires running Redis instance"]
-    fn normalized_targets_share_budget() {
+    async fn normalized_targets_share_budget() {
         let budget = PolitenessBudget::with_policy(&redis_url(), 60_000, 1).unwrap();
         let base = uuid::Uuid::new_v4();
         let a = format!("shared-{base}.example");
         let b = format!("SHARED-{base}.example.");
-        assert!(budget.check_and_consume(&a).unwrap());
-        assert!(!budget.check_and_consume(&b).unwrap(), "case/trailing-dot equal");
+        assert!(budget.check_and_consume(&a).await.unwrap());
+        assert!(!budget.check_and_consume(&b).await.unwrap(), "case/trailing-dot equal");
     }
 }

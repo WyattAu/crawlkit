@@ -126,8 +126,12 @@ jobs:
         run: cargo test -p crawlkit-engine --features postgres --lib pg_storage -- --ignored --test-threads=1
       - name: PostgreSQL API state store test
         run: cargo test -p crawlkit-api --lib pg_tests -- --ignored --test-threads=1
+      # Redis-backed suites live behind the `unstable` feature gate; run
+      # them with it enabled (serially — suites share one Redis DB).
       - name: Redis distributed queue tests
-        run: cargo test -p crawlkit-engine --lib distributed_queue -- --ignored --test-threads=1
+        run: cargo test -p crawlkit-engine --features unstable --lib distributed_queue -- --ignored --test-threads=1
+      - name: Redis politeness budget tests
+        run: cargo test -p crawlkit-engine --features unstable --lib politeness -- --ignored --test-threads=1
 
   roadmap-controls:
     name: Roadmap and Security Controls

@@ -217,12 +217,37 @@ pub struct Tenant {
     pub id: String,
     pub name: String,
     pub created_at: DateTime<Utc>,
+    /// Per-tenant data-retention policy (AR9): crawls older than this many
+    /// days are purged for the tenant when retention is set or changed.
+    /// `None` retains data indefinitely (server default may still apply a
+    /// platform-wide policy).
+    #[serde(default)]
+    pub retention_days: Option<u32>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
 pub struct CreateTenantRequest {
     pub id: String,
     pub name: String,
+    /// Optional per-tenant retention policy (AR9), days. Omit to retain
+    /// indefinitely; 1–3650 enforced on the retention endpoint.
+    pub retention_days: Option<u32>,
+}
+
+/// Request to set a tenant's data-retention policy (AR9).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct SetRetentionRequest {
+    /// Days to retain crawl data for this tenant; `null` disables retention
+    /// purging (data retained indefinitely). Range: 1–3650.
+    pub retention_days: Option<u32>,
+}
+
+/// Response from setting a tenant's retention policy: the updated tenant and
+/// how many crawls the immediate enforcement pass purged.
+#[derive(Debug, Serialize, ToSchema)]
+pub struct RetentionResponse {
+    pub tenant: Tenant,
+    pub crawls_purged: u64,
 }
 
 #[derive(Clone)]

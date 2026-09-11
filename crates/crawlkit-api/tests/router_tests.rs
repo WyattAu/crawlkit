@@ -583,6 +583,91 @@ async fn admin_can_create_tenants_and_keys() {
 }
 
 #[tokio::test]
+async fn retention_set_enforces_and_audits() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+
+    let token = test.token_for("root");
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/tenants",
+            Some(serde_json::json!({"id": "acme", "name": "ACME"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED);
+
+    // Set retention to 30 days: returns the updated tenant and purge count.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "PUT",
+            "/api/v1/tenants/acme/retention",
+            Some(serde_json::json!({"retention_days": 30})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["tenant"]["retention_days"], 30);
+    assert!(
+        body["crawls_purged"].is_u64(),
+        "purge count must be numeric"
+    );
+
+    // The in-memory tenant now carries the policy.
+    assert_eq!(
+        test.state.tenants.get("acme").unwrap().retention_days,
+        Some(30)
+    );
+
+    // Validation: 0 and over-max are rejected.
+    for bad in [0u32, 3651] {
+        let (status, _) = test
+            .send(test.authed(
+                &token,
+                "PUT",
+                "/api/v1/tenants/acme/retention",
+                Some(serde_json::json!({"retention_days": bad})),
+            ))
+            .await;
+        assert_eq!(
+            status,
+            StatusCode::BAD_REQUEST,
+            "retention_days={bad} must be rejected"
+        );
+    }
+
+    // Missing tenant 404s.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "PUT",
+            "/api/v1/tenants/nope/retention",
+            Some(serde_json::json!({"retention_days": 30})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    // Viewer cannot set retention.
+    test.state
+        .auth
+        .add_user(make_user("viewer", "default", "viewer", "password123!X"));
+    let vtoken = test.token_for("viewer");
+    let (status, _) = test
+        .send(test.authed(
+            &vtoken,
+            "PUT",
+            "/api/v1/tenants/acme/retention",
+            Some(serde_json::json!({"retention_days": 30})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+}
+
+#[tokio::test]
 async fn non_admin_cannot_delete_users() {
     let dir = tempfile::tempdir().unwrap();
     let test = setup(dir.path());

@@ -65,6 +65,10 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
             "/api/v1/tenants/{id}",
             get(get_tenant).delete(delete_tenant),
         )
+        .route(
+            "/api/v1/tenants/{id}/retention",
+            axum::routing::put(set_tenant_retention),
+        )
         .route("/api/v1/users", post(create_user).get(list_users))
         .route("/api/v1/users/{id}", axum::routing::delete(delete_user))
         .route(

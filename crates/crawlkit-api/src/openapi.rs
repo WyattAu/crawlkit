@@ -75,6 +75,8 @@ use utoipa::{Modify, OpenApi};
             crate::types::CreateCrawlRequest,
             crate::types::CreateScheduleRequest,
             crate::types::CreateTenantRequest,
+            crate::types::SetRetentionRequest,
+            crate::types::RetentionResponse,
             crate::types::CreateUserRequest,
             crate::types::CreateWebhookRequest,
             crate::types::CrawlFinding,

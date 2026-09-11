@@ -133,6 +133,20 @@ impl SqliteStateStore {
                 requests_per_minute BIGINT NOT NULL
             );",
         )?;
+        // Migration: add the retention column if an older schema exists.
+        // (SQLite has no ADD COLUMN IF NOT EXISTS; PRAGMA table_info is the
+        // portable guard. New databases get the column via the ALTER below
+        // too, keeping one code path.)
+        let has_column: bool = conn
+            .query_row(
+                "SELECT COUNT(*) FROM pragma_table_info('api_tenants') WHERE name = 'retention_days'",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .map(|n| n > 0)?;
+        if !has_column {
+            conn.execute_batch("ALTER TABLE api_tenants ADD COLUMN retention_days INTEGER;")?;
+        }
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
@@ -216,7 +230,8 @@ impl ApiStateStore for SqliteStateStore {
     /// Returns [`PersistenceError`] on database failure.
     async fn load_tenants(&self) -> Result<Vec<Tenant>, PersistenceError> {
         let conn = self.conn.lock().await;
-        let mut stmt = conn.prepare("SELECT id, name, created_at FROM api_tenants")?;
+        let mut stmt =
+            conn.prepare("SELECT id, name, created_at, retention_days FROM api_tenants")?;
         let rows = stmt.query_map([], |row| {
             let created_at: String = row.get(2)?;
             Ok(Tenant {
@@ -225,6 +240,9 @@ impl ApiStateStore for SqliteStateStore {
                 created_at: chrono::DateTime::parse_from_rfc3339(&created_at)
                     .map(|dt| dt.with_timezone(&chrono::Utc))
                     .unwrap_or_else(|_| chrono::Utc::now()),
+                retention_days: row
+                    .get::<_, Option<i64>>(3)?
+                    .map(|v| u32::try_from(v).unwrap_or_default()),
             })
         })?;
         rows.collect::<Result<Vec<_>, _>>().map_err(Into::into)
@@ -238,8 +256,13 @@ impl ApiStateStore for SqliteStateStore {
     async fn save_tenant(&self, tenant: &Tenant) -> Result<(), PersistenceError> {
         let conn = self.conn.lock().await;
         conn.execute(
-            "INSERT OR REPLACE INTO api_tenants (id, name, created_at) VALUES (?1, ?2, ?3)",
-            rusqlite::params![tenant.id, tenant.name, tenant.created_at.to_rfc3339()],
+            "INSERT OR REPLACE INTO api_tenants (id, name, created_at, retention_days) VALUES (?1, ?2, ?3, ?4)",
+            rusqlite::params![
+                tenant.id,
+                tenant.name,
+                tenant.created_at.to_rfc3339(),
+                tenant.retention_days.map(i64::from),
+            ],
         )?;
         Ok(())
     }
@@ -348,6 +371,7 @@ impl PgStateStore {
                 name TEXT NOT NULL,
                 created_at TEXT NOT NULL
             );
+            ALTER TABLE api_tenants ADD COLUMN IF NOT EXISTS retention_days INTEGER;
             CREATE TABLE IF NOT EXISTS api_keys (
                 key TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -425,7 +449,7 @@ impl ApiStateStore for PgStateStore {
     }
 
     async fn load_tenants(&self) -> Result<Vec<Tenant>, PersistenceError> {
-        let rows = sqlx::query("SELECT id, name, created_at FROM api_tenants")
+        let rows = sqlx::query("SELECT id, name, created_at, retention_days FROM api_tenants")
             .fetch_all(&self.pool)
             .await?;
         rows.into_iter()
@@ -437,6 +461,10 @@ impl ApiStateStore for PgStateStore {
                         &row.try_get::<String, _>("created_at")
                             .map_err(PersistenceError::Sqlx)?,
                     ),
+                    retention_days: row
+                        .try_get::<Option<i64>, _>("retention_days")
+                        .map_err(PersistenceError::Sqlx)?
+                        .map(|v| u32::try_from(v).unwrap_or_default()),
                 })
             })
             .collect()
@@ -444,12 +472,13 @@ impl ApiStateStore for PgStateStore {
 
     async fn save_tenant(&self, tenant: &Tenant) -> Result<(), PersistenceError> {
         sqlx::query(
-            "INSERT INTO api_tenants (id, name, created_at) VALUES ($1, $2, $3)
-             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name",
+            "INSERT INTO api_tenants (id, name, created_at, retention_days) VALUES ($1, $2, $3, $4)
+             ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, retention_days = EXCLUDED.retention_days",
         )
         .bind(&tenant.id)
         .bind(&tenant.name)
         .bind(tenant.created_at.to_rfc3339())
+        .bind(tenant.retention_days.map(i64::from))
         .execute(&self.pool)
         .await?;
         Ok(())
@@ -550,6 +579,7 @@ mod pg_tests {
             id: "pg-acme".to_string(),
             name: "ACME".to_string(),
             created_at: chrono::Utc::now(),
+            retention_days: Some(30),
         };
         store.save_tenant(&tenant).await.unwrap();
         assert!(store
@@ -626,6 +656,7 @@ mod tests {
             id: "acme".to_string(),
             name: "ACME".to_string(),
             created_at: chrono::Utc::now(),
+            retention_days: Some(30),
         };
         store.save_tenant(&tenant).await.unwrap();
 

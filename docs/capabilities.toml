@@ -156,8 +156,9 @@ evidence = [
   "crates/crawlkit-scanner/src/scan.rs",
   "crates/crawlkit-scanner/src/fetcher.rs",
   ".adrs/ADR-012-hosted-scanner-trust-boundary.md",
+  "docs/SCANNER_RUNBOOK.md",
 ]
-notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store; shared backend required before multi-replica). Not yet publicly deployed."
+notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store; shared backend required before multi-replica). Not yet publicly deployed. GA gated on docs/SCANNER_RUNBOOK.md checklist (§6) and signed ownership (§7); stays prototype until both complete."
 
 [capabilities.log_analysis]
 status = "stable"

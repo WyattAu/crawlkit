@@ -6,6 +6,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::access_log_mw::access_log_middleware;
 use crate::auth_mw::auth_middleware as jwt_auth_middleware;
+use crate::handlers::alerts::*;
 use crate::handlers::api_keys::*;
 use crate::handlers::audit::*;
 use crate::handlers::auth_handlers::*;
@@ -50,6 +51,14 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
         .route(
             "/api/v1/webhooks/{id}",
             axum::routing::delete(delete_webhook),
+        )
+        .route(
+            "/api/v1/alert-channels",
+            post(create_alert_channel).get(list_alert_channels),
+        )
+        .route(
+            "/api/v1/alert-channels/{id}",
+            axum::routing::delete(delete_alert_channel),
         )
         .route(
             "/api/v1/schedules",

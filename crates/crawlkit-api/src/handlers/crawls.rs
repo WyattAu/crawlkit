@@ -555,6 +555,14 @@ pub async fn run_crawl_task_with_monitoring(
                 output.pages_crawled,
                 output.issues_found,
             );
+            super::alerts::fire_alerts(
+                &state,
+                "crawl.completed",
+                &crawl_id,
+                &tenant_id,
+                output.pages_crawled,
+                output.issues_found,
+            );
 
             // If monitoring detected an alert, fire monitoring webhooks
             // and update the schedule's last_crawl_id.
@@ -602,6 +610,7 @@ pub async fn run_crawl_task_with_monitoring(
                 &format!("crawl failed: {e}"),
             );
             super::webhooks::fire_webhooks(&state, "crawl.failed", &crawl_id, &tenant_id, 0, 0);
+            super::alerts::fire_alerts(&state, "crawl.failed", &crawl_id, &tenant_id, 0, 0);
         }
     }
 }

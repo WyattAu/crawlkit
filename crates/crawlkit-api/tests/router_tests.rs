@@ -72,9 +72,10 @@ fn make_state_with_capacity(dir: &std::path::Path, crawl_capacity: usize) -> App
         persistence: None,
         crawl_permits: Arc::new(tokio::sync::Semaphore::new(crawl_capacity)),
         idempotency_keys: Arc::new(DashMap::new()),
+        credential_store: None,
+        alert_channels: Arc::new(DashMap::new()),
     }
 }
-
 fn setup(dir: &std::path::Path) -> TestApp {
     let state = make_state(dir);
     let api_key = "ck_testkey123".to_string();
@@ -93,6 +94,19 @@ fn setup(dir: &std::path::Path) -> TestApp {
         state,
         api_key,
     }
+}
+
+/// Like [`setup`], but with a passthrough (identity-crypto) credential store
+/// enabled — for alert-channel and credential-boundary tests.
+fn setup_with_credentials(dir: &std::path::Path) -> TestApp {
+    let mut test = setup(dir);
+    test.state.credential_store = Some(Arc::new(
+        crawlkit_api::credential_store::CredentialStore::new(Arc::new(
+            crawlkit_engine::EncryptionManager::default(),
+        )),
+    ));
+    test.app = create_router(test.state.clone(), vec![ORIGIN.to_string()]);
+    test
 }
 
 impl TestApp {
@@ -2605,4 +2619,139 @@ async fn crawl_submission_validates_url_pages_concurrency_and_delay() {
         );
     }
     assert!(test.state.crawl_results.is_empty());
+}
+
+#[tokio::test]
+async fn alert_channel_lifecycle_and_credential_boundary() {
+    use crawlkit_api::credential_store::{Credential, CredentialMetadata};
+
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup_with_credentials(dir.path());
+
+    let store = test.state.credential_store.clone().unwrap();
+    store
+        .put(
+            "tenant-a",
+            Credential {
+                secret: "https://hooks.example.com/slack/credential-material".to_string(),
+                metadata: CredentialMetadata {
+                    connector: "slack".to_string(),
+                    identifiers: std::collections::HashMap::new(),
+                    created_at: "2026-09-11T00:00:00Z".to_string(),
+                },
+            },
+        )
+        .unwrap();
+    drop(store);
+
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    // Unknown credential -> 400.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/alert-channels",
+            Some(serde_json::json!({
+                "channel_type": "slack",
+                "credential_connector": "missing-connector",
+                "events": ["crawl.completed"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+
+    // Unknown channel type -> 400.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/alert-channels",
+            Some(serde_json::json!({
+                "channel_type": "carrier-pigeon",
+                "credential_connector": "slack",
+                "events": ["crawl.completed"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+
+    // Valid creation -> 201, and the endpoint URL never appears.
+    let (status, created) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/alert-channels",
+            Some(serde_json::json!({
+                "channel_type": "slack",
+                "credential_connector": "slack",
+                "events": ["crawl.completed", "crawl.failed"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::CREATED, "body: {created}");
+    let channel_id = created["id"].as_str().unwrap().to_string();
+    let created_text = created.to_string();
+    assert!(
+        !created_text.contains("hooks.example.com"),
+        "endpoint URL leaked in response: {created_text}"
+    );
+    assert_eq!(created["consecutive_failures"], 0);
+
+    // Listing includes the channel with health fields, no URL material.
+    let (status, listed) = test
+        .send(test.authed(&token, "GET", "/api/v1/alert-channels", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let arr = listed.as_array().unwrap();
+    assert_eq!(arr.len(), 1);
+    let listed_text = listed.to_string();
+    assert!(
+        !listed_text.contains("hooks.example.com"),
+        "endpoint URL leaked in listing: {listed_text}"
+    );
+
+    // Deletion.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            &format!("/api/v1/alert-channels/{channel_id}"),
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!test.state.alert_channels.contains_key(&channel_id));
+}
+
+#[tokio::test]
+async fn alert_channel_requires_credential_store() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/alert-channels",
+            Some(serde_json::json!({
+                "channel_type": "teams",
+                "credential_connector": "teams",
+                "events": ["crawl.failed"]
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+    assert!(
+        body.to_string()
+            .contains("credential store is not configured"),
+        "error names the missing store: {body}"
+    );
 }

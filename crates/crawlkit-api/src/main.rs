@@ -97,6 +97,23 @@ async fn main() -> anyhow::Result<()> {
         _ => Arc::new(crawlkit_engine::AuditTrail::new()),
     };
 
+    // Encryption at rest (ADR-013): enabled when CRAWLKIT_ENCRYPTION_KEY is
+    // set. The credential store requires it — channels and connector
+    // credentials are unavailable on deployments without a key rather than
+    // stored in plaintext.
+    let encryption_config = crawlkit_engine::EncryptionConfig::default();
+    let manager = crawlkit_engine::EncryptionManager::new(encryption_config.clone());
+    if encryption_config.enabled {
+        manager.initialize().map_err(|e| {
+            anyhow::anyhow!("Failed to initialize encryption from CRAWLKIT_ENCRYPTION_KEY: {e}")
+        })?;
+        tracing::info!("Credential encryption at rest enabled (AES-256-GCM)");
+    } else {
+        tracing::warn!(
+            "CRAWLKIT_ENCRYPTION_KEY not set — credential store, alert channels, and connector credentials are disabled"
+        );
+    }
+
     // API-plane state persistence (users, tenants, API keys) so a restart
     // does not lose accounts. Postgres via API_STATE_PG_URL; otherwise
     // SQLite (API_STATE_DB_PATH, default `<db>.state`). Disabled with
@@ -132,6 +149,18 @@ async fn main() -> anyhow::Result<()> {
             }
         };
 
+    // Encrypted per-tenant credential store (ADR-013). Enabled when the
+    // deployment provides an encryption key; `None` leaves channel/connector
+    // registration explicitly unavailable rather than storing plaintext.
+    let credential_store: Option<Arc<crawlkit_api::credential_store::CredentialStore>> =
+        if encryption_config.enabled {
+            Some(Arc::new(
+                crawlkit_api::credential_store::CredentialStore::new(Arc::new(manager)),
+            ))
+        } else {
+            None
+        };
+
     // Build application state
     let state = AppState {
         storage: Arc::new(storage) as Arc<dyn StorageBackend>,
@@ -156,6 +185,8 @@ async fn main() -> anyhow::Result<()> {
         )),
         idempotency_keys: Arc::new(DashMap::new()),
         access_logger: Arc::new(crawlkit_engine::AccessLogger::new(10_000)),
+        credential_store: credential_store.clone(),
+        alert_channels: Arc::new(DashMap::new()),
     };
 
     // Restore persisted API-plane state into memory.

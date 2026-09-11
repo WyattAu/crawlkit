@@ -1,3 +1,4 @@
+pub mod alerts;
 pub mod api_keys;
 pub mod audit;
 pub mod auth_handlers;

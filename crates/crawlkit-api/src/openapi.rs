@@ -42,6 +42,9 @@ use utoipa::{Modify, OpenApi};
         crate::handlers::health::metrics_endpoint,
         crate::handlers::marketplace::delete_marketplace_plugin,
         crate::handlers::marketplace::get_marketplace_plugin,
+        crate::handlers::alerts::create_alert_channel,
+        crate::handlers::alerts::delete_alert_channel,
+        crate::handlers::alerts::list_alert_channels,
         crate::handlers::marketplace::list_marketplace_plugins,
         crate::handlers::marketplace::search_marketplace_plugins,
         crate::handlers::marketplace::submit_plugin,
@@ -66,12 +69,14 @@ use utoipa::{Modify, OpenApi};
     ),
     components(
         schemas(
+            crate::types::AlertChannelConfig,
             crate::types::ApiAuditEvent,
             crate::types::ApiErrorBody,
             crate::types::ApiKeyCreateRequest,
             crate::types::ApiKeyResponse,
             crate::handlers::auth_handlers::LoginResponse,
             crate::handlers::crawls::BacklinksResponse,
+            crate::types::CreateAlertChannelRequest,
             crate::types::CreateCrawlRequest,
             crate::types::CreateScheduleRequest,
             crate::types::CreateTenantRequest,
@@ -105,6 +110,7 @@ use utoipa::{Modify, OpenApi};
     modifiers(&SecurityAddon),
     tags(
         (name = "health", description = "Liveness and metrics endpoints"),
+        (name = "alerts", description = "Alert channel configuration (Slack, Teams) with delivery health"),
         (name = "auth", description = "Login, token refresh, OIDC, and session management"),
         (name = "crawls", description = "Crawl lifecycle, statistics, findings, and backlinks"),
         (name = "api-keys", description = "API key management (admin)"),

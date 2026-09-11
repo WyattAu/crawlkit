@@ -280,6 +280,11 @@ pub struct AppState {
     pub idempotency_keys: Arc<DashMap<String, IdempotencyEntry>>,
     /// SOC 2 access logger: records every API request for compliance auditing.
     pub access_logger: Arc<AccessLogger>,
+    /// Encrypted per-tenant credential store (ADR-013 §2). `None` when
+    /// encryption is disabled on the deployment.
+    pub credential_store: Option<Arc<crate::credential_store::CredentialStore>>,
+    /// Alert channel configurations (ADR-014), keyed by channel id.
+    pub alert_channels: AlertChannelMap,
 }
 
 /// A recorded idempotency-key mapping for crawl submissions.
@@ -535,6 +540,49 @@ pub struct WebhookConfig {
     #[serde(skip_serializing, default)]
     pub secret: String,
     pub created_at: DateTime<Utc>,
+}
+
+/// Map of alert channel configurations, keyed by channel id.
+pub type AlertChannelMap = std::sync::Arc<DashMap<String, AlertChannelConfig>>;
+
+/// A configured alert channel (ADR-014).
+///
+/// The channel's endpoint (Slack/Teams webhook URL) is a credential: it lives
+/// in the encrypted credential store under `credential_connector` and is
+/// never included in this config or any serialization of it.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct AlertChannelConfig {
+    pub id: String,
+    pub tenant_id: String,
+    /// Channel type: `slack` or `teams`.
+    pub channel_type: String,
+    /// Credential-store connector name holding the channel's webhook URL.
+    pub credential_connector: String,
+    /// Events this channel subscribes to.
+    pub events: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    /// Delivery health (ADR-014 §2): consecutive failed deliveries.
+    pub consecutive_failures: u32,
+    /// Last successful delivery, if any.
+    pub last_success_at: Option<DateTime<Utc>>,
+    /// Last failed delivery, if any.
+    pub last_failure_at: Option<DateTime<Utc>>,
+    /// Last delivery error, URL-scrubbed. Never contains endpoint material.
+    pub last_error: Option<String>,
+}
+
+/// Request to create an alert channel.
+///
+/// The webhook URL itself is provided out-of-band to the credential store;
+/// this request only names it.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct CreateAlertChannelRequest {
+    /// `slack` or `teams`.
+    pub channel_type: String,
+    /// Credential-store connector name holding the channel's webhook URL.
+    pub credential_connector: String,
+    #[serde(default = "default_webhook_events")]
+    pub events: Vec<String>,
 }
 
 /// Response returned once when a webhook is created, containing the secret.

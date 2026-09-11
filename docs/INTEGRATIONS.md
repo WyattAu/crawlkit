@@ -53,6 +53,15 @@ Error contract (both paths, tested against hermetic HTTP stubs): HTTP error stat
 
 Token hygiene (pinned by test on both paths): the API key is sent in the `x-goog-api-key` header, never in the URL query string — reqwest error messages embed request URLs, so a query-string key would leak into logs and error output. Keys never appear in error `Display` output.
 
+## Alert channels (experimental — Slack, Teams)
+
+Crawl-lifecycle alerts to human channels per ADR-014 (`.adrs/ADR-014-alert-channels.md`). Slack (Block Kit) and Teams (MessageCard) renderers deliver over the same loop-retry pipeline as webhooks — transport errors and 5xx/429 retry, other 4xx fatal.
+
+- **Endpoints are credentials.** The Slack/Teams webhook URL is stored in the encrypted per-tenant credential store (requires `CRAWLKIT_ENCRYPTION_KEY`) and referenced by connector name in channel config. It is never echoed in API responses, and delivery failures are URL-scrubbed before logging (reqwest error strings embed request URLs).
+- **Delivery health.** Each channel tracks consecutive failures, last success/failure, and a sanitized last error, surfaced in `GET /api/v1/alert-channels`; repeated failures escalate to an error-level log signal so a dead webhook is visible, not silent.
+- **Events.** `crawl.completed`, `crawl.failed`, `monitoring.alert_triggered` — the same event source as webhooks, fanned out independently.
+- **Email/SMTP** is deferred to the 6.0.0 transport decision (new dependency, ADR-014 §4).
+
 ## LLM analysis (optional — with configuration)
 
 Bring-your-own-key semantic analysis via `LLM_*` environment variables; see `crates/crawlkit-engine/src/llm_analyzer.rs`. Conditional: behavior depends on provider choice, cost controls, and network egress policy, so it stays `conditional` until those are contractual.

@@ -205,6 +205,16 @@ evidence = [
 requirements = ["Google Search Console API access", "access token (GSC_ACCESS_TOKEN or explicit)"]
 promotion_notes = "Promoted 2026-09-11: error-path tests against a local TCP stub (HTTP 403/500 surfaced as ApiError with status+body, connection refused as RequestFailed, malformed JSON as ParseError, empty rows as empty analytics), token-hygiene test (bearer header sent exactly once, token absent from error Debug output), env-var contract documented in docs/INTEGRATIONS.md."
 
+[capabilities.alert_channels]
+status = "experimental"
+evidence = [
+  "crates/crawlkit-api/src/handlers/alerts.rs",
+  "crates/crawlkit-api/src/credential_store.rs",
+  ".adrs/ADR-014-alert-channels.md",
+]
+requirements = ["CRAWLKIT_ENCRYPTION_KEY set (credential store active)", "Slack incoming-webhook URL or Teams Power Automate connector URL stored as a tenant credential"]
+notes = "Slack (Block Kit) and Teams (MessageCard) alert delivery per ADR-014: pure renderers over the existing loop-retry pipeline, endpoint URLs held in the encrypted credential store and never logged (URL-scrubbed transport errors), per-channel delivery health (consecutive failures, last outcome). Email/SMTP transport deferred to the 6.0.0 design decision."
+
 [capabilities.llm_analysis]
 status = "conditional"
 evidence = [

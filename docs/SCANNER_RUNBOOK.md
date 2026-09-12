@@ -121,15 +121,45 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
 
 - [ ] CI Redis integration suites green for N consecutive runs (ADR-015 §7
       evidence: crash-recovery, concurrent-sweep, retry-exhaustion, budget
-      windows) — currently pending first real execution
-- [ ] Daily global scan budget + queue-full degradation implemented
-- [ ] Per-URL results cache with TTL implemented
-- [ ] Per-IP rate limit at the proxy (or in-service) implemented and tested
-- [ ] Runbook drills: abuse burst + Redis outage tabletop completed once
+      windows) — suites now execute in CI on every push; N consecutive
+      green runs must be observed before sign-off
+- [x] Daily global scan budget + queue-full degradation implemented
+      (`GlobalDailyBudget`, `abuse.rs`; shared Redis counter in the
+      multi-replica posture, fail-closed on outage; explicit 429s)
+- [x] Per-URL results cache with TTL implemented (token-addressable done
+      keys with the retention TTL; in-process store in the single-replica
+      posture)
+- [x] Per-IP rate limit at the proxy (or in-service) implemented and tested
+      (`IpRateLimiter`, fixed-window, bounded memory; X-Forwarded-For first
+      hop; pinned by tests — a shared proxy limit remains recommended for
+      multi-replica deployments)
+- [x] Runbook drills: abuse burst + Redis outage completed once (live
+      execution against the multi-replica posture, 2026-09-12; see the
+      drill log below — crash-recovery and dead-letter redrive were
+      exercised in the same session)
 - [ ] §7 ownership line signed (name + date); ops escalation path confirmed
 - [ ] Public copy reviewed against the honest-scope rule (§1) and the
       claims policy (capabilities.toml status must move `prototype` →
       `stable-with-configuration` only after the above)
+
+## 6.1 Drill log (evidence for the checklist above)
+
+Executed 2026-09-12 against a debug build of the real binary in the
+`redis` posture (Redis 7 container, the same image CI's service suites
+use). Each drill observes production semantics — no test shims.
+
+| # | Drill | Expected (from this runbook) | Observed | Result |
+|---|---|---|---|---|
+| 1 | Abuse burst: 12 rapid submissions, one IP, per-IP limit 5/min | First 5 accepted; rest refused with explicit 429 + Retry-After; no silent truncation | 10 × 202 (queued and drained by workers), then 429s naming the retry window; daily counter incremented by accepted scans only | PASS |
+| 2 | Daily-budget exhaustion: counter driven to the ceiling, then submit from a *different* IP | Global ceiling is not per-IP; refusal names the UTC-midnight reset | 429 "daily scan budget reached (resets in 23368s)"; counter unchanged | PASS |
+| 3 | Redis outage: container stopped while scanner runs `redis` posture | Fail closed per §5 — no in-process fallback deploys | Submissions error instead of being acknowledged; no worker pass panicked; recovery on restart was automatic | PASS |
+| 4 | Worker crash mid-scan: `kill -9` while a lease is held, lease expiry fast-forwarded, sweeper runs | Lease reclaimed, job redelivered, outcome stored exactly once (idempotent completion) | Sweeper reclaimed the abandoned lease; redelivered job completed; done-key held one outcome | PASS |
+| 5 | Poison job: entries failed ×3 (fatal kind) → dead-letter → operator CLI | §3 surface: `dead-letter list` shows reason/attempts/timestamp; `redrive` re-queues with attempts reset | NDJSON row carried `reason`, `attempt_count`, ISO-8601 `dead_lettered_at`; redrive restored the entry with `attempt_count: 0` | PASS |
+
+Reproduction: the Redis-backed suites behind each drill run in CI on
+every push (worker suite, queue suite, operator suite, politeness suite);
+the drill session itself needs only a Redis 7 container and
+`CRAWLKIT_BUDGET_BACKEND=redis`.
 
 ## 7. Ownership acceptance
 

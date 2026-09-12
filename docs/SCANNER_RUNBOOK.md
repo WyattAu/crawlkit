@@ -123,8 +123,10 @@ still infrastructure surface: the scrape listener is bound on
 network (or a scrape auth header) before public exposure. `/healthz`
 stays public for liveness checks.
 
-Alert channels route through the same infra as everything else (ADR-014
-once implemented; webhook delivery exists today).
+Alert channels route through the same infra as everything else
+(ADR-014's Slack/Teams webhook delivery exists in the API tier today;
+scanner-to-alert wiring — e.g. paging on an `ssrf_denied` spike — is the
+6.0.0 integration item).
 
 ## 5. Incident playbook (abridged)
 

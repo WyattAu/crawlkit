@@ -82,14 +82,9 @@ Denial by construction, not blocklist discipline (ADR-012):
 4. **No environment bypass** — the scanner's guard does not honor
    `CRAWLKIT_ALLOW_PRIVATE` (unlike the engine's dev escape hatch).
 
-Known gaps before GA (all pre-GA, tracked):
-
-- [ ] Daily global scan budget with queue-full degradation (strategy §4) —
-      not yet implemented; single-replica posture needs a process-level cap.
-- [ ] Results cache per URL with TTL (strategy §4) — not yet implemented;
-      repeat scans of one URL currently cost full budget each time.
-- [ ] Per-IP rate limiting in front of `POST /scan` (reverse-proxy layer is
-      acceptable; must exist before public exposure).
+The former pre-GA gaps (daily global budget, per-URL results cache,
+per-IP rate limiting) are all implemented and checked off in the §6
+checklist; that list is the single source of truth for gap status.
 
 ## 4. Monitoring and alerting
 
@@ -126,7 +121,9 @@ stays public for liveness checks.
 Alert channels route through the same infra as everything else
 (ADR-014's Slack/Teams webhook delivery exists in the API tier today;
 scanner-to-alert wiring — e.g. paging on an `ssrf_denied` spike — is the
-6.0.0 integration item).
+6.0.0 integration item). The dashboard-layer design that consumes this
+data plane — panels, delta-math queries, named thresholds, and routing —
+is spec'd in docs/SCANNER_DASHBOARDS.md.
 
 ## 5. Incident playbook (abridged)
 

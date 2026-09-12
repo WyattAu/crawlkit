@@ -1,5 +1,10 @@
 # 5.4.0 Stable — Cut Checklist
 
+**Status:** EXECUTED 2026-09-12 — v5.4.0 tagged, published stable (18
+assets, byte-exact against signed checksums), CI green. Retained as the
+reference procedure for the next stable cut; the version-bearing items
+below record what was done, and §D remains the live scheduling table.
+
 **Purpose:** the executable runbook for cutting 5.4.0 stable, written while
 the remaining work is fresh. Every item names its evidence location; nothing
 here requires rediscovery. Follow in order; do not skip the gate rows.
@@ -12,21 +17,24 @@ and CI-proven. The GA decision is the only open product question.
 
 ## Gate 0 — the GA decision (human; blocks item C only)
 
-5.4.0 stable contains the queue graduation **regardless** of the scanner
-GA outcome (PRODUCT_STRATEGY: "GA slips without blocking the rest of the
-ladder"). The scanner's capabilities.toml status is the only delta.
+**Resolved at cut time:** the CI-streak item is MET (5 of 5 consecutive
+green runs, counted per the runbook rule) and the drills are recorded;
+**§7 remains unsigned**, so the not-signed branch was taken —
+`hosted_scanner` stays `prototype` and §A was skipped. The deferral is
+framed in docs/RELEASE_5_4_0_ALPHA_1.md §"What's next".
 
-- [ ] §6 checklist human items complete:
-  - [ ] N consecutive green CI runs observed since the evidence suites
+- [x] §6 checklist human items complete (except the signature):
+  - [x] N consecutive green CI runs observed since the evidence suites
         landed — **N = 5**, with the counting rule and live streak
         recorded in the runbook checklist item itself (docs/SCANNER_RUNBOOK.md §6);
         they accumulate automatically, no action needed beyond checking
-  - [ ] §6.1 drills: done 2026-09-12, recorded in the runbook
+        **(met: 5/5 verified 2026-09-12)**
+  - [x] §6.1 drills: done 2026-09-12, recorded in the runbook
   - [ ] §7 ownership line signed (docs/SCANNER_RUNBOOK.md §7) with the
-        escalation path confirmed
+        escalation path confirmed — **still open; the one remaining GA item**
 - [ ] If signed: flip `hosted_scanner` → `stable-with-configuration` in
       docs/capabilities.toml, land public copy, include §A below.
-- [ ] If not signed: keep `prototype`, note the deferral in the release
+- [x] If not signed: keep `prototype`, note the deferral in the release
       notes (docs/RELEASE_5_4_0_ALPHA_1.md §"What's next" already frames
       this), skip §A.
 
@@ -41,20 +49,21 @@ Decision material: docs/GA_SIGNOFF_PACKAGE.md.
 - [ ] Runbook §4 dashboard row completed (see D status below)
 - [ ] Release notes section: scanner GA with its exact scope and limits
 
-## B — release engineering (same pipeline as alpha.1, verified twice)
+## B — release engineering (executed 2026-09-12: v5.4.0 published stable,
+18 assets, checksums verified, SBOM pipeline unchanged)
 
-- [ ] Version bumps: workspace `Cargo.toml` → `5.4.0` (3 places: members,
+- [x] Version bumps: workspace `Cargo.toml` → `5.4.0` (3 places: members,
       deps, binary versions), `VERSION.md`, `docs/capabilities.toml`
       `[project].version`
-- [ ] CHANGELOG.md: move the 5.4.0 section from the rolling-prerelease
+- [x] CHANGELOG.md: move the 5.4.0 section from the rolling-prerelease
       entry to a dated stable entry; keep the alpha.1 history line
-- [ ] `cargo check -p crawlkit -p crawlkit-api -p crawlkit-scanner -p
+- [x] `cargo check -p crawlkit -p crawlkit-api -p crawlkit-scanner -p
       crawlkit-engine` (version-consistency gate)
-- [ ] Tag `v5.4.0` on the release commit; push triggers the Release
+- [x] Tag `v5.4.0` on the release commit; push triggers the Release
       workflow
-- [ ] Verify release is published, **not draft**, and is flagged stable
+- [x] Verify release is published, **not draft**, and is flagged stable
       (v5.3.0 must stop being "Latest" only when 5.4.0 is stable)
-- [ ] Download all assets; verify byte-exact against the signed
+- [x] Download all assets; verify byte-exact against the signed
       `checksums.txt` (script from the 5.3.0/alpha.1 cuts)
 - [ ] Verify SBOM reproducibility (re-run the workflow's SBOM step on the
       same commit; artifacts must be byte-identical)

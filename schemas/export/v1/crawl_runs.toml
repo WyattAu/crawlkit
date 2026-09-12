@@ -1,0 +1,91 @@
+# crawl export schema v1 — table: crawl_runs
+# Part of the ADR-016 schema contract. This file is the source of truth for
+# the `crawl_runs` table; the bindings below are the only permitted physical
+# mappings. Evolution rules (ADR-016 §2.2): v1.x may add nullable columns;
+# never rename, repurpose, tighten a type, or remove a column without v2.
+
+[table]
+name = "crawl_runs"
+grain = "one row per crawl"
+keys = ["crawl_id"]
+version = "1.0.0"
+
+[[column]]
+name = "crawl_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Unique crawl identifier (storage `crawl_id`)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "target_url"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "The seed / target URL of the crawl."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "start_time"
+logical_type = "timestamp"
+nullable = true
+added_in = "1.0.0"
+description = "When the crawl started (UTC)."
+bigquery = "TIMESTAMP"
+snowflake = "TIMESTAMP_NTZ"
+parquet = "TIMESTAMP_MILLIS"
+
+[[column]]
+name = "end_time"
+logical_type = "timestamp"
+nullable = true
+added_in = "1.0.0"
+description = "When the crawl finished (UTC)."
+bigquery = "TIMESTAMP"
+snowflake = "TIMESTAMP_NTZ"
+parquet = "TIMESTAMP_MILLIS"
+
+[[column]]
+name = "pages_crawled"
+logical_type = "int64"
+nullable = false
+added_in = "1.0.0"
+description = "Number of pages successfully crawled."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "total_issues"
+logical_type = "int64"
+nullable = false
+added_in = "1.0.0"
+description = "Total issues discovered across all pages of the crawl."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "tenant_id"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Tenant identifier (ADR-013 §2 tenancy precedent); the only multi-tenant isolation the export provides."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "sequence"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Monotonic per-tenant export sequence (ADR-016 §5.3); reserved for future incremental exports, null until assigned."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"

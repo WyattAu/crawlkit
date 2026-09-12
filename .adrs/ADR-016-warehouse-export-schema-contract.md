@@ -1,6 +1,9 @@
 # ADR-016: Warehouse Exporters — Versioned Schema Contract
 
-**Status:** Proposed (6.0.0 "Scale" design; implementation follows acceptance)
+**Status:** Accepted — schema contract v1 landed 2026-09-13 (`schemas/export/v1/*.toml`,
+conformance-gated in `crates/crawlkit-engine/src/export/warehouse.rs`); first
+physical binding (S3/Parquet) implemented behind the `warehouse` feature;
+`warehouse_exporters` registered as `experimental` in capabilities.toml
 **Date:** 2026-09-12
 **Deciders:** Maintainers
 **Related:** docs/PRODUCT_STRATEGY.md §3 (6.0.0 row: warehouse exporters, AR2);

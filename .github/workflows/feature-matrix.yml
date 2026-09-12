@@ -17,6 +17,8 @@ jobs:
             args: '--features full'
           - name: core
             args: '--no-default-features'
+          - name: warehouse
+            args: '--features warehouse'
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable

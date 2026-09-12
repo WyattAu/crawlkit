@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Warehouse export schema contract (ADR-016)**: versioned crawl-export
+  schema v1 (`schemas/export/v1/*.toml` + human contract at
+  `docs/schema/export/v1/README.md`) for the three 6.0.0 tables —
+  `crawl_runs`, `pages`, `findings` — with per-binding BigQuery/Snowflake/
+  Parquet type mappings declared in the manifest. Conformance tests gate
+  drift in both directions (manifest ↔ code) on every push.
+- **S3/Parquet warehouse exporter** behind the new `warehouse` feature
+  (`crawlkit-engine`): deterministic key-sorted Parquet writer (same crawl →
+  byte-identical files, idempotent overwrite per logical key), schema
+  version embedded in file footers, zstd compression. First binding of
+  three; `warehouse_exporters` enters capabilities.toml as `experimental`
+  per ADR-016 §2.4.
+- Scanner dashboards design (docs/SCANNER_DASHBOARDS.md): the runbook §4
+  alert rows rendered as concrete panels, queries, and named thresholds over
+  the `/metrics` data plane, with alert routing and an arming plan.
+
+### Changed
+
+- docs housekeeping: SCANNER_RUNBOOK §3 stale pre-GA gaps list removed (the
+  §6 checklist is the single source of truth); RELEASE_5_4_0_CUT_CHECKLIST
+  marked executed with the GA Gate 0 outcome recorded.
+
 ## [5.4.0-alpha.1] - 2026-09-12
 
 Rolling prerelease for 5.4.0; superseded by the 5.4.0 stable entry above

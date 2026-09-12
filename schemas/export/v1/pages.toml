@@ -1,0 +1,291 @@
+# crawl export schema v1 — table: pages
+# Part of the ADR-016 schema contract (ADR-016 §2.2). One row per fetched
+# page. Nullable-heavy by design: uncertain columns were nullable in storage
+# first, and v1 must never tighten a type later. `links` is deliberately
+# excluded (row explosion; ADR-016 §2.2 scope note).
+
+[table]
+name = "pages"
+grain = "one row per fetched page"
+keys = ["crawl_id", "page_id"]
+version = "1.0.0"
+
+[[column]]
+name = "crawl_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Owning crawl (denormalized from crawl_runs for warehouse-style joins)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "page_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Unique page identifier within the crawl (storage page id)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "url"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "The requested URL of the page."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "final_url"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "The URL after all redirects."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "status_code"
+logical_type = "int64"
+nullable = false
+added_in = "1.0.0"
+description = "HTTP status code of the final response."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT32"
+
+[[column]]
+name = "title"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Page title."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "description"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Meta description."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "canonical_url"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Canonical URL declared by the page."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "word_count"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Word count of the page body."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "load_time_ms"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Response time in milliseconds."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "body_size"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Body size in bytes."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "fetched_at"
+logical_type = "timestamp"
+nullable = false
+added_in = "1.0.0"
+description = "When the page was fetched (UTC). Recommended partition key for BQ/SF (ADR-016 §5.2)."
+bigquery = "TIMESTAMP"
+snowflake = "TIMESTAMP_NTZ"
+parquet = "TIMESTAMP_MILLIS"
+
+[[column]]
+name = "tenant_id"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Tenant identifier (ADR-013 §2)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "etag"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "ETag header value from the last fetch."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "last_modified"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Last-Modified header value from the last fetch."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "cwv_lcp_ms"
+logical_type = "float64"
+nullable = true
+added_in = "1.0.0"
+description = "Largest Contentful Paint in milliseconds (lab measurement)."
+bigquery = "FLOAT64"
+snowflake = "FLOAT"
+parquet = "DOUBLE"
+
+[[column]]
+name = "cwv_cls"
+logical_type = "float64"
+nullable = true
+added_in = "1.0.0"
+description = "Cumulative Layout Shift (dimensionless, lab measurement)."
+bigquery = "FLOAT64"
+snowflake = "FLOAT"
+parquet = "DOUBLE"
+
+[[column]]
+name = "cwv_inp_ms"
+logical_type = "float64"
+nullable = true
+added_in = "1.0.0"
+description = "Interaction to Next Paint in milliseconds (lab measurement)."
+bigquery = "FLOAT64"
+snowflake = "FLOAT"
+parquet = "DOUBLE"
+
+[[column]]
+name = "has_structured_data"
+logical_type = "bool"
+nullable = true
+added_in = "1.0.0"
+description = "Whether the page has any structured data (JSON-LD, microdata, RDFa)."
+bigquery = "BOOL"
+snowflake = "BOOLEAN"
+parquet = "BOOL"
+
+[[column]]
+name = "schema_types"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Comma-separated list of schema types present on the page."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "viewport_ok"
+logical_type = "bool"
+nullable = true
+added_in = "1.0.0"
+description = "Whether the viewport meta tag is properly configured."
+bigquery = "BOOL"
+snowflake = "BOOLEAN"
+parquet = "BOOL"
+
+[[column]]
+name = "has_csp"
+logical_type = "bool"
+nullable = true
+added_in = "1.0.0"
+description = "Whether the page has a Content-Security-Policy header."
+bigquery = "BOOL"
+snowflake = "BOOLEAN"
+parquet = "BOOL"
+
+[[column]]
+name = "has_hsts"
+logical_type = "bool"
+nullable = true
+added_in = "1.0.0"
+description = "Whether the page has a Strict-Transport-Security header."
+bigquery = "BOOL"
+snowflake = "BOOLEAN"
+parquet = "BOOL"
+
+[[column]]
+name = "images_total"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Total number of images on the page."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "images_missing_alt"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Number of images missing alt text."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "h1_count"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Number of H1 headings on the page."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "heading_count"
+logical_type = "int64"
+nullable = true
+added_in = "1.0.0"
+description = "Total number of headings (H1-H6) on the page."
+bigquery = "INT64"
+snowflake = "NUMBER(38,0)"
+parquet = "INT64"
+
+[[column]]
+name = "extractions_json"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "JSON-serialized custom extraction results: Vec<(rule_name, Vec<value>)>. Opaque to the contract; structure is the extractor's."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"

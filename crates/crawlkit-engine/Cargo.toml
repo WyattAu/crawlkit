@@ -80,6 +80,7 @@ required-features = ["full"]
 [features]
 default = ["full"]
 full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry"]
+warehouse = ["toml", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:parquet"]
 unstable = ["full"]
 wasm = []
 wasi-preview2 = [
@@ -125,6 +126,11 @@ sha2 = { workspace = true, optional = true }
 ed25519-dalek = { version = "2", optional = true }
 futures = { version = "0.3", optional = true }
 toml = { workspace = true, optional = true }
+# ADR-016 warehouse export: first physical binding is Parquet (deterministic writer).
+arrow = { version = "57", optional = true, default-features = false, features = ["ipc"] }
+arrow-array = { version = "57", optional = true }
+arrow-schema = { version = "57", optional = true }
+parquet = { version = "57", optional = true, default-features = false, features = ["arrow", "zstd"] }
 async-trait = { version = "0.1", optional = true }
 urlencoding = { version = "2.1", optional = true }
 aes-gcm = { version = "0.10", optional = true }

@@ -81,6 +81,19 @@ constraints = ["signed or explicitly allow-unsigned verification policy", "fuel 
 status = "experimental"
 evidence = ["crates/crawlkit-engine/src/native_plugin.rs"]
 
+[capabilities.warehouse_exporters]
+status = "experimental"
+evidence = [
+  ".adrs/ADR-016-warehouse-export-schema-contract.md",
+  "schemas/export/v1/crawl_runs.toml",
+  "schemas/export/v1/pages.toml",
+  "schemas/export/v1/findings.toml",
+  "docs/schema/export/v1/README.md",
+  "crates/crawlkit-engine/src/export/warehouse.rs",
+]
+requirements = ["--features warehouse"]
+notes = "Versioned crawl-export schema contract (ADR-016); first physical binding (S3/Parquet, deterministic writer) implemented behind the `warehouse` feature. BQ/Snowflake transports, full CI round-trip coverage, and a documented migration drill are required for stable-with-configuration per ADR-016 §2.4."
+
 [capabilities.redis_queue]
 status = "stable-with-configuration"
 evidence = [

@@ -1,0 +1,121 @@
+# crawl export schema v1 — table: findings
+# Part of the ADR-016 schema contract (ADR-016 §2.2). One row per issue.
+# `crawl_id` is denormalized for warehouse-style joins. The plugin surface
+# (IssueCategory::Custom) makes `category` a free-form *string*, not an enum,
+# so plugin categories can never break the contract.
+
+[table]
+name = "findings"
+grain = "one row per issue"
+keys = ["crawl_id", "page_id", "issue_id"]
+version = "1.0.0"
+
+[[column]]
+name = "crawl_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Owning crawl (denormalized for warehouse-style joins)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "page_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "The page this issue belongs to."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "issue_id"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Unique issue identifier."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "category"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Issue category as a lowercase string (http, seo, content, links, images, schema, security, performance, mobile, accessibility, social, or custom:<name> from plugins)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "severity"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "One of: critical, error, warning, info."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "code"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Machine-readable issue code (e.g. SEO001)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "title"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Human-readable title."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "description"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Detailed description."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "element"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "CSS selector of the affected element, if applicable."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "recommendation"
+logical_type = "string"
+nullable = false
+added_in = "1.0.0"
+description = "Recommendation for fixing the issue."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"
+
+[[column]]
+name = "tenant_id"
+logical_type = "string"
+nullable = true
+added_in = "1.0.0"
+description = "Tenant identifier (ADR-013 §2)."
+bigquery = "STRING"
+snowflake = "VARCHAR"
+parquet = "UTF8"

@@ -3,6 +3,8 @@ mod helpers;
 pub mod html;
 pub mod json;
 pub mod markdown;
+#[cfg(feature = "warehouse")]
+pub mod warehouse;
 
 pub use csv::{export_csv, CsvColumnSelector};
 pub use helpers::ExportError;

@@ -28,7 +28,7 @@ use axum::{Json, Router};
 use serde::{Deserialize, Serialize};
 use tokio::sync::Semaphore;
 
-use crate::bounds::{InMemoryBudgetStore, RESULT_RETENTION};
+use crate::bounds::{BudgetStore, InMemoryBudgetStore, RESULT_RETENTION};
 use crate::fetcher::PinnedFetcher;
 use crate::scan::{run_scan, ScanDeps, ScanOutcome};
 use crate::token::{new_result_token, parse_result_token, TokenError};
@@ -76,11 +76,39 @@ struct StoredResult {
 /// Shared server state.
 pub struct AppState {
     fetcher: Arc<PinnedFetcher>,
-    budget: Arc<InMemoryBudgetStore>,
+    budget: Arc<dyn BudgetStore>,
     registry: Arc<crawlkit_engine::analyzers::AnalyzerRegistry>,
     results: dashmap::DashMap<String, StoredResult>,
     /// One-Gil-free bound on concurrent scans.
     scan_permits: Semaphore,
+
+    /// Which budget backend was selected at startup (ADR-015 §A1 posture).
+    /// Surfaced for runbook verification and tests.
+    pub budget_backend: BudgetBackend,
+}
+
+/// Errors possible when constructing [`AppState`] from the environment.
+#[derive(Debug, thiserror::Error)]
+pub enum StartupError {
+    /// Fetcher/trust-boundary construction failed.
+    #[error(transparent)]
+    Guard(#[from] crate::guard::GuardError),
+    /// Budget-backend configuration is invalid; message names the variable
+    /// and the accepted values so misconfiguration fails fast at boot.
+    #[error("budget backend configuration error: {0}")]
+    Config(String),
+}
+
+/// The selected politeness-budget deployment posture (ADR-015 §A1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BudgetBackend {
+    /// In-process store: single-replica default. Budget resets on process
+    /// restart; no cross-replica accounting (acceptable — one replica cannot
+    /// multiply its own budget).
+    InMemory,
+    /// Redis-backed shared-state store: multi-replica posture. Fail-closed
+    /// on Redis outage by design.
+    Redis,
 }
 
 impl AppState {
@@ -94,7 +122,86 @@ impl AppState {
             )),
             results: dashmap::DashMap::new(),
             scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
+            budget_backend: BudgetBackend::InMemory,
         })
+    }
+
+    /// Build state with the budget backend selected from the environment
+    /// (ADR-015 §A1 deployment-posture split):
+    ///
+    /// - `CRAWLKIT_BUDGET_BACKEND` unset or `in-memory` → single-replica
+    ///   posture ([`InMemoryBudgetStore`]; documented weaker guarantees).
+    /// - `CRAWLKIT_BUDGET_BACKEND=redis` → multi-replica posture
+    ///   ([`RedisBudgetStore`] against `CRAWLKIT_REDIS_URL`; fail-closed).
+    ///   Requires the `shared-budget` feature at build time.
+    ///
+    /// Any other value is a hard startup error naming the accepted values,
+    /// so a typo cannot silently degrade the anti-abuse guarantee.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StartupError`] on fetcher construction failure or invalid
+    /// backend configuration.
+    pub fn from_env() -> Result<Self, StartupError> {
+        let backend =
+            std::env::var("CRAWLKIT_BUDGET_BACKEND").unwrap_or_else(|_| "in-memory".to_string());
+        let redis_url = std::env::var("CRAWLKIT_REDIS_URL").ok();
+        Self::with_budget_backend(&backend, redis_url.as_deref())
+    }
+
+    /// Build state with an explicit budget backend, the testable core of
+    /// [`Self::from_env`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StartupError`] on fetcher construction failure or invalid
+    /// backend configuration.
+    pub fn with_budget_backend(
+        backend: &str,
+        redis_url: Option<&str>,
+    ) -> Result<Self, StartupError> {
+        match backend {
+            "in-memory" | "" => {
+                let mut state = Self::new()?;
+                state.budget_backend = BudgetBackend::InMemory;
+                Ok(state)
+            }
+            "redis" => {
+                let redis_url = redis_url.ok_or_else(|| {
+                    StartupError::Config(
+                        "CRAWLKIT_BUDGET_BACKEND=redis requires CRAWLKIT_REDIS_URL".to_string(),
+                    )
+                })?;
+                #[cfg(feature = "shared-budget")]
+                {
+                    let store = crate::budget_redis::RedisBudgetStore::new(redis_url)
+                        .map_err(|e| StartupError::Config(format!("Redis budget store: {e}")))?;
+                    Ok(Self {
+                        fetcher: Arc::new(PinnedFetcher::new()?),
+                        budget: Arc::new(store),
+                        registry: Arc::new(crawlkit_engine::analyzers::AnalyzerRegistry::new(
+                            &crawlkit_engine::CrawlConfig::default(),
+                        )),
+                        results: dashmap::DashMap::new(),
+                        scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
+                        budget_backend: BudgetBackend::Redis,
+                    })
+                }
+                #[cfg(not(feature = "shared-budget"))]
+                {
+                    let _ = redis_url;
+                    Err(StartupError::Config(
+                        "CRAWLKIT_BUDGET_BACKEND=redis requires building with the \
+                         `shared-budget` feature"
+                            .to_string(),
+                    ))
+                }
+            }
+            other => Err(StartupError::Config(format!(
+                "CRAWLKIT_BUDGET_BACKEND={other:?} is not a valid backend; \
+                 accepted values: in-memory, redis"
+            ))),
+        }
     }
 
     /// Remove expired results; called opportunistically on submissions.
@@ -287,6 +394,76 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    // --- Budget-posture selection (ADR-015 §A1) ---
+
+    /// Extract the Config error message, failing the test on any other
+    /// outcome (AppState is not Debug, so `expect_err` is unavailable).
+    fn expect_config_err(r: Result<AppState, StartupError>) -> String {
+        match r {
+            Ok(_) => panic!("expected Config error, got Ok state"),
+            Err(StartupError::Config(msg)) => msg,
+            Err(other) => panic!("expected Config error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn backend_default_is_in_memory() {
+        let state = AppState::with_budget_backend("in-memory", None).expect("state");
+        assert_eq!(state.budget_backend, BudgetBackend::InMemory);
+    }
+
+    #[test]
+    fn backend_empty_string_is_in_memory() {
+        let state = AppState::with_budget_backend("", None).expect("state");
+        assert_eq!(state.budget_backend, BudgetBackend::InMemory);
+    }
+
+    #[test]
+    fn backend_unknown_value_is_rejected_not_silently_degraded() {
+        // A typo like "Redis" or "inmemory" must fail startup loudly —
+        // silent fallback would multiply the budget across replicas.
+        for bad in ["Redis", "inmemory", "memory", "redis-"] {
+            let msg = expect_config_err(AppState::with_budget_backend(bad, None));
+            assert!(
+                msg.contains("accepted values"),
+                "error must name accepted values: {msg}"
+            );
+        }
+    }
+
+    #[cfg(feature = "shared-budget")]
+    #[test]
+    fn backend_redis_without_url_is_rejected() {
+        let msg = expect_config_err(AppState::with_budget_backend("redis", None));
+        assert!(
+            msg.contains("CRAWLKIT_REDIS_URL"),
+            "error names the variable: {msg}"
+        );
+    }
+
+    #[cfg(feature = "shared-budget")]
+    #[test]
+    fn backend_redis_selects_shared_store() {
+        // Store construction succeeds even against a non-listening address:
+        // the ConnectionManager connects lazily on first use.
+        let state =
+            AppState::with_budget_backend("redis", Some("redis://127.0.0.1:1/")).expect("state");
+        assert_eq!(state.budget_backend, BudgetBackend::Redis);
+    }
+
+    #[cfg(not(feature = "shared-budget"))]
+    #[test]
+    fn backend_redis_requires_shared_budget_feature() {
+        let msg = expect_config_err(AppState::with_budget_backend(
+            "redis",
+            Some("redis://127.0.0.1:1/"),
+        ));
+        assert!(
+            msg.contains("shared-budget"),
+            "error names the feature: {msg}"
+        );
     }
 
     #[tokio::test]

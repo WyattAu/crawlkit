@@ -13,8 +13,14 @@ async fn main() {
         )
         .init();
 
-    let state = match AppState::new() {
-        Ok(s) => Arc::new(s),
+    let state = match AppState::from_env() {
+        Ok(s) => {
+            tracing::info!(
+                budget_backend = ?s.budget_backend,
+                "budget posture selected (ADR-015 §A1)"
+            );
+            Arc::new(s)
+        }
         Err(e) => {
             eprintln!("fatal: scanner state initialization failed: {e}");
             std::process::exit(1);

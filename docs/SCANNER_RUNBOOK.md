@@ -34,6 +34,7 @@ or API. The scanner must never be described as a site audit.
 - Budget: in-process store (the prototype's current behavior). Budget resets
   on process restart; no cross-replica accounting. Acceptable because one
   replica cannot multiply its own budget.
+- Selection: default, or explicit `CRAWLKIT_BUDGET_BACKEND=in-memory`.
 - Scan execution: inline (in-process). No queue dependency; Redis is **not
   required** in this posture.
 - Failure mode: process restart clears budget state; acceptable window is
@@ -44,10 +45,19 @@ or API. The scanner must never be described as a site audit.
 - Budget: `PolitenessBudget` (Redis-backed, ADR-015 §6) — **required**.
   Fail-closed: no budget record → no scan. A Redis outage takes the scanner
   down by design; do not add a bypass.
+- Selection: `CRAWLKIT_BUDGET_BACKEND=redis` plus `CRAWLKIT_REDIS_URL`,
+  built with the `shared-budget` feature. Startup fails hard when the
+  backend value is unknown, the URL is missing, or the feature is absent —
+  a typo can never silently degrade the anti-abuse guarantee (pinned by
+  tests in `crates/crawlkit-scanner/src/api.rs`). The selected posture is
+  logged at startup (`budget_backend` field) for runbook verification.
 - Scan execution: requires the lease queue for fan-out; ADR-015 §5 surface
   exists, worker wiring does not yet (tracked below).
 - Recommended: Redis with Sentinel/failover; persistence config documented
   in the deployment manifest before enabling this posture.
+- Dead-letter operations (ADR-015 §3): `crawlkit queue dead-letter list`
+  and `crawlkit queue dead-letter redrive <INDEX>` against the same Redis
+  (`CRAWLKIT_REDIS_URL`).
 
 ## 3. Anti-abuse architecture (what is already enforced)
 

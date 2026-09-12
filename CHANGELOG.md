@@ -9,26 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [5.4.0-alpha.1] - 2026-09-12
 
-### Added — "Queue Graduation" rolling prerelease (ADR-015)
+Rolling prerelease for 5.4.0; superseded by the 5.4.0 stable entry above
+(same content plus the metrics data plane and abuse-surface limits).
 
-- **CLI dead-letter operator surface** (§3): `crawlkit queue dead-letter list`
-  (NDJSON with failure reasons, ISO-8601 timestamps, redrive indices) and
-  `crawlkit queue dead-letter redrive <INDEX>` (re-queue with reset attempts),
-  behind the new `queue-ops` feature. Poison quarantine is now a visible,
-  actionable operator workflow — never a silent loss or infinite retry.
-- **Scanner budget-posture selection** (§6/§A1): `CRAWLKIT_BUDGET_BACKEND`
-  selects in-memory (single-replica default) or Redis shared-state
-  (multi-replica, fail-closed) politeness budgeting; invalid configuration is
-  a hard startup error naming the accepted values, never a silent degradation.
-- **Scanner queue fan-out** (§5, the runbook's last wiring gap): in the redis
-  posture, scan submissions enqueue per-token jobs and the replica's worker
-  pool executes them with the identical inline trust path. Delivery is
-  at-least-once (lease reclamation recovers crashed workers, duplicates are
-  idempotent); outcomes land in shared keys so any replica serves any token;
-  enqueue failures fail closed.
-- CI runs the Redis-backed evidence suites: queue crash-recovery,
-  dead-letter operator flows, and scanner-worker enqueue→claim→execute→read
-  plus abandoned-lease recovery.
+## [5.4.0] - 2026-09-12
+
+### Added — "Queue Graduation" (ADR-015)
+
+Everything from 5.4.0-alpha.1, plus the monitoring data plane and the
+operator-tooling completions below.
+
+- **Redis lease queue graduation** (ADR-015): at-least-once delivery with
+  lease TTLs and crash reclamation, transient/fatal retry classification,
+  poison quarantine after bounded retries, O(1) queue membership.
+- **CLI dead-letter operator surface** (ADR-015 §3): `crawlkit queue
+  dead-letter list` (NDJSON with failure reasons, ISO-8601 timestamps,
+  redrive indices) and `crawlkit queue dead-letter redrive <INDEX>`
+  (re-queue with reset attempts), behind the new `queue-ops` feature.
+  Poison quarantine is now a visible, actionable operator workflow —
+  never a silent loss or infinite retry.
+- **Scanner budget-posture selection** (ADR-015 §6/§A1):
+  `CRAWLKIT_BUDGET_BACKEND` selects in-memory (single-replica default) or
+  Redis shared-state (multi-replica, fail-closed) politeness budgeting;
+  invalid configuration is a hard startup error naming the accepted
+  values, never a silent degradation.
+- **Scanner queue fan-out** (ADR-015 §5): in the redis posture, scan
+  submissions enqueue per-token jobs and the replica's worker pool
+  executes them with the identical inline trust path. Delivery is
+  at-least-once (lease reclamation recovers crashed workers, duplicates
+  are idempotent); outcomes land in shared keys so any replica serves any
+  token; enqueue failures fail closed.
+- **Daily global scan budget + per-IP rate limit** (runbook §6 items 2 &
+  4): per-UTC-day service-wide ceiling (shared Redis counter in
+  multi-replica, fail-closed on outage) and a fixed-window per-IP limiter
+  over the proxy's first `X-Forwarded-For` hop; both refuse explicitly
+  with 429 + Retry-After — degradation is never silent.
+- **Scanner `/metrics` data plane** (runbook §4): cumulative submission
+  counters with a closed rejection-cause enum (the `ssrf_denied` bucket —
+  the attack-recon paging signal — is incremented at the guarded
+  resolver), terminal outcome buckets, application-level egress bytes
+  (truncated reads included), and p50/p95 reservoir latency samples split
+  by posture (inline fetch path vs. submit→result-ready including queue
+  wait and crash recovery). Zero-allocation counters, no external metrics
+  dependency; scrapeable JSON, per-replica.
+- CI runs the Redis-backed evidence suites on every push: queue
+  crash-recovery, concurrent sweeps, retry exhaustion, dead-letter
+  operator flows, and scanner-worker enqueue→claim→execute→read plus
+  abandoned-lease recovery (Service-backed PostgreSQL + Redis job).
+- Capabilities audit: `redis_queue` → `stable-with-configuration` (ADR-015
+  evidence), `ga4_integration` and `alert_channels` →
+  `stable-with-configuration` (ADR-013/014), `hosted_scanner` notes
+  updated (status remains `prototype` pending runbook §7 signature).
+
+### Fixed
+
+- Schedule auth tests de-flaked: credential selection moved to a pure
+  function; the one env-reading test serialized under a mutex (env vars
+  are process-global and parallel tests raced them — observed once in
+  CI).
+
 
 ## [5.3.0] - 2026-09-12
 

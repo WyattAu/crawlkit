@@ -1,9 +1,9 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** v5.4.0-alpha.1 — Redis queue graduation (ADR-015); scanner GA decision pending runbook §7
-**Version:** 5.4.0-alpha.1
-**Status:** Prerelease
+**Current Phase:** v5.4.0 stable — Queue Graduation (ADR-015) + operator surface; scanner GA decision pending runbook §7
+**Version:** 5.4.0
+**Status:** Stable release
 **Last Updated:** 2026-09-12
 **MSRV:** 1.94.0
 
@@ -22,6 +22,7 @@
 | 16 | v2.1.0 Release | Complete | 2026-08-18 | Security hardening, WASM ABI conformance, persistent audit |
 | 17 | v3.0.0 Release | Complete | 2026-08-19 | Breaking engine API cleanup; plugin trust chain; determinism rails; API backpressure/idempotency; signed release artifacts |
 | 24 | v5.0.0 Ground Truth | Complete | 2026-08-27 | Type unification (crawlkit-types); DIP fix (dyn StorageBackend); client library completion; doc reconciliation; SSRF dedup; dead code gating |
+| 26 | v5.4.0 Queue Graduation | Released | 2026-09-12 | ADR-015 lease queue + operator surface; scanner fan-out, abuse limits, metrics data plane; scanner GA decision pending §7 |
 | 25 | v5.2.0 Truth and Surface | Released | 2026-09-11 | Capability manifest CI drift gate; schedule CLI; GSC → stable; findings JSON schema + conformance tests; 100% client parity (Python/Go/Node); hosted-scanner prototype (ADR-012) |
 
 ## Current State
@@ -68,6 +69,8 @@
 | 4.4.1 | 2026-08-23 | GPG-signed checksums (first signed release); ADR-011 WASI eval; OSS-Fuzz submission kit |
 | 5.0.0 | 2026-09-06 | Breaking release on the reconciled main: analyzer finding-code ownership (833 → 778), profiles, robots.txt RFC 9309 + PostgreSQL storage fixes, `dyn StorageBackend`, crawlkit-types, `--allow-private`, auth salting Policy+Strength, envstack config, loop-retry webhook delivery, @pediment/tokens; version-tag guard + release-pipeline fixes |
 | 5.0.0 | 2026-08-27 | Breaking: unified types (crawlkit-types crate); DIP fix (dyn StorageBackend); client library completion (Python 92%, Go/Node 100%); SSRF dedup; dead code gated; docs reconciled |
+| 5.4.0 | 2026-09-12 | "Queue Graduation" stable: Redis lease queue (ADR-015) with operator dead-letter CLI, scanner queue fan-out + budget posture selection, daily global budget + per-IP limiter, /metrics data plane; capabilities audit (redis_queue/ga4/alerts stable-with-configuration) |
+| 5.4.0-alpha.1 | 2026-09-12 | Rolling prerelease: ADR-015 queue graduation (§3/§5/§6), CI Redis evidence suites |
 | 5.2.0 | 2026-09-11 | "Truth and Surface": manifest drift gate, schedule CLI, GSC stable, findings JSON schema, full client parity, scanner prototype (ADR-012); roadmap split into 5.3.0 Connectors + 5.4.0 Queue/Scanner-GA (ADR-013/014/015) |
 | 5.3.0 | 2026-09-12 | "Connectors": GA4 Data API connector (ADR-013, read-only per-tenant OAuth), Slack + Teams alert channels (ADR-014), per-tenant credential store (ADR-013 §2), CrUX stable, per-tenant retention API, Redis lease queue + politeness budget (ADR-015) |
 | 5.3.0-alpha.2 | 2026-09-12 | Rolling Connectors prerelease: Slack + Teams alert channels (ADR-014) — pure renderers over the loop-retry pipeline, credential-store endpoint URLs, URL-scrubbed delivery errors, per-channel health |
@@ -75,4 +78,4 @@
 
 ---
 
-*Historical phase record; current workspace version: 5.3.0*
+*Historical phase record; current workspace version: 5.4.0*

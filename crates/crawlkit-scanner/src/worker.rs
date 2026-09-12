@@ -454,31 +454,51 @@ mod tests {
     #[tokio::test]
     #[ignore = "requires running Redis instance"]
     async fn duplicate_delivery_is_idempotent() {
-        // At-least-once contract: executing the same job twice (e.g. after
-        // lease expiry) must not corrupt or duplicate the outcome.
+        // At-least-once contract: a worker crash after dequeue (lease
+        // abandoned) leads to reclamation and a second delivery; the second
+        // execution must produce exactly one consistent outcome.
         let token = unique_token();
         let url = format!("https://example.com/{}", token);
         assert!(enqueue_scan(&redis_url(), &token, &url).await.unwrap());
 
-        let queue = scan_queue(&redis_url(), &token).unwrap();
-        let lease1 = queue.pop().await.unwrap().expect("first delivery");
-        // Simulate crash: do not ack; pop again after reclamation would
-        // redeliver — here we simply run a second full job pass, which
-        // claims a fresh lease for the same token (if the first was
-        // reclaimed) or claims nothing (first lease still held).
-        let _ = run_one_job(&redis_url(), test_deps()).await;
+        // First delivery on a short-TTL view of the same namespace, then
+        // simulate the crash: never ack or fail.
+        let crashed = DistributedQueue::with_policy(
+            &redis_url(),
+            &format!("{QUEUE_PREFIX}{token}"),
+            50, // lease TTL ms — expires almost immediately
+            MAX_ATTEMPTS,
+            DEAD_LETTER_CAP,
+        )
+        .unwrap();
+        let lease1 = crashed.pop().await.unwrap().expect("first delivery");
+        assert_eq!(lease1.entry.url, url);
         drop(lease1);
 
-        // Either way, exactly one consistent outcome is addressable.
-        let outcome = read_outcome(&redis_url(), &token).await.unwrap();
-        match outcome {
+        // No outcome yet — the job is mid-flight, exactly as with a live
+        // crashed worker.
+        assert!(read_outcome(&redis_url(), &token).await.unwrap().is_none());
+
+        // TTL passes; the sweeper reclaims the abandoned lease.
+        tokio::time::sleep(std::time::Duration::from_millis(120)).await;
+        let reclaimed = crashed.reclaim_expired().await.unwrap();
+        assert_eq!(reclaimed, 1, "abandoned lease must be reclaimed");
+
+        // Second delivery executes through the normal worker path and
+        // stores exactly one consistent outcome.
+        assert!(run_one_job(&redis_url(), test_deps()).await.unwrap());
+        match read_outcome(&redis_url(), &token).await.unwrap() {
             Some(ScanOutcome::Complete(report)) => {
                 assert_eq!(report.submitted_url, url);
             }
             Some(other) => panic!("unexpected outcome variant: {other:?}"),
-            None => panic!("outcome missing after worker pass"),
+            None => panic!("outcome missing after re-delivery"),
         }
-        cleanup(&queue, &token).await;
+
+        // Running the worker again finds nothing (job left the index).
+        assert!(!run_one_job(&redis_url(), test_deps()).await.unwrap());
+
+        cleanup(&crashed, &token).await;
     }
 
     #[tokio::test]

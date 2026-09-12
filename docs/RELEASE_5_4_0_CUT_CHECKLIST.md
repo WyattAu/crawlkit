@@ -18,8 +18,9 @@ ladder"). The scanner's capabilities.toml status is the only delta.
 
 - [ ] §6 checklist human items complete:
   - [ ] N consecutive green CI runs observed since the evidence suites
-        landed (they accumulate automatically; count `CI` workflow runs
-        on main containing the Service-backed Redis job)
+        landed — **N = 5**, with the counting rule and live streak
+        recorded in the runbook checklist item itself (docs/SCANNER_RUNBOOK.md §6);
+        they accumulate automatically, no action needed beyond checking
   - [ ] §6.1 drills: done 2026-09-12, recorded in the runbook
   - [ ] §7 ownership line signed (docs/SCANNER_RUNBOOK.md §7) with the
         escalation path confirmed

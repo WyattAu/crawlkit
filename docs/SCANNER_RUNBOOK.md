@@ -116,6 +116,13 @@ guarded resolver, the only place the private-address policy fires.
 Dashboards scrape this endpoint per replica and aggregate; rates are
 computed at the dashboard layer from the cumulative counters.
 
+**Exposure rule:** `/metrics` carries aggregate counters only — no
+tokens, URLs, IPs, or per-actor state (verified by its tests) — but it is
+still infrastructure surface: the scrape listener is bound on
+`0.0.0.0`, so restrict `/metrics` at the reverse proxy to the monitoring
+network (or a scrape auth header) before public exposure. `/healthz`
+stays public for liveness checks.
+
 Alert channels route through the same infra as everything else (ADR-014
 once implemented; webhook delivery exists today).
 
@@ -134,8 +141,15 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
 
 - [ ] CI Redis integration suites green for N consecutive runs (ADR-015 §7
       evidence: crash-recovery, concurrent-sweep, retry-exhaustion, budget
-      windows) — suites now execute in CI on every push; N consecutive
-      green runs must be observed before sign-off
+      windows) — suites now execute in CI on every push.
+      **N = 5.** Counting rule: the 5 most recent *completed* `CI` runs on
+      main; `cancelled` runs (auto-cancelled by the concurrency group) are
+      skipped, not evidence either way; every counted run must have its
+      Service-backed PostgreSQL+Redis job green. Verify with:
+      `gh run list --branch main --workflow CI --limit 15 --json
+      conclusion,headSha --jq '[.[] | select(.conclusion != "cancelled")]
+      | .[0:5] | map(.conclusion)'` → `["success","success","success",
+      "success","success"]`. Streak as of 2026-09-12: 2 of 5, accumulating.
 - [x] Daily global scan budget + queue-full degradation implemented
       (`GlobalDailyBudget`, `abuse.rs`; shared Redis counter in the
       multi-replica posture, fail-closed on outage; explicit 429s)

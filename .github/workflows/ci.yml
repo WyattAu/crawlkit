@@ -140,7 +140,7 @@ jobs:
   roadmap-controls:
     name: Roadmap and Security Controls
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@e797f83bcb11b83ae66e0230d6156d7c80228e7c # v6.0.0
@@ -149,6 +149,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
         with:
           components: clippy, rustfmt
+      # The controls script compiles several Rust test binaries; without a
+      # shared target cache this job alone exceeded the old 15-minute cap.
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          key: roadmap-controls
       - name: Verify roadmap, capabilities, unsafe inventory, and contracts
         env:
           CRAWLKIT_TEST_THREADS: '1'

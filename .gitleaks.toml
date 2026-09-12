@@ -1,0 +1,18 @@
+# Gitleaks configuration (docs: https://github.com/gitleaks/gitleaks)
+#
+# The default rules are used as-is; this file exists only to allowlist
+# strings that look like secrets but provably are not. Each allowlist
+# entry documents why the match is a false positive.
+
+[allowlist]
+  description = "Documented false positives"
+  # Release-signing key FINGERPRINT (a public identifier, published
+  # deliberately in docs/RELEASE_ASSURANCE.md and printed by `gpg
+  # --fingerprint` on every release). It authenticates nothing by itself
+  # and is not the key material.
+  regexes = [
+    '''(?i)BA01FF9BA6BBB28AE22C13850F8C446E31A16C97''',
+  ]
+  paths = [
+    '''docs/RELEASE_ASSURANCE\.md''',
+  ]

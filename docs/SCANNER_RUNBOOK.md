@@ -150,8 +150,11 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
       Service-backed PostgreSQL+Redis job green. Verify with:
       `gh run list --branch main --workflow CI --limit 15 --json
       conclusion,headSha --jq '[.[] | select(.conclusion != "cancelled")]
-      | .[0:5] | map(.conclusion)'` → `["success","success","success",
-      "success","success"]`. Streak as of 2026-09-12: 2 of 5, accumulating.
+      | .[0:5] | map(.conclusion)'` →      `["success","success","success",
+      "success","success"]`. Streak as of 2026-09-12 (evening): 3 of 5,
+      accumulating — the chain resets only on a *failure*; the one break
+      in recent history was the schedule-test env race, fixed at its
+      cause.
 - [x] Daily global scan budget + queue-full degradation implemented
       (`GlobalDailyBudget`, `abuse.rs`; shared Redis counter in the
       multi-replica posture, fail-closed on outage; explicit 429s)

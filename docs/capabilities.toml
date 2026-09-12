@@ -205,6 +205,17 @@ evidence = [
 requirements = ["Google Search Console API access", "access token (GSC_ACCESS_TOKEN or explicit)"]
 promotion_notes = "Promoted 2026-09-11: error-path tests against a local TCP stub (HTTP 403/500 surfaced as ApiError with status+body, connection refused as RequestFailed, malformed JSON as ParseError, empty rows as empty analytics), token-hygiene test (bearer header sent exactly once, token absent from error Debug output), env-var contract documented in docs/INTEGRATIONS.md."
 
+[capabilities.ga4_integration]
+status = "experimental"
+evidence = [
+  "crates/crawlkit-engine/src/ga4.rs",
+  "crates/crawlkit-api/src/handlers/ga4.rs",
+  ".adrs/ADR-013-ga4-connector.md",
+  "docs/INTEGRATIONS.md",
+]
+requirements = ["GA4_CLIENT_ID / GA4_CLIENT_SECRET deployment OAuth app config", "CRAWLKIT_ENCRYPTION_KEY set (per-tenant credential store)", "tenant OAuth consent for analytics.readonly"]
+notes = "GA4 Data API v1beta connector per ADR-013: read-only (scope pinned by test), one-time code exchange + refresh grants with injectable token/API endpoints for hermetic tests, per-tenant refresh tokens only in the encrypted credential store, access tokens memory-only and redacted in Debug, 429/5xx retryable for loop_retry backoff. Integration API: exchange, store, status, disconnect (audited, no token material), and runReport engagement summary."
+
 [capabilities.alert_channels]
 status = "experimental"
 evidence = [

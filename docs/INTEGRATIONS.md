@@ -53,6 +53,16 @@ Error contract (both paths, tested against hermetic HTTP stubs): HTTP error stat
 
 Token hygiene (pinned by test on both paths): the API key is sent in the `x-goog-api-key` header, never in the URL query string — reqwest error messages embed request URLs, so a query-string key would leak into logs and error output. Keys never appear in error `Display` output.
 
+## Google Analytics 4 (experimental — with configuration)
+
+Read-only GA4 Data API v1beta connector per ADR-013 (`.adrs/ADR-013-ga4-connector.md`). The first F1-part-2 connector on the GSC error/hygiene contract:
+
+- **Read-only by construction.** The client requests exactly the `analytics.readonly` scope — the constant is pinned by test, so scope creep is a build failure. No write APIs, no admin API.
+- **Per-tenant OAuth grants.** The deployment configures the OAuth app (`GA4_CLIENT_ID`/`GA4_CLIENT_SECRET`); each tenant's refresh token lives only in the encrypted credential store (`ga4` connector). Access tokens are minted in memory via refresh grants — never persisted, never logged, redacted in `Debug`.
+- **API surface.** `POST /api/v1/integrations/ga4/exchange` (one-time code → stored refresh token), `POST /api/v1/integrations/ga4/credentials` (out-of-band grant), `GET .../status`, `DELETE .../credentials` (audited disconnect), `POST .../report` (engagement summary over `runReport`). Token material never appears in any response or audit record.
+- **Testability.** Both the token endpoint and Data API base URL are injectable; error paths (HTTP errors, malformed JSON, connection refusal, OAuth rejection) are hermetically tested with no Google dependency in CI. Transport errors are URL-scrubbed (the CrUX/GSC leak class).
+- **Quotas.** GA4 Data API 429/5xx classify as retryable for `loop_retry` backoff; other 4xx are fatal.
+
 ## Alert channels (experimental — Slack, Teams)
 
 Crawl-lifecycle alerts to human channels per ADR-014 (`.adrs/ADR-014-alert-channels.md`). Slack (Block Kit) and Teams (MessageCard) renderers deliver over the same loop-retry pipeline as webhooks — transport errors and 5xx/429 retry, other 4xx fatal.

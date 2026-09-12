@@ -217,8 +217,14 @@ jobs:
             --detach-sign --armor checksums.txt
           gpg --verify checksums.txt.asc checksums.txt
 
+      # The gh-release action has a known asset-metadata 404 race that can
+      # abort this step mid-upload (v5.2.0 run 34620846825, v5.3.0-alpha.2
+      # run 34659641395 — 16 of 17 assets uploaded, then abort). Errors here
+      # are tolerated: the verify step below is the real gate and re-uploads
+      # anything missing from the local staging dirs.
       - name: Create GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        continue-on-error: true
         with:
           generate_release_notes: true
           fail_on_unmatched_files: true
@@ -246,18 +252,27 @@ jobs:
           }
           missing=1
           for _ in 1 2 3 4 5 6 7 8 9 10; do
-            assets="$(gh release view "$TAG" --json assets --jq '.assets[].name')"
-            if printf '%s\n' "$assets" | sort > /tmp/assets.txt &&
-               expected | sort -u | diff -u - /tmp/assets.txt >/dev/null; then
+            gh release view "$TAG" --json assets --jq '.assets[].name' | sort -u > /tmp/assets.txt
+            expected | sort -u > /tmp/expected.txt
+            missing_list="$(comm -23 /tmp/expected.txt /tmp/assets.txt)"
+            if [ -z "$missing_list" ]; then
               missing=0
               break
             fi
+            # Self-heal: re-upload whatever the action's race dropped.
+            for name in $missing_list; do
+              file="$(find artifacts sbom -type f -name "$name" | head -1)"
+              if [ -n "$file" ]; then
+                echo "re-uploading missing asset: $name"
+                gh release upload "$TAG" "$file" --clobber
+              fi
+            done
             sleep 6
           done
           if [ "$missing" -ne 0 ]; then
             echo "::error::release assets incomplete on ${TAG}"
-            printf '%s\n' "$assets" | sort -u
-            expected | sort -u
+            sort -u /tmp/assets.txt
+            sort -u /tmp/expected.txt
             exit 1
           fi
           gh release edit "$TAG" --draft=false

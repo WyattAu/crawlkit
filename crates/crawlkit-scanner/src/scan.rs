@@ -32,7 +32,7 @@ pub const SCANNER_USER_AGENT: &str = concat!(
 );
 
 /// One fetched page (or failed fetch attempt).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct PageRecord {
     pub url: String,
     /// HTTP status; `None` when the fetch itself failed.
@@ -43,7 +43,7 @@ pub struct PageRecord {
 
 /// Aggregated finding summary for a scan result (ADR-012 §4: summary only,
 /// token-addressable, no account linkage).
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FindingSummary {
     pub code: String,
     pub severity: String,
@@ -54,7 +54,7 @@ pub struct FindingSummary {
 }
 
 /// Why a scan stopped before its page ceiling, if it did.
-#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TruncationReason {
     /// Page ceiling (25) reached.
@@ -68,7 +68,7 @@ pub enum TruncationReason {
 }
 
 /// Final report for one scan.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScanReport {
     pub submitted_url: String,
     pub pages_scanned: usize,
@@ -81,7 +81,7 @@ pub struct ScanReport {
 }
 
 /// Terminal state of a scan attempt.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScanOutcome {
     Complete(Box<ScanReport>),
@@ -125,9 +125,10 @@ pub trait Fetch: Send + Sync {
         -> Pin<Box<dyn Future<Output = FetchOutcome> + Send + 'a>>;
 }
 
-/// Dependencies for one scan run.
-pub struct ScanDeps<F: Fetch> {
-    pub fetcher: Arc<F>,
+/// Dependencies for one scan run. The fetcher is trait-object typed so the
+/// same path serves inline requests and queue-consuming workers.
+pub struct ScanDeps {
+    pub fetcher: Arc<dyn Fetch>,
     pub budget: Arc<dyn BudgetStore>,
     pub registry: Arc<AnalyzerRegistry>,
 }
@@ -138,7 +139,7 @@ pub struct ScanDeps<F: Fetch> {
 /// robots gate → BFS with per-page budget slots → analysis. Every fetch
 /// consumes exactly one politeness slot, robots included, so concurrent
 /// submitters for the same host share a hard ceiling.
-pub async fn run_scan<F: Fetch + 'static>(submitted: &str, deps: ScanDeps<F>) -> ScanOutcome {
+pub async fn run_scan(submitted: &str, deps: ScanDeps) -> ScanOutcome {
     let started_at = chrono::Utc::now();
     let start = Instant::now();
 
@@ -432,7 +433,7 @@ mod tests {
         }
     }
 
-    fn fixture_deps<I, S, B>(pages: I) -> ScanDeps<FixtureFetcher>
+    fn fixture_deps<I, S, B>(pages: I) -> ScanDeps
     where
         S: Into<String>,
         B: Into<String>,

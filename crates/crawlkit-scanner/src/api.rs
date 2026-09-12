@@ -30,7 +30,7 @@ use tokio::sync::Semaphore;
 
 use crate::bounds::{BudgetStore, InMemoryBudgetStore, RESULT_RETENTION};
 use crate::fetcher::PinnedFetcher;
-use crate::scan::{run_scan, ScanDeps, ScanOutcome};
+use crate::scan::{run_scan, ScanOutcome};
 use crate::token::{new_result_token, parse_result_token, TokenError};
 
 /// Result-store ceiling: the oldest entries are evicted when exceeded. This
@@ -85,6 +85,10 @@ pub struct AppState {
     /// Which budget backend was selected at startup (ADR-015 §A1 posture).
     /// Surfaced for runbook verification and tests.
     pub budget_backend: BudgetBackend,
+
+    /// Shared Redis URL when running the multi-replica posture (queue
+    /// execution + shared results); `None` in the single-replica posture.
+    pub redis_url: Option<String>,
 }
 
 /// Errors possible when constructing [`AppState`] from the environment.
@@ -123,7 +127,29 @@ impl AppState {
             results: dashmap::DashMap::new(),
             scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
             budget_backend: BudgetBackend::InMemory,
+            redis_url: None,
         })
+    }
+
+    /// Whether scan execution is queued (multi-replica posture).
+    ///
+    /// True exactly when the Redis budget backend is selected: the runbook's
+    /// multi-replica posture is "shared budget + queue fan-out", so one
+    /// switch selects both. Inline execution remains the single-replica
+    /// path, where Redis is not required at all.
+    pub fn queue_mode(&self) -> bool {
+        self.budget_backend == BudgetBackend::Redis
+    }
+
+    /// Build scan dependencies from this state (shared fetcher, budget,
+    /// registry). Used by the inline handler and, in queue mode, by the
+    /// worker pool's deps factory.
+    pub fn deps(&self) -> crate::scan::ScanDeps {
+        crate::scan::ScanDeps {
+            fetcher: self.fetcher.clone(),
+            budget: self.budget.clone(),
+            registry: self.registry.clone(),
+        }
     }
 
     /// Build state with the budget backend selected from the environment
@@ -185,6 +211,7 @@ impl AppState {
                         results: dashmap::DashMap::new(),
                         scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
                         budget_backend: BudgetBackend::Redis,
+                        redis_url: Some(redis_url.to_string()),
                     })
                 }
                 #[cfg(not(feature = "shared-budget"))]
@@ -263,11 +290,53 @@ async fn submit_scan(
         }
     };
 
-    let deps = ScanDeps {
-        fetcher: state.fetcher.clone(),
-        budget: state.budget.clone(),
-        registry: state.registry.clone(),
-    };
+    let deps = state.deps();
+
+    // Multi-replica posture: enqueue for the worker pool and return the
+    // token immediately. The scan runs with the identical trust path in a
+    // worker; GET /scan/{token} serves the shared outcome key. Enqueue
+    // failure is fail-closed: 503, nothing acknowledged.
+    #[cfg(feature = "shared-budget")]
+    if state.queue_mode() {
+        let Some(redis_url) = state.redis_url.as_deref() else {
+            return (
+                StatusCode::SERVICE_UNAVAILABLE,
+                [(header::RETRY_AFTER, "30")],
+                Json(serde_json::json!({ "error": "queue backend unavailable" })),
+            )
+                .into_response();
+        };
+        return match crate::worker::enqueue_scan(redis_url, &token, &request.url).await {
+            Ok(true) => (
+                StatusCode::ACCEPTED,
+                [
+                    (header::CACHE_CONTROL, "no-store"),
+                    (header::RETRY_AFTER, "2"),
+                ],
+                Json(serde_json::json!({
+                    "token": token,
+                    "result_url": format!("/scan/{token}"),
+                    "state": "queued"
+                })),
+            )
+                .into_response(),
+            Ok(false) => (
+                StatusCode::CONFLICT,
+                [(header::CACHE_CONTROL, "no-store")],
+                Json(serde_json::json!({ "error": "job already enqueued" })),
+            )
+                .into_response(),
+            Err(e) => {
+                tracing::warn!(error = %e, "scan enqueue failed; failing closed");
+                (
+                    StatusCode::SERVICE_UNAVAILABLE,
+                    [(header::RETRY_AFTER, "30")],
+                    Json(serde_json::json!({ "error": "queue backend unavailable" })),
+                )
+                    .into_response()
+            }
+        };
+    }
 
     let outcome = run_scan(&request.url, deps).await;
 
@@ -316,6 +385,55 @@ async fn get_result(State(state): State<Arc<AppState>>, Path(token): Path<String
     // touching the store (and without leaking whether siblings exist).
     if parse_result_token(&token).is_err() {
         return token_error_response();
+    }
+
+    // Multi-replica posture: serve from the shared done key so any replica
+    // can answer for any token (results are not replica-local in this mode).
+    #[cfg(feature = "shared-budget")]
+    if let Some(redis_url) = state.redis_url.as_deref() {
+        if parse_result_token(&token).is_err() {
+            return token_error_response();
+        }
+        let shared = match crate::worker::read_outcome(redis_url, &token).await {
+            Ok(o) => o,
+            Err(e) => {
+                tracing::warn!(error = %e, "shared result read failed");
+                None
+            }
+        };
+        return match shared {
+            Some(outcome) => {
+                let body = match &outcome {
+                    ScanOutcome::Complete(report) => ScanResultResponse {
+                        state: "complete",
+                        report: Some((**report).clone()),
+                        reason: None,
+                        expires_in_secs: RESULT_RETENTION.as_secs(),
+                    },
+                    ScanOutcome::RobotsBlocked { submitted_url } => ScanResultResponse {
+                        state: "robots_blocked",
+                        report: None,
+                        reason: Some(format!("robots.txt disallows scanning {submitted_url}")),
+                        expires_in_secs: RESULT_RETENTION.as_secs(),
+                    },
+                    ScanOutcome::Rejected { .. } | ScanOutcome::BudgetExhausted { .. } => {
+                        ScanResultResponse {
+                            state: "expired",
+                            report: None,
+                            reason: None,
+                            expires_in_secs: 0,
+                        }
+                    }
+                };
+                (
+                    StatusCode::OK,
+                    [(header::CACHE_CONTROL, "no-store")],
+                    Json(body),
+                )
+                    .into_response()
+            }
+            None => token_error_response(),
+        };
     }
 
     match state.results.get(&token) {

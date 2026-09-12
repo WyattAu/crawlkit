@@ -16,6 +16,8 @@ pub mod fetcher;
 pub mod guard;
 pub mod scan;
 pub mod token;
+#[cfg(feature = "shared-budget")]
+pub mod worker;
 
 #[cfg(feature = "shared-budget")]
 pub mod budget_redis;

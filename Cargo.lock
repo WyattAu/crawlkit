@@ -1064,6 +1064,7 @@ dependencies = [
  "dashmap",
  "http",
  "rand 0.8.7",
+ "redis",
  "reqwest 0.12.28",
  "serde",
  "serde_json",

@@ -51,13 +51,21 @@ or API. The scanner must never be described as a site audit.
   a typo can never silently degrade the anti-abuse guarantee (pinned by
   tests in `crates/crawlkit-scanner/src/api.rs`). The selected posture is
   logged at startup (`budget_backend` field) for runbook verification.
-- Scan execution: requires the lease queue for fan-out; ADR-015 §5 surface
-  exists, worker wiring does not yet (tracked below).
+- Scan execution: queue fan-out is **implemented** — submissions enqueue a
+  per-token job (`crawlkit:scanner:jobs` index + a `scanner:{token}` queue
+  namespace using the ADR-015 lease queue) and the replica's worker pool
+  (`CRAWLKIT_SCANNER_WORKERS`, default 2; `CRAWLKIT_SCANNER_POLL_MS`,
+  default 500) executes with the identical trust path. Delivery is
+  at-least-once: crashes are recovered by lease reclamation, duplicates
+  are idempotent (completion is a SETEX of the outcome). Results live in
+  `crawlkit:scanner:done:{token}` with the retention TTL, so any replica
+  can serve any token.
 - Recommended: Redis with Sentinel/failover; persistence config documented
   in the deployment manifest before enabling this posture.
 - Dead-letter operations (ADR-015 §3): `crawlkit queue dead-letter list`
   and `crawlkit queue dead-letter redrive <INDEX>` against the same Redis
-  (`CRAWLKIT_REDIS_URL`).
+  (`CRAWLKIT_REDIS_URL`); each scan namespace is named `scanner:{token}`,
+  so dead letters name the affected scan directly.
 
 ## 3. Anti-abuse architecture (what is already enforced)
 

@@ -89,6 +89,55 @@ pub struct AppState {
     /// Shared Redis URL when running the multi-replica posture (queue
     /// execution + shared results); `None` in the single-replica posture.
     pub redis_url: Option<String>,
+
+    /// Daily global scan budget (GA checklist item 2): a service-wide cost
+    /// lever. Shared (Redis) exactly when the queue posture is active.
+    pub daily_budget: Arc<crate::abuse::GlobalDailyBudget>,
+
+    /// Per-IP submission rate limiter (GA checklist item 4).
+    pub ip_limiter: Arc<crate::abuse::IpRateLimiter>,
+}
+
+/// Default service-wide daily scan ceiling. A cost lever: deployment
+/// configuration may lower it (env), never raise the code default.
+const DEFAULT_DAILY_BUDGET: u64 = 5_000;
+
+/// Default per-IP submissions per minute (fixed window).
+const DEFAULT_IP_LIMIT_PER_MIN: u32 = 10;
+
+/// Daily scan ceiling: `CRAWLKIT_SCANNER_DAILY_BUDGET` or the code default
+/// (lowering only — the default is the ceiling, per the runbook's cost-lever
+/// rule).
+fn daily_budget_limit() -> u64 {
+    std::env::var("CRAWLKIT_SCANNER_DAILY_BUDGET")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_DAILY_BUDGET)
+}
+
+/// Per-IP submissions/minute: `CRAWLKIT_SCANNER_IP_LIMIT_PER_MIN` or default
+/// (lowering only).
+fn ip_limit_per_min() -> u32 {
+    std::env::var("CRAWLKIT_SCANNER_IP_LIMIT_PER_MIN")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(DEFAULT_IP_LIMIT_PER_MIN)
+}
+
+/// Extract the client IP for rate limiting from the proxy-set
+/// `X-Forwarded-For` header (first hop). The deployment's proxy is trusted
+/// to set/strip this header; direct unproxied access shares the
+/// `"unknown"` bucket, which is the documented single-replica prototype
+/// posture (public exposure requires the proxied deployment).
+fn client_ip(headers: &http::HeaderMap) -> String {
+    headers
+        .get("x-forwarded-for")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.split(',').next())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| "unknown".to_string())
 }
 
 /// Errors possible when constructing [`AppState`] from the environment.
@@ -128,6 +177,13 @@ impl AppState {
             scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
             budget_backend: BudgetBackend::InMemory,
             redis_url: None,
+            daily_budget: Arc::new(crate::abuse::GlobalDailyBudget::in_memory(
+                daily_budget_limit(),
+            )),
+            ip_limiter: Arc::new(crate::abuse::IpRateLimiter::new(
+                ip_limit_per_min(),
+                std::time::Duration::from_secs(60),
+            )),
         })
     }
 
@@ -212,6 +268,14 @@ impl AppState {
                         scan_permits: Semaphore::new(MAX_CONCURRENT_SCANS),
                         budget_backend: BudgetBackend::Redis,
                         redis_url: Some(redis_url.to_string()),
+                        daily_budget: Arc::new(crate::abuse::GlobalDailyBudget::shared(
+                            "crawlkit:scanner:daily",
+                            daily_budget_limit(),
+                        )),
+                        ip_limiter: Arc::new(crate::abuse::IpRateLimiter::new(
+                            ip_limit_per_min(),
+                            std::time::Duration::from_secs(60),
+                        )),
                     })
                 }
                 #[cfg(not(feature = "shared-budget"))]
@@ -271,9 +335,67 @@ async fn healthz() -> &'static str {
 /// the scan path is identical to the production engine's.
 async fn submit_scan(
     State(state): State<Arc<AppState>>,
+    headers: http::HeaderMap,
     Json(request): Json<ScanRequest>,
 ) -> Response {
     state.sweep();
+
+    // Abuse-surface ceilings (GA checklist items 2 & 4), checked before any
+    // other work: per-IP fixed window first (cheap, bounds one actor), then
+    // the service-wide daily budget (the cost lever). Refusals are explicit
+    // 429s with Retry-After — degradation is never silent.
+    let ip = client_ip(&headers);
+    let now_ms = u64::try_from(chrono::Utc::now().timestamp_millis()).unwrap_or(0);
+    if let Err(e) = state.ip_limiter.check(&ip, now_ms) {
+        let retry = match &e {
+            crate::abuse::AbuseLimitError::IpRateLimited { retry_after_secs } => *retry_after_secs,
+            _ => 60,
+        };
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, retry.to_string().as_str())],
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response();
+    }
+    let daily = match state.daily_budget.backend() {
+        crate::abuse::DailyBudgetBackend::InMemory => state.daily_budget.consume_local(now_ms),
+        #[cfg(feature = "shared-budget")]
+        crate::abuse::DailyBudgetBackend::Redis => {
+            // Shared counting needs a connection; on failure this fails
+            // closed inside consume_shared. Reuse a scratch queue handle.
+            let scratch = crawlkit_engine::distributed_queue::DistributedQueue::new(
+                state.redis_url.as_deref().unwrap_or("redis://127.0.0.1/"),
+                "__scanner_daily__",
+            );
+            match scratch {
+                Ok(q) => match q.manager().await {
+                    Ok(mut conn) => state.daily_budget.consume_shared(&mut conn, now_ms).await,
+                    Err(_) => Err(crate::abuse::AbuseLimitError::DailyBudgetExhausted {
+                        retry_after_secs: 60,
+                    }),
+                },
+                Err(_) => Err(crate::abuse::AbuseLimitError::DailyBudgetExhausted {
+                    retry_after_secs: 60,
+                }),
+            }
+        }
+        #[cfg(not(feature = "shared-budget"))]
+        crate::abuse::DailyBudgetBackend::Redis => {
+            // Unreachable without the feature; treat as refused.
+            Err(crate::abuse::AbuseLimitError::DailyBudgetExhausted {
+                retry_after_secs: 60,
+            })
+        }
+    };
+    if let Err(e) = daily {
+        return (
+            StatusCode::TOO_MANY_REQUESTS,
+            [(header::RETRY_AFTER, "60")],
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response();
+    }
 
     let token = new_result_token();
 
@@ -502,6 +624,42 @@ mod tests {
         // liveness here; scan-path tests live in scan.rs with fixtures.
         let state = Arc::new(AppState::new().expect("state"));
         create_router(state)
+    }
+
+    // --- Abuse-surface limits (GA checklist items 2 & 4) ---
+
+    #[test]
+    fn ip_limiter_refusal_names_retry() {
+        let limiter = crate::abuse::IpRateLimiter::new(1, std::time::Duration::from_secs(60));
+        let t0: u64 = 1_789_000_000_000;
+        assert!(limiter.check("203.0.113.5", t0).is_ok());
+        match limiter.check("203.0.113.5", t0 + 1_000) {
+            Err(crate::abuse::AbuseLimitError::IpRateLimited { retry_after_secs }) => {
+                assert!(retry_after_secs > 0 && retry_after_secs <= 60);
+            }
+            other => panic!("expected IpRateLimited, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn daily_budget_refusal_is_explicit() {
+        let budget = crate::abuse::GlobalDailyBudget::in_memory(1);
+        let t0: u64 = 1_789_000_000_000;
+        assert!(budget.consume_local(t0).is_ok());
+        match budget.consume_local(t0) {
+            Err(crate::abuse::AbuseLimitError::DailyBudgetExhausted { retry_after_secs }) => {
+                assert!(retry_after_secs > 0);
+            }
+            other => panic!("expected DailyBudgetExhausted, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn client_ip_prefers_first_forwarded_hop() {
+        let mut headers = http::HeaderMap::new();
+        headers.insert("x-forwarded-for", "203.0.113.9, 10.0.0.1".parse().unwrap());
+        assert_eq!(client_ip(&headers), "203.0.113.9");
+        assert_eq!(client_ip(&http::HeaderMap::new()), "unknown");
     }
 
     #[tokio::test]

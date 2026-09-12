@@ -10,6 +10,7 @@
 // crates/crawlkit-api and crates/crawlkit).
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+pub mod abuse;
 pub mod api;
 pub mod bounds;
 pub mod fetcher;

@@ -321,11 +321,23 @@ pub fn create_router(state: Arc<AppState>) -> Router {
         .route("/scan", post(submit_scan))
         .route("/scan/{token}", get(get_result))
         .route("/healthz", get(healthz))
+        .route("/metrics", get(metrics_snapshot))
         .with_state(state)
 }
 
 async fn healthz() -> &'static str {
     "ok"
+}
+
+/// GET /metrics: operational snapshot for dashboard scraping (runbook §4).
+/// Cumulative counters since process start; per-replica view (aggregation
+/// is the dashboard layer's job).
+async fn metrics_snapshot() -> Response {
+    (
+        [(header::CACHE_CONTROL, "no-store")],
+        axum::Json(crate::metrics::METRICS.snapshot_json()),
+    )
+        .into_response()
 }
 
 /// POST /scan: validate, run the bounded scan, store and return the token.
@@ -351,6 +363,7 @@ async fn submit_scan(
             crate::abuse::AbuseLimitError::IpRateLimited { retry_after_secs } => *retry_after_secs,
             _ => 60,
         };
+        crate::metrics::METRICS.record_rejected(crate::metrics::RejectionCause::IpRateLimited);
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, retry.to_string().as_str())],
@@ -389,6 +402,7 @@ async fn submit_scan(
         }
     };
     if let Err(e) = daily {
+        crate::metrics::METRICS.record_rejected(crate::metrics::RejectionCause::DailyBudget);
         return (
             StatusCode::TOO_MANY_REQUESTS,
             [(header::RETRY_AFTER, "60")],
@@ -403,6 +417,7 @@ async fn submit_scan(
     let _permit = match state.scan_permits.try_acquire() {
         Ok(p) => p,
         Err(_) => {
+            crate::metrics::METRICS.record_rejected(crate::metrics::RejectionCause::QueueBusy);
             return (
                 StatusCode::SERVICE_UNAVAILABLE,
                 [(header::RETRY_AFTER, "30")],
@@ -429,19 +444,22 @@ async fn submit_scan(
                 .into_response();
         };
         return match crate::worker::enqueue_scan(redis_url, &token, &request.url).await {
-            Ok(true) => (
-                StatusCode::ACCEPTED,
-                [
-                    (header::CACHE_CONTROL, "no-store"),
-                    (header::RETRY_AFTER, "2"),
-                ],
-                Json(serde_json::json!({
-                    "token": token,
-                    "result_url": format!("/scan/{token}"),
-                    "state": "queued"
-                })),
-            )
-                .into_response(),
+            Ok(true) => {
+                crate::metrics::METRICS.record_accepted();
+                (
+                    StatusCode::ACCEPTED,
+                    [
+                        (header::CACHE_CONTROL, "no-store"),
+                        (header::RETRY_AFTER, "2"),
+                    ],
+                    Json(serde_json::json!({
+                        "token": token,
+                        "result_url": format!("/scan/{token}"),
+                        "state": "queued"
+                    })),
+                )
+                    .into_response()
+            }
             Ok(false) => (
                 StatusCode::CONFLICT,
                 [(header::CACHE_CONTROL, "no-store")],
@@ -450,6 +468,7 @@ async fn submit_scan(
                 .into_response(),
             Err(e) => {
                 tracing::warn!(error = %e, "scan enqueue failed; failing closed");
+                crate::metrics::METRICS.record_rejected(crate::metrics::RejectionCause::QueueBusy);
                 (
                     StatusCode::SERVICE_UNAVAILABLE,
                     [(header::RETRY_AFTER, "30")],
@@ -460,7 +479,15 @@ async fn submit_scan(
         };
     }
 
+    let inline_started = std::time::Instant::now();
     let outcome = run_scan(&request.url, deps).await;
+
+    // Outcome metrics are recorded once here in the inline posture; queue
+    // workers record their own (Metrics::record_outcome is idempotent per
+    // call site, and the two postures are mutually exclusive per replica).
+    crate::metrics::METRICS.record_outcome(&outcome);
+    crate::metrics::METRICS
+        .record_inline_latency_ms(u64::try_from(inline_started.elapsed().as_millis()).unwrap_or(0));
 
     let (status, body) = match &outcome {
         ScanOutcome::Rejected { .. } => (
@@ -475,10 +502,13 @@ async fn submit_scan(
             StatusCode::TOO_MANY_REQUESTS,
             serde_json::json!({ "state": "budget_exhausted", "retry_after_secs": retry_after_secs }),
         ),
-        ScanOutcome::Complete(_) => (
-            StatusCode::ACCEPTED,
-            serde_json::json!({ "token": token, "result_url": format!("/scan/{token}") }),
-        ),
+        ScanOutcome::Complete(_) => {
+            crate::metrics::METRICS.record_accepted();
+            (
+                StatusCode::ACCEPTED,
+                serde_json::json!({ "token": token, "result_url": format!("/scan/{token}") }),
+            )
+        }
     };
 
     // Only addressable outcomes are stored; rejected inputs and budget
@@ -670,6 +700,54 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn metrics_endpoint_serves_snapshot() {
+        let app = test_app();
+        let res = app
+            .oneshot(Request::get("/metrics").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), 1 << 20)
+            .await
+            .unwrap();
+        let snap: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        // Dashboard-consumable shape (runbook §4): every section present.
+        assert!(snap["submissions"]["accepted"].is_u64());
+        assert!(snap["submissions"]["rejected_by_cause"]["ssrf_denied"].is_u64());
+        assert!(snap["outcomes"]["complete"].is_u64());
+        assert!(snap["egress_bytes_total"].is_u64());
+        assert!(
+            snap["latency_ms"]["inline_p95"].is_null() || snap["latency_ms"]["inline_p95"].is_u64()
+        );
+    }
+
+    #[tokio::test]
+    async fn rejected_submission_counts_in_metrics() {
+        // The process-global METRICS accumulates across tests in one binary;
+        // assert on the delta rather than absolute values.
+        let before = crate::metrics::METRICS.snapshot_json()["submissions"]["rejected_by_cause"]
+            ["malformed_input"]
+            .as_u64()
+            .unwrap_or(0);
+        let app = test_app();
+        let res = app
+            .oneshot(
+                Request::post("/scan")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{\"url\":\"not a url\"}"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let after = crate::metrics::METRICS.snapshot_json()["submissions"]["rejected_by_cause"]
+            ["malformed_input"]
+            .as_u64()
+            .unwrap_or(0);
+        assert_eq!(after, before + 1, "rejection must hit its dashboard bucket");
     }
 
     // --- Budget-posture selection (ADR-015 §A1) ---

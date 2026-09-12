@@ -204,6 +204,19 @@ pub async fn run_one_job(redis_url: &str, deps: ScanDeps) -> Result<bool, Worker
     // the first stored its outcome already — the SETEX overwrites with an
     // identical result.
     let _ = queue.ack(&lease.lease_id).await?;
+
+    // Runbook §4 latency row: submit→result-ready, measured from the
+    // entry's original enqueue (preserved across retries and crash
+    // recovery, so a redelivered job reports its true end-to-end span).
+    // Robots-blocked and rejected outcomes complete instantly; sampling
+    // only `Complete` keeps the latency series about real work.
+    if matches!(outcome, ScanOutcome::Complete(_)) {
+        let now = chrono::Utc::now().timestamp_millis();
+        let ms = u64::try_from((now - lease.entry.first_enqueued_at).max(0)).unwrap_or(0);
+        crate::metrics::METRICS.record_scan_latency_ms(ms);
+    }
+    crate::metrics::METRICS.record_outcome(&outcome);
+
     info!(token, "scan job complete");
     Ok(true)
 }

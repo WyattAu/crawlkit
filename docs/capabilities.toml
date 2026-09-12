@@ -82,12 +82,15 @@ status = "experimental"
 evidence = ["crates/crawlkit-engine/src/native_plugin.rs"]
 
 [capabilities.redis_queue]
-status = "experimental"
+status = "stable-with-configuration"
 evidence = [
   "crates/crawlkit-engine/src/distributed_queue.rs",
   "crates/crawlkit-engine/src/queue_trait.rs",
+  ".adrs/ADR-015-redis-queue-graduation.md",
+  "crates/crawlkit/src/cli/queue.rs",
 ]
-requirements = ["Redis service", "distributed delivery semantics review"]
+requirements = ["Redis service"]
+notes = "Graduated per ADR-015 (5.4.0): at-least-once delivery with lease TTLs and reclamation, transient/fatal retry classification, poison quarantine after 3 attempts, O(1) membership. Crash-recovery, concurrent-sweep, retry-exhaustion, and dead-letter redrive evidence suites run in CI against a Redis 7 service on every push. Operator surface: `crawlkit queue dead-letter list` (NDJSON) and `redrive <INDEX>`. Delivery semantics published in docs/SCANNER_RUNBOOK.md §2; this is the scanner's production execution path in the multi-replica posture."
 
 [capabilities.javascript_rendering]
 status = "optional"
@@ -163,7 +166,7 @@ evidence = [
   ".adrs/ADR-012-hosted-scanner-trust-boundary.md",
   "docs/SCANNER_RUNBOOK.md",
 ]
-notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store; shared backend required before multi-replica). Not yet publicly deployed. GA gated on docs/SCANNER_RUNBOOK.md checklist (§6) and signed ownership (§7); stays prototype until both complete."
+notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store, or shared Redis backend per ADR-015 §A1 selected by CRAWLKIT_BUDGET_BACKEND). Not yet publicly deployed. All §6 code obligations implemented (daily global budget, per-IP limiter, queue fan-out, /metrics data plane); five live drills recorded (§6.1). Status stays prototype until the checklist's human items complete: N consecutive green CI runs and the §7 ownership signature (decision material: docs/GA_SIGNOFF_PACKAGE.md)."
 
 [capabilities.log_analysis]
 status = "stable"
@@ -206,7 +209,7 @@ requirements = ["Google Search Console API access", "access token (GSC_ACCESS_TO
 promotion_notes = "Promoted 2026-09-11: error-path tests against a local TCP stub (HTTP 403/500 surfaced as ApiError with status+body, connection refused as RequestFailed, malformed JSON as ParseError, empty rows as empty analytics), token-hygiene test (bearer header sent exactly once, token absent from error Debug output), env-var contract documented in docs/INTEGRATIONS.md."
 
 [capabilities.ga4_integration]
-status = "experimental"
+status = "stable-with-configuration"
 evidence = [
   "crates/crawlkit-engine/src/ga4.rs",
   "crates/crawlkit-api/src/handlers/ga4.rs",
@@ -217,7 +220,7 @@ requirements = ["GA4_CLIENT_ID / GA4_CLIENT_SECRET deployment OAuth app config",
 notes = "GA4 Data API v1beta connector per ADR-013: read-only (scope pinned by test), one-time code exchange + refresh grants with injectable token/API endpoints for hermetic tests, per-tenant refresh tokens only in the encrypted credential store, access tokens memory-only and redacted in Debug, 429/5xx retryable for loop_retry backoff. Integration API: exchange, store, status, disconnect (audited, no token material), and runReport engagement summary."
 
 [capabilities.alert_channels]
-status = "experimental"
+status = "stable-with-configuration"
 evidence = [
   "crates/crawlkit-api/src/handlers/alerts.rs",
   "crates/crawlkit-api/src/credential_store.rs",
@@ -279,6 +282,7 @@ status = "experimental"
 evidence = [
   "crates/crawlkit-engine/src/plugin/wasi_preview2.rs",
   "crates/crawlkit-engine/src/plugin/mod.rs",
+  "docs/wasi-promotion-evaluation.md",
 ]
 requirements = ["wasi-preview2 feature"]
 notes = "Component-model loading, analysis invocation, WASI CLI (bounded stdout/stderr capture, no fs/env/sockets) and HTTP outcalls (deny-by-default capability, SSRF-validated, 10s timeouts, 1 MiB response cap, no redirects) are implemented via wasmtime-wasi/wasmtime-wasi-http v47."

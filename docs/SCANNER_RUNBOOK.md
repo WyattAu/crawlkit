@@ -103,6 +103,19 @@ Minimum dashboards before GA (Phase 5.1 alignment):
 - Egress bytes/day — the primary cost driver; alert on deviation from the
   established baseline
 
+**Data plane (implemented):** `GET /metrics` serves a cumulative JSON
+snapshot per replica — `submissions` (accepted + `rejected_by_cause`
+buckets), `outcomes` (complete / robots_blocked / rejected /
+budget_exhausted), `egress_bytes_total` (application-level body bytes,
+including truncated reads), and `latency_ms` p50/p95 reservoir samples
+split by posture (`inline_*` = fetch path, `scan_*` = submit→result-ready
+including queue wait and crash recovery). Rejection causes are a closed
+enum (`ssrf_denied`, `daily_budget`, `ip_rate_limited`, `target_budget`,
+`queue_busy`, `malformed_input`) — the SSRF bucket is incremented at the
+guarded resolver, the only place the private-address policy fires.
+Dashboards scrape this endpoint per replica and aggregate; rates are
+computed at the dashboard layer from the cumulative counters.
+
 Alert channels route through the same infra as everything else (ADR-014
 once implemented; webhook delivery exists today).
 

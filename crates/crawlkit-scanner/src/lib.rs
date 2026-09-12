@@ -15,6 +15,7 @@ pub mod api;
 pub mod bounds;
 pub mod fetcher;
 pub mod guard;
+pub mod metrics;
 pub mod scan;
 pub mod token;
 #[cfg(feature = "shared-budget")]

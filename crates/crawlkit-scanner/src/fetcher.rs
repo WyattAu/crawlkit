@@ -61,6 +61,11 @@ impl reqwest::dns::Resolve for GuardedResolver {
                 .filter(|addr| guard::is_allowed_ip(addr.ip()))
                 .collect();
             if addrs.is_empty() {
+                // The ADR-012 SSRF boundary just fired: DNS answered, but
+                // every address was private/reserved. This is the attack-
+                // recon signal the runbook §4 pages on, so it is counted
+                // here — the only place the policy decision is visible.
+                crate::metrics::METRICS.record_rejected(crate::metrics::RejectionCause::SsrfDenied);
                 return Err(format!("scanner policy: {host} has no permitted addresses").into());
             }
             Ok(Box::new(addrs.into_iter()) as reqwest::dns::Addrs)
@@ -210,6 +215,9 @@ impl PinnedFetcher {
                     body.extend_from_slice(&bytes);
                 }
                 Err(e) => {
+                    // Partial bytes crossed the wire before the failure;
+                    // egress cost was incurred, so it is counted.
+                    crate::metrics::METRICS.record_egress_bytes(body.len() as u64);
                     return FetchOutcome {
                         status: 0,
                         headers,
@@ -221,6 +229,10 @@ impl PinnedFetcher {
                 }
             }
         }
+
+        // Application-level egress (runbook §4): body bytes actually pulled,
+        // including truncated reads — those bytes did cross the wire.
+        crate::metrics::METRICS.record_egress_bytes(body.len() as u64);
 
         FetchOutcome {
             status,

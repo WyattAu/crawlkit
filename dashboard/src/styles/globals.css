@@ -1,4 +1,4 @@
-@import "@pediment/tokens";
+@import "./tokens.css";
 
 @tailwind base;
 @tailwind components;

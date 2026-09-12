@@ -3,7 +3,7 @@
  * Amoebic UI: fluid organic shapes, smooth transitions
  */
 
-@import "@pediment/tokens";
+@import "./tokens.css";
 
 :root {
   /* Starlight palette -- mapped from pediment light theme */

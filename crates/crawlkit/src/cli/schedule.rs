@@ -19,15 +19,21 @@ pub enum AuthKind {
 /// Resolve credentials from the environment. Errors name the missing variable
 /// so operators can fix CI secrets without reading source.
 fn resolve_auth() -> Result<(String, AuthKind)> {
-    if let Ok(key) = std::env::var("CRAWLKIT_API_KEY") {
-        if !key.trim().is_empty() {
-            return Ok((key, AuthKind::ApiKey));
-        }
+    let api_key = std::env::var("CRAWLKIT_API_KEY").ok();
+    let jwt = std::env::var("CRAWLKIT_JWT").ok();
+    resolve_auth_from(api_key.as_deref(), jwt.as_deref())
+}
+
+/// Pure credential-selection core: API key wins over JWT; blank values are
+/// treated as absent. Split from the env-reading wrapper so the priority
+/// policy is testable without touching process-global state (env vars are
+/// shared across parallel test threads — mutating them there is a race).
+fn resolve_auth_from(api_key: Option<&str>, jwt: Option<&str>) -> Result<(String, AuthKind)> {
+    if let Some(key) = api_key.map(str::trim).filter(|k| !k.is_empty()) {
+        return Ok((key.to_string(), AuthKind::ApiKey));
     }
-    if let Ok(token) = std::env::var("CRAWLKIT_JWT") {
-        if !token.trim().is_empty() {
-            return Ok((token, AuthKind::Bearer));
-        }
+    if let Some(token) = jwt.map(str::trim).filter(|t| !t.is_empty()) {
+        return Ok((token.to_string(), AuthKind::Bearer));
     }
     bail!(
         "no credentials: set CRAWLKIT_API_KEY (X-API-Key) or CRAWLKIT_JWT (Bearer) \
@@ -223,6 +229,10 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Mutex;
+
+    /// Serializes tests that mutate process-global env state.
+    static ENV_TEST_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn normalize_base_strips_trailing_slash() {
@@ -246,10 +256,7 @@ mod tests {
 
     #[test]
     fn missing_credentials_error_names_variable() {
-        // Ensure neither var is set in the test environment for determinism.
-        std::env::remove_var("CRAWLKIT_API_KEY");
-        std::env::remove_var("CRAWLKIT_JWT");
-        let err = resolve_auth().unwrap_err().to_string();
+        let err = resolve_auth_from(None, None).unwrap_err().to_string();
         assert!(
             err.contains("CRAWLKIT_API_KEY"),
             "error must name the env var: {err}"
@@ -258,10 +265,33 @@ mod tests {
 
     #[test]
     fn auth_kind_selection_prefers_api_key() {
-        std::env::set_var("CRAWLKIT_API_KEY", "k-test");
-        std::env::set_var("CRAWLKIT_JWT", "t-test");
-        let (auth, kind) = resolve_auth().expect("credentials present");
+        let (auth, kind) =
+            resolve_auth_from(Some("k-test"), Some("t-test")).expect("credentials present");
         assert_eq!(auth, "k-test");
+        assert_eq!(kind, AuthKind::ApiKey);
+    }
+
+    #[test]
+    fn blank_credentials_are_treated_as_absent() {
+        assert!(resolve_auth_from(Some("   "), None).is_err());
+        assert!(resolve_auth_from(None, Some("")).is_err());
+        let (auth, kind) = resolve_auth_from(Some(" "), Some("t-trimmed")).expect("jwt wins");
+        assert_eq!(auth, "t-trimmed");
+        assert_eq!(kind, AuthKind::Bearer);
+    }
+
+    /// The one env-reading behavior (values pass through unchanged) needs
+    /// process-global state; serialize it so parallel tests that also touch
+    /// these variables can't race it.
+    #[test]
+    fn env_wrapper_passes_values_through() {
+        let _env_lock = ENV_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        std::env::set_var("CRAWLKIT_API_KEY", "k-env");
+        std::env::set_var("CRAWLKIT_JWT", "t-env");
+        let (auth, kind) = resolve_auth().expect("credentials present");
+        assert_eq!(auth, "k-env");
         assert_eq!(kind, AuthKind::ApiKey);
         std::env::remove_var("CRAWLKIT_API_KEY");
         std::env::remove_var("CRAWLKIT_JWT");

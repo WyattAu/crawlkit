@@ -141,7 +141,9 @@ async fn store_outcome(
     let json = serialize_outcome(outcome)?;
     let ttl_secs = RESULT_RETENTION.as_secs().max(1);
     let mut conn = queue.manager().await?;
-    let _: i64 = conn
+    // SET replies "OK" (bulk string) — the unit type accepts any reply, an
+    // integer type would fail conversion (caught by the CI Redis suite).
+    let _: () = conn
         .set_ex(format!("{DONE_PREFIX}{token}"), json, ttl_secs)
         .await
         .map_err(|e| WorkerError::Redis(e.to_string()))?;
@@ -547,7 +549,8 @@ mod tests {
         queue.clear().await.ok();
         if let Ok(mut conn) = queue.manager().await {
             let _: Result<i64, _> = conn.srem(JOBS_KEY, token).await;
-            let _: Result<i64, _> = conn.del(format!("{DONE_PREFIX}{token}")).await;
+            // DEL replies with the removed count; unit type for robustness.
+            let _: Result<(), _> = conn.del(format!("{DONE_PREFIX}{token}")).await;
         }
     }
 }

@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.3.0] - 2026-09-12
+
+### Added — "Connectors"
+Everything from the 5.3.0 rolling prereleases (alpha.1, alpha.2), plus:
+- **GA4 Data API connector** (ADR-013, the final 5.3.0 ladder item): read-only `runReport`
+  engagement summaries over per-tenant OAuth2; the `analytics.readonly` scope is pinned by test;
+  refresh tokens live only in the encrypted credential store; access tokens are memory-only and
+  redacted in `Debug`; injectable token/API endpoints give hermetic error-path coverage (HTTP
+  errors, malformed JSON, connection refusal, OAuth rejection); 429/5xx retryable for
+  `loop_retry` backoff
+- **Per-tenant GA4 integration API**: `POST /api/v1/integrations/ga4/exchange`,
+  `POST/DELETE /api/v1/integrations/ga4/credentials` (audited disconnect), `GET .../status`,
+  `POST .../report` — token material never appears in responses or audit records
+
+### Security
+- **Deterministic release SBOMs**: `cargo-cyclonedx` now runs under `SOURCE_DATE_EPOCH` (tag
+  commit time), making SBOM bytes reproducible across reruns — a re-uploaded asset can no longer
+  silently mismatch the signed checksum manifest
+- **Self-healing release publish**: the asset upload step tolerates the `action-gh-release`
+  metadata-404 race; the verify step re-uploads anything missing before publishing, so a
+  transient failure cannot strand an incomplete or draft release (alpha.2 required manual
+  recovery before this)
+
 ## [5.3.0-alpha.2] - 2026-09-12
 
 ### Added

@@ -106,6 +106,7 @@ serde.workspace = true
 serde_json.workspace = true
 url.workspace = true
 chrono.workspace = true
+redis.workspace = true
 uuid = { workspace = true, optional = true }
 async-trait = { version = "0.1", optional = true }
 tracing-opentelemetry = { version = "0.33", optional = true }
@@ -142,4 +143,7 @@ full = [
     "dirs",
     "envstack",
 ]
+# Queue dead-letter operator surface (ADR-015 §3): pulls the engine's
+# `unstable` distributed queue module for the `queue` command only.
+queue-ops = ["full", "crawlkit-engine/unstable"]
 profiling = ["crawlkit-engine/profiling", "dhat"]

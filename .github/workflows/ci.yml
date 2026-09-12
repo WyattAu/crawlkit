@@ -132,6 +132,8 @@ jobs:
         run: cargo test -p crawlkit-engine --features unstable --lib distributed_queue -- --ignored --test-threads=1
       - name: Redis politeness budget tests
         run: cargo test -p crawlkit-engine --features unstable --lib politeness -- --ignored --test-threads=1
+      - name: Redis queue dead-letter operator tests
+        run: cargo test -p crawlkit --features queue-ops --bin crawlkit queue -- --ignored --test-threads=1
 
   roadmap-controls:
     name: Roadmap and Security Controls

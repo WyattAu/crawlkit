@@ -15,6 +15,8 @@ pub mod inspect;
 pub mod log_analyze;
 #[cfg(feature = "full")]
 pub mod plugin;
+#[cfg(feature = "queue-ops")]
+pub mod queue;
 #[cfg(feature = "full")]
 pub mod rank;
 #[cfg(feature = "full")]
@@ -351,6 +353,13 @@ pub enum Commands {
     /// Analyze web server access logs
     LogAnalyze(LogAnalyzeArgs),
 
+    /// Inspect and re-drive dead-lettered queue entries (ADR-015 §3)
+    #[cfg(feature = "queue-ops")]
+    Queue {
+        #[command(subcommand)]
+        command: QueueCommands,
+    },
+
     /// Analyze trends across multiple crawl snapshots
     #[cfg(feature = "full")]
     Trend {
@@ -485,6 +494,27 @@ pub enum ScheduleCommands {
 
         /// Schedule ID
         id: String,
+    },
+}
+
+/// Queue dead-letter operator commands (ADR-015 §3).
+#[cfg(feature = "queue-ops")]
+#[derive(Subcommand)]
+pub enum QueueCommands {
+    /// List dead-lettered entries (NDJSON, one object per line)
+    List {
+        /// Restrict to one crawl namespace; omit to list all
+        #[arg(long)]
+        crawl_id: Option<String>,
+    },
+    /// Re-drive a dead letter (reset its attempt count, re-queue it)
+    Redrive {
+        /// Entry index as shown by `list` (oldest = 0)
+        index: usize,
+
+        /// Restrict to one crawl namespace; omit to index across all
+        #[arg(long)]
+        crawl_id: Option<String>,
     },
 }
 

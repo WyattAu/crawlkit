@@ -29,3 +29,26 @@ jobs:
       - name: Check crawlkit CLI full target
         if: matrix.name == 'full'
         run: cargo check -p crawlkit --features full
+      - name: Check crawlkit CLI queue-ops target (ADR-015 §3 surface)
+        if: matrix.name == 'full'
+        run: cargo check -p crawlkit --features queue-ops
+
+  scanner-features:
+    name: Scanner feature matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: default (single-replica posture)
+            args: ''
+          - name: shared-budget (multi-replica posture)
+            args: '--features shared-budget'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check crawlkit-scanner (${{ matrix.name }})
+        run: cargo check -p crawlkit-scanner ${{ matrix.args }}
+      - name: Test crawlkit-scanner (${{ matrix.name }})
+        run: cargo test -p crawlkit-scanner ${{ matrix.args }} --lib

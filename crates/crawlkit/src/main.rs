@@ -30,6 +30,8 @@ use tracing_subscriber::Layer;
 
 #[cfg(feature = "full")]
 use cli::Config;
+#[cfg(feature = "queue-ops")]
+use cli::QueueCommands;
 #[cfg(feature = "full")]
 use cli::ScheduleCommands;
 use cli::{Cli, Commands};
@@ -237,6 +239,23 @@ async fn main() -> Result<()> {
         }
         #[cfg(feature = "full")]
         Commands::Rank { command } => cli::rank::run(command).await,
+        #[cfg(feature = "queue-ops")]
+        Commands::Queue { command } => {
+            let redis_url = std::env::var("CRAWLKIT_REDIS_URL")
+                .unwrap_or_else(|_| "redis://127.0.0.1/".to_string());
+            let target = |crawl_id: &Option<String>| match crawl_id {
+                Some(id) => cli::queue::Target::One(id.clone()),
+                None => cli::queue::Target::All,
+            };
+            match command {
+                QueueCommands::List { crawl_id } => {
+                    cli::queue::list(&target(&crawl_id), &redis_url).await
+                }
+                QueueCommands::Redrive { index, crawl_id } => {
+                    cli::queue::redrive(index, &target(&crawl_id), &redis_url).await
+                }
+            }
+        }
         #[cfg(feature = "full")]
         Commands::Schedule { command } => {
             use cli::schedule::ScheduleAction;

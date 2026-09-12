@@ -225,6 +225,16 @@ jobs:
           gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_PASSPHRASE" \
             --detach-sign --armor checksums.txt
           gpg --verify checksums.txt.asc checksums.txt
+          # Publish the signing key's public half alongside every release:
+          # without it, third parties can check archive hashes but cannot
+          # authenticate the signature that vouches for them. The expected
+          # fingerprint is pinned in docs/RELEASE_ASSURANCE.md — exporting
+          # a different/absent key fails the release (empty file or
+          # nonzero --fingerprint exit).
+          FINGERPRINT="BA01FF9BA6BBB28AE22C13850F8C446E31A16C97"
+          gpg --armor --export "$FINGERPRINT" > release-key.pub.asc
+          test -s release-key.pub.asc || { echo "fatal: public key export empty; signing key does not match the pinned fingerprint"; exit 1; }
+          gpg --fingerprint "$FINGERPRINT"
 
       # The gh-release action has a known asset-metadata 404 race that can
       # abort this step mid-upload (v5.2.0 run 34620846825, v5.3.0-alpha.2
@@ -241,6 +251,7 @@ jobs:
             artifacts/**/crawlkit-*
             artifacts/checksums.txt
             artifacts/checksums.txt.asc
+            artifacts/release-key.pub.asc
             sbom/**
 
       # The gh-release action has a known cosmetic race (asset-metadata 404

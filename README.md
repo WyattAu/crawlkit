@@ -167,6 +167,24 @@ Run end-to-end throughput benchmark:
 just bench-e2e
 ```
 
+## Release verification
+
+Release archives are checksummed and signed; the signature and the
+signing key's public half ship as release assets.
+
+```bash
+# 1. Check every downloaded artifact (archives + SBOMs):
+sha256sum -c checksums.txt
+
+# 2. Authenticate the checksum manifest (imports the release public key
+#    from the release assets on first use):
+gpg --import release-key.pub.asc
+gpg --verify checksums.txt.asc checksums.txt
+```
+
+The signing key fingerprint is pinned in `docs/RELEASE_ASSURANCE.md`;
+if `gpg --verify` reports a key with a different fingerprint, stop.
+
 ## Security Model
 
 - HTTP/2 with TLS via rustls (no OpenSSL dependency)

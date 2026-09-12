@@ -189,14 +189,20 @@ HFT, FAANG, or compliance certification.
 
 ### Open follow-up: publish the release signing key
 
-`checksums.txt.asc` is produced by the `GPG_PRIVATE_KEY` secret
-(EDDSA key `BA01FF9BA6BBB28AE22C13850F8C446E31A16C97`), but the
-corresponding **public** key is published nowhere: not in this repo, not
-in the release notes, not on a keyserver. Third parties can verify
-archive hashes against `checksums.txt` but cannot verify the signature
-that authenticates it — which removes most of the signing value. Fix:
-export the public key into the repo (e.g. `docs/release-key.asc`) or a
-documented keyserver, publish its fingerprint in the README's
-verification section, and reference both from each release's assets.
-Tracked as a post-5.4.0 item; it does not retroactively weaken the
-workflow-internal signature verification above.
+**Resolved mechanism (2026-09-12):** `checksums.txt.asc` is produced by
+the `GPG_PRIVATE_KEY` secret — EDDSA key, fingerprint pinned below. The
+release workflow now exports the public half (`release-key.pub.asc`) as
+a release asset on every release, and the README's "Release
+verification" section documents the two-step consumer check
+(`sha256sum -c` then `gpg --verify`). The fingerprint pin lives here:
+
+```
+Release signing key fingerprint:
+BA01FF9BA6BBB28AE22C13850F8C446E31A16C97
+```
+
+A future key rotation must update this pin in the same commit as the
+`GPG_PRIVATE_KEY` secret; the workflow fails closed if the secret's key
+does not match the pin (empty export → fatal). Note: releases before
+the next one after 5.4.0 do not carry `release-key.pub.asc` — for those,
+obtain the key from the maintainer directly.

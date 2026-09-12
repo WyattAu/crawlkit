@@ -1,5 +1,6 @@
 import { CheckCircle2, Download, Star } from 'lucide-react';
 import type { MarketplacePlugin } from '../../models/types';
+import { formatDownloads } from '../../lib/format';
 
 export function StarRating({ rating }: { rating: number }) {
   const rounded = Math.round(rating);
@@ -22,12 +23,6 @@ export function StarRating({ rating }: { rating: number }) {
       ))}
     </div>
   );
-}
-
-export function formatDownloads(count: number): string {
-  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`;
-  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}k`;
-  return String(count);
 }
 
 interface PluginCardProps {

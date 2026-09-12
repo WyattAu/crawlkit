@@ -5,7 +5,8 @@ import Modal from '../ui/Modal';
 import Button from '../ui/Button';
 import { apiClient } from '../../services/api_client';
 import type { MarketplacePlugin } from '../../models/types';
-import { StarRating, formatDownloads } from './PluginCard';
+import { StarRating } from './PluginCard';
+import { formatDownloads } from '../../lib/format';
 
 interface PluginDetailProps {
   plugin: MarketplacePlugin | null;

@@ -276,6 +276,7 @@ pub use plugin_index::{
 /// and site management APIs.
 #[cfg(feature = "full")]
 pub mod ga4;
+#[cfg(feature = "full")]
 pub mod gsc;
 /// Prioritized insights engine that ranks post-crawl findings by impact and effort.
 ///
@@ -427,9 +428,11 @@ pub use feature_flags::{
     FeatureFlags, SharedFeatureFlags, FLAG_AI_ANALYZERS, FLAG_JS_RENDERING, FLAG_WASM_ANALYZERS,
 };
 #[cfg(feature = "full")]
+#[cfg(feature = "full")]
 pub use ga4::{
     Ga4Client, Ga4Credentials, Ga4Error, Ga4Report, Ga4ReportRequest, Ga4Row, GA4_SCOPE,
 };
+#[cfg(feature = "full")]
 pub use gsc::{GscAnalytics, GscClient, GscError, GscQueryPageRow, GscRow, UrlInspection};
 #[cfg(feature = "full")]
 pub use http::{FetchStreamReader, HttpClient, HttpClientConfig};

@@ -184,10 +184,19 @@ jobs:
           echo "=== Release checksums ==="
           cat checksums.txt
 
+      # Deterministic SBOMs: cargo-cyclonedx embeds a random serialNumber
+      # and wall-clock timestamp, so reruns produce different bytes and any
+      # re-uploaded asset would no longer match the signed checksums.txt.
+      # Fixing both from SOURCE_DATE_EPOCH makes output reproducible, so
+      # the self-healing verify step can safely regenerate and re-upload.
       - name: Generate SBOM
         run: |
           mkdir -p sbom
           cargo install cargo-cyclonedx --locked
+          # Tag commit time — stable across reruns of the same tag, so the
+          # SBOM bytes (and their checksums) are reproducible. Verified
+          # locally: two runs produce identical hashes.
+          export SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           cargo cyclonedx --format json
           find crates -name '*.cdx.json' -exec cp {} sbom/ \;
 

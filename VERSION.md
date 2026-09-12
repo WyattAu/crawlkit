@@ -1,10 +1,10 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** v5.3.0 "Connectors" — stable; 5.4.0 Queue/Scanner-GA in progress per docs/PRODUCT_STRATEGY.md §3
-**Version:** 5.3.0
-**Status:** Released
-**Last Updated:** 2026-09-11
+**Current Phase:** v5.4.0-alpha.1 — Redis queue graduation (ADR-015); scanner GA decision pending runbook §7
+**Version:** 5.4.0-alpha.1
+**Status:** Prerelease
+**Last Updated:** 2026-09-12
 **MSRV:** 1.94.0
 
 ---

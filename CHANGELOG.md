@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [5.4.0-alpha.1] - 2026-09-12
+
+### Added — "Queue Graduation" rolling prerelease (ADR-015)
+
+- **CLI dead-letter operator surface** (§3): `crawlkit queue dead-letter list`
+  (NDJSON with failure reasons, ISO-8601 timestamps, redrive indices) and
+  `crawlkit queue dead-letter redrive <INDEX>` (re-queue with reset attempts),
+  behind the new `queue-ops` feature. Poison quarantine is now a visible,
+  actionable operator workflow — never a silent loss or infinite retry.
+- **Scanner budget-posture selection** (§6/§A1): `CRAWLKIT_BUDGET_BACKEND`
+  selects in-memory (single-replica default) or Redis shared-state
+  (multi-replica, fail-closed) politeness budgeting; invalid configuration is
+  a hard startup error naming the accepted values, never a silent degradation.
+- **Scanner queue fan-out** (§5, the runbook's last wiring gap): in the redis
+  posture, scan submissions enqueue per-token jobs and the replica's worker
+  pool executes them with the identical inline trust path. Delivery is
+  at-least-once (lease reclamation recovers crashed workers, duplicates are
+  idempotent); outcomes land in shared keys so any replica serves any token;
+  enqueue failures fail closed.
+- CI runs the Redis-backed evidence suites: queue crash-recovery,
+  dead-letter operator flows, and scanner-worker enqueue→claim→execute→read
+  plus abandoned-lease recovery.
+
 ## [5.3.0] - 2026-09-12
 
 ### Added — "Connectors"

@@ -2755,3 +2755,105 @@ async fn alert_channel_requires_credential_store() {
         "error names the missing store: {body}"
     );
 }
+
+#[tokio::test]
+async fn ga4_credential_boundary_and_report_flow() {
+    use crawlkit_api::credential_store::{Credential, CredentialMetadata};
+
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup_with_credentials(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("editor", "tenant-a", "editor", "password123!X"));
+    let token = test.token_for("editor");
+
+    // Status before connecting: disconnected, store available.
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/integrations/ga4/status", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["connected"], false);
+    assert_eq!(body["credential_store_available"], true);
+
+    // Report before connecting: clear 400, no panic.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/integrations/ga4/report",
+            Some(serde_json::json!({
+                "start_date": "2026-08-01",
+                "end_date": "2026-08-31"
+            })),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "body: {body}");
+
+    // Store credentials directly (exchange requires deployment env config,
+    // exercised by the unit tests).
+    let store = test.state.credential_store.clone().unwrap();
+    store
+        .put(
+            "tenant-a",
+            Credential {
+                secret: "refresh-material".to_string(),
+                metadata: CredentialMetadata {
+                    connector: "ga4".to_string(),
+                    identifiers: std::collections::HashMap::from([(
+                        "property_id".to_string(),
+                        "123456".to_string(),
+                    )]),
+                    created_at: "2026-09-12T00:00:00Z".to_string(),
+                },
+            },
+        )
+        .unwrap();
+
+    // Status now connected with the non-secret property id.
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/integrations/ga4/status", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["connected"], true);
+    assert_eq!(body["property_id"], "123456");
+    let body_text = body.to_string();
+    assert!(
+        !body_text.contains("refresh-material"),
+        "token leaked in status: {body_text}"
+    );
+
+    // Disconnect deletes the grant and is audited.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "DELETE",
+            "/api/v1/integrations/ga4/credentials",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(!store.contains("tenant-a", "ga4"));
+
+    // Audit trail mentions the event, never the token (audit:read is
+    // admin-only; read it as an admin in the same tenant).
+    test.state.auth.add_user(make_user(
+        "tenantadmin",
+        "tenant-a",
+        "admin",
+        "password123!X",
+    ));
+    let admin_token = test.token_for("tenantadmin");
+    let (status, audit) = test
+        .send(test.authed(&admin_token, "GET", "/api/v1/audit", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    let audit_text = audit.to_string();
+    assert!(
+        audit_text.contains("ga4 credentials deleted"),
+        "audit: {audit_text}"
+    );
+    assert!(
+        !audit_text.contains("refresh-material"),
+        "token leaked in audit trail"
+    );
+}

@@ -3,6 +3,7 @@ pub mod api_keys;
 pub mod audit;
 pub mod auth_handlers;
 pub mod crawls;
+pub mod ga4;
 pub mod health;
 pub mod marketplace;
 pub mod schedules;

@@ -585,6 +585,82 @@ pub struct CreateAlertChannelRequest {
     pub events: Vec<String>,
 }
 
+/// Request to exchange a GA4 OAuth2 authorization code for a refresh token
+/// (ADR-013 §1). The code is one-time; the resulting refresh token is
+/// stored encrypted per tenant and never returned.
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct Ga4ExchangeRequest {
+    /// One-time OAuth2 authorization code from the consent redirect.
+    pub code: String,
+    /// Redirect URI matching the one used in the authorization request.
+    pub redirect_uri: String,
+    /// Optional GA4 property id (e.g. `123456`) recorded as a non-secret
+    /// key identifier.
+    pub property_id: Option<String>,
+}
+
+/// Request to store a GA4 refresh token directly (out-of-band OAuth
+/// completion).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct Ga4StoreCredentialsRequest {
+    /// The tenant's long-lived OAuth2 refresh token. Stored encrypted;
+    /// never returned.
+    pub refresh_token: String,
+    /// Optional GA4 property id recorded as a non-secret key identifier.
+    pub property_id: Option<String>,
+}
+
+/// GA4 integration status (non-secret fields only).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Ga4StatusResponse {
+    /// Whether the tenant has a stored GA4 grant.
+    pub connected: bool,
+    /// Non-secret GA4 property identifier, when recorded.
+    pub property_id: Option<String>,
+    /// Whether the deployment has the credential store enabled.
+    pub credential_store_available: bool,
+}
+
+/// Body for running a GA4 report (ADR-013 §3).
+#[derive(Debug, Deserialize, ToSchema)]
+pub struct Ga4ReportRequestBody {
+    /// Inclusive start date, `YYYY-MM-DD`.
+    pub start_date: String,
+    /// Inclusive end date, `YYYY-MM-DD`.
+    pub end_date: String,
+    /// Optional property id override when none was stored.
+    pub property_id: Option<String>,
+    /// Row limit (1..=100_000; default 1000).
+    pub limit: Option<u32>,
+}
+
+/// GA4 report response (read-only rows; no credential material).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Ga4ReportResponse {
+    pub property_id: String,
+    pub start_date: String,
+    pub end_date: String,
+    pub row_count: u32,
+    pub rows: Vec<Ga4RowDto>,
+}
+
+/// API-facing GA4 report row (mirrors `crawlkit_engine::Ga4Row`, positional
+/// dimension and metric values).
+#[derive(Debug, Serialize, ToSchema)]
+pub struct Ga4RowDto {
+    pub dimension_values: Vec<String>,
+    pub metric_values: Vec<String>,
+}
+
+impl From<&crawlkit_engine::Ga4Row> for Ga4RowDto {
+    fn from(row: &crawlkit_engine::Ga4Row) -> Self {
+        Self {
+            dimension_values: row.dimension_values.clone(),
+            metric_values: row.metric_values.clone(),
+        }
+    }
+}
+
 /// Response returned once when a webhook is created, containing the secret.
 #[derive(Debug, Serialize, ToSchema)]
 pub struct WebhookCreatedResponse {

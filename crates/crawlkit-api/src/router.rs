@@ -11,6 +11,7 @@ use crate::handlers::api_keys::*;
 use crate::handlers::audit::*;
 use crate::handlers::auth_handlers::*;
 use crate::handlers::crawls::*;
+use crate::handlers::ga4::*;
 use crate::handlers::health::*;
 use crate::handlers::marketplace::*;
 use crate::handlers::schedules::*;
@@ -59,6 +60,22 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
         .route(
             "/api/v1/alert-channels/{id}",
             axum::routing::delete(delete_alert_channel),
+        )
+        .route(
+            "/api/v1/integrations/ga4/exchange",
+            axum::routing::post(exchange_ga4_code),
+        )
+        .route(
+            "/api/v1/integrations/ga4/credentials",
+            axum::routing::post(store_ga4_credentials).delete(delete_ga4_credentials),
+        )
+        .route(
+            "/api/v1/integrations/ga4/status",
+            axum::routing::get(ga4_integration_status),
+        )
+        .route(
+            "/api/v1/integrations/ga4/report",
+            axum::routing::post(run_ga4_report),
         )
         .route(
             "/api/v1/schedules",

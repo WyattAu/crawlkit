@@ -65,6 +65,23 @@ relabel corrected the original mislabeling: v4.4.1 was already tagged at
 robots.txt RFC 9309 fix, the PostgreSQL storage fixes, the breaking
 finding-code changes — ship as 5.0.0 alongside the owner's main work.
 
+## v5.4.0 shipped (2026-09-12)
+
+GitHub Release **v5.4.0** "Queue Graduation" published from tag `3084f95c`
+(stable-flagged, `prerelease: false`, **Latest**). Release workflow green:
+pre-flight, security audit, all five platform builds, SBOMs (6 CDX
+documents), signed `checksums.txt` + `.asc`. All 18 assets downloaded and
+verified byte-exact against `checksums.txt` locally
+(`sha256sum --check`: 0 failures). The GPG signature is verified at
+creation inside the workflow (`gpg --verify` step, release.yml);
+independent local verification of the signature is currently limited by
+the public key not being published — see "Release blockers" for the
+follow-up. CI on main at `3084f95c` green (14 jobs incl. Service-backed
+PostgreSQL+Redis); Feature matrix, Secret Scan, Deploy Documentation green
+on the same commit. This is the first release carrying the graduated
+Redis lease queue, the scanner `/metrics` data plane, and the
+`queue-ops` dead-letter operator CLI.
+
 ## v5.0.0 shipped (2026-09-06)
 
 GitHub Release **v5.0.0** published from tag `554fe85e` (run 34055829118):
@@ -169,3 +186,17 @@ Block a release for:
 Native plugins are trusted process code and must never be represented as
 sandboxed. WASM sandbox controls do not imply formal verification or defence,
 HFT, FAANG, or compliance certification.
+
+### Open follow-up: publish the release signing key
+
+`checksums.txt.asc` is produced by the `GPG_PRIVATE_KEY` secret
+(EDDSA key `BA01FF9BA6BBB28AE22C13850F8C446E31A16C97`), but the
+corresponding **public** key is published nowhere: not in this repo, not
+in the release notes, not on a keyserver. Third parties can verify
+archive hashes against `checksums.txt` but cannot verify the signature
+that authenticates it — which removes most of the signing value. Fix:
+export the public key into the repo (e.g. `docs/release-key.asc`) or a
+documented keyserver, publish its fingerprint in the README's
+verification section, and reference both from each release's assets.
+Tracked as a post-5.4.0 item; it does not retroactively weaken the
+workflow-internal signature verification above.

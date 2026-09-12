@@ -141,7 +141,7 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
 
 ## 6. GA checklist (all boxes required before public launch)
 
-- [ ] CI Redis integration suites green for N consecutive runs (ADR-015 §7
+- [x] CI Redis integration suites green for N consecutive runs (ADR-015 §7
       evidence: crash-recovery, concurrent-sweep, retry-exhaustion, budget
       windows) — suites now execute in CI on every push.
       **N = 5.** Counting rule: the 5 most recent *completed* `CI` runs on
@@ -150,11 +150,13 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
       Service-backed PostgreSQL+Redis job green. Verify with:
       `gh run list --branch main --workflow CI --limit 15 --json
       conclusion,headSha --jq '[.[] | select(.conclusion != "cancelled")]
-      | .[0:5] | map(.conclusion)'` →      `["success","success","success",
-      "success","success"]`. Streak as of 2026-09-12 (evening): 3 of 5,
-      accumulating — the chain resets only on a *failure*; the one break
-      in recent history was the schedule-test env race, fixed at its
-      cause.
+      | .[0:5] | map(.conclusion)'` →      `"success","success","success",
+      "success","success"]`.
+      **Met 2026-09-12:** the 5 most recent completed runs — 2ef26c05,
+      78312872, 6a698253, c608327b, 3084f95c (the v5.4.0 release
+      commit) — are all green, with the Service-backed PostgreSQL+Redis
+      job green in each. A failure resets the count; re-verify at
+      sign-off.
 - [x] Daily global scan budget + queue-full degradation implemented
       (`GlobalDailyBudget`, `abuse.rs`; shared Redis counter in the
       multi-replica posture, fail-closed on outage; explicit 429s)

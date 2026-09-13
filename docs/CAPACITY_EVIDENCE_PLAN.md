@@ -130,8 +130,19 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
 1. ~~Sampler + run-record writer + 1k CI smoke gate~~ — **done 2026-09-13**
    (`capacity_smoke.rs` + the `capacity-smoke` CI job; first reference-class
    record committed under `docs/capacity/`).
-2. 10k runs on reference hardware → first published report.
-3. 100k runs → ADR-016 §5.1 compression defaults picked from the same runs.
+2. ~~10k runs on reference hardware → first published report~~ — **done
+   2026-09-13** (`docs/capacity/2026-09-13-10k-reference/`, 3 release-profile
+   runs, set valid at 8.9% spread). Verdict: throughput target **met**
+   (median 64.2 pages/s ≥ 50); peak-RSS target **missed** (median 2115 MB vs
+   the < 500 MB §2 row) — recorded as evidence, and the RSS gap is the
+   newest 6.0.0 engineering item. First diagnostic step: a `dhat` heap
+   profile over the same workload to attribute the ~2 GB (page-store page
+   cache, analyzer intermediates, or issue-string retention) before picking
+   a fix.
+3. 100k runs on the same harness (additive: `CAPACITY_PAGES=100000`) →
+   ADR-016 §5.1 compression defaults picked from the same runs. Note: the
+   same harness at 100k pages in one crawl multiplies the RSS question —
+   run it only after the §2 item above has an attribution, or shard it.
 4. Distributed-posture variant (queue + Postgres + multiple workers) → the
    numbers the 6.0.0 distributed-stability claim actually rests on.
 

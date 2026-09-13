@@ -197,9 +197,10 @@ struct RunRecord {
     schema: &'static str,
     recorded_at_unix: u64,
     crawlkit_version: &'static str,
-    workload: &'static str,
+    workload: String,
     kernel: String,
     cpu_model: String,
+    mem_total_kb: u64,
     config: ConfigRecord,
     results: ResultsRecord,
     resources: ResourcesRecord,
@@ -215,6 +216,9 @@ struct ConfigRecord {
     request_delay_ms: u64,
     storage: &'static str,
     mode: &'static str,
+    /// Build profile of the measured binary (derived from `OUT_DIR`) —
+    /// debug and release numbers are different classes of evidence.
+    profile: String,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -254,20 +258,85 @@ struct EnforceRecord {
     requested: bool,
     baseline_path: Option<String>,
     baseline_found: bool,
+    baseline_class_match: Option<bool>,
 }
 
-const PEAK_RSS_CAP_KB: u64 = 500_000; // 500 MB (plan §2)
+const PEAK_RSS_CAP_KB: u64 = 500_000; // 500 MB (plan §2; per-1k class)
 const THROUGHPUT_FLOOR: f64 = 20.0; // pages/s, smoke-class floor (plan §6)
 const FD_BASELINE_SLACK: u64 = 10; // plan §2
 const BASELINE_TOLERANCE: f64 = 0.20; // plan §6
-const PAGES: usize = 1000;
+const PAGES: usize = 1000; // CI default; override with CAPACITY_PAGES
 const CONCURRENCY: usize = 8;
 const SETTLE_SECS: u64 = 2;
+
+/// Workload size for this run: `CAPACITY_PAGES` (CI smoke default 1000;
+/// reference-class runs pass 10000 per plan §8).
+fn workload_pages() -> usize {
+    std::env::var("CAPACITY_PAGES")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(PAGES)
+}
+
+/// Storage backend: `sqlite-in-memory` (default, CI) or `sqlite-file`
+/// (`CAPACITY_STORAGE=sqlite-file` — the production-shaped path used by
+/// reference-class runs).
+enum StorageKind {
+    InMemory,
+    File(std::path::PathBuf),
+}
+
+fn storage_kind() -> StorageKind {
+    if std::env::var("CAPACITY_STORAGE").is_ok_and(|v| v == "sqlite-file") {
+        let path = std::env::temp_dir().join(format!(
+            "crawlkit-capacity-{}.sqlite",
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos()
+        ));
+        StorageKind::File(path)
+    } else {
+        StorageKind::InMemory
+    }
+}
+
+fn storage_label(kind: &StorageKind) -> &'static str {
+    match kind {
+        StorageKind::InMemory => "sqlite-in-memory",
+        StorageKind::File(_) => "sqlite-file",
+    }
+}
 
 fn kernel() -> String {
     std::fs::read_to_string("/proc/sys/kernel/osrelease")
         .map(|s| s.trim().to_string())
         .unwrap_or_else(|_| "unknown".into())
+}
+
+/// The build profile of the measured binary. `env!("PROFILE")` is
+/// build-script-only and `OUT_DIR` is not set at test runtime, so the
+/// compile-time `debug_assertions` cfg is the reliable signal.
+fn build_profile() -> String {
+    if cfg!(debug_assertions) {
+        "debug".to_string()
+    } else {
+        "release".to_string()
+    }
+}
+
+fn mem_total_kb() -> u64 {
+    std::fs::read_to_string("/proc/meminfo")
+        .ok()
+        .and_then(|s| {
+            s.lines()
+                .find(|l| l.starts_with("MemTotal:"))?
+                .split_whitespace()
+                .nth(1)?
+                .parse()
+                .ok()
+        })
+        .unwrap_or(0)
 }
 
 fn cpu_model() -> String {
@@ -295,12 +364,17 @@ fn record_dir() -> PathBuf {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "capacity smoke; run via the CI capacity-smoke job or --ignored"]
 async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
-    let server = TestServer::start(PAGES);
-    let storage: Arc<dyn StorageBackend> = Arc::new(Storage::new_in_memory().unwrap());
+    let pages = workload_pages();
+    let kind = storage_kind();
+    let server = TestServer::start(pages);
+    let storage: Arc<dyn StorageBackend> = match &kind {
+        StorageKind::InMemory => Arc::new(Storage::new_in_memory().unwrap()),
+        StorageKind::File(p) => Arc::new(Storage::new(p).unwrap()),
+    };
     let engine = CrawlEngine::new_shared(
         CrawlEngineConfig {
             crawl_config: CrawlConfig {
-                max_pages: PAGES + 100,
+                max_pages: pages + 100,
                 concurrency: CONCURRENCY,
                 respect_robots_txt: true,
                 // Loopback corpus we own — the 500 ms default politeness
@@ -353,7 +427,7 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
     let throughput = output.pages_crawled as f64 / elapsed_secs;
 
     // --- absolute caps (plan §6: always enforced) ---
-    let pages_exact = output.pages_crawled == PAGES + 1; // index + children
+    let pages_exact = output.pages_crawled == pages + 1; // index + children
     let peak_rss_under_cap = rss_peak_kb < PEAK_RSS_CAP_KB;
     let throughput_above_floor = throughput >= THROUGHPUT_FLOOR;
     let fds_returned_to_baseline = fd_end <= fd_baseline + FD_BASELINE_SLACK;
@@ -363,7 +437,7 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
     // --- relative baseline (only when enforce is requested and available) ---
     let enforce_requested = std::env::var("CAPACITY_ENFORCE").is_ok_and(|v| v == "1");
     let baseline_path = std::env::var("CAPACITY_BASELINE_PATH").ok();
-    let baseline_found = baseline_path
+    let baseline_found: Option<BaselineRecord> = baseline_path
         .as_deref()
         .map(std::path::Path::new)
         .map(std::fs::read_to_string)
@@ -371,12 +445,23 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
         .ok()
         .flatten()
         .and_then(|raw| serde_json::from_str::<BaselineRecord>(&raw).ok());
-    let baseline_within_20pct = baseline_found.as_ref().map(|b| {
-        let t_ok = throughput >= b.results.throughput_pages_per_sec * (1.0 - BASELINE_TOLERANCE);
-        let r_ok =
-            rss_peak_kb as f64 <= b.resources.rss_peak_kb as f64 * (1.0 + BASELINE_TOLERANCE);
-        t_ok && r_ok
-    });
+    // The relative gate compares like with like: a baseline from a different
+    // workload class (e.g. the CI 1k record vs a 10k run) is not evidence,
+    // and gating across classes would fail every reference run (plan §6).
+    let baseline_class_match = baseline_found
+        .as_ref()
+        .map(|b| b.config.pages == pages && b.config.profile == build_profile());
+    let baseline_within_20pct = if baseline_class_match == Some(false) {
+        None
+    } else {
+        baseline_found.as_ref().map(|b| {
+            let t_ok =
+                throughput >= b.results.throughput_pages_per_sec * (1.0 - BASELINE_TOLERANCE);
+            let r_ok =
+                rss_peak_kb as f64 <= b.resources.rss_peak_kb as f64 * (1.0 + BASELINE_TOLERANCE);
+            t_ok && r_ok
+        })
+    };
 
     let record = RunRecord {
         schema: "crawlkit.capacity.run_record/v1",
@@ -385,16 +470,18 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
             .unwrap()
             .as_secs(),
         crawlkit_version: env!("CARGO_PKG_VERSION"),
-        workload: "smoke-1k",
+        workload: format!("crawl-{pages}"),
         kernel: kernel(),
         cpu_model: cpu_model(),
+        mem_total_kb: mem_total_kb(),
         config: ConfigRecord {
-            pages: PAGES,
+            pages,
             concurrency: CONCURRENCY,
-            max_pages: PAGES + 100,
+            max_pages: pages + 100,
             request_delay_ms: 0,
-            storage: "sqlite-in-memory",
+            storage: storage_label(&kind),
             mode: "inline",
+            profile: build_profile(),
         },
         results: ResultsRecord {
             pages_crawled: output.pages_crawled,
@@ -426,6 +513,7 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
             requested: enforce_requested,
             baseline_path,
             baseline_found: baseline_found.is_some(),
+            baseline_class_match,
         },
     };
 
@@ -454,7 +542,7 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
         fds_returned_to_baseline,
         "fds did not return to baseline: {fd_baseline} → {fd_end}"
     );
-    if enforce_requested {
+    if enforce_requested && baseline_class_match != Some(false) {
         if let Some(true) = record.gates.baseline_within_20pct {
             // pass
         } else {
@@ -464,6 +552,12 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
             );
         }
     }
+
+    if let StorageKind::File(p) = &kind {
+        let _ = std::fs::remove_file(p);
+        let _ = std::fs::remove_file(p.with_extension("sqlite-wal"));
+        let _ = std::fs::remove_file(p.with_extension("sqlite-shm"));
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -472,8 +566,16 @@ async fn capacity_smoke_1k_crawl_meets_absolute_caps() {
 
 #[derive(Debug, serde::Deserialize)]
 struct BaselineRecord {
+    config: BaselineConfig,
     results: BaselineResults,
     resources: BaselineResources,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct BaselineConfig {
+    pages: usize,
+    #[serde(default)]
+    profile: String,
 }
 
 #[derive(Debug, serde::Deserialize)]

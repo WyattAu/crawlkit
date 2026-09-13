@@ -42,6 +42,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   resource sampling and a machine run record; the new `capacity-smoke` CI
   job auto-arms a 20% relative baseline gate on throughput and peak RSS.
   First reference-class record committed under `docs/capacity/`.
+- First published capacity report (docs/capacity/2026-09-13-10k-reference/):
+  three release-profile 10k-page runs on reference-class hardware (valid
+  8.9% spread) with a records-rendered report
+  (`scripts/render_capacity_report.py`). Verdict: throughput target met
+  (64.2 pages/s median); peak-RSS target missed (2115 MB vs the 500 MB
+  target) — committed as evidence and opened as a 6.0.0 engineering item.
 - Warehouse migration drill (ADR-016 §2.4): `warehouse_drill.rs` executes
   export → load → query → verify for both bindings with independent readers
   and uploads a drill record as a CI artifact; the live-warehouse load is

@@ -324,8 +324,10 @@ jobs:
           key: capacity-baseline-smoke-1k
       - name: Run capacity smoke (1k-page loopback crawl)
         env:
-          CAPACITY_RECORD_DIR: capacity-out
-          CAPACITY_BASELINE_PATH: capacity-baseline/run_record.json
+          # Absolute paths: cargo runs the test with CWD = crate root, and
+          # relative paths would land outside the workspace the steps read.
+          CAPACITY_RECORD_DIR: ${{ github.workspace }}/capacity-out
+          CAPACITY_BASELINE_PATH: ${{ github.workspace }}/capacity-baseline/run_record.json
           # Auto-arming: enforce only once a committed CI baseline exists —
           # the first run records and passes absolutely; the next one gates.
           CAPACITY_ENFORCE: ${{ steps.baseline.outputs.cache-hit == 'true' && '1' || '0' }}

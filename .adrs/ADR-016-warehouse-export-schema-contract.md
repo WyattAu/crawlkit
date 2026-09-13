@@ -110,6 +110,15 @@ deployment has run a documented migration drill (export → load → query
 → verify) with the artifacts committed. This mirrors ADR-015's
 evidence-before-stable pattern.
 
+Progress (2026-09-13): two of three bindings implemented (Parquet + the
+JSONL load-job binding serving BigQuery/Snowflake); the conformance gate
+runs on every push (14 warehouse lib tests + the `warehouse-drill`
+feature-matrix job, which executes export → load → query → verify with
+independent readers and uploads a drill record — `tests/warehouse_drill.rs`).
+Still owed for `stable-with-configuration`: one documented load against a
+live BigQuery or Snowflake (explicitly recorded as not-proven-here in the
+drill record).
+
 ## 3. Consequences
 
 **Positive:** customers' warehouse investments survive crawlkit

@@ -92,13 +92,24 @@ distributed mode, whatever its speed.
 Artifacts live under `docs/capacity/<date>-<config>/` (run records, samples,
 report) — the Phase 4.2 "raw artifacts committed" requirement.
 
-## 6. Regression gate (CI smoke class)
+## 6. Regression gate (CI smoke class) — **implemented**
 
-- **Workload:** 1k-page local corpus, SQLite, inline mode — runtime budget
-  fits CI (< 3 min).
-- **Gate:** throughput and peak RSS must stay within **20% of the CI-recorded
-  baseline** (rolling, updated only by an explicit `ci-baseline` labeled run
-  committed with its raw record). Breaches fail the workflow — same drift-gate
+- **Workload:** 1k-page loopback corpus (index + 1000 children, deterministic
+  sizes, fixed-ratio issue shapes), SQLite in-memory, inline mode, zero
+  request delay — measured ~13 s locally.
+- **Implementation:** `crates/crawlkit-engine/tests/capacity_smoke.rs`
+  (ignored test; run by the `capacity-smoke` CI job in `ci.yml`). Samples
+  RSS/fd/task counts from `/proc` at 100 ms, writes a `run_record.json`
+  (schema `crawlkit.capacity.run_record/v1`) with environment, config,
+  results, and gate outcomes, and uploads it as a workflow artifact.
+- **Absolute caps (always enforced):** page budget exact (1001), peak RSS
+  < 500 MB, throughput ≥ 20 pages/s, fds return to baseline + 10 after a
+  settle period.
+- **Relative gate (auto-arming):** the CI job caches the first green run's
+  record as the baseline; `CAPACITY_ENFORCE=1` is set only on a cache hit, so
+  subsequent runs must land within 20% of the CI baseline on throughput and
+  peak RSS. Baseline updates are explicit (bump the cache key) with the
+  superseding run record committed under `docs/capacity/` — same drift-gate
   philosophy as the capabilities manifest and the schema contract.
 - Absolute numbers from CI are never published; the gate is relative.
 
@@ -116,8 +127,9 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
 
 ## 8. Sequencing and open items
 
-1. Sampler + run-record writer + 1k CI smoke gate (small PR; unblocks the
-   baseline).
+1. ~~Sampler + run-record writer + 1k CI smoke gate~~ — **done 2026-09-13**
+   (`capacity_smoke.rs` + the `capacity-smoke` CI job; first reference-class
+   record committed under `docs/capacity/`).
 2. 10k runs on reference hardware → first published report.
 3. 100k runs → ADR-016 §5.1 compression defaults picked from the same runs.
 4. Distributed-posture variant (queue + Postgres + multiple workers) → the

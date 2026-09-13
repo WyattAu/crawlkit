@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scanner GA sign-off request (docs/GA_SIGNOFF_REQUEST.md): the owner-facing
   one-pager for the runbook §7 decision, referencing the evidence package,
   drill log, met streak, and dashboard plan.
+- Capacity smoke gate implemented (docs/CAPACITY_EVIDENCE_PLAN.md §6):
+  `capacity_smoke.rs` runs a gated 1k-page loopback crawl with `/proc`
+  resource sampling and a machine run record; the new `capacity-smoke` CI
+  job auto-arms a 20% relative baseline gate on throughput and peak RSS.
+  First reference-class record committed under `docs/capacity/`.
+- Warehouse migration drill (ADR-016 §2.4): `warehouse_drill.rs` executes
+  export → load → query → verify for both bindings with independent readers
+  and uploads a drill record as a CI artifact; the live-warehouse load is
+  recorded explicitly as the remaining §2.4 item.
 
 ### Changed
 

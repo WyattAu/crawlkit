@@ -206,6 +206,9 @@ Accepted:  ______/______/______
 Review:    quarterly, first review 3 months after acceptance
 ```
 
+Decision tracking: [#19 — Scanner GA: §7 ownership signature needed](https://github.com/WyattAu/crawlkit/issues/19)
+(the one-page ask is `docs/GA_SIGNOFF_REQUEST.md`).
+
 **If this section remains unsigned, the scanner stays at `prototype` status
 and public exposure does not happen.** The engineering work retains full
 value: the guard, budget, and queue modules serve self-hosted deployments

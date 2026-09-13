@@ -77,14 +77,20 @@ Notable mappings:
 | Binding | Status | Notes |
 |---|---|---|
 | S3 (Parquet) | implemented (`warehouse` feature) | deterministic key-sorted rows, zstd; footer carries schema version |
-| BigQuery | contract defined, transport pending | MERGE on `(keys)` |
-| Snowflake | contract defined, transport pending | MERGE on `(keys)` |
+| BigQuery | implemented via the JSONL load-job binding (`warehouse` feature) | newline-delimited JSON, one object per row with exactly the manifest columns; load manifest (`_schema` doc) embeds the version; `bigquery_schema_fragment()` renders the external-schema DDL from the manifest; MERGE on `(keys)` |
+| Snowflake | implemented via the JSONL load-job binding (`warehouse` feature) | same JSONL files loaded from a stage; `snowflake_schema_fragment()` renders the column DDL from the manifest; MERGE on `(keys)` |
+
+The JSONL binding serves both SQL-warehouse transports with one physical
+format (ADR-016 §2.1: one logical schema, bindings differ only where the
+warehouse demands it). Its conformance tests gate manifest column coverage,
+BQ/SF type vocabulary, manifest-order fields, explicit nulls for absent
+nullable values, key-sorted line order (byte-identical re-exports), and
+cross-binding agreement with the Parquet files for the same crawl.
 
 `warehouse_exporters` enters `capabilities.toml` as `experimental`; it moves
 to `stable-with-configuration` only per ADR-016 §2.4 (all three bindings
 round-trip in CI, conformance gate on every push, one documented migration
 drill).
-
 ## Open items owned elsewhere (ADR-016 §5)
 
 - Compression/encoding defaults to be finalized against the 100k-page

@@ -24,6 +24,7 @@ use arrow_array::{
     TimestampMillisecondArray,
 };
 use arrow_schema::{DataType, Field, Schema, TimeUnit};
+use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::Compression;
@@ -163,7 +164,7 @@ pub fn arrow_schema_from_manifest(manifest: &TableManifest) -> Result<Schema, Wa
 // ---------------------------------------------------------------------------
 
 /// One `crawl_runs` row.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct CrawlRunRow {
     pub crawl_id: String,
     pub target_url: String,
@@ -274,7 +275,7 @@ impl From<(&str, &PageData)> for PageRow {
 }
 
 /// One `findings` row (an `Issue` plus the denormalized `crawl_id`).
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
 pub struct FindingRow {
     pub crawl_id: String,
     pub page_id: String,
@@ -572,6 +573,375 @@ pub struct ParquetCrawlExport {
     pub findings: Vec<u8>,
 }
 
+// ---------------------------------------------------------------------------
+// JSONL writer (the second physical binding: BigQuery + Snowflake load jobs)
+// ---------------------------------------------------------------------------
+
+/// Metadata key under which the schema version is embedded in the JSONL
+/// load-manifest (ADR-016 §2.3: version embedded in every artifact).
+pub const MANIFEST_SCHEMA_VERSION_KEY: &str = "crawlkit.schema_version";
+/// Metadata key naming the table the JSONL file belongs to.
+pub const MANIFEST_TABLE_KEY: &str = "crawlkit.table";
+
+/// A validated JSONL record for one table: exactly the manifest's columns
+/// (deterministic key-sorted order — field order carries no semantics for
+/// load jobs, determinism does), `null` for absent nullable values, no
+/// extra fields.
+#[derive(Debug, Clone)]
+struct JsonlRecord {
+    /// Field order follows the manifest's column order — the record renders
+    /// as the contract reads.
+    fields: Vec<(&'static str, serde_json::Value)>,
+}
+
+impl JsonlRecord {
+    /// Build a record from a row's serialized fields, validating against the
+    /// manifest: unknown field → contract violation; missing nullable column
+    /// → explicit `null` (load jobs treat absent and null identically, but
+    /// the record should be self-describing); missing non-nullable column →
+    /// contract violation (a writer bug: required values are never optional).
+    fn build(
+        manifest: &TableManifest,
+        fields: serde_json::Map<String, serde_json::Value>,
+    ) -> Result<Self, WarehouseError> {
+        let mut out = Vec::with_capacity(manifest.columns.len());
+        for col in &manifest.columns {
+            let name: &'static str = match col.name.as_str() {
+                "crawl_id" => "crawl_id",
+                "target_url" => "target_url",
+                "start_time" => "start_time",
+                "end_time" => "end_time",
+                "pages_crawled" => "pages_crawled",
+                "total_issues" => "total_issues",
+                "tenant_id" => "tenant_id",
+                "sequence" => "sequence",
+                "page_id" => "page_id",
+                "url" => "url",
+                "final_url" => "final_url",
+                "status_code" => "status_code",
+                "title" => "title",
+                "description" => "description",
+                "canonical_url" => "canonical_url",
+                "word_count" => "word_count",
+                "load_time_ms" => "load_time_ms",
+                "body_size" => "body_size",
+                "fetched_at" => "fetched_at",
+                "etag" => "etag",
+                "last_modified" => "last_modified",
+                "cwv_lcp_ms" => "cwv_lcp_ms",
+                "cwv_cls" => "cwv_cls",
+                "cwv_inp_ms" => "cwv_inp_ms",
+                "has_structured_data" => "has_structured_data",
+                "schema_types" => "schema_types",
+                "viewport_ok" => "viewport_ok",
+                "has_csp" => "has_csp",
+                "has_hsts" => "has_hsts",
+                "images_total" => "images_total",
+                "images_missing_alt" => "images_missing_alt",
+                "h1_count" => "h1_count",
+                "heading_count" => "heading_count",
+                "extractions_json" => "extractions_json",
+                "issue_id" => "issue_id",
+                "category" => "category",
+                "severity" => "severity",
+                "code" => "code",
+                "element" => "element",
+                "recommendation" => "recommendation",
+                other => {
+                    return Err(WarehouseError::Contract(format!(
+                        "manifest column `{other}` has no static field mapping — \
+                         extend JsonlRecord::build"
+                    )))
+                }
+            };
+            match fields.get(&col.name) {
+                Some(v) => {
+                    out.push((name, v.clone()));
+                }
+                None if col.nullable => {
+                    out.push((name, serde_json::Value::Null));
+                }
+                None => {
+                    return Err(WarehouseError::Contract(format!(
+                        "row is missing non-nullable manifest column `{}`",
+                        col.name
+                    )))
+                }
+            }
+        }
+        for key in fields.keys() {
+            if !manifest.columns.iter().any(|c| &c.name == key) {
+                return Err(WarehouseError::Contract(format!(
+                    "row field `{key}` is not a manifest column — schema drift"
+                )));
+            }
+        }
+        Ok(Self { fields: out })
+    }
+
+    fn to_json(&self) -> String {
+        let mut s = String::new();
+        s.push('{');
+        for (i, (k, v)) in self.fields.iter().enumerate() {
+            if i > 0 {
+                s.push(',');
+            }
+            s.push_str(&serde_json::to_string(k).unwrap_or_default());
+            s.push(':');
+            s.push_str(&serde_json::to_string(v).unwrap_or_default());
+        }
+        s.push('}');
+        s
+    }
+}
+
+fn jsonl_cell(
+    raw: &'static str,
+    cell: &'static std::sync::OnceLock<Result<TableManifest, String>>,
+) -> Result<&'static TableManifest, WarehouseError> {
+    manifest_cell(raw, cell)
+}
+
+fn jsonl_pages_manifest() -> Result<&'static TableManifest, WarehouseError> {
+    static M: std::sync::OnceLock<Result<TableManifest, String>> = std::sync::OnceLock::new();
+    jsonl_cell(PAGES_MANIFEST, &M)
+}
+
+fn jsonl_findings_manifest() -> Result<&'static TableManifest, WarehouseError> {
+    static M: std::sync::OnceLock<Result<TableManifest, String>> = std::sync::OnceLock::new();
+    jsonl_cell(FINDINGS_MANIFEST, &M)
+}
+
+fn jsonl_crawl_runs_manifest() -> Result<&'static TableManifest, WarehouseError> {
+    static M: std::sync::OnceLock<Result<TableManifest, String>> = std::sync::OnceLock::new();
+    jsonl_cell(CRAWL_RUNS_MANIFEST, &M)
+}
+
+/// Serialize rows to newline-delimited JSON: manifest-declared columns per
+/// object, in manifest order (key-sorted output order is a writer property,
+/// not the contract), UTF-8, LF-terminated.
+fn write_jsonl(
+    manifest: Result<&'static TableManifest, WarehouseError>,
+    mut rows: Vec<serde_json::Map<String, serde_json::Value>>,
+) -> Result<Vec<u8>, WarehouseError> {
+    let manifest = manifest?;
+    // Key-sort by the manifest's logical keys before writing (ADR-016 §2.2
+    // rule 4, matching the Parquet writers): input order never affects the
+    // output bytes, so re-exports are byte-identical. All v1 keys are
+    // strings; a non-string key value is a writer bug surfaced below by the
+    // non-nullable column check.
+    rows.sort_by(|a, b| {
+        for k in &manifest.table.keys {
+            let x = a
+                .get(k.as_str())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            let y = b
+                .get(k.as_str())
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("");
+            if x != y {
+                return x.cmp(y);
+            }
+        }
+        std::cmp::Ordering::Equal
+    });
+    let mut buf = Vec::new();
+    for fields in rows {
+        let rec = JsonlRecord::build(manifest, fields)?;
+        buf.extend_from_slice(rec.to_json().as_bytes());
+        buf.push(b'\n');
+    }
+    Ok(buf)
+}
+
+/// Serialize one row to a JSON object, fallibly (workspace lints deny
+/// `expect` in production code; serialization of in-repo rows only fails on
+/// a programming error, but it must be surfaced, not panicked).
+fn row_to_object<T: serde::Serialize>(
+    label: &str,
+    row: &T,
+) -> Result<serde_json::Map<String, serde_json::Value>, WarehouseError> {
+    match serde_json::to_value(row)
+        .map_err(|e| WarehouseError::Writer(format!("{label} failed to serialize: {e}")))?
+    {
+        serde_json::Value::Object(map) => Ok(map),
+        _ => Err(WarehouseError::Contract(format!(
+            "{label} must serialize to a JSON object"
+        ))),
+    }
+}
+
+/// Write `crawl_runs` rows as JSONL (BigQuery/Snowflake load-job compatible).
+pub fn write_crawl_runs_jsonl(runs: &[CrawlRunRow]) -> Result<Vec<u8>, WarehouseError> {
+    let rows = runs
+        .iter()
+        .map(|r| row_to_object("CrawlRunRow", r))
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    write_jsonl(jsonl_crawl_runs_manifest(), rows)
+}
+
+/// Write `pages` rows as JSONL (BigQuery/Snowflake load-job compatible).
+pub fn write_pages_jsonl(pages: &[PageRow]) -> Result<Vec<u8>, WarehouseError> {
+    let rows = pages
+        .iter()
+        .map(|r| row_to_object("PageRow", r))
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    write_jsonl(jsonl_pages_manifest(), rows)
+}
+
+/// Write `findings` rows as JSONL (BigQuery/Snowflake load-job compatible).
+pub fn write_findings_jsonl(findings: &[FindingRow]) -> Result<Vec<u8>, WarehouseError> {
+    let rows = findings
+        .iter()
+        .map(|r| row_to_object("FindingRow", r))
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    write_jsonl(jsonl_findings_manifest(), rows)
+}
+
+/// Build the BigQuery external-schema DDL fragment for a table from its
+/// manifest (`bigquery` bindings). Operational convenience for load jobs —
+/// the manifest remains the only source of truth.
+pub fn bigquery_schema_fragment(manifest: &TableManifest) -> Result<String, WarehouseError> {
+    let cols = manifest
+        .columns
+        .iter()
+        .map(|c| {
+            if c.bigquery.is_empty() {
+                return Err(WarehouseError::Contract(format!(
+                    "column `{}` declares no bigquery binding",
+                    c.name
+                )));
+            }
+            let mode = if c.nullable { "NULLABLE" } else { "REQUIRED" };
+            Ok(format!("{} {} {}", c.name, c.bigquery, mode))
+        })
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    Ok(cols.join(", "))
+}
+
+/// Build the Snowflake external-schema DDL fragment for a table from its
+/// manifest (`snowflake` bindings). Operational convenience for load jobs —
+/// the manifest remains the only source of truth.
+pub fn snowflake_schema_fragment(manifest: &TableManifest) -> Result<String, WarehouseError> {
+    let cols = manifest
+        .columns
+        .iter()
+        .map(|c| {
+            if c.snowflake.is_empty() {
+                return Err(WarehouseError::Contract(format!(
+                    "column `{}` declares no snowflake binding",
+                    c.name
+                )));
+            }
+            Ok(format!("{} {}", c.name, c.snowflake))
+        })
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    Ok(cols.join(", "))
+}
+
+/// Build the JSONL load manifest for one exported file (ADR-016 §2.3: the
+/// version embedded in every artifact — `_schema` is this document for the
+/// JSONL bindings). Deterministic: keys sorted, stable field order.
+pub fn jsonl_load_manifest(
+    table: &'static str,
+    manifest: &TableManifest,
+    file_name: &str,
+) -> Result<Vec<u8>, WarehouseError> {
+    let version = manifest.table.version.as_str();
+    let doc = serde_json::json!({
+        MANIFEST_SCHEMA_VERSION_KEY: version,
+        MANIFEST_TABLE_KEY: table,
+        "file": file_name,
+        "tables": [{
+            "name": manifest.table.name,
+            "version": manifest.table.version,
+            "keys": manifest.table.keys,
+        }],
+    });
+    let mut buf = serde_json::to_string_pretty(&doc)
+        .map_err(|e| WarehouseError::Writer(e.to_string()))?
+        .into_bytes();
+    buf.push(b'\n');
+    Ok(buf)
+}
+
+/// The three JSONL files (plus one load manifest) for one crawl, ready to
+/// upload to GCS / a Snowflake stage under crawl-scoped object keys (e.g.
+/// `exports/{crawl_id}/pages.jsonl`). Line order is key-sorted, so
+/// re-exports are byte-identical — idempotent overwrite per logical key.
+#[derive(Debug, Clone)]
+pub struct JsonlCrawlExport {
+    /// `crawl_runs` table file.
+    pub crawl_runs: Vec<u8>,
+    /// `pages` table file.
+    pub pages: Vec<u8>,
+    /// `findings` table file.
+    pub findings: Vec<u8>,
+    /// The `_schema` load manifest covering all three files.
+    pub manifest: Vec<u8>,
+}
+
+/// Export one crawl from any [`StorageBackend`] into JSONL files for
+/// BigQuery/Snowflake load jobs. Crawl-scoped (ADR-016 §3) and idempotent:
+/// same data → byte-identical bytes.
+pub fn export_crawl_jsonl(
+    storage: &dyn StorageBackend,
+    crawl_id: &str,
+    tenant_id: Option<&str>,
+    sequence: Option<i64>,
+) -> Result<JsonlCrawlExport, WarehouseError> {
+    let meta = storage
+        .get_crawl_meta(crawl_id)
+        .map_err(|e| WarehouseError::InvalidMeta(e.to_string()))?;
+    let run = CrawlRunRow::from_parts(&meta, tenant_id, sequence)?;
+
+    let pages = storage
+        .get_pages(crawl_id, usize::MAX)
+        .map_err(|e| WarehouseError::Writer(e.to_string()))?;
+    // Key-sort before writing (ADR-016 §2.2 rule 4): line order matches the
+    // Parquet writers' sort, so re-exports are byte-identical.
+    let mut page_rows: Vec<PageRow> = pages.iter().map(|p| (crawl_id, p).into()).collect();
+    page_rows.sort_by(|a, b| (&a.crawl_id, &a.page_id).cmp(&(&b.crawl_id, &b.page_id)));
+
+    let issues = storage
+        .get_issues(crawl_id, &crate::storage::IssueFilter::default())
+        .map_err(|e| WarehouseError::Writer(e.to_string()))?;
+    let mut finding_rows: Vec<FindingRow> = issues
+        .iter()
+        .map(|i| FindingRow::new(crawl_id, i))
+        .collect();
+    finding_rows.sort_by(|a, b| {
+        (&a.crawl_id, &a.page_id, &a.issue_id).cmp(&(&b.crawl_id, &b.page_id, &b.issue_id))
+    });
+
+    let crawl_runs = write_crawl_runs_jsonl(std::slice::from_ref(&run))?;
+    let pages_buf = write_pages_jsonl(&page_rows)?;
+    let findings_buf = write_findings_jsonl(&finding_rows)?;
+    let manifest_doc = jsonl_load_manifest("_schema", crawl_runs_manifest()?, "crawl_runs.jsonl")?;
+
+    Ok(JsonlCrawlExport {
+        crawl_runs,
+        pages: pages_buf,
+        findings: findings_buf,
+        manifest: manifest_doc,
+    })
+}
+
+/// Decode a Parquet file back into arrow record batches (testing and
+/// round-trip verification helper).
+pub fn read_parquet_batches(data: &[u8]) -> Result<Vec<RecordBatch>, WarehouseError> {
+    let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+        Bytes::copy_from_slice(data),
+    )
+    .map_err(|e| WarehouseError::Writer(e.to_string()))?
+    .build()
+    .map_err(|e| WarehouseError::Writer(e.to_string()))?;
+    reader
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| WarehouseError::Writer(e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(clippy::unwrap_used)]
@@ -825,6 +1195,221 @@ mod tests {
         let mut out = Vec::new();
         write_findings_parquet(&rows, &mut out).unwrap();
         assert!(!out.is_empty());
+    }
+
+    // ------------------------------------------------------------------
+    // JSONL binding (second physical binding: BigQuery/Snowflake load jobs)
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn jsonl_records_match_manifest_exactly() {
+        // Gates: (a) field set equals the manifest's column set; (b) absent
+        // nullable values are explicit nulls; (c) manifest order is preserved
+        // (line column i ↔ JSON field i).
+        let pages = [test_page("p1", "https://example.com/")];
+        let rows: Vec<PageRow> = pages.iter().map(|p| ("c1", p).into()).collect();
+        let out = write_pages_jsonl(&rows).unwrap();
+        assert_eq!(out.last(), Some(&b'\n'));
+        let text = String::from_utf8(out).unwrap();
+        assert_eq!(text.lines().count(), 1);
+
+        let manifest = pages_manifest().unwrap();
+        let text = text.trim_end();
+        let names: Vec<&str> = manifest.columns.iter().map(|c| c.name.as_str()).collect();
+        for (i, name) in names.iter().enumerate() {
+            let line_col = text
+                .match_indices(&format!("\"{name}\":"))
+                .find(|(pos, _)| text[..*pos].match_indices('"').count().is_multiple_of(2));
+            assert!(line_col.is_some(), "field `{name}` missing from line");
+            if i > 0 {
+                let prev = names[i - 1];
+                let prev_pos = text
+                    .match_indices(&format!("\"{prev}\":"))
+                    .find(|(pos, _)| text[..*pos].match_indices('"').count().is_multiple_of(2))
+                    .map(|(p, _)| p)
+                    .unwrap();
+                let cur_pos = line_col.map(|(p, _)| p).unwrap();
+                assert!(prev_pos < cur_pos, "field order must follow the manifest");
+            }
+        }
+
+        let v: serde_json::Value = serde_json::from_str(text).unwrap();
+        let obj = v.as_object().unwrap();
+        assert_eq!(obj.len(), manifest.columns.len(), "field set drift");
+        assert_eq!(obj["crawl_id"], "c1");
+        assert_eq!(obj["status_code"], 200);
+        assert!(
+            obj["canonical_url"].is_null(),
+            "absent nullable values are explicit nulls"
+        );
+        assert!(obj["cwv_inp_ms"].is_null());
+        assert_eq!(obj["fetched_at"], "2026-09-13T12:00:00Z");
+    }
+
+    #[test]
+    fn jsonl_binds_to_declared_bq_and_sf_types() {
+        // ADR-016 §2.1: types bind at the edges, once. The JSONL binding
+        // serves two transports; each manifest column's declared BQ/SF type
+        // must be from the table's declared vocabulary (and non-empty).
+        for (manifest, bq_vocab, sf_vocab) in [
+            (
+                crawl_runs_manifest().unwrap(),
+                ["STRING", "TIMESTAMP", "INT64"].as_slice(),
+                ["VARCHAR", "TIMESTAMP_NTZ", "NUMBER(38,0)"].as_slice(),
+            ),
+            (
+                pages_manifest().unwrap(),
+                ["STRING", "TIMESTAMP", "INT64", "FLOAT64", "BOOL"].as_slice(),
+                [
+                    "VARCHAR",
+                    "TIMESTAMP_NTZ",
+                    "NUMBER(38,0)",
+                    "FLOAT",
+                    "BOOLEAN",
+                ]
+                .as_slice(),
+            ),
+            (
+                findings_manifest().unwrap(),
+                ["STRING"].as_slice(),
+                ["VARCHAR"].as_slice(),
+            ),
+        ] {
+            for col in &manifest.columns {
+                assert!(
+                    !col.bigquery.is_empty() && bq_vocab.contains(&col.bigquery.as_str()),
+                    "{}.{}: undeclared bigquery binding `{}`",
+                    manifest.table.name,
+                    col.name,
+                    col.bigquery
+                );
+                assert!(
+                    !col.snowflake.is_empty() && sf_vocab.contains(&col.snowflake.as_str()),
+                    "{}.{}: undeclared snowflake binding `{}`",
+                    manifest.table.name,
+                    col.name,
+                    col.snowflake
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn schema_fragments_render_from_manifests() {
+        let runs = crawl_runs_manifest().unwrap();
+        let bq = bigquery_schema_fragment(runs).unwrap();
+        let sf = snowflake_schema_fragment(runs).unwrap();
+        assert!(bq.starts_with("crawl_id STRING REQUIRED"));
+        assert!(bq.contains("pages_crawled INT64 REQUIRED"));
+        assert!(sf.contains("start_time TIMESTAMP_NTZ"));
+        assert!(sf.contains("sequence NUMBER(38,0)"));
+        // BQ mode derives from manifest nullability.
+        assert!(bq.contains("tenant_id STRING NULLABLE"));
+    }
+
+    #[test]
+    fn jsonl_output_is_deterministic_and_input_order_independent() {
+        let pages = [
+            test_page("p2", "https://t.example/"),
+            test_page("p1", "https://t.example/x"),
+        ];
+        let rows_a: Vec<PageRow> = pages.iter().map(|p| ("c1", p).into()).collect();
+        let mut reversed = pages;
+        reversed.reverse();
+        let rows_b: Vec<PageRow> = reversed.iter().map(|p| ("c1", p).into()).collect();
+
+        let out_a = write_pages_jsonl(&rows_a).unwrap();
+        let out_b = write_pages_jsonl(&rows_b).unwrap();
+        assert_eq!(
+            out_a, out_b,
+            "same rows in different order must produce byte-identical JSONL"
+        );
+    }
+
+    #[test]
+    fn export_crawl_jsonl_round_trips_through_storage() {
+        let storage = Storage::new_in_memory().unwrap();
+        let cid = storage.start_crawl("https://example.com", None).unwrap();
+        storage
+            .insert_page(&cid, &test_page("p1", "https://example.com/"))
+            .unwrap();
+        storage.insert_issue(&test_issue("i1", "p1", true)).unwrap();
+        storage.finish_crawl(&cid, 1, 1).unwrap();
+
+        let export = export_crawl_jsonl(&storage, &cid, Some("tenant-b"), None).unwrap();
+        assert!(String::from_utf8(export.manifest.clone())
+            .unwrap()
+            .contains("crawlkit.schema_version"));
+        assert!(!export.pages.is_empty());
+
+        // The crawl_runs line carries the export-level tenancy parameter.
+        let run_text = String::from_utf8(export.crawl_runs).unwrap();
+        let run: serde_json::Value = serde_json::from_str(run_text.trim_end()).unwrap();
+        assert_eq!(run["crawl_id"], cid);
+        assert_eq!(run["tenant_id"], "tenant-b");
+
+        // Page rows carry tenancy from PageData itself (null in this fixture).
+        let text = String::from_utf8(export.pages).unwrap();
+        let v: serde_json::Value = serde_json::from_str(text.trim_end()).unwrap();
+        assert_eq!(v["crawl_id"], cid);
+        assert!(v["tenant_id"].is_null());
+        assert_eq!(v["fetched_at"], "2026-09-13T12:00:00Z");
+    }
+
+    #[test]
+    fn jsonl_and_parquet_bindings_describe_the_same_rows() {
+        // Cross-binding equivalence (ADR-016 §2.1: one logical schema): the
+        // JSONL lines must agree with the Parquet rows — same row count,
+        // same per-row values through the row types (field sets were already
+        // gated against the manifest above).
+        let storage = Storage::new_in_memory().unwrap();
+        let cid = storage.start_crawl("https://example.com", None).unwrap();
+        storage
+            .insert_page(&cid, &test_page("p1", "https://example.com/"))
+            .unwrap();
+        storage
+            .insert_issue(&test_issue("i1", "p1", false))
+            .unwrap();
+        storage.finish_crawl(&cid, 1, 1).unwrap();
+
+        let parquet_export = export_crawl_parquet(&storage, &cid, Some("tenant-b"), None).unwrap();
+        let jsonl_export = export_crawl_jsonl(&storage, &cid, Some("tenant-b"), None).unwrap();
+
+        // crawl_runs: parse the single JSONL line back into CrawlRunRow.
+        let run_text = String::from_utf8(jsonl_export.crawl_runs).unwrap();
+        let run: CrawlRunRow = serde_json::from_str(run_text.trim_end()).unwrap();
+        assert_eq!(run.crawl_id, cid);
+        let pq_run_batches = read_parquet_batches(&parquet_export.crawl_runs).unwrap();
+        let pq_run = &pq_run_batches[0];
+        assert_eq!(pq_run.num_rows(), 1);
+        let got_crawl_id = pq_run
+            .column(0)
+            .as_any()
+            .downcast_ref::<StringArray>()
+            .unwrap();
+        assert_eq!(got_crawl_id.value(0), run.crawl_id);
+        let got_pages = pq_run
+            .column(4)
+            .as_any()
+            .downcast_ref::<Int64Array>()
+            .unwrap();
+        assert_eq!(got_pages.value(0), run.pages_crawled);
+
+        // pages: JSONL row count == Parquet row count.
+        let pages_text = String::from_utf8(jsonl_export.pages).unwrap();
+        let page_lines = pages_text.lines().count();
+        let pq_pages = read_parquet_batches(&parquet_export.pages).unwrap();
+        assert_eq!(
+            pq_pages.iter().map(|b| b.num_rows()).sum::<usize>(),
+            page_lines
+        );
+
+        // findings: same, including the custom-category string form.
+        let findings_text = String::from_utf8(jsonl_export.findings).unwrap();
+        let finding: serde_json::Value = serde_json::from_str(findings_text.trim_end()).unwrap();
+        assert_eq!(finding["category"], "seo");
+        let pq_findings = read_parquet_batches(&parquet_export.findings).unwrap();
+        assert_eq!(pq_findings.iter().map(|b| b.num_rows()).sum::<usize>(), 1);
     }
 
     #[test]

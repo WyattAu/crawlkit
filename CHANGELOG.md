@@ -18,12 +18,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **S3/Parquet warehouse exporter** behind the new `warehouse` feature
   (`crawlkit-engine`): deterministic key-sorted Parquet writer (same crawl →
   byte-identical files, idempotent overwrite per logical key), schema
-  version embedded in file footers, zstd compression. First binding of
-  three; `warehouse_exporters` enters capabilities.toml as `experimental`
-  per ADR-016 §2.4.
+  version embedded in file footers, zstd compression.
+- **BigQuery/Snowflake JSONL load-job binding** (`warehouse` feature):
+  newline-delimited JSON with exactly the manifest columns per record
+  (explicit nulls, manifest field order), a per-export `_schema` load
+  manifest embedding the schema version, and DDL fragment renderers for
+  both warehouses generated from the manifest's declared bindings. Two of
+  three bindings now implemented; `warehouse_exporters` stays `experimental`
+  per ADR-016 §2.4 (round-trip CI + migration drill still owed).
 - Scanner dashboards design (docs/SCANNER_DASHBOARDS.md): the runbook §4
   alert rows rendered as concrete panels, queries, and named thresholds over
   the `/metrics` data plane, with alert routing and an arming plan.
+- Capacity-evidence plan (docs/CAPACITY_EVIDENCE_PLAN.md): the 10k/100k
+  instrumented-crawl protocol for the 6.0.0 AR1 gate — named thresholds
+  (throughput, peak RSS, fd/task bounds), deterministic synthetic workload,
+  run-record procedure with committed raw artifacts, and a CI smoke-class
+  regression gate.
+- Scanner GA sign-off request (docs/GA_SIGNOFF_REQUEST.md): the owner-facing
+  one-pager for the runbook §7 decision, referencing the evidence package,
+  drill log, met streak, and dashboard plan.
 
 ### Changed
 

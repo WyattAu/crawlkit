@@ -1,8 +1,10 @@
 # ADR-016: Warehouse Exporters — Versioned Schema Contract
 
 **Status:** Accepted — schema contract v1 landed 2026-09-13 (`schemas/export/v1/*.toml`,
-conformance-gated in `crates/crawlkit-engine/src/export/warehouse.rs`); first
-physical binding (S3/Parquet) implemented behind the `warehouse` feature;
+conformance-gated in `crates/crawlkit-engine/src/export/warehouse.rs`); two
+physical bindings implemented behind the `warehouse` feature — S3/Parquet
+(deterministic writer) and the JSONL load-job binding serving BigQuery and
+Snowflake (one physical format for both, manifest-rendered DDL fragments);
 `warehouse_exporters` registered as `experimental` in capabilities.toml
 **Date:** 2026-09-12
 **Deciders:** Maintainers

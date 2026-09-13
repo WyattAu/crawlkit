@@ -11,6 +11,11 @@ ignore = [
     # number_prefix (transitive via indicatif): unmaintained; cosmetic
     # progress-bar dep, no security surface.
     { id = "RUSTSEC-2025-0119" },
+    # paste (transitive via parquet): unmaintained (archived by dtolnay);
+    # compile-time token-pasting proc-macro with no runtime surface.
+    # Introduced by the ADR-016 warehouse exporter (`warehouse` feature);
+    # tracked for a parquet release that drops it.
+    { id = "RUSTSEC-2024-0436" },
 ]
 
 [licenses]

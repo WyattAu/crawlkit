@@ -1,8 +1,24 @@
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
 use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
+
+/// Process-global override for [`ResourceLimits::default`], set once via
+/// [`set_default_limits`]. Exists so embedders can raise or disable the
+/// engine's in-crawl resource ceilings without a semver-major change to the
+/// exhaustively-constructible `CrawlEngineConfig` (adding a public field
+/// there breaks struct literal initializers). Measurement harnesses are the
+/// primary intended caller.
+static DEFAULT_LIMITS_OVERRIDE: OnceLock<ResourceLimits> = OnceLock::new();
+
+/// Override the limits [`ResourceMonitor::with_default_limits`] hands out.
+/// Process-wide; only the first call wins (returns `false` thereafter).
+/// Passing `None` for a limit field disables that ceiling.
+pub fn set_default_limits(limits: ResourceLimits) -> bool {
+    DEFAULT_LIMITS_OVERRIDE.set(limits).is_ok()
+}
 
 /// Resource limits for a crawl session.
 ///
@@ -91,10 +107,11 @@ impl ResourceMonitor {
         }
     }
 
-    /// Create with default limits.
+    /// Create with default limits — or the process-global override installed
+    /// by [`set_default_limits`] when one is present.
     #[must_use]
     pub fn with_default_limits() -> Self {
-        Self::new(ResourceLimits::default())
+        Self::new(DEFAULT_LIMITS_OVERRIDE.get().cloned().unwrap_or_default())
     }
 
     /// Update current usage.

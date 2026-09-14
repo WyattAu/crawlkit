@@ -192,6 +192,16 @@ struct RunStats {
 }
 
 fn run_crawl(profile: AnalyzerProfile) -> RunStats {
+    // The engine's 512 MB default monitor would abort the full-profile run
+    // mid-crawl (observed: stopped at 4507/10001 pages when Rust-heap +
+    // analyzer intermediates crossed the cap). The measurement must be
+    // allowed to reach its natural peak — set once, process-wide, before
+    // any engine construction (semver-safe additive API; the public config
+    // struct cannot gain a field without a major version).
+    let _ = crawlkit_engine::set_default_limits(crawlkit_engine::ResourceLimits {
+        max_memory_bytes: None,
+        ..crawlkit_engine::ResourceLimits::default()
+    });
     let server = TestServer::start(PAGES);
     let tmp = tempfile::tempdir().unwrap();
     let db_path = tmp.path().join("capacity.db");
@@ -211,15 +221,6 @@ fn run_crawl(profile: AnalyzerProfile) -> RunStats {
             analyzer_profile: profile,
             concurrency: Some(CONCURRENCY),
             allow_http: true, // local loopback corpus only
-            // The engine's own 512 MB default monitor would abort the full-
-            // profile run mid-crawl (observed: stopped at 4507/10001 pages
-            // when Rust-heap + analyzer intermediates crossed the cap). The
-            // measurement must be allowed to reach its natural peak — the
-            // same cap applied to both runs would just move the finding.
-            resource_limits: crawlkit_engine::ResourceLimits {
-                max_memory_bytes: None,
-                ..crawlkit_engine::ResourceLimits::default()
-            },
             ..CrawlEngineConfig::default()
         },
         Arc::clone(&storage),

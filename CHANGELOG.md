@@ -70,10 +70,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (Core 99 MB vs Full 1 547 MB peaks on the identical workload), ~780 MB is
   retained after the crawl under the full profile, and ~570 MB is allocator
   slack from 79 GB allocation churn. Fix directions ranked in the report.
-- **Changed**: `CrawlEngineConfig` gained `resource_limits` — the engine's
-  in-crawl resource monitor limits are now pluggable instead of hardcoded
-  (found when the 512 MB default aborted a full-profile measurement run at
-  4507/10001 pages; default behavior unchanged).
+- **Changed**: the engine's in-crawl resource monitor limits are now
+  pluggable via the additive `set_default_limits()` API (process-global
+  override for `ResourceLimits::default()`), instead of hardcoded — found
+  when the 512 MB default aborted a full-profile measurement run at
+  4507/10001 pages. Default behavior is unchanged; the override exists so
+  embedders and measurement harnesses can raise or disable ceilings without
+  a semver-major change to the exhaustively-constructible
+  `CrawlEngineConfig` (caught by the repo's own semver gate on the first
+  attempt).
 - **Fixed**: the `crawl --profiling` dhat path was dormant — the `Profiler`
   was built but dhat's global allocator was never installed, so no heap
   data was recorded. Both the binary and the attribution harness now install

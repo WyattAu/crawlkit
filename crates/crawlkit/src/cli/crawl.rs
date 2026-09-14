@@ -190,7 +190,6 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         instance_count: None,
         analyzer_profile,
         custom_analyzers: None,
-        resource_limits: Default::default(),
         allow_private: params.allow_private,
     };
 

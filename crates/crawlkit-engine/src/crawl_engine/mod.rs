@@ -17,7 +17,7 @@ use crate::sitemap::SitemapCache;
 use crate::storage_trait::StorageBackend;
 use crate::{
     CircuitBreakerRegistry, CrawlConfig, DeterminismController, FeatureFlags, Metrics,
-    ResourceMonitor,
+    ResourceLimits, ResourceMonitor,
 };
 use counters::{current, CrawlCounters};
 use dashmap::DashSet;
@@ -135,6 +135,12 @@ pub struct CrawlEngineConfig {
     /// Ignored when [`Self::custom_analyzers`] is set.
     pub analyzer_profile: AnalyzerProfile,
 
+    /// Resource limits enforced by the engine's in-crawl resource monitor
+    /// (memory, CPU, disk, fds, duration). Defaults to
+    /// [`ResourceLimits::default`]; embedders running larger workloads —
+    /// or measuring them — can raise or disable individual limits here.
+    pub resource_limits: ResourceLimits,
+
     /// Optional fully custom analyzer registry. When set, it replaces the
     /// built-in set entirely and takes precedence over
     /// [`Self::analyzer_profile`].
@@ -242,6 +248,7 @@ impl Default for CrawlEngineConfig {
                 &CrawlConfig::default(),
             ),
             analyzer_profile: AnalyzerProfile::default(),
+            resource_limits: ResourceLimits::default(),
             custom_analyzers: None,
             queue: None,
             crux_api_key: None,
@@ -467,7 +474,7 @@ impl CrawlEngine {
         let sitemap_cache = Arc::new(SitemapCache::new(http_client.clone()));
 
         let metrics = Metrics::new();
-        let resource_monitor = ResourceMonitor::with_default_limits();
+        let resource_monitor = ResourceMonitor::new(cfg.resource_limits.clone());
         let circuit_breaker_registry = CircuitBreakerRegistry::with_default_config();
 
         let determinism = cfg.seed.map(DeterminismController::new);

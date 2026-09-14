@@ -135,16 +135,28 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    runs, set valid at 8.9% spread). Verdict: throughput target **met**
    (median 64.2 pages/s ≥ 50); peak-RSS target **missed** (median 2115 MB vs
    the < 500 MB §2 row) — recorded as evidence, and the RSS gap is the
-   newest 6.0.0 engineering item. First diagnostic step: a `dhat` heap
-   profile over the same workload to attribute the ~2 GB (page-store page
-   cache, analyzer intermediates, or issue-string retention) before picking
-   a fix.
+   newest 6.0.0 engineering item. First diagnostic step: ~~a `dhat` heap
+   profile over the same workload to attribute the ~2 GB~~ — **done
+   2026-09-14** (`docs/capacity/2026-09-14-heap-attribution/`): the peak is
+   analyzer intermediates (~1.45 GB live delta, Full vs Core profiles), with
+   ~780 MB retained post-crawl under the full profile and ~570 MB allocator
+   slack from 79 GB churn. Fix directions are ranked in that report.
 3. 100k runs on the same harness (additive: `CAPACITY_PAGES=100000`) →
    ADR-016 §5.1 compression defaults picked from the same runs. Note: the
    same harness at 100k pages in one crawl multiplies the RSS question —
    run it only after the §2 item above has an attribution, or shard it.
 4. Distributed-posture variant (queue + Postgres + multiple workers) → the
    numbers the 6.0.0 distributed-stability claim actually rests on.
+   **Status: scoped, not yet run (2026-09-14).** The host has Docker, so the
+   service path (Redis 7 + Postgres, mirroring the CI service set) is
+   available without new infrastructure; the blocker is measurement
+   discipline, not tooling — a capacity run on a host concurrently running
+   two service containers plus the dhat attribution workload would violate
+   §3's quiet-host rule. Scheduled after the §8.2 attribution work closes.
+   Harness shape: extend `capacity_smoke.rs` with `CAPACITY_MODE=distributed`
+   (enqueue-only producer + N worker processes consuming the lease queue,
+   per-worker `/proc` samples, and a record that names the topology so the
+   numbers can never be conflated with the inline mode).
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

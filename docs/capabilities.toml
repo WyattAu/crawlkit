@@ -42,6 +42,7 @@ names = [
   "gsc",
   "rank",
   "schedule",
+  "export",
 ]
 
 [capabilities.crawler]
@@ -92,7 +93,7 @@ evidence = [
   "crates/crawlkit-engine/src/export/warehouse.rs",
 ]
 requirements = ["--features warehouse"]
-notes = "Versioned crawl-export schema contract (ADR-016); two of three physical bindings implemented behind the `warehouse` feature (S3/Parquet deterministic writer; JSONL load-job binding serving BigQuery and Snowflake with manifest-rendered DDL fragments). CI round-trip coverage against live warehouses and a documented migration drill are required for stable-with-configuration per ADR-016 §2.4."
+notes = "Versioned crawl-export schema contract (ADR-016); two of three physical bindings implemented behind the `warehouse` feature (S3/Parquet deterministic writer; JSONL load-job binding serving BigQuery and Snowflake with manifest-rendered DDL fragments). User-facing via `crawlkit export` (same feature gate). CI round-trip coverage against live warehouses and a documented migration drill are required for stable-with-configuration per ADR-016 §2.4."
 
 [capabilities.redis_queue]
 status = "stable-with-configuration"

@@ -52,6 +52,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   export → load → query → verify for both bindings with independent readers
   and uploads a drill record as a CI artifact; the live-warehouse load is
   recorded explicitly as the remaining §2.4 item.
+- **`crawlkit export` CLI command** (ADR-016 bindings; `warehouse` feature):
+  user-facing warehouse export from a storage database — `--format parquet`
+  (S3/data-lake) or `--format jsonl` (BigQuery/Snowflake load files plus the
+  `_schema` manifest), with crawl resolution (explicit `--crawl-id`, single-
+  crawl default, or an actionable multi-crawl listing), `--tenant` scoping,
+  and the same byte-identical idempotency guarantees as the library API.
+  End-to-end CLI tests cover both formats, idempotency, and failure modes.
+- Heap-attribution harness (`tests/heap_attribution.rs`, `profiling`
+  feature): dhat phase snapshots + analyzer ablation + 10 ms timeline
+  sampling over the 10k reference workload — the first diagnostic step of
+  the capacity plan's RSS-gap item, with the attribution record emitted for
+  `docs/capacity/`.
+- **RSS-gap attribution published**
+  (`docs/capacity/2026-09-14-heap-attribution/`): the 10k peak-RSS miss is
+  attributed — analyzer intermediates own ~1.45 GB of live-heap delta
+  (Core 99 MB vs Full 1 547 MB peaks on the identical workload), ~780 MB is
+  retained after the crawl under the full profile, and ~570 MB is allocator
+  slack from 79 GB allocation churn. Fix directions ranked in the report.
+- **Changed**: `CrawlEngineConfig` gained `resource_limits` — the engine's
+  in-crawl resource monitor limits are now pluggable instead of hardcoded
+  (found when the 512 MB default aborted a full-profile measurement run at
+  4507/10001 pages; default behavior unchanged).
+- **Fixed**: the `crawl --profiling` dhat path was dormant — the `Profiler`
+  was built but dhat's global allocator was never installed, so no heap
+  data was recorded. Both the binary and the attribution harness now install
+  `dhat::Alloc` under the `profiling` feature.
 
 ### Changed
 

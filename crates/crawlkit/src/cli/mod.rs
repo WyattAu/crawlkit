@@ -6,6 +6,8 @@ pub mod compare;
 pub mod crawl;
 #[cfg(feature = "full")]
 pub mod crawl_map;
+#[cfg(feature = "warehouse")]
+pub mod export_warehouse;
 #[cfg(feature = "full")]
 pub(crate) mod findings;
 #[cfg(feature = "full")]
@@ -358,6 +360,30 @@ pub enum Commands {
     Queue {
         #[command(subcommand)]
         command: QueueCommands,
+    },
+
+    /// Export a completed crawl to warehouse files (ADR-016 bindings)
+    #[cfg(feature = "warehouse")]
+    Export {
+        /// Path to the crawlkit storage database (e.g. <out-dir>/crawlkit.db)
+        #[arg(long)]
+        db: Option<PathBuf>,
+
+        /// Crawl id to export (defaults to the only crawl in the database)
+        #[arg(long)]
+        crawl_id: Option<String>,
+
+        /// Tenant id recorded on the export's crawl_runs row
+        #[arg(long)]
+        tenant: Option<String>,
+
+        /// Physical binding to emit
+        #[arg(long, value_enum, default_value = "parquet")]
+        format: export_warehouse::ExportFormat,
+
+        /// Directory receiving the exported table files
+        #[arg(short, long, default_value = "warehouse-export")]
+        output: PathBuf,
     },
 
     /// Analyze trends across multiple crawl snapshots

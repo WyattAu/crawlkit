@@ -7,6 +7,13 @@
 
 mod cli;
 
+/// dhat instruments allocations only through its own global allocator;
+/// building the `Profiler` alone records nothing. Active only under the
+/// `profiling` feature (never in default builds).
+#[cfg(feature = "profiling")]
+#[global_allocator]
+static DHAT_ALLOC: dhat::Alloc = dhat::Alloc;
+
 #[cfg(feature = "full")]
 use anyhow::Context;
 use anyhow::Result;
@@ -162,6 +169,25 @@ async fn main() -> Result<()> {
             output,
             format,
         } => cli::compare::run(&crawl1, &crawl2, output.as_deref(), &format),
+        #[cfg(feature = "warehouse")]
+        Commands::Export {
+            db,
+            crawl_id,
+            tenant,
+            format,
+            output,
+        } => {
+            let db = db.ok_or_else(|| {
+                anyhow::anyhow!("--db is required (path to the crawlkit storage database, e.g. <out-dir>/crawlkit.db)")
+            })?;
+            cli::export_warehouse::run(cli::export_warehouse::ExportParams {
+                db,
+                crawl_id,
+                tenant,
+                format,
+                out_dir: output,
+            })
+        }
         #[cfg(feature = "full")]
         Commands::Report {
             crawl,

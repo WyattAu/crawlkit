@@ -72,6 +72,7 @@ crawlkit report crawl1/ --format html --output report.html
 | `crawlkit crawl` | Crawl a website and run analyzers |
 | `crawlkit compare` | Diff two crawl snapshots |
 | `crawlkit report` | Generate report from crawl data |
+| `crawlkit export` | Export a completed crawl to warehouse files (ADR-016 bindings: `--format parquet` for S3/data-lake, `--format jsonl` for BigQuery/Snowflake load jobs) |
 | `crawlkit schedule` | Manage recurring crawls on a crawlkit-api server (add/list/enable/disable/remove) |
 
 | Option | Default | Description |

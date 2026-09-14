@@ -91,6 +91,14 @@ cross-binding agreement with the Parquet files for the same crawl.
 to `stable-with-configuration` only per ADR-016 §2.4 (all three bindings
 round-trip in CI, conformance gate on every push, one documented migration
 drill).
+
+**User-facing access:** the `crawlkit export` CLI command (also gated on the
+`warehouse` feature) writes both bindings to a local directory from a
+storage database — `--format parquet` (default) or `--format jsonl` (with
+the `_schema` load manifest). The same determinism guarantees hold: identical
+data re-exports byte-identically, so re-running the command over the same
+crawl is idempotent.
+
 ## Open items owned elsewhere (ADR-016 §5)
 
 - Compression/encoding defaults to be finalized against the 100k-page

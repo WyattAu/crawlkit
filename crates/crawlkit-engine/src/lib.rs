@@ -466,9 +466,7 @@ pub use playwright::{
     WasmError as PlaywrightWasmError,
 };
 #[cfg(feature = "full")]
-pub use resource_monitor::{
-    set_default_limits, ResourceLimits, ResourceMonitor, ResourceUsage,
-};
+pub use resource_monitor::{set_default_limits, ResourceLimits, ResourceMonitor, ResourceUsage};
 #[cfg(feature = "full")]
 pub use robots::RobotsTxtCache;
 #[cfg(feature = "full")]

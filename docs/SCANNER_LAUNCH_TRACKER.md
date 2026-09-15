@@ -28,18 +28,26 @@ crawl deviated >20% from baseline — shared-runner noise, proven by the
 unchanged binary and the immediate green re-run of the same job. Per the
 rule above, the count resets.
 
-**Watch (§3) — closed by fix:** the second consecutive reset (`dd60c5a1`)
-failed the same capacity smoke baseline gate, also on a docs-only diff —
-the §3 condition was met and the flake source was fixed rather than
-lawyered: the relative baseline comparison now re-measures up to 2 more
-times before failing (absolute caps stay no-retry; every attempt recorded
-in the run record). Fix exercised: a 2× unreachable baseline correctly
-fails after 3 genuine crawls with the attempts trail in the panic.
+**Watch (§3) — updated after Reset 3:** the bounded re-measurement fix
+handles single-sample jitter (proven: `335bd2ec` green first attempt;
+recovery run at 65.0 p/s first attempt). It **cannot** handle a sustained
+slow runner window — `d2066d5b` failed all three clustered attempts at
+49–52 p/s (±2% internally, −25% vs baseline). Residual noise mode is now
+*environment windows*, not samples. If a slow-window reset recurs, the
+§3 escalation is a deliberate baseline re-seed (cache-key bump with the
+evidence committed) or a gate redesign (median-of-N instead of retries)
+— not more retries, and not gate removal.
+
+Note also recorded: the engine landed the early-stop insight feature and
+the 10k queue-mode reference during this window; those runs' results live
+in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 
 | Date | HEAD | Count | Note |
 |---|---|---|---|
 | 2026-09-15 | `3d763b65` | 1 / 5 | green on re-run after noise failure |
 | 2026-09-15 | `335bd2ec` | 1 / 5 | reset 2 (`dd60c5a1`) fixed by the bounded re-measurement gate — green first attempt |
+| 2026-09-15 | `d2066d5b` | 0 / 5 | **Reset 3:** capacity gate failed all 3 attempts at 49–52 p/s, tightly clustered — a sustained slow runner window, not single-sample jitter (retries cannot rescue a uniformly slow window) |
+| 2026-09-15 | `292c8dc9` | 1 / 5 | recovery proven: 65.0 p/s first attempt, baseline within — the slow window was transient |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

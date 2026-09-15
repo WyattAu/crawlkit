@@ -104,23 +104,21 @@ pub fn early_stop_insight(
     pages_crawled: usize,
     queue_len: Option<usize>,
 ) -> Insight {
-    let title;
-    let recommendation;
-    match stop_reason {
-        "page-budget" => {
-            title = "Crawl stopped at the configured page budget".to_string();
-            recommendation = "This is the configured max_pages budget, not a fault. Raise \
-                             CrawlConfig::max_pages if the site has more pages you want \
-                             covered."
-                .to_string();
-        }
-        "time-limit" => {
-            title = "Crawl stopped at the configured time limit".to_string();
-            recommendation = "This is the configured max_time budget, not a fault. Raise \
-                             CrawlConfig::max_time or increase concurrency if the crawl \
-                             was expected to finish."
-                .to_string();
-        }
+    let (title, recommendation) = match stop_reason {
+        "page-budget" => (
+            "Crawl stopped at the configured page budget".to_string(),
+            "This is the configured max_pages budget, not a fault. Raise \
+             CrawlConfig::max_pages if the site has more pages you want \
+             covered."
+                .to_string(),
+        ),
+        "time-limit" => (
+            "Crawl stopped at the configured time limit".to_string(),
+            "This is the configured max_time budget, not a fault. Raise \
+             CrawlConfig::max_time or increase concurrency if the crawl \
+             was expected to finish."
+                .to_string(),
+        ),
         "resource-limit" => {
             // The engine keeps its ResourceLimits private, so the effective
             // page ceiling is reconstructed here: the process override when
@@ -145,25 +143,27 @@ pub fn early_stop_insight(
                 }
                 _ => String::new(),
             };
-            title = "Crawl stopped early: internal resource limits were hit".to_string();
-            recommendation = format!(
-                "The crawl was truncated by the engine's built-in resource \
-                 monitor, not by your crawl configuration — results in this \
-                 report are a partial view of the site.{queue_note} To cover \
-                 the full site, raise the ceilings via \
-                 crawlkit_engine::resource_monitor::set_default_limits \
-                 (process-wide, first call wins) — e.g. max_pages: None — \
-                 or crawl in depth-limited segments and merge results."
-            );
+            (
+                "Crawl stopped early: internal resource limits were hit".to_string(),
+                format!(
+                    "The crawl was truncated by the engine's built-in resource \
+                     monitor, not by your crawl configuration — results in this \
+                     report are a partial view of the site.{queue_note} To cover \
+                     the full site, raise the ceilings via \
+                     crawlkit_engine::resource_monitor::set_default_limits \
+                     (process-wide, first call wins) — e.g. max_pages: None — \
+                     or crawl in depth-limited segments and merge results."
+                ),
+            )
         }
-        other => {
-            title = "Crawl stopped early".to_string();
-            recommendation = format!(
+        other => (
+            "Crawl stopped early".to_string(),
+            format!(
                 "The crawl ended before natural completion (stop reason: \
                  {other}). Results may be a partial view of the site."
-            );
-        }
-    }
+            ),
+        ),
+    };
     Insight {
         title,
         description: format!(

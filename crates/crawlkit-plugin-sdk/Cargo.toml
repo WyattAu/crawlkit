@@ -41,5 +41,6 @@ wasmtime = { workspace = true, optional = true, features = ["component-model"] }
 # Optional: WASI host implementations (wasi:cli, wasi:io, ...) for running
 # components that import standard WASI interfaces.
 wasmtime-wasi = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]

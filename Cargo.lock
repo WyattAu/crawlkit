@@ -1131,6 +1131,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1180,6 +1181,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1239,6 +1241,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "wasmtime-wasi-http",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1250,6 +1253,7 @@ dependencies = [
  "serde_json",
  "wasmtime",
  "wasmtime-wasi",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1276,6 +1280,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -1284,6 +1289,7 @@ version = "5.4.0"
 dependencies = [
  "serde",
  "serde_json",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -6943,6 +6949,99 @@ dependencies = [
  "serde_json",
  "unicode-ident",
  "wasmparser 0.252.0",
+]
+
+[[package]]
+name = "workspace-hack"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "bumpalo",
+ "byteorder",
+ "cc",
+ "chrono",
+ "clap",
+ "clap_builder",
+ "cranelift-bitset",
+ "crc32fast",
+ "crossbeam-utils",
+ "crypto-common 0.1.7",
+ "debugid",
+ "digest 0.10.7",
+ "digest 0.11.3",
+ "either",
+ "fnv",
+ "form_urlencoded",
+ "futures",
+ "futures-channel",
+ "futures-core",
+ "futures-executor",
+ "futures-io",
+ "futures-sink",
+ "futures-util",
+ "getrandom 0.2.17",
+ "half",
+ "hashbrown 0.16.1",
+ "hashbrown 0.17.1",
+ "hyper",
+ "hyper-util",
+ "indexmap",
+ "log",
+ "memchr",
+ "num-bigint",
+ "num-integer",
+ "num-traits",
+ "opentelemetry",
+ "opentelemetry_sdk",
+ "percent-encoding",
+ "ppv-lite86",
+ "proc-macro2",
+ "pulley-interpreter",
+ "quote",
+ "rand 0.8.7",
+ "rand 0.9.5",
+ "rand_chacha 0.9.0",
+ "rand_core 0.6.4",
+ "regex",
+ "regex-automata",
+ "regex-syntax",
+ "rustc-demangle",
+ "rustls",
+ "rustls-pki-types",
+ "rustls-webpki",
+ "semver",
+ "sentry",
+ "serde",
+ "serde_core",
+ "serde_json",
+ "sha2 0.10.9",
+ "sha2 0.11.0",
+ "slab",
+ "smallvec",
+ "sqlx-core",
+ "sqlx-postgres",
+ "stable_deref_trait",
+ "subtle",
+ "syn 2.0.119",
+ "syn 3.0.3",
+ "sync_wrapper",
+ "thiserror 2.0.19",
+ "time",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tracing",
+ "tracing-core",
+ "tracing-subscriber",
+ "typenum",
+ "url",
+ "uuid",
+ "wasmparser 0.252.0",
+ "wasmtime-internal-core",
+ "winnow 0.7.15",
+ "zerocopy",
+ "zeroize",
 ]
 
 [[package]]

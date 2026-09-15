@@ -120,6 +120,7 @@ sha2 = { workspace = true, optional = true }
 dirs = { version = "5", optional = true }
 envstack = { workspace = true, optional = true }
 dhat = { workspace = true, optional = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]
 assert_cmd = "2"

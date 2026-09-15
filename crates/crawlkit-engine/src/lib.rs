@@ -153,6 +153,9 @@ pub mod determinism;
 /// a crawl ID to prevent collisions between different crawl sessions.
 #[cfg(feature = "unstable")]
 pub mod distributed_queue;
+/// `Queue`-trait adapter over the Redis distributed queue (unstable gate).
+#[cfg(feature = "unstable")]
+pub mod distributed_queue_adapter;
 /// DNS resolution cache and prefetching.
 ///
 /// Concurrent DNS cache with configurable TTL and background prefetching

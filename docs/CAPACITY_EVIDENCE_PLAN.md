@@ -163,10 +163,14 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    worker RSS sum peak 156–169 MB). Harness: `capacity_distributed.rs`,
    `CAPACITY_MODE=distributed`, record schema
    `crawlkit.capacity.distributed_run_record/v1` naming the topology so the
-   numbers can never be conflated with inline mode. Remaining for the full
-   distributed claim: wire the Redis lease queue into the crawl frontier
-   (6.0.0 engineering) and re-run with `topology.queue` naming the lease
-   path; then shard a 100k-page run across workers.
+   numbers can never be conflated with inline mode. **Done 2026-09-15:** the
+   Redis lease queue is wired into the crawl frontier
+   (`DistributedQueueAdapter` over the engine's `queue` slot) and measured
+   (`docs/capacity/2026-09-15-queue-frontier/`: 2×5 000 pages, 3-run valid
+   set, 90.7–103.9 p/s aggregate — an ~18% throughput cost vs the inline
+   frontier for at-least-once delivery in the crawl path). Remaining for the
+   full distributed claim: the 100k-page sharded headline run (harness
+   ready; deferred for a quiet host — see that report's §100k status).
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

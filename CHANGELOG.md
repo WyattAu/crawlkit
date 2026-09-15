@@ -26,6 +26,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema `crawlkit.capacity.distributed_run_record/v1` naming the topology;
   the record's `queue` field honestly names the inline-per-worker path until
   the Redis lease queue is wired into the crawl frontier (6.0.0).
+- **Redis lease queue in the crawl frontier (ADR-015 in the crawl path)**:
+  `DistributedQueueAdapter` implements the engine's `Queue` trait over the
+  graduated lease queue — every dispatched URL is a leased pop, acked on
+  success, reported into retry/backoff/dead-letter on failure
+  (`failure_kind`/`failure_is_fatal` taxonomy; entry-keyed `ack`/`fail`
+  default methods on the trait keep multi-pop in-flight pipelines sound).
+  Pinned by 13 Redis-backed queue tests + 4 adapter tests in the CI service
+  suite. First capacity evidence of this posture
+  (`docs/capacity/2026-09-15-queue-frontier/`): 2 worker processes × 5 000
+  pages, 3-run valid set, 90.7–103.9 pages/s aggregate, worker RSS sum peak
+  ~160 MB — an ~18% aggregate-throughput cost vs the inline frontier for
+  at-least-once delivery in the crawl path. Harness findings recorded there:
+  the engine's default resource limits truncate large runs with no
+  user-visible signal (output-shape fix filed), and stale queue namespaces
+  referencing dead deployment-scoped services can stall workers (operator
+  runbook finding; harness now clears namespaces per run).
 - **Allocator experiments (negative results, recorded in the post-fix
   report)**: mimalloc measured at parity with glibc on the 10k workload
   (built, measured, reverted); `MALLOC_ARENA_MAX=2` saves 30–50 MB peak at a

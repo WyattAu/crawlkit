@@ -38,6 +38,57 @@ pub trait Queue: Send + Sync {
 
     /// Returns `Ok(true)` if the queue contains an entry for the given URL.
     fn contains(&self, url: &str) -> Result<bool, QueueError>;
+
+    /// Acknowledge completed (or intentionally skipped) processing of `entry`,
+    /// which must have been returned by an earlier [`pop`](Self::pop) on this
+    /// queue instance (lease queues: release that entry's lease).
+    ///
+    /// Default: no-op — backends without delivery semantics (the in-memory
+    /// [`UrlQueue`](crate::queue::UrlQueue)) have nothing to release.
+    fn ack(&self, _entry: &QueueEntry) {}
+
+    /// Report a failed processing attempt for `entry`, which must have been
+    /// returned by an earlier [`pop`](Self::pop) on this queue instance (lease
+    /// queues: schedule a retry with backoff, or dead-letter when attempts are
+    /// exhausted or the failure is fatal).
+    ///
+    /// `kind` classifies the failure (e.g. "timeout", "request_failed",
+    /// "gone"); `reason` is a human-readable detail surfaced in the
+    /// dead-letter record. Default: no-op, matching [`ack`](Self::ack).
+    fn fail(&self, _entry: &QueueEntry, _kind: &str, _reason: &str) {}
+}
+
+/// Map a fetch failure to the queue's failure-kind taxonomy
+/// (see [`classify`](crate::distributed_queue::classify)).
+///
+/// The engine's crawl loop reports these kinds on the [`Queue::fail`] path;
+/// transient kinds re-queue with backoff, fatal kinds dead-letter immediately.
+pub fn failure_kind(err: &crate::CrawlError) -> &'static str {
+    use crate::CrawlError;
+    match err {
+        CrawlError::InvalidUrl(_) => "malformed",
+        CrawlError::TooManyRedirects(_) => "too_many_redirects",
+        CrawlError::RequestFailed(_) => "request_failed",
+        CrawlError::MaxRetriesExceeded(_) => "request_failed",
+        CrawlError::Storage(_) => "storage",
+        CrawlError::Internal(_) => "internal",
+        _ => "transient",
+    }
+}
+
+/// Whether a fetch failure is fatal for queue purposes (never re-queued).
+///
+/// Mirrors the fatal set of [`classify`](crate::distributed_queue::classify)
+/// ("gone" | "permanent_dns" | "ssrf_denied" | "malformed" |
+/// "deserialization") for the kinds [`failure_kind`] can emit; kept textual
+/// because `distributed_queue` lives behind the `unstable` gate while the
+/// crawl loop compiles in every configuration. A test in
+/// `distributed_queue::classify`'s module pins the two in sync.
+pub fn failure_is_fatal(err: &crate::CrawlError) -> bool {
+    matches!(
+        failure_kind(err),
+        "gone" | "permanent_dns" | "ssrf_denied" | "malformed" | "deserialization"
+    )
 }
 
 /// Async wrapper around a sync [`Queue`] implementation.

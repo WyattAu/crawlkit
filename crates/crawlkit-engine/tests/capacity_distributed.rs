@@ -1,20 +1,21 @@
 //! Distributed-posture capacity run (docs/CAPACITY_EVIDENCE_PLAN.md §8.4).
 //!
-//! Topology measured (and named in the record so it can never be conflated
-//! with inline-mode numbers): N worker **processes**, each running the real
-//! [`CrawlEngine`] against its own loopback host, all writing to **one shared
-//! PostgreSQL instance** — the deployment shape whose sizing the 6.0.0
-//! distributed-stability claim rests on.
+//! Two modes, both named in the record's `topology` so numbers can never be
+//! conflated:
 //!
-//! Honest scope (plan §8.4 note): the Redis lease queue is not wired into the
-//! crawl frontier yet — that integration is tracked as 6.0.0 engineering.
-//! Each worker therefore runs the engine's inline path against its own seed;
-//! what this run measures is the *shared-state* posture: multi-process
-//! footprint, aggregate throughput, fd behavior under connection pools, and
-//! concurrent write load on one PostgreSQL instance.
+//! - `shared-db` (default): N worker processes run the engine's inline path
+//!   against their own loopback hosts, all writing to one shared PostgreSQL
+//!   instance — the deployment shape whose sizing the 6.0.0
+//!   distributed-stability claim rests on.
+//! - `CAPACITY_DIST_QUEUE=1`: adds the **Redis lease queue in the crawl
+//!   frontier** (`DistributedQueueAdapter` as the engine's `Queue`); the
+//!   record then names `topology.queue = redis-lease-queue`. Workers still
+//!   crawl their own hosts; the queue is exercised as the discovery/dedup
+//!   substrate with ack on success and fail (retry/dead-letter) on error.
 //!
 //! Requires services (default endpoints match the runbook drill setup):
 //!   - PostgreSQL at postgres://crawlkit:crawlkit@127.0.0.1:5499/crawlkit
+//!   - Redis at redis://127.0.0.1:6379/ (queue mode only)
 //!   - Docker (the parent resets the schema between runs)
 //!
 //! Run via:
@@ -230,7 +231,7 @@ struct TopologyRecord {
     workers: u32,
     storage: &'static str,
     shared_db_instance: bool,
-    queue: &'static str,
+    queue: String,
     pages_per_worker: usize,
     concurrency_per_worker: usize,
     profile: String,
@@ -341,6 +342,16 @@ fn worker_main(worker: u32, out_path: &PathBuf) {
     let pg_url = std::env::var("CAP_DIST_PG")
         .unwrap_or_else(|_| "postgres://crawlkit:crawlkit@127.0.0.1:5499/crawlkit".into());
 
+    // The harness owns capacity gating (the named gates on the record);
+    // the engine's built-in default limits (10k pages / 512 MB) would
+    // truncate large runs mid-crawl — discovered at 50k×2 where every
+    // worker ended at exactly 10 000 pages with the frontier still full.
+    let _ = crawlkit_engine::set_default_limits(crawlkit_engine::ResourceLimits {
+        max_pages: None,
+        max_memory_bytes: None,
+        ..crawlkit_engine::ResourceLimits::default()
+    });
+
     let server = TestServer::start(&host, pages);
 
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -352,6 +363,34 @@ fn worker_main(worker: u32, out_path: &PathBuf) {
         let pg = PgStorage::new(&pg_url).await.unwrap();
         pg.migrate().await.unwrap();
         let storage: Arc<dyn StorageBackend> = Arc::new(pg);
+        // Queue mode: the Redis lease queue becomes the engine's frontier
+        // (ack on success, retry/dead-letter on failure — ADR-015 in the
+        // crawl path).
+        let queue_adapter = if std::env::var("CAPACITY_DIST_QUEUE").is_ok_and(|v| v == "1") {
+            // Empty env (forwarded-but-unset) must fall back to the default.
+            let redis = match std::env::var("CAP_DIST_REDIS") {
+                Ok(v) if !v.is_empty() => v,
+                _ => "redis://127.0.0.1:6379/".to_string(),
+            };
+            let dq = crawlkit_engine::distributed_queue::DistributedQueue::new(
+                &redis,
+                &format!("cap-dist-{worker}"),
+            )
+            .unwrap();
+            // Fresh namespace per run: stale pending entries from earlier
+            // capacity runs on the same Redis reference dead ports (the test
+            // server binds an ephemeral port each time). Pops are score-
+            // ordered oldest-first, so leftover garbage is ground through
+            // before any fresh URL — at 100k this stalled a worker entirely
+            // in circuit-breaker/backoff churn against dead ports.
+            dq.clear().await.unwrap();
+            Some(Arc::new(
+                crawlkit_engine::distributed_queue_adapter::DistributedQueueAdapter::new(dq),
+            )
+                as Arc<dyn crawlkit_engine::queue_trait::Queue>)
+        } else {
+            None
+        };
         let engine = CrawlEngine::new_shared(
             CrawlEngineConfig {
                 crawl_config: CrawlConfig {
@@ -363,6 +402,7 @@ fn worker_main(worker: u32, out_path: &PathBuf) {
                 },
                 concurrency: Some(8),
                 allow_http: true, // local loopback corpus only
+                queue: queue_adapter,
                 ..CrawlEngineConfig::default()
             },
             Arc::clone(&storage),
@@ -463,6 +503,7 @@ async fn capacity_distributed_posture_shared_pg() {
 
     let workers = env_u32("CAP_DIST_WORKERS", WORKERS);
     let pages_per_worker = env_usize("CAP_DIST_PAGES_PER_WORKER", 5000);
+    let queue_mode = std::env::var("CAPACITY_DIST_QUEUE").is_ok_and(|v| v == "1");
 
     // ---- spawn worker processes (fresh processes: the multi-process claim) ----
     let exe = std::env::current_exe().unwrap();
@@ -480,6 +521,11 @@ async fn capacity_distributed_posture_shared_pg() {
         .env("CAP_DIST_WORKER", w.to_string())
         .env("CAP_DIST_PG", &pg_url)
         .env("CAP_DIST_PAGES_PER_WORKER", pages_per_worker.to_string())
+        .env(
+            "CAP_DIST_REDIS",
+            std::env::var("CAP_DIST_REDIS").unwrap_or_default(),
+        )
+        .env("CAPACITY_DIST_QUEUE", if queue_mode { "1" } else { "0" })
         .env("CAPACITY_RECORD_DIR", &dir);
         children.push(cmd.spawn().expect("worker process spawn"));
     }
@@ -585,7 +631,10 @@ async fn capacity_distributed_posture_shared_pg() {
             .unwrap()
             .as_secs(),
         crawlkit_version: env!("CARGO_PKG_VERSION"),
-        workload: format!("distributed-crawl-{workers}x{pages_per_worker}"),
+        workload: format!(
+            "distributed-crawl-{workers}x{pages_per_worker}{}",
+            if queue_mode { "-queue" } else { "" }
+        ),
         kernel: kernel(),
         cpu_model: cpu_model(),
         mem_total_kb: mem_total_kb(),
@@ -594,7 +643,11 @@ async fn capacity_distributed_posture_shared_pg() {
             workers,
             storage: "postgres-shared",
             shared_db_instance: true,
-            queue: "inline-per-worker (Redis lease queue not in crawl path; 6.0.0 engineering)",
+            queue: if queue_mode {
+                "redis-lease-queue (DistributedQueueAdapter in the crawl frontier)".to_string()
+            } else {
+                "inline-per-worker (engine's in-process UrlQueue)".to_string()
+            },
             pages_per_worker,
             concurrency_per_worker: 8,
             profile: build_profile(),

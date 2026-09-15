@@ -8,6 +8,7 @@ mod pipeline;
 use crate::analyzers::post_crawl_analyzers::{CrawlData, PostCrawlAnalyzerRegistry};
 use crate::analyzers::{AnalyzerProfile, AnalyzerRegistry};
 use crate::coordination::{CrawlCoordinator, PartitionStrategy};
+use crate::crawl_engine::fetch::FetchOutcome;
 use crate::http::{HttpClient, HttpClientConfig};
 use crate::queue::{Priority, QueueEntry};
 use crate::queue_trait::Queue;
@@ -600,11 +601,17 @@ impl CrawlEngine {
                 // In distributed mode, skip URLs not assigned to this instance
                 if let Some(ref coordinator) = run.coordinator {
                     if !coordinator.should_process(entry.url.as_str()) {
+                        // Lease queues: release the lease — another instance
+                        // owns this URL (partition strategy).
+                        self.queue.ack(&entry);
                         continue;
                     }
                 }
 
                 if run.visited.contains(&entry.url.to_string()) {
+                    // Duplicate (in-flight pipeline window). Treated as done:
+                    // the first copy is being crawled.
+                    self.queue.ack(&entry);
                     continue;
                 }
                 run.visited.insert(entry.url.to_string());
@@ -623,6 +630,8 @@ impl CrawlEngine {
                         tracing::debug!("Blocked by robots.txt: {}", entry.url);
                         bump(&run.counters.skipped_robots);
                         run.metrics.record_page_skipped_robots();
+                        // Intentional skip, not a failure — release the lease.
+                        self.queue.ack(&entry);
                         continue;
                     }
                     if let Some(delay_secs) = robots_cache.crawl_delay(scheme, &domain).await {
@@ -673,6 +682,13 @@ impl CrawlEngine {
                 if !breaker.is_allowed() {
                     tracing::debug!("Circuit breaker open for domain: {}", domain);
                     run.metrics.record_page_skipped_circuit_breaker();
+                    // Transient: the breaker may close later — requeue with
+                    // backoff rather than dropping the URL.
+                    self.queue.fail(
+                        &entry,
+                        "circuit_breaker_open",
+                        "domain circuit breaker open",
+                    );
                     continue;
                 }
 
@@ -726,12 +742,14 @@ impl CrawlEngine {
             // Wait for the next completed fetch and process it
             if let Some(Ok(Some(fetched))) = in_flight.next().await {
                 run.process(&fetched).await;
+                resolve_queue_entry(&self.queue, &run, &fetched);
             }
         }
 
         // Drain remaining in-flight fetches
         while let Some(Ok(Some(fetched))) = in_flight.next().await {
             run.process(&fetched).await;
+            resolve_queue_entry(&self.queue, &run, &fetched);
         }
 
         Ok(self.finish_and_report(&run, crawl_start).await)
@@ -1186,6 +1204,27 @@ impl CrawlEngine {
     pub fn with_post_crawl_analyzers(mut self, registry: PostCrawlAnalyzerRegistry) -> Self {
         self.config.post_crawl_analyzers = registry;
         self
+    }
+}
+
+/// Resolve a completed fetch against the queue's delivery semantics.
+///
+/// No-op for queues without leases (the default `ack`/`fail` implementations).
+/// For lease queues: `ack` releases the lease on success (including 304 and
+/// intentional skips recorded as success); `fail` routes fetch errors into the
+/// retry/backoff/dead-letter path using the failure-kind taxonomy.
+fn resolve_queue_entry(queue: &Arc<dyn Queue>, run: &CrawlRun, fetched: &FetchedPage) {
+    match &fetched.outcome {
+        FetchOutcome::Failed(err) => {
+            let kind = crate::queue_trait::failure_kind(err);
+            queue.fail(&fetched.entry, kind, &err.to_string());
+            if crate::queue_trait::failure_is_fatal(err) {
+                run.metrics.record_page_failure();
+            }
+        }
+        FetchOutcome::Fetched { .. } | FetchOutcome::NotModified { .. } => {
+            queue.ack(&fetched.entry);
+        }
     }
 }
 

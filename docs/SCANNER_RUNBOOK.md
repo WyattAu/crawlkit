@@ -174,9 +174,12 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
       shared proxy rate limit) accepted with the signature. Streak gate
       rebuilding to N=5 after the 2026-09-14/15 fix cycle — public launch
       waits for it per the counting rule.
-- [ ] Public copy reviewed against the honest-scope rule (§1) and the
-      claims policy (capabilities.toml status must move `prototype` →
-      `stable-with-configuration` only after the above)
+- [x] Public copy reviewed against the honest-scope rule (§1) and the
+      claims policy — reviewed 2026-09-15: the finalized copy
+      (GA_SIGNOFF_PACKAGE §2) says "teaser, not a full site audit", states
+      the 25-page cap and the no-JS-render limitation verbatim, and never
+      uses "site audit", "complete", or "full coverage" for the free scan;
+      `capabilities.toml` `hosted_scanner` is `stable-with-configuration`.
 
 ## 6.1 Drill log (evidence for the checklist above)
 

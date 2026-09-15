@@ -947,6 +947,45 @@ mod redis_tests {
         DistributedQueueEntry::new(url, 0, priority, 1_000)
     }
 
+    /// Pin `queue_trait::failure_is_fatal` (textual mirror, compiles without
+    /// the `unstable` gate) to this module's `classify` fatal set: every kind
+    /// that maps to `Fatal` here and is emittable by the crawl loop's
+    /// `failure_kind` must be listed there.
+    #[test]
+    fn failure_is_fatal_matches_classify() {
+        use crate::queue_trait::{failure_is_fatal, failure_kind};
+        use crate::CrawlError;
+        // The fatal taxonomy must be exactly classify's Fatal set — the same
+        // set queue_trait::failure_is_fatal mirrors textually.
+        for kind in [
+            "gone",
+            "permanent_dns",
+            "ssrf_denied",
+            "malformed",
+            "deserialization",
+        ] {
+            assert_eq!(classify(kind), FailureClass::Fatal, "kind {kind}");
+        }
+        for kind in [
+            "timeout",
+            "request_failed",
+            "storage",
+            "internal",
+            "circuit_breaker_open",
+        ] {
+            assert_eq!(classify(kind), FailureClass::Transient, "kind {kind}");
+        }
+        // The crawl loop's emitted kinds flow through failure_kind first:
+        // none of them may accidentally classify as fatal except "malformed".
+        assert_eq!(
+            failure_kind(&CrawlError::InvalidUrl(url::Url::parse("::").unwrap_err())),
+            "malformed"
+        );
+        assert!(failure_is_fatal(&CrawlError::InvalidUrl(
+            url::Url::parse("::").unwrap_err()
+        )));
+    }
+
     #[tokio::test]
     #[ignore = "requires running Redis instance"]
     async fn push_pop_ack_roundtrip() {

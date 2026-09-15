@@ -20,6 +20,9 @@
 //! Run via:
 //! `CAPACITY_MODE=distributed cargo test -p crawlkit-engine --test capacity_distributed -- --ignored --nocapture`
 
+// The whole harness measures the Postgres storage path; without the feature
+// the crate has no `pg_storage` module to import.
+#![cfg(feature = "postgres")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use std::io::{Read, Write};

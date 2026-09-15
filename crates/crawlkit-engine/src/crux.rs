@@ -167,22 +167,33 @@ impl CruxClient {
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Mutex;
+
     use super::*;
+
+    /// Tests in this module mutate `CRUX_API_KEY`, a process-global; cargo
+    /// runs tests on parallel threads, so they serialize on this mutex
+    /// (a coverage-runner race between `_missing` and `_present` fired once
+    /// in CI — see the git history).
+    static ENV_LOCK: Mutex<()> = Mutex::new(());
 
     #[test]
     fn test_crux_client_from_env_missing() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::remove_var("CRUX_API_KEY");
         assert!(CruxClient::from_env().is_none());
     }
 
     #[test]
     fn test_crux_client_from_env_empty() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var("CRUX_API_KEY", "");
         assert!(CruxClient::from_env().is_none());
     }
 
     #[test]
     fn test_crux_client_from_env_present() {
+        let _guard = ENV_LOCK.lock().unwrap();
         std::env::set_var("CRUX_API_KEY", "test-key-123");
         let client = CruxClient::from_env();
         assert!(client.is_some());

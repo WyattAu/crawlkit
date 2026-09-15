@@ -5,7 +5,8 @@ use sqlx::Row;
 use url::Url;
 
 use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
-use crate::storage_trait::{CrawlMeta, IssueCodeAggregate, StorageBackend, TopIssue};
+use crate::storage::IssueCodeAggregate;
+use crate::storage_trait::{CrawlMeta, StorageBackend, TopIssue};
 
 /// PostgreSQL-backed storage for crawl data.
 ///
@@ -1094,11 +1095,11 @@ impl StorageBackend for PgStorage {
             > = std::collections::HashMap::new();
             for r in &group_rows {
                 groups.entry(r.try_get("code")?).or_default().push((
-                    r.try_get::<_, String>("title")?,
-                    r.try_get::<_, String>("description")?,
-                    r.try_get::<_, String>("recommendation")?,
-                    r.try_get::<_, String>("severity")?,
-                    r.try_get::<_, String>("first_id")?,
+                    r.try_get::<String, _>("title")?,
+                    r.try_get::<String, _>("description")?,
+                    r.try_get::<String, _>("recommendation")?,
+                    r.try_get::<String, _>("severity")?,
+                    r.try_get::<String, _>("first_id")?,
                 ));
             }
 
@@ -1119,9 +1120,9 @@ impl StorageBackend for PgStorage {
                 };
                 let affected_pages = page_totals_rows
                     .iter()
-                    .find(|r| r.try_get::<_, String>("code") == Ok(code.clone()))
+                    .find(|r| r.try_get::<String, _>("code").ok().as_deref() == Some(code.as_str()))
                     .and_then(|r| {
-                        r.try_get::<_, i64>("affected_pages")
+                        r.try_get::<i64, _>("affected_pages")
                             .ok()
                             .map(|v| v as usize)
                     });

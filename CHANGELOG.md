@@ -207,6 +207,18 @@ operator-tooling completions below.
 
 ### Fixed
 
+- Capacity smoke baseline gate de-flaked: the ±20% relative baseline
+  comparison (CI 1k debug-profile, ~10 s measurement window) failed twice
+  on shared runners for docs-only commits and passed on re-run with
+  identical binaries — runner contention, not engine change. A failed
+  relative comparison now re-measures up to 2 more times with fresh
+  storage/engine per attempt (a reused engine re-measures an empty
+  frontier — 0 pages in milliseconds); absolute caps stay no-retry. Every
+  attempt's throughput/RSS is retained in the run record's `attempts`
+  array, and enforcement semantics are unchanged (missing baseline and
+  class mismatch still fail/skip as before). Exercise evidence: a 2×
+  unreachable baseline correctly fails after 3 genuine ~100 p/s crawls
+  with the full attempts trail in the panic message.
 - Schedule auth tests de-flaked: credential selection moved to a pure
   function; the one env-reading test serialized under a mutex (env vars
   are process-global and parallel tests raced them — observed once in

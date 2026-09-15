@@ -108,7 +108,11 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
 - **Relative gate (auto-arming):** the CI job caches the first green run's
   record as the baseline; `CAPACITY_ENFORCE=1` is set only on a cache hit, so
   subsequent runs must land within 20% of the CI baseline on throughput and
-  peak RSS. Baseline updates are explicit (bump the cache key) with the
+  peak RSS. At CI 1k scale the measurement window is ~10 s on shared
+  runners, so a failed relative comparison re-measures up to 2 more times
+  (fresh storage/engine per attempt) before failing; absolute caps stay
+  no-retry, and every attempt is recorded in the run record's `attempts`
+  array. Baseline updates are explicit (bump the cache key) with the
   superseding run record committed under `docs/capacity/` — same drift-gate
   philosophy as the capabilities manifest and the schema contract.
 - Absolute numbers from CI are never published; the gate is relative.

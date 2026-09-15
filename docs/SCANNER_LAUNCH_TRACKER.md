@@ -28,9 +28,13 @@ crawl deviated >20% from baseline — shared-runner noise, proven by the
 unchanged binary and the immediate green re-run of the same job. Per the
 rule above, the count resets.
 
-**Watch (§3):** first reset. If the capacity smoke job produces further
-noise resets, the response is a gate-design discussion (tolerance vs
-sample count vs baseline class), not gate removal.
+**Watch (§3) — closed by fix:** the second consecutive reset (`dd60c5a1`)
+failed the same capacity smoke baseline gate, also on a docs-only diff —
+the §3 condition was met and the flake source was fixed rather than
+lawyered: the relative baseline comparison now re-measures up to 2 more
+times before failing (absolute caps stay no-retry; every attempt recorded
+in the run record). Fix exercised: a 2× unreachable baseline correctly
+fails after 3 genuine crawls with the attempts trail in the panic.
 
 | Date | HEAD | Count | Note |
 |---|---|---|---|

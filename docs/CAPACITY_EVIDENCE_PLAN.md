@@ -141,6 +141,16 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    analyzer intermediates (~1.45 GB live delta, Full vs Core profiles), with
    ~780 MB retained post-crawl under the full profile and ~570 MB allocator
    slack from 79 GB churn. Fix directions are ranked in that report.
+   **Fix shipped 2026-09-15**: the dominant cost was the post-crawl
+   per-finding readback (`finish_and_report` materializing all 1.63 M
+   findings at 10k); replaced with SQL-side per-code aggregates
+   (`get_issue_code_aggregates`) behind a `requires_issues()` opt-in for
+   analyzers. Post-fix evidence: `docs/capacity/2026-09-15-post-fix-10k/` —
+   median 236.2 pages/s (was 64.2) and 506 MB peak RSS (was 2115 MB),
+   identical analyzer output. The §2 RSS row is now missed by 1.2% at the
+   10k class (remaining gap: findings-table page-store + allocator slack —
+   dhat again if the last 1% is chased); the 1k CI class comfortably under
+   cap, baseline intentionally re-seeded (`capacity-baseline-smoke-1k-v2`).
 3. 100k runs on the same harness (additive: `CAPACITY_PAGES=100000`) →
    ADR-016 §5.1 compression defaults picked from the same runs. Note: the
    same harness at 100k pages in one crawl multiplies the RSS question —

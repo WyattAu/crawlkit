@@ -321,7 +321,11 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: capacity-baseline
-          key: capacity-baseline-smoke-1k
+          # -v2 (2026-09-15): intentional re-seed after the issue-aggregate
+          # memory fix (docs/capacity/2026-09-15-post-fix-10k/) — engine
+          # throughput/RSS legitimately moved beyond the ±20% relative gate,
+          # so the pre-fix baseline is stale by evidence, not drift.
+          key: capacity-baseline-smoke-1k-v2
       - name: Run capacity smoke (1k-page loopback crawl)
         env:
           # Absolute paths: cargo runs the test with CWD = crate root, and

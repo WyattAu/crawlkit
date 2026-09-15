@@ -145,6 +145,26 @@ pub trait StorageBackend: Send + Sync {
     /// first) then by number of affected pages descending.
     fn get_top_issues(&self, crawl_id: &str, limit: usize) -> Result<Vec<TopIssue>, StorageError>;
 
+    /// Get per-code aggregates of all findings for a crawl.
+    ///
+    /// One [`IssueCodeAggregate`] per distinct issue code, with the highest
+    /// observed severity and the count of distinct affected pages. This is
+    /// the memory-safe path for insight generation: it never materializes
+    /// individual finding rows, so cost scales with distinct codes (dozens)
+    /// rather than total findings (potentially millions).
+    ///
+    /// Backends without aggregate support return
+    /// [`StorageError::Unsupported`]; callers should fall back to
+    /// `get_issues` in that case.
+    fn get_issue_code_aggregates(
+        &self,
+        _crawl_id: &str,
+    ) -> Result<Vec<crate::storage::IssueCodeAggregate>, StorageError> {
+        Err(StorageError::Unsupported(
+            "issue code aggregates".to_string(),
+        ))
+    }
+
     /// Get CrUX field metrics for all pages in a crawl.
     fn get_crux_metrics_for_crawl(&self, crawl_id: &str) -> Result<Vec<CruxMetrics>, StorageError>;
 

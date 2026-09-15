@@ -883,9 +883,20 @@ impl CrawlEngine {
         }
 
         // Run post-crawl analyzers if any are registered.
-        let (post_crawl_issues, crawl_data_for_insights) =
+        //
+        // Memory note (capacity attribution, 2026-09-14): the per-finding
+        // issue readback is skipped unless some registered analyzer actually
+        // requires `CrawlData::issues`. Insights are instead derived from
+        // per-code storage aggregates, whose cost scales with distinct
+        // issue codes rather than total findings.
+        let needs_issue_readback = self
+            .config
+            .post_crawl_analyzers
+            .iter()
+            .any(|a| a.requires_issues());
+        let (post_crawl_issues, crawl_data_for_insights, issue_aggregates) =
             if self.config.post_crawl_analyzers.is_empty() {
-                (0, None)
+                (0, None, None)
             } else {
                 let crawl_id_clone = crawl_id.clone();
                 let seed_url = run.cfg.crawl_config.start_url.to_string();
@@ -897,11 +908,13 @@ impl CrawlEngine {
                     let links = storage_for_analysis
                         .get_links_for_crawl(&crawl_id_clone)
                         .unwrap_or_default();
-                    let issues = {
+                    let issues = if needs_issue_readback {
                         use crate::storage::IssueFilter;
                         storage_for_analysis
                             .get_issues(&crawl_id_clone, &IssueFilter::default())
                             .unwrap_or_default()
+                    } else {
+                        Vec::new()
                     };
                     CrawlData {
                         pages,
@@ -922,12 +935,47 @@ impl CrawlEngine {
                 });
                 let findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
                 let count = findings.len();
-                (count, Some(crawl_data))
+                let aggregates = if needs_issue_readback {
+                    None
+                } else {
+                    let storage_for_aggregates = Arc::clone(&self.storage);
+                    let crawl_id_for_aggregates = crawl_id.clone();
+                    let stats_pages = stats.pages_crawled;
+                    let result = tokio::task::spawn_blocking(move || {
+                        (
+                            storage_for_aggregates
+                                .get_issue_code_aggregates(&crawl_id_for_aggregates),
+                            stats_pages,
+                        )
+                    })
+                    .await;
+                    match result {
+                        Ok((Ok(aggs), total)) => Some(
+                            crate::insights::generate_insights_from_aggregates(&aggs, total),
+                        ),
+                        Ok((Err(e), _)) => {
+                            tracing::warn!(
+                                error = %e,
+                                "Issue aggregate query failed; insights unavailable"
+                            );
+                            None
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Issue aggregate task failed");
+                            None
+                        }
+                    }
+                };
+                (count, Some(crawl_data), aggregates)
             };
 
         // Generate prioritized insights from findings.
         let insights = if let Some(ref data) = crawl_data_for_insights {
-            crate::insights::generate_insights_from_crawl_data(data)
+            if data.issues.is_empty() {
+                issue_aggregates.unwrap_or_default()
+            } else {
+                crate::insights::generate_insights_from_crawl_data(data)
+            }
         } else {
             Vec::new()
         };

@@ -83,6 +83,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was built but dhat's global allocator was never installed, so no heap
   data was recorded. Both the binary and the attribution harness now install
   `dhat::Alloc` under the `profiling` feature.
+- **Memory fix: post-crawl findings are aggregated in SQL, not
+  materialized** (the RSS-gap engineering item, direction confirmed by the
+  2026-09-14 attribution): `finish_and_report` used to load every finding
+  row into `CrawlData` (1.63 M issues at the 10k reference workload) plus a
+  second copy when insights re-mapped them — no production consumer needed
+  the per-finding list. New additive `StorageBackend::get_issue_code_aggregates`
+  (SQL `GROUP BY`, SQLite + Postgres) feeds `insights::generate_insights_from_aggregates`
+  (equivalence-tested against the per-finding path), and a new
+  `PostCrawlAnalyzer::requires_issues()` (default `false`) makes the heavy
+  readback opt-in — no built-in analyzer needs it. Post-fix evidence
+  (`docs/capacity/2026-09-15-post-fix-10k/`): median **236.2 pages/s** (was
+  64.2, **3.7×**) and **506 MB peak RSS** (was 2115 MB, **4.2×**) on the
+  same machine/harness with identical analyzer output; the 1k CI baseline
+  was intentionally re-seeded (`capacity-baseline-smoke-1k-v2`) since the
+  improvement legitimately exceeds the ±20% relative gate.
+- Insights ordering is now deterministic: equal-impact insights previously
+  ordered by HashMap iteration order (non-deterministic across identical
+  runs); a finding-code tiebreaker was added to both insight paths.
 
 ### Changed
 

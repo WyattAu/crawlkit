@@ -5,7 +5,7 @@ use sqlx::Row;
 use url::Url;
 
 use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
-use crate::storage_trait::{CrawlMeta, StorageBackend, TopIssue};
+use crate::storage_trait::{CrawlMeta, IssueCodeAggregate, StorageBackend, TopIssue};
 
 /// PostgreSQL-backed storage for crawl data.
 ///
@@ -1050,6 +1050,95 @@ impl StorageBackend for PgStorage {
                 .collect::<Result<Vec<_>, StorageError>>()?;
 
             Ok(issues)
+        })
+    }
+
+    fn get_issue_code_aggregates(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<IssueCodeAggregate>, StorageError> {
+        let pool = self.pool.clone();
+        let crawl_id = crawl_id.to_string();
+
+        let rt = blocking_runtime().handle().clone();
+        rt.block_on(async {
+            // Per-(code, text, severity) groups with a stable representative
+            // ordering key (mirrors the SQLite implementation; see it for the
+            // equivalence rationale).
+            let group_rows = sqlx::query(
+                "SELECT f.code, f.title, f.description, f.recommendation, f.severity,
+                        MIN(f.id) as first_id
+                 FROM findings f
+                 JOIN pages p ON f.page_id = p.id
+                 WHERE p.crawl_id = $1
+                 GROUP BY f.code, f.title, f.description, f.recommendation, f.severity",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            let page_totals_rows = sqlx::query(
+                "SELECT f.code, COUNT(DISTINCT f.page_id) as affected_pages
+                 FROM findings f
+                 JOIN pages p ON f.page_id = p.id
+                 WHERE p.crawl_id = $1
+                 GROUP BY f.code",
+            )
+            .bind(&crawl_id)
+            .fetch_all(&pool)
+            .await?;
+
+            let mut groups: std::collections::HashMap<
+                String,
+                Vec<(String, String, String, String, String)>,
+            > = std::collections::HashMap::new();
+            for r in &group_rows {
+                groups.entry(r.try_get("code")?).or_default().push((
+                    r.try_get::<_, String>("title")?,
+                    r.try_get::<_, String>("description")?,
+                    r.try_get::<_, String>("recommendation")?,
+                    r.try_get::<_, String>("severity")?,
+                    r.try_get::<_, String>("first_id")?,
+                ));
+            }
+
+            let severity_rank = |s: &str| match s {
+                "critical" => 0,
+                "error" => 1,
+                "warning" => 2,
+                _ => 3,
+            };
+
+            let mut aggregates = Vec::with_capacity(groups.len());
+            for (code, rows) in &groups {
+                let Some(representative) = rows.iter().min_by(|a, b| a.4.cmp(&b.4)) else {
+                    continue;
+                };
+                let Some(severity_row) = rows.iter().min_by_key(|r| severity_rank(&r.3)) else {
+                    continue;
+                };
+                let affected_pages = page_totals_rows
+                    .iter()
+                    .find(|r| r.try_get::<_, String>("code") == Ok(code.clone()))
+                    .and_then(|r| {
+                        r.try_get::<_, i64>("affected_pages")
+                            .ok()
+                            .map(|v| v as usize)
+                    });
+                let Some(affected_pages) = affected_pages else {
+                    continue;
+                };
+                aggregates.push(IssueCodeAggregate {
+                    code: code.clone(),
+                    title: representative.0.clone(),
+                    description: representative.1.clone(),
+                    recommendation: representative.2.clone(),
+                    severity: crawlkit_types::Severity::parse_severity(&severity_row.3)
+                        .unwrap_or(crawlkit_types::Severity::Info),
+                    affected_pages,
+                });
+            }
+            Ok(aggregates)
         })
     }
 

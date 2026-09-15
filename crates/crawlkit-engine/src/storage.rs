@@ -47,6 +47,7 @@ pub enum StorageError {
 // Severity and IssueCategory are defined in `types` so they are available
 // without the `full` feature gate. Re-export for backward compatibility.
 pub use crate::types::{IssueCategory, Severity};
+pub use crawlkit_types::IssueCodeAggregate;
 
 /// A page extracted from the crawl, with full data for storage.
 ///
@@ -2087,6 +2088,104 @@ impl crate::storage_trait::StorageBackend for Storage {
         Ok(rows)
     }
 
+    fn get_issue_code_aggregates(
+        &self,
+        crawl_id: &str,
+    ) -> Result<Vec<IssueCodeAggregate>, StorageError> {
+        let conn = self.conn.lock();
+
+        // Per-(code, text, severity) groups with a stable representative
+        // ordering key. MIN(f.id) reproduces the row the per-finding path
+        // would pick as representative (get_issues reads ORDER BY f.id ASC
+        // and keeps the first row seen per code).
+        let mut stmt = conn.prepare(
+            "SELECT f.code, f.title, f.description, f.recommendation, f.severity,
+                    MIN(f.id) as first_id
+             FROM findings f
+             JOIN pages p ON f.page_id = p.id
+             WHERE p.crawl_id = ?1
+             GROUP BY f.code, f.title, f.description, f.recommendation, f.severity",
+        )?;
+        struct GroupRow {
+            title: String,
+            description: String,
+            recommendation: String,
+            severity: Severity,
+            first_id: String,
+        }
+        let mut groups: std::collections::HashMap<String, Vec<GroupRow>> =
+            std::collections::HashMap::new();
+        let group_rows = stmt
+            .query_map(params![crawl_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    GroupRow {
+                        title: row.get(1)?,
+                        description: row.get(2)?,
+                        recommendation: row.get::<_, Option<String>>(3)?.unwrap_or_default(),
+                        severity: Severity::parse_severity(&row.get::<_, String>(4)?)
+                            .unwrap_or(Severity::Info),
+                        first_id: row.get(5)?,
+                    },
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        for (code, group) in group_rows {
+            groups.entry(code).or_default().push(group);
+        }
+
+        // Distinct affected pages per code (union across text groups).
+        let mut stmt = conn.prepare(
+            "SELECT f.code, COUNT(DISTINCT f.page_id)
+             FROM findings f
+             JOIN pages p ON f.page_id = p.id
+             WHERE p.crawl_id = ?1
+             GROUP BY f.code",
+        )?;
+        let page_totals = stmt
+            .query_map(params![crawl_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)? as usize))
+            })?
+            .collect::<Result<std::collections::HashMap<String, usize>, _>>()?;
+        drop(stmt);
+
+        let severity_rank = |s: &str| match s {
+            "critical" => 0,
+            "error" => 1,
+            "warning" => 2,
+            _ => 3,
+        };
+
+        let mut aggregates = Vec::with_capacity(page_totals.len());
+        for (code, rows) in &groups {
+            let Some(&total_pages) = page_totals.get(code) else {
+                continue;
+            };
+            // Representative text: same row the per-finding path picks
+            // (smallest id). Severity: highest observed for the code.
+            let Some(representative) = rows.iter().min_by(|a, b| a.first_id.cmp(&b.first_id))
+            else {
+                continue;
+            };
+            let Some(severity_row) = rows
+                .iter()
+                .min_by_key(|r| severity_rank(r.severity.as_str()))
+            else {
+                continue;
+            };
+            aggregates.push(IssueCodeAggregate {
+                code: code.clone(),
+                title: representative.title.clone(),
+                description: representative.description.clone(),
+                recommendation: representative.recommendation.clone(),
+                severity: severity_row.severity,
+                affected_pages: total_pages,
+            });
+        }
+        Ok(aggregates)
+    }
+
     fn get_crux_metrics_for_crawl(&self, crawl_id: &str) -> Result<Vec<CruxMetrics>, StorageError> {
         Storage::get_crux_metrics_for_crawl(self, crawl_id)
     }
@@ -2124,6 +2223,8 @@ impl crate::storage_trait::StorageBackend for Storage {
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+    use crate::analyzers::CrawlData;
+    use crate::storage_trait::StorageBackend as _;
     use chrono::TimeZone;
 
     fn test_page(id: &str, url: &str, status: u16) -> PageData {
@@ -2698,5 +2799,114 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM query_positions", [], |row| row.get(0))
             .unwrap();
         assert_eq!(count, 1);
+    }
+
+    fn agg_issue(id: &str, page_id: &str, code: &str, severity: Severity) -> Issue {
+        Issue {
+            id: id.to_string(),
+            page_id: page_id.to_string(),
+            category: IssueCategory::Seo,
+            severity,
+            code: code.to_string(),
+            title: format!("Title for {code}"),
+            description: format!("Description for {code}"),
+            element: None,
+            recommendation: format!("Recommendation for {code}"),
+            tenant_id: None,
+        }
+    }
+
+    #[test]
+    fn test_issue_code_aggregates_basic() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let pages = vec![
+            test_page("p1", "https://example.com/", 200),
+            test_page("p2", "https://example.com/about", 200),
+            test_page("p3", "https://example.com/contact", 200),
+        ];
+        storage.insert_pages(&crawl_id, &pages).unwrap();
+
+        let issues = vec![
+            agg_issue("i1", "p1", "SEO001", Severity::Warning),
+            agg_issue("i2", "p2", "SEO001", Severity::Warning),
+            agg_issue("i3", "p1", "SEO002", Severity::Error),
+        ];
+        storage.insert_issues(&issues).unwrap();
+
+        let aggregates = storage.get_issue_code_aggregates(&crawl_id).unwrap();
+        assert_eq!(aggregates.len(), 2, "two distinct codes");
+        let seo001 = aggregates.iter().find(|a| a.code == "SEO001").unwrap();
+        assert_eq!(seo001.affected_pages, 2);
+        assert_eq!(seo001.severity, Severity::Warning);
+        assert_eq!(seo001.title, "Title for SEO001");
+        let seo002 = aggregates.iter().find(|a| a.code == "SEO002").unwrap();
+        assert_eq!(seo002.affected_pages, 1);
+        assert_eq!(seo002.severity, Severity::Error);
+    }
+
+    #[test]
+    fn test_issue_code_aggregates_empty_crawl() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let aggregates = storage.get_issue_code_aggregates(&crawl_id).unwrap();
+        assert!(aggregates.is_empty());
+    }
+
+    /// The aggregate path must produce the same insights as the per-finding
+    /// path (the engine's memory optimization, see the capacity attribution
+    /// report). Multi-page, multi-code, mixed-severity scenario.
+    #[test]
+    fn test_aggregates_equivalent_to_findings_insights() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+
+        let pages = vec![
+            test_page("p1", "https://example.com/", 200),
+            test_page("p2", "https://example.com/about", 200),
+            test_page("p3", "https://example.com/contact", 200),
+            test_page("p4", "https://example.com/blog", 200),
+        ];
+        storage.insert_pages(&crawl_id, &pages).unwrap();
+
+        let issues = vec![
+            agg_issue("i1", "p1", "SEO001", Severity::Warning),
+            agg_issue("i2", "p2", "SEO001", Severity::Warning),
+            agg_issue("i3", "p3", "SEO001", Severity::Warning),
+            agg_issue("i4", "p1", "SEO002", Severity::Error),
+            agg_issue("i5", "p2", "SEO002", Severity::Error),
+            agg_issue("i6", "p1", "CONTENT001", Severity::Info),
+            agg_issue("i7", "p2", "SEC001", Severity::Critical),
+        ];
+        storage.insert_issues(&issues).unwrap();
+
+        // Per-finding path (what the engine used to do).
+        let all_issues = storage
+            .get_issues(&crawl_id, &IssueFilter::default())
+            .unwrap();
+        let crawl_data = CrawlData {
+            pages: storage.get_pages(&crawl_id, 100).unwrap(),
+            links: vec![],
+            issues: all_issues,
+            seed_url: "https://example.com".to_string(),
+        };
+        let from_findings = crate::insights::generate_insights_from_crawl_data(&crawl_data);
+
+        // Aggregate path (what the engine does now).
+        let aggregates = storage.get_issue_code_aggregates(&crawl_id).unwrap();
+        let total_pages = storage.get_pages(&crawl_id, 100).unwrap().len();
+        let from_aggregates =
+            crate::insights::generate_insights_from_aggregates(&aggregates, total_pages);
+
+        assert_eq!(from_findings.len(), from_aggregates.len());
+        for (a, b) in from_findings.iter().zip(from_aggregates.iter()) {
+            assert_eq!(a.title, b.title, "title for code {:?}", a.finding_codes);
+            assert_eq!(a.description, b.description);
+            assert_eq!(a.affected_pages, b.affected_pages);
+            assert_eq!(a.impact_score, b.impact_score);
+            assert_eq!(a.finding_codes, b.finding_codes);
+            assert_eq!(a.recommendation, b.recommendation);
+        }
     }
 }

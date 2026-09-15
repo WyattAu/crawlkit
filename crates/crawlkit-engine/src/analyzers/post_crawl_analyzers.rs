@@ -48,6 +48,18 @@ pub trait PostCrawlAnalyzer: Send + Sync {
 
     /// Analyze the full crawl data and return any findings.
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding>;
+
+    /// Whether this analyzer needs the full per-finding issue list in
+    /// [`CrawlData::issues`].
+    ///
+    /// Analyzers that only inspect pages and links should keep the default
+    /// (`false`): the engine then skips the full findings readback after the
+    /// crawl, keeping post-crawl memory bounded by pages and links rather
+    /// than by the total number of findings (see
+    /// `docs/capacity/2026-09-14-heap-attribution/REPORT.md`).
+    fn requires_issues(&self) -> bool {
+        false
+    }
 }
 
 /// Registry of [`PostCrawlAnalyzer`] implementations.

@@ -264,12 +264,16 @@ pub fn generate_insights_with_limit(
         })
         .collect();
 
-    // 3. Sort by impact descending, then by effort ascending (quick fixes first)
+    // 3. Sort by impact descending, then by effort ascending (quick fixes
+    // first), with the code as final tiebreaker. Without the tiebreaker,
+    // equal-scoring insights would order by HashMap iteration order —
+    // non-deterministic across identical runs.
     insights.sort_by(|a, b| {
         b.impact_score
             .partial_cmp(&a.impact_score)
             .unwrap_or(std::cmp::Ordering::Equal)
             .then_with(|| a.effort.cmp(&b.effort))
+            .then_with(|| a.finding_codes.cmp(&b.finding_codes))
     });
 
     // 4. Truncate to max
@@ -297,6 +301,72 @@ pub fn generate_insights_from_crawl_data(data: &CrawlData) -> Vec<Insight> {
         .collect();
 
     generate_insights(&findings, &data.pages)
+}
+
+/// Generate insights from per-code aggregates instead of individual findings.
+///
+/// Produces the same insights as [`generate_insights_from_crawl_data`] for
+/// the built-in analyzers, but never materializes the full findings list:
+/// cost scales with distinct codes rather than total findings. This is the
+/// memory-safe path for large crawls (see
+/// `docs/capacity/2026-09-14-heap-attribution/REPORT.md`).
+///
+/// Divergence from the findings path is only possible when one code emits
+/// findings with differing severities or differing text across pages; in
+/// that case the aggregate uses the highest severity and the
+/// lexicographically-first representative text (storage resolves the
+/// representative deterministically). Built-in analyzers emit constant
+/// severity and text per code, so outputs are identical in practice and
+/// verified equal by the storage-layer equivalence tests.
+pub fn generate_insights_from_aggregates(
+    aggregates: &[crawlkit_types::IssueCodeAggregate],
+    total_pages: usize,
+) -> Vec<Insight> {
+    if aggregates.is_empty() || total_pages == 0 {
+        return Vec::new();
+    }
+
+    let total_pages_f = total_pages as f64;
+    let mut insights: Vec<Insight> = aggregates
+        .iter()
+        .map(|agg| {
+            let prevalence = agg.affected_pages as f64 / total_pages_f;
+            let base = severity_base_impact(agg.severity);
+            let impact_score = (base * prevalence).clamp(0.0, 100.0);
+            let effort = estimate_effort(&agg.code);
+            let category = category_for_code(&agg.code);
+
+            Insight {
+                title: agg.title.clone(),
+                description: format!(
+                    "{} (affects {}/{} pages, {:.0}% prevalence)",
+                    agg.description,
+                    agg.affected_pages,
+                    total_pages,
+                    prevalence * 100.0,
+                ),
+                priority: priority_from_score(impact_score),
+                impact_score,
+                effort,
+                affected_pages: agg.affected_pages,
+                finding_codes: vec![agg.code.clone()],
+                recommendation: agg.recommendation.clone(),
+                category,
+            }
+        })
+        .collect();
+
+    // Same ordering and truncation as `generate_insights_with_limit`
+    // (including the code tiebreaker, so both paths agree exactly).
+    insights.sort_by(|a, b| {
+        b.impact_score
+            .partial_cmp(&a.impact_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| a.effort.cmp(&b.effort))
+            .then_with(|| a.finding_codes.cmp(&b.finding_codes))
+    });
+    insights.truncate(20);
+    insights
 }
 
 /// Extract the root code prefix (letters only, before the first digit).

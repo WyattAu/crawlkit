@@ -175,6 +175,33 @@ impl<'de> Deserialize<'de> for IssueCategory {
     }
 }
 
+/// Per-code aggregate of crawl findings, produced by storage backends
+/// without materializing individual issue rows.
+///
+/// Backends compute this with a SQL `GROUP BY` so that insight generation
+/// scales with the number of distinct issue codes (dozens) instead of the
+/// number of findings (potentially millions on large crawls).
+///
+/// The representative severity is the **highest** severity observed for the
+/// code (critical > error > warning > info), matching what per-finding
+/// insight generation would derive from the full findings list.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssueCodeAggregate {
+    /// Machine-readable issue code (e.g. `SEO001`).
+    pub code: String,
+    /// Representative human-readable title (any observed instance; titles
+    /// are constant per code in the built-in analyzers).
+    pub title: String,
+    /// Representative description (any observed instance).
+    pub description: String,
+    /// Representative recommendation (any observed instance).
+    pub recommendation: String,
+    /// Highest severity observed for this code.
+    pub severity: Severity,
+    /// Number of distinct pages this code was found on.
+    pub affected_pages: usize,
+}
+
 /// A single finding from an analyzer.
 ///
 /// Represents a SEO or technical issue found during page analysis.

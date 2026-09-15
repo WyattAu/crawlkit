@@ -71,6 +71,36 @@ Ranked by measured leverage:
 4. **Not the problem:** the SQLite page store — the core profile proves a
    10k crawl fits in ~100 MB of live heap with the same storage path.
 
+## Outcome (2026-09-15): root cause confirmed and fixed
+
+Follow-up code grounding sharpened the mechanism the dhat snapshots
+bracketed: the per-page pipeline was **already incremental** (fetches are
+semaphore-bounded, analyzers stateless). The full-profile peak and
+retention were dominated by `finish_and_report` — which sits **inside**
+the harness's measured crawl window — materializing **every finding row**
+(1.63 M issues at 10k pages) into `CrawlData`, plus a second full copy
+when insights re-mapped each issue into a `Finding`. No production
+consumer needed the per-finding list: insights derive from per-code
+aggregates, and no built-in post-crawl analyzer reads `CrawlData::issues`.
+
+Fix shipped (same PR as this addendum):
+
+- `StorageBackend::get_issue_code_aggregates` — SQL `GROUP BY` aggregate
+  (SQLite + Postgres implementations); insights cost scales with distinct
+  codes, not total findings. Storage-layer test asserts the aggregate
+  path's insights equal the per-finding path's.
+- `PostCrawlAnalyzer::requires_issues()` (default `false`) — the engine
+  does the per-finding readback only if some registered analyzer opts in;
+  none of the built-ins do.
+- Insights sort gained a deterministic tiebreaker (equal-impact insights
+  previously ordered by HashMap iteration order — non-deterministic).
+
+Post-fix evidence: `docs/capacity/2026-09-15-post-fix-10k/` — median
+**236.2 pages/s** (was 64.2) and **506 MB peak RSS** (was 2115 MB) on the
+same machine, workload, and harness, with identical analyzer output
+(1,633,312 issues). Directions 1–3 above were symptoms of the single
+readback; the allocator question (3) is now moot at this class.
+
 ## Reproduction
 
 ```bash

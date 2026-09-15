@@ -551,18 +551,26 @@ impl CrawlEngine {
         let mut in_flight: FuturesUnordered<tokio::task::JoinHandle<Option<FetchedPage>>> =
             FuturesUnordered::new();
 
+        // Why the crawl ended before natural completion, if it did. Set at
+        // the break sites below and surfaced to the user as an insight in
+        // finish_and_report — previously a resource-limit stop was visible
+        // only as a tracing warn (product finding, 2026-09-15).
+        let mut stop_reason: Option<&'static str> = None;
+
         // Main crawl loop: dispatch URLs and process completed fetches.
         loop {
             // Check time budget
             if let Some(max_time) = cfg.crawl_config.max_time {
                 if crawl_start.elapsed() >= max_time {
                     tracing::info!("Crawl time limit reached: {max_time:?}");
+                    stop_reason = Some("time-limit");
                     break;
                 }
             }
 
             let crawled = current(&run.counters.pages_crawled);
             if crawled >= max_pages {
+                stop_reason = Some("page-budget");
                 break;
             }
 
@@ -580,6 +588,7 @@ impl CrawlEngine {
                     if !exceeded.is_empty() {
                         tracing::warn!("Resource limits exceeded: {:?}", exceeded);
                         run.metrics.record_resource_limit_hit();
+                        stop_reason = Some("resource-limit");
                         break;
                     }
                 }
@@ -752,7 +761,7 @@ impl CrawlEngine {
             resolve_queue_entry(&self.queue, &run, &fetched);
         }
 
-        Ok(self.finish_and_report(&run, crawl_start).await)
+        Ok(self.finish_and_report(&run, crawl_start, stop_reason).await)
     }
 
     /// Prefill the crawl queue before the dispatch loop runs.
@@ -879,6 +888,7 @@ impl CrawlEngine {
         &self,
         run: &CrawlRun<'a>,
         crawl_start: std::time::Instant,
+        stop_reason: Option<&'static str>,
     ) -> CrawlOutput {
         let crawl_id = run.crawl_id.clone();
         let stats = run.counters.snapshot();
@@ -988,7 +998,7 @@ impl CrawlEngine {
             };
 
         // Generate prioritized insights from findings.
-        let insights = if let Some(ref data) = crawl_data_for_insights {
+        let mut insights = if let Some(ref data) = crawl_data_for_insights {
             if data.issues.is_empty() {
                 issue_aggregates.unwrap_or_default()
             } else {
@@ -997,6 +1007,20 @@ impl CrawlEngine {
         } else {
             Vec::new()
         };
+
+        // Surface a crawl that ended before natural completion. A
+        // resource-limit stop is the dangerous case: the report looks
+        // complete but covers a prefix of the site, and the built-in page
+        // ceiling (default 10 000) previously announced itself only in a
+        // tracing warn.
+        if stop_reason.is_some() {
+            let queue_len = self.queue.len().ok();
+            insights.push(crate::insights::early_stop_insight(
+                stop_reason.unwrap_or("unknown"),
+                stats.pages_crawled,
+                queue_len,
+            ));
+        }
 
         let elapsed = crawl_start.elapsed();
         let snapshot = run.metrics.snapshot();

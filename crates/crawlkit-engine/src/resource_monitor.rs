@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 /// exhaustively-constructible `CrawlEngineConfig` (adding a public field
 /// there breaks struct literal initializers). Measurement harnesses are the
 /// primary intended caller.
-static DEFAULT_LIMITS_OVERRIDE: OnceLock<ResourceLimits> = OnceLock::new();
+pub(crate) static DEFAULT_LIMITS_OVERRIDE: OnceLock<ResourceLimits> = OnceLock::new();
 
 /// Override the limits [`ResourceMonitor::with_default_limits`] hands out.
 /// Process-wide; only the first call wins (returns `false` thereafter).

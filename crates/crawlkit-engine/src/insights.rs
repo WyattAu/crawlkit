@@ -1,4 +1,5 @@
 use crate::analyzers::post_crawl_analyzers::CrawlData;
+use crate::resource_monitor::DEFAULT_LIMITS_OVERRIDE;
 use crate::storage::{PageData, Severity};
 use crate::Finding;
 use serde::{Deserialize, Serialize};
@@ -88,6 +89,96 @@ pub struct Insight {
     pub recommendation: String,
     /// Broad category of the insight.
     pub category: InsightCategory,
+}
+
+/// Build the user-visible early-stop insight appended by [`CrawlEngine::run`]
+/// when the crawl ended before natural completion.
+///
+/// `stop_reason` distinguishes the caller's own budgets (page budget, time
+/// limit) from the resource monitor's built-in ceilings (memory, CPU, file
+/// descriptors, duration, or the default 10 000-page cap) — the latter are
+/// the ones operators could previously only discover from a tracing warn.
+#[doc(hidden)]
+pub fn early_stop_insight(
+    stop_reason: &str,
+    pages_crawled: usize,
+    queue_len: Option<usize>,
+) -> Insight {
+    let title;
+    let recommendation;
+    match stop_reason {
+        "page-budget" => {
+            title = "Crawl stopped at the configured page budget".to_string();
+            recommendation = "This is the configured max_pages budget, not a fault. Raise \
+                             CrawlConfig::max_pages if the site has more pages you want \
+                             covered."
+                .to_string();
+        }
+        "time-limit" => {
+            title = "Crawl stopped at the configured time limit".to_string();
+            recommendation = "This is the configured max_time budget, not a fault. Raise \
+                             CrawlConfig::max_time or increase concurrency if the crawl \
+                             was expected to finish."
+                .to_string();
+        }
+        "resource-limit" => {
+            // The engine keeps its ResourceLimits private, so the effective
+            // page ceiling is reconstructed here: the process override when
+            // set_default_limits was called, otherwise the engine default of
+            // 10 000 pages. Depth-limit guidance is included because the
+            // most common cause is a large site meeting that default cap.
+            let queue_note = match queue_len {
+                Some(remaining) if remaining > 0 => {
+                    let cap_note = match DEFAULT_LIMITS_OVERRIDE.get() {
+                        None => {
+                            "the effective page ceiling was 10000 (the engine default)".to_string()
+                        }
+                        Some(l) => match l.max_pages {
+                            Some(cap) => format!("the effective page ceiling was {cap}"),
+                            None => "the page ceiling was disabled".to_string(),
+                        },
+                    };
+                    format!(
+                        " Roughly {remaining} discovered URLs remained queued when the \
+                         crawl stopped; {cap_note}."
+                    )
+                }
+                _ => String::new(),
+            };
+            title = "Crawl stopped early: internal resource limits were hit".to_string();
+            recommendation = format!(
+                "The crawl was truncated by the engine's built-in resource \
+                 monitor, not by your crawl configuration — results in this \
+                 report are a partial view of the site.{queue_note} To cover \
+                 the full site, raise the ceilings via \
+                 crawlkit_engine::resource_monitor::set_default_limits \
+                 (process-wide, first call wins) — e.g. max_pages: None — \
+                 or crawl in depth-limited segments and merge results."
+            );
+        }
+        other => {
+            title = "Crawl stopped early".to_string();
+            recommendation = format!(
+                "The crawl ended before natural completion (stop reason: \
+                 {other}). Results may be a partial view of the site."
+            );
+        }
+    }
+    Insight {
+        title,
+        description: format!(
+            "The crawl stopped after {pages_crawled} pages before the site's \
+             link graph was exhausted. Findings in this report cover only \
+             the pages actually crawled."
+        ),
+        priority: InsightPriority::High,
+        impact_score: 90.0,
+        effort: InsightEffort::Quick,
+        affected_pages: pages_crawled,
+        finding_codes: vec!["CRAWL_EARLY_STOP".to_string()],
+        recommendation,
+        category: InsightCategory::Technical,
+    }
 }
 
 /// Map a finding code prefix to an `InsightCategory`.
@@ -390,6 +481,54 @@ mod tests {
     use crate::storage::{Issue, IssueCategory, PageData, Severity};
     use chrono::Utc;
     use url::Url;
+
+    #[test]
+    fn early_stop_insight_resource_limit_names_the_lever() {
+        let i = early_stop_insight("resource-limit", 10_000, Some(39_894));
+        assert!(i.title.contains("resource limits"));
+        assert!(i.recommendation.contains("set_default_limits"));
+        assert!(i.recommendation.contains("10000"));
+        assert!(i.recommendation.contains("39894"));
+        assert_eq!(i.finding_codes, vec!["CRAWL_EARLY_STOP".to_string()]);
+        assert_eq!(i.priority, InsightPriority::High);
+    }
+
+    #[test]
+    fn early_stop_insight_honors_process_override_in_cap_note() {
+        // Process-global: probe with a value nobody else sets so the test is
+        // order-tolerant; only assert on the branches we can control.
+        let probed = crate::resource_monitor::DEFAULT_LIMITS_OVERRIDE
+            .get()
+            .is_some();
+        let i = early_stop_insight("resource-limit", 500, Some(7));
+        if !probed {
+            // No override installed: the note must name the engine default.
+            assert!(i.recommendation.contains("10000"));
+        }
+    }
+
+    #[test]
+    fn early_stop_insight_page_budget_reads_as_configured_not_fault() {
+        let i = early_stop_insight("page-budget", 1_000, Some(50));
+        assert!(i.title.contains("page budget"));
+        assert!(i.recommendation.contains("not a fault"));
+        assert!(i.recommendation.contains("max_pages"));
+    }
+
+    #[test]
+    fn early_stop_insight_time_limit_reads_as_configured_not_fault() {
+        let i = early_stop_insight("time-limit", 2_000, None);
+        assert!(i.title.contains("time limit"));
+        assert!(i.recommendation.contains("not a fault"));
+    }
+
+    #[test]
+    fn early_stop_insight_empty_queue_gets_no_remaining_note() {
+        let i = early_stop_insight("resource-limit", 10_000, Some(0));
+        assert!(!i.recommendation.contains("remained queued"));
+        let i_none = early_stop_insight("resource-limit", 10_000, None);
+        assert!(!i_none.recommendation.contains("remained queued"));
+    }
 
     fn test_page(url: &str) -> PageData {
         PageData {

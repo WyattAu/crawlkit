@@ -506,3 +506,97 @@ async fn failing_plugin_does_not_abort_crawl() {
 
     let _ = std::fs::remove_dir_all(&plugins_root);
 }
+
+// ---------------------------------------------------------------------------
+// Early-stop visibility: a crawl that ends before natural completion must be
+// user-visible in the output insights, not only in a tracing warn.
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn test_early_stop_insight_on_page_budget() {
+    let server = TestServer::start(30, ServerConfig::default());
+    let engine = CrawlEngine::new_shared(engine_config(10, 4), shared_storage());
+    let output = engine.run(&server.index_url()).await.unwrap();
+
+    assert_eq!(output.pages_crawled, 10);
+    let stop = output
+        .insights
+        .iter()
+        .find(|i| i.finding_codes.iter().any(|c| c == "CRAWL_EARLY_STOP"))
+        .expect("page-budget stop must surface a CRAWL_EARLY_STOP insight");
+    assert!(stop.title.contains("page budget"));
+    // The configured budget is not a fault: the copy must say so.
+    assert!(stop.recommendation.contains("not a fault"));
+}
+
+#[tokio::test]
+async fn test_no_early_stop_insight_on_natural_completion() {
+    let server = TestServer::start(5, ServerConfig::default());
+    let engine = CrawlEngine::new_shared(engine_config(50, 4), shared_storage());
+    let output = engine.run(&server.index_url()).await.unwrap();
+
+    assert_eq!(output.pages_crawled, 6); // index + 5 children
+    assert!(
+        !output
+            .insights
+            .iter()
+            .any(|i| i.finding_codes.iter().any(|c| c == "CRAWL_EARLY_STOP")),
+        "a completed crawl must not carry an early-stop insight"
+    );
+}
+
+#[tokio::test]
+async fn test_resource_limit_stop_is_user_visible() {
+    // Process-wide, first-call-wins: install a tiny page ceiling nobody
+    // else in this binary sets. If another test won the race for the
+    // override slot, the monitor cap is whatever that test chose — the
+    // assertions below tolerate both worlds rather than order-failing.
+    let override_installed = crawlkit_engine::set_default_limits(crawlkit_engine::ResourceLimits {
+        max_pages: Some(120),
+        ..Default::default()
+    });
+
+    // 300-page fixture: the monitor samples every 100 pages, so the crawl
+    // must pass a sample past the 120-page ceiling before the budget of
+    // 10_000 could ever bind.
+    let server = TestServer::start(300, ServerConfig::default());
+    let engine = CrawlEngine::new_shared(engine_config(10_000, 8), shared_storage());
+    let output = engine.run(&server.index_url()).await.unwrap();
+
+    let truncated = output.pages_crawled < 301;
+    if override_installed {
+        // Our ceiling won: the crawl must have stopped at the monitor, and
+        // the user must be told — previously only a tracing warn.
+        assert!(
+            truncated,
+            "monitor ceiling of 120 pages must truncate a 301-page crawl, got {}",
+            output.pages_crawled
+        );
+        let stop = output
+            .insights
+            .iter()
+            .find(|i| i.finding_codes.iter().any(|c| c == "CRAWL_EARLY_STOP"))
+            .expect("resource-limit stop must surface a CRAWL_EARLY_STOP insight");
+        assert!(stop.title.contains("resource limits"));
+        assert!(
+            stop.recommendation.contains("set_default_limits"),
+            "the recommendation must name the fix lever"
+        );
+        assert_eq!(
+            stop.priority,
+            crawlkit_engine::insights::InsightPriority::High
+        );
+    } else {
+        // Override lost the race: the crawl ran to natural completion or
+        // another test's limits applied — the gate under test is the
+        // insight surfacing, so require consistency either way.
+        let has_stop = output
+            .insights
+            .iter()
+            .any(|i| i.finding_codes.iter().any(|c| c == "CRAWL_EARLY_STOP"));
+        assert_eq!(
+            has_stop, truncated,
+            "insight presence must exactly track truncation"
+        );
+    }
+}

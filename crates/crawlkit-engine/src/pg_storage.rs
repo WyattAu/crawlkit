@@ -4,8 +4,9 @@ use sqlx::PgPool;
 use sqlx::Row;
 use url::Url;
 
-use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
-use crate::storage::IssueCodeAggregate;
+use crate::storage::{
+    CrawlStats, CruxMetrics, Issue, IssueCodeAggregate, IssueFilter, PageData, StorageError,
+};
 use crate::storage_trait::{CrawlMeta, StorageBackend, TopIssue};
 
 /// PostgreSQL-backed storage for crawl data.

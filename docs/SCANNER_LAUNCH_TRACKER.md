@@ -18,7 +18,23 @@ the previous streak.
 | 2026-09-15 | `47b04cac` | 2 / 5 | queue-frontier wiring landed |
 | 2026-09-15 | `a05f71e6` | 3 / 5 | 100k queue run evidence landed |
 | 2026-09-15 | `72d40ef3` | 4 / 5 | tracker update; one more green run unblocks launch |
-| 2026-09-15 | `d0a7029c` | **5 / 5** | **GATE MET — public launch unblocked** |
+| 2026-09-15 | `d0a7029c` | 5 / 5 | gate met — then reset same day, see Reset 1 |
+
+### Reset 1 — 2026-09-15
+
+The next run (`3d763b65`, docs-only diff, identical binary) failed the
+capacity smoke baseline gate on its first attempt: the 1k debug-profile
+crawl deviated >20% from baseline — shared-runner noise, proven by the
+unchanged binary and the immediate green re-run of the same job. Per the
+rule above, the count resets.
+
+**Watch (§3):** first reset. If the capacity smoke job produces further
+noise resets, the response is a gate-design discussion (tolerance vs
+sample count vs baseline class), not gate removal.
+
+| Date | HEAD | Count | Note |
+|---|---|---|---|
+| 2026-09-15 | `3d763b65` | 1 / 5 | green on re-run after noise failure |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to
@@ -27,8 +43,9 @@ runs.
 
 ## 2. On reaching 5 / 5
 
-**Reached 2026-09-15** (`d0a7029c`). The remaining steps are the launch
-procedure itself — operator actions, to be executed and recorded in order:
+**Reached 2026-09-15** (`d0a7029c`), then **reset** the same day before
+the launch procedure executed (Reset 1). The steps below stand ready for
+when the streak rebuilds:
 1. Deploy the scanner in the `redis` posture (runbook §2): behind a proxy
    that overwrites `X-Forwarded-For`, with the shared proxy rate limit —
    the constraint accepted with the §7 signature.

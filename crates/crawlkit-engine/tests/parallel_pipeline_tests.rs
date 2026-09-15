@@ -4,6 +4,8 @@
 //! it, exercising the FuturesUnordered dispatch loop, the max-pages budget,
 //! fetch overlap, and incremental 304 handling.
 #![allow(clippy::unwrap_used)]
+// Early-stop tests assert on Option lookups with descriptive panics.
+#![allow(clippy::expect_used)]
 
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};

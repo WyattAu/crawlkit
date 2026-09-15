@@ -1,6 +1,7 @@
 # Hosted Scanner Runbook (ADR-012 GA Decision Document)
 
-**Status:** Draft — GA decision pending ownership acceptance (see §7)
+**Status:** Accepted — GA signed 2026-09-15 (§7); public launch gated on the §6
+streak rule rebuilding to N=5 after the 2026-09-14/15 fmt/semver fix cycle
 **Date:** 2026-09-11
 **Applies to:** `crawlkit-scanner` crate, ADR-012 (trust boundary), ADR-015 (queue/budget §6, posture §A1)
 **Purpose:** This document is simultaneously the Phase 5.3 runbook prerequisite
@@ -168,7 +169,11 @@ Full incident process: docs/SECURITY.md and the maintainer security policy.
       execution against the multi-replica posture, 2026-09-12; see the
       drill log below — crash-recovery and dead-letter redrive were
       exercised in the same session)
-- [ ] §7 ownership line signed (name + date); ops escalation path confirmed
+- [x] §7 ownership line signed (Wyatt Au, 2026-09-15); ops escalation path
+      confirmed; deployment constraint (X-Forwarded-For-overwriting proxy +
+      shared proxy rate limit) accepted with the signature. Streak gate
+      rebuilding to N=5 after the 2026-09-14/15 fix cycle — public launch
+      waits for it per the counting rule.
 - [ ] Public copy reviewed against the honest-scope rule (§1) and the
       claims policy (capabilities.toml status must move `prototype` →
       `stable-with-configuration` only after the above)
@@ -201,10 +206,22 @@ Scanner GA is an ops commitment, not a code milestone. The owner accepts:
 - The daily-budget cost lever (may lower limits at their discretion)
 
 ```
-Owner:     ______________________
-Accepted:  ______/______/______
+Owner:     Wyatt Au (maintainer)
+Accepted:  09/15/2026
 Review:    quarterly, first review 3 months after acceptance
 ```
+
+Accepted constraints, recorded with the signature:
+
+- Per-IP limiter trusts the first `X-Forwarded-For` hop — deployment is
+  approved **only** behind a proxy that overwrites the header, and a shared
+  proxy-level rate limit is required for multi-replica posture
+  (`GA_SIGNOFF_PACKAGE.md` §5).
+- Signature accepted 2026-09-15 with the §6 CI-streak gate at 3 of 5
+  (reset by the 2026-09-14/15 fmt/semver fix cycle); the gate rebuilds with
+  normal pushes and public launch waits for N=5 per the counting rule.
+- Engineering flips `hosted_scanner` → `stable-with-configuration` and lands
+  the honest-scope public copy (§2 draft) at launch.
 
 Decision tracking: [#19 — Scanner GA: §7 ownership signature needed](https://github.com/WyattAu/crawlkit/issues/19)
 (the one-page ask is `docs/GA_SIGNOFF_REQUEST.md`).

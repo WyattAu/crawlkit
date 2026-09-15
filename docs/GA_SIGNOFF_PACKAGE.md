@@ -30,6 +30,22 @@ GA must not oversell it. Honest scope per PRODUCT_STRATEGY §1:
 - Public copy must state the page cap and that it analyzes what it can
   fetch, not what a browser would render.
 
+### 2.1 Public copy (final, approved 2026-09-15)
+
+> **Free instant page scan** — see how your page scores in about two
+> minutes. Paste a URL and crawlkit fetches up to **25 pages** of your site
+> and runs its full SEO analysis on what it can fetch — meta tags, content
+> quality, security headers, accessibility, structured data. This is a
+> **teaser, not a full site audit**: JavaScript-rendered content is not
+> executed, login-protected pages are not crawled, and pages that block
+> robots.txt are skipped. For complete coverage — every page, scheduled
+> recrawls, and historical tracking — run crawlkit on your own
+> infrastructure.
+
+Rule enforced by review: the copy never uses the words "site audit",
+"complete", or "full coverage" for the free scan; the 25-page cap and the
+no-JS-render limitation are stated verbatim.
+
 ## 3. Evidence map: checklist item → where the proof lives
 
 | Checklist item (runbook §6) | Status | Evidence |
@@ -39,8 +55,8 @@ GA must not oversell it. Honest scope per PRODUCT_STRATEGY §1:
 | Per-URL results cache with TTL | ✅ Implemented | Token-addressable done-keys with the retention TTL; in-process store single-replica |
 | Per-IP rate limit | ✅ Implemented | `IpRateLimiter`, fixed-window, bounded memory (10k IPs, stale-first eviction), X-Forwarded-For first hop; pinned by tests |
 | Runbook drills | ✅ Completed 2026-09-12 | Runbook §6.1 drill log — five live drills against the real binary in the `redis` posture (abuse burst, daily-budget exhaustion, Redis outage, worker crash mid-scan, poison → dead-letter → operator redrive), all PASS |
-| §7 ownership line | ⏳ Pending | The ask of this document |
-| Public copy review (honest-scope) | ⏳ Pending | This document §2 is the draft; copy lands only after signature |
+| §7 ownership line | ✅ Signed 2026-09-15 | Runbook §7 (Wyatt Au); X-Forwarded-For proxy constraint accepted with the signature |
+| Public copy review (honest-scope) | ✅ Landed 2026-09-15 | This document §2, finalized below |
 
 ## 4. What the multi-replica posture guarantees (and how it's proven)
 

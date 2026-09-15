@@ -155,18 +155,18 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    ADR-016 §5.1 compression defaults picked from the same runs. Note: the
    same harness at 100k pages in one crawl multiplies the RSS question —
    run it only after the §2 item above has an attribution, or shard it.
-4. Distributed-posture variant (queue + Postgres + multiple workers) → the
-   numbers the 6.0.0 distributed-stability claim actually rests on.
-   **Status: scoped, not yet run (2026-09-14).** The host has Docker, so the
-   service path (Redis 7 + Postgres, mirroring the CI service set) is
-   available without new infrastructure; the blocker is measurement
-   discipline, not tooling — a capacity run on a host concurrently running
-   two service containers plus the dhat attribution workload would violate
-   §3's quiet-host rule. Scheduled after the §8.2 attribution work closes.
-   Harness shape: extend `capacity_smoke.rs` with `CAPACITY_MODE=distributed`
-   (enqueue-only producer + N worker processes consuming the lease queue,
-   per-worker `/proc` samples, and a record that names the topology so the
-   numbers can never be conflated with the inline mode).
+4. Distributed-posture variant (shared Postgres + multiple worker
+   processes) → the numbers the 6.0.0 distributed-stability claim rests on.
+   **Status: run 2026-09-15 — see `docs/capacity/2026-09-15-distributed-posture/`**
+   (2 worker processes × 5 000-page loopback hosts, one shared PostgreSQL 16
+   instance, 3-run valid set, all gates PASS: aggregate 112.9–116.4 p/s,
+   worker RSS sum peak 156–169 MB). Harness: `capacity_distributed.rs`,
+   `CAPACITY_MODE=distributed`, record schema
+   `crawlkit.capacity.distributed_run_record/v1` naming the topology so the
+   numbers can never be conflated with inline mode. Remaining for the full
+   distributed claim: wire the Redis lease queue into the crawl frontier
+   (6.0.0 engineering) and re-run with `topology.queue` naming the lease
+   path; then shard a 100k-page run across workers.
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

@@ -171,7 +171,7 @@ evidence = [
 notes = "Enabled per-crawl via the --monitor flag; alerts are severity-graded (info/warning/critical) against the previous crawl diff."
 
 [capabilities.hosted_scanner]
-status = "prototype"
+status = "stable-with-configuration"
 evidence = [
   "crates/crawlkit-scanner/src/guard.rs",
   "crates/crawlkit-scanner/src/bounds.rs",
@@ -180,7 +180,7 @@ evidence = [
   ".adrs/ADR-012-hosted-scanner-trust-boundary.md",
   "docs/SCANNER_RUNBOOK.md",
 ]
-notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store, or shared Redis backend per ADR-015 §A1 selected by CRAWLKIT_BUDGET_BACKEND). Not yet publicly deployed. All §6 code obligations implemented (daily global budget, per-IP limiter, queue fan-out, /metrics data plane); five live drills recorded (§6.1). Status stays prototype until the checklist's human items complete: N consecutive green CI runs and the §7 ownership signature (decision material: docs/GA_SIGNOFF_PACKAGE.md)."
+notes = "Single-URL bounded free scan: 25 pages max, depth 4, 30s wall clock; DNS-pinned SSRF denial by construction; global per-target budget 30 requests/10 min (in-process store, or shared Redis backend per ADR-015 §A1 selected by CRAWLKIT_BUDGET_BACKEND). GA signed 2026-09-15 (runbook §7): all §6 engineering obligations implemented (daily global budget, per-IP limiter, queue fan-out, /metrics data plane), five live drills recorded (§6.1). Public launch additionally requires the §6 CI-streak rule to rebuild to N=5 after the 2026-09-14/15 fix cycle, deployment behind a proxy that overwrites X-Forwarded-For (accepted constraint), and the honest-scope public copy (GA_SIGNOFF_PACKAGE.md §2) at launch."
 
 [capabilities.log_analysis]
 status = "stable"

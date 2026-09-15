@@ -9,6 +9,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Scanner GA signed (2026-09-15)**: ownership acceptance recorded in the
+  runbook §7 (`hosted_scanner` → `stable-with-configuration` in
+  `docs/capabilities.toml`; issue #19 closed). Accepted constraints recorded
+  with the signature: deployment only behind a proxy that overwrites
+  `X-Forwarded-For`, shared proxy rate limit for multi-replica, and public
+  launch waiting for the §6 CI-streak rule to rebuild to N=5. Honest-scope
+  public copy finalized (`GA_SIGNOFF_PACKAGE.md` §2.1: 25-page cap and
+  no-JS-render limitation stated verbatim; never "site audit").
+- **Distributed-posture capacity run**
+  (`docs/capacity/2026-09-15-distributed-posture/`): 2 worker processes ×
+  5 000-page loopback hosts into one shared PostgreSQL 16 instance, 3-run
+  valid set, all gates PASS — aggregate 112.9–116.4 pages/s, worker RSS sum
+  peak 156–169 MB, per-worker RSS ~6× lower than the inline SQLite posture.
+  Harness: `capacity_distributed.rs` (`CAPACITY_MODE=distributed`), record
+  schema `crawlkit.capacity.distributed_run_record/v1` naming the topology;
+  the record's `queue` field honestly names the inline-per-worker path until
+  the Redis lease queue is wired into the crawl frontier (6.0.0).
+- **Allocator experiments (negative results, recorded in the post-fix
+  report)**: mimalloc measured at parity with glibc on the 10k workload
+  (built, measured, reverted); `MALLOC_ARENA_MAX=2` saves 30–50 MB peak at a
+  14–24% throughput cost and is documented as an operator tuning knob, not an
+  engine default. `smaps_rollup` evidence attributes the remaining end-RSS
+  floor to glibc per-thread arena pooling of freed memory.
 - **Warehouse export schema contract (ADR-016)**: versioned crawl-export
   schema v1 (`schemas/export/v1/*.toml` + human contract at
   `docs/schema/export/v1/README.md`) for the three 6.0.0 tables —

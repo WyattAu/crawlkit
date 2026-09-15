@@ -18,6 +18,7 @@ the previous streak.
 | 2026-09-15 | `47b04cac` | 2 / 5 | queue-frontier wiring landed |
 | 2026-09-15 | `a05f71e6` | 3 / 5 | 100k queue run evidence landed |
 | 2026-09-15 | `72d40ef3` | 4 / 5 | tracker update; one more green run unblocks launch |
+| 2026-09-15 | `d0a7029c` | **5 / 5** | **GATE MET — public launch unblocked** |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to
@@ -26,6 +27,8 @@ runs.
 
 ## 2. On reaching 5 / 5
 
+**Reached 2026-09-15** (`d0a7029c`). The remaining steps are the launch
+procedure itself — operator actions, to be executed and recorded in order:
 1. Deploy the scanner in the `redis` posture (runbook §2): behind a proxy
    that overwrites `X-Forwarded-For`, with the shared proxy rate limit —
    the constraint accepted with the §7 signature.

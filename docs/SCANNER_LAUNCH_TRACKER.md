@@ -39,6 +39,7 @@ fails after 3 genuine crawls with the attempts trail in the panic.
 | Date | HEAD | Count | Note |
 |---|---|---|---|
 | 2026-09-15 | `3d763b65` | 1 / 5 | green on re-run after noise failure |
+| 2026-09-15 | `335bd2ec` | 1 / 5 | reset 2 (`dd60c5a1`) fixed by the bounded re-measurement gate — green first attempt |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

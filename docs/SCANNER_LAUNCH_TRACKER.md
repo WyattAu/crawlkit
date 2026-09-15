@@ -17,6 +17,7 @@ the previous streak.
 | 2026-09-15 | `8072352b` | 1 / 5 | all jobs green; first after the fix cycle |
 | 2026-09-15 | `47b04cac` | 2 / 5 | queue-frontier wiring landed |
 | 2026-09-15 | `a05f71e6` | 3 / 5 | 100k queue run evidence landed |
+| 2026-09-15 | `72d40ef3` | 4 / 5 | tracker update; one more green run unblocks launch |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

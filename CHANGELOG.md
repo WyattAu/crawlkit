@@ -26,6 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   schema `crawlkit.capacity.distributed_run_record/v1` naming the topology;
   the record's `queue` field honestly names the inline-per-worker path until
   the Redis lease queue is wired into the crawl frontier (6.0.0).
+- **Early-stop visibility (product finding fixed)**: a crawl truncated by
+  the resource monitor's built-in ceilings (default 10 000-page cap,
+  memory, CPU, FDs, duration) previously announced itself only in a
+  tracing warn. `CrawlEngine::run` now records the stop reason and
+  appends a `CRAWL_EARLY_STOP` insight to the output: High priority, the
+  `set_default_limits` lever named, remaining-queue size and effective
+  ceiling reported for resource-limit stops; caller-configured budgets
+  get explicit "not a fault" copy. Semver-clean (no public-shape
+  changes).
+- **10k queue-mode reference**
+  (`docs/capacity/2026-09-15-queue-frontier-10k/`): 1 worker × 10 001
+  pages through the Redis lease-queue frontier, 3-run valid set,
+  51.8–58.8 pages/s (13.5% spread), RSS peak 131–138 MB — lease overhead
+  at reference scale is ~5–11% per worker vs the inline posture,
+  amortizing better than the 2 × 5 000 runs suggested.
 - **Redis lease queue in the crawl frontier (ADR-015 in the crawl path)**:
   `DistributedQueueAdapter` implements the engine's `Queue` trait over the
   graduated lease queue — every dispatched URL is a leased pop, acked on

@@ -177,6 +177,12 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    worker RSS sum peak 729 MB — per-worker throughput halves vs the 10k set
    (per-crawl closeout scales with issue count) and the Postgres tier is
    the confirmed scaling surface (checkpoint-pressure log captured).
+   **10k single-worker reference measured**
+   (`docs/capacity/2026-09-15-queue-frontier-10k/`): 1 × 10 001 pages,
+   3-run valid set, 51.8–58.8 p/s, RSS peak 131–138 MB — the like-for-like
+   per-worker anchor: lease overhead ~5–11% at reference scale (the
+   2×5 000 set's ~10% aggregate figure overstated per-URL cost because
+   closeout dominates smaller runs).
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

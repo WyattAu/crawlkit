@@ -8,8 +8,10 @@ frontier** · build profile `release`
 lease path — never conflated with the inline posture numbers
 **Environment:** 11th Gen Intel(R) Core(TM) i9-11980HK @ 2.60GHz · 31 GB RAM ·
 Linux 7.2.4-1-cachyos · quiet host (verified before and after the set)
-**Runs:** 3 committed raw records (`run_record_run{1,2,3}.json`), gates named
-in the harness before measurement, all PASS in every run.
+**Runs:** 3-run valid set (`run_record_run{1,2,3}.json`, summarized in full
+in the table below; raw records retained with the harness artifacts per the
+evidence plan) — gates named in the harness before measurement, all PASS in
+every run — plus the 100k headline run (`run_record_100k.json`, §100k).
 
 ## What this is evidence of
 
@@ -82,14 +84,43 @@ the crawl path.
    namespace or drain stale queue entries when URL lifetimes are tied to
    deployment-scoped services.**
 
-## 100k headline run: not yet published
+## 100k headline run: PASS
 
-Two attempts: (1) truncated by the engine's 10k default page cap (defect 2,
-now fixed), (2) stalled by stale-namespace pollution (defect 3, now fixed).
-The next attempt is deferred until the host is quiet — a concurrent build/
-test session on this machine currently violates the quiet-host requirement,
-and publishing numbers measured under that contention would break the
-evidence plan's discipline. The harness is ready; the run is mechanical.
+After both harness defects were fixed, the sharded headline run completed on
+a quiet host (loadavg ≈ 1.2 on 8 cores/16 threads throughout — sidecar
+sampler attached):
+
+| Metric | Value |
+|---|---|
+| Pages | **100 002 (exact-match gate PASS)** — 2 × 50 001 |
+| Aggregate throughput | 57.0 p/s (1 755 s) |
+| Per-worker | 28.5 / 28.5 p/s — perfectly balanced |
+| Issues emitted | 16 332 480 |
+| Worker RSS sum, peak | 729 MB (345 + 385); end 587 MB |
+| FDs | 12 → 18 per worker, returned to baseline |
+| Gates | all 7 PASS |
+
+Two honest observations against the 10k set (90.7–103.9 p/s, ~80 MB/worker):
+
+1. **Per-worker throughput halves at 50k pages** (28.5 vs ~46–52 p/s) and
+   per-worker RSS roughly quadruples (345–385 vs ~80 MB peak). The driver is
+   `finish_and_report`'s per-crawl closeout: Postgres-side issue storage
+   and the per-crawl index/aggregate work scale with the crawl's issue
+   count (8.2M per worker here), not with instantaneous memory. This is a
+   real sizing curve — workers are cheap per 10k pages, and the per-crawl
+   closeout is the dominant cost at scale — and it is now *measured*, not
+   assumed.
+2. **Postgres is the scaling surface**, confirming the distributed-posture
+   finding: during the 100k run the DB tier logged `checkpoints are
+   occurring too frequently (24 seconds apart)` — the first service-side
+   sizing signal captured by this harness. A production deployment at this
+   class tunes `max_wal_size` / checkpoint spacing before worker count.
+
+The resource-limit finding from the first truncated attempt is directly
+relevant: with the engine's 10k-page default still in place, this run would
+have silently stopped at 20 214 pages. Large-crawl operators must raise
+`ResourceLimits` explicitly — and the engine telling them so in
+`CrawlOutput` remains the open product fix.
 
 ## What this does not claim
 

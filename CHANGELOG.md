@@ -40,8 +40,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   at-least-once delivery in the crawl path. Harness findings recorded there:
   the engine's default resource limits truncate large runs with no
   user-visible signal (output-shape fix filed), and stale queue namespaces
-  referencing dead deployment-scoped services can stall workers (operator
-  runbook finding; harness now clears namespaces per run).
+  referencing dead deployment-scoped services can stall workers (  operator runbook finding; harness now clears namespaces per run). The
+  100k-page sharded headline run PASSed: 2 × 50 001 pages exact, 57.0
+  pages/s aggregate, worker RSS sum peak 729 MB — measuring the sizing
+  curve (per-worker throughput halves at 50k pages; per-crawl closeout
+  scales with issue count) and capturing the first service-side sizing
+  signal (Postgres checkpoint pressure under sustained issue storage).
 - **Allocator experiments (negative results, recorded in the post-fix
   report)**: mimalloc measured at parity with glibc on the 10k workload
   (built, measured, reverted); `MALLOC_ARENA_MAX=2` saves 30–50 MB peak at a

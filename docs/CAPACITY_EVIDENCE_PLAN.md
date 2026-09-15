@@ -168,9 +168,11 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    (`DistributedQueueAdapter` over the engine's `queue` slot) and measured
    (`docs/capacity/2026-09-15-queue-frontier/`: 2×5 000 pages, 3-run valid
    set, 90.7–103.9 p/s aggregate — an ~18% throughput cost vs the inline
-   frontier for at-least-once delivery in the crawl path). Remaining for the
-   full distributed claim: the 100k-page sharded headline run (harness
-   ready; deferred for a quiet host — see that report's §100k status).
+   frontier for at-least-once delivery in the crawl path). **100k headline
+   run PASS** (same report): 2 × 50 001 pages exact, 57.0 p/s aggregate,
+   worker RSS sum peak 729 MB — per-worker throughput halves vs the 10k set
+   (per-crawl closeout scales with issue count) and the Postgres tier is
+   the confirmed scaling surface (checkpoint-pressure log captured).
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

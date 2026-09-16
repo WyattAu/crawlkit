@@ -1,0 +1,96 @@
+# Committed percentile budgets — estate standard §5 (P50/P99 within SLA).
+#
+# Enforced by the "Benchmark Regression Detection" workflow via
+# `crawlkit-budget-check` (crates/crawlkit-budget-check), a thin wrapper
+# over percentile-kit's report feature
+# (https://github.com/WyattAu/percentile-kit). This is a second,
+# percentile-explicit gate alongside the workflow's live main-vs-PR
+# mean comparison: it re-checks the criterion output the run just wrote
+# at the percentile level (P99 = nearest-rank over criterion's sampled
+# data).
+#
+# FIRST-PASS VALUES, DELIBERATELY LOOSE: budgets are ~3x the means in
+# docs/benchmarks/baseline/criterion.txt (recorded 2026-08-30 on local
+# hardware; CI runners are slower and noisier), P99 budgets get a further
+# 2x over the P50 budget, and max_regression_pct is 25%. They exist to
+# catch catastrophic regressions without false reds, and are expected to
+# TIGHTEN as CI accumulates real P50/P99 data.
+#
+# Schema (percentile-kit, deny_unknown_fields): `metric` names the bench
+# directory under target/criterion; `p50`/`p99` budgets and
+# `max_regression_pct` (allowed excess, %) are per-metric. Units are
+# criterion's base unit (nanoseconds per iteration).
+
+[[budget]]
+metric = "html_parser/parse_small_page" # baseline ~149 us
+p50 = 500_000.0
+p99 = 1_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "html_parser/parse_5kb_page" # baseline ~625 us
+p50 = 2_000_000.0
+p99 = 4_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "analyzer_registry_full_suite" # baseline ~1.56 ms, high variance
+p50 = 5_000_000.0
+p99 = 10_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "url_queue/push_1000_urls" # baseline ~1.60 ms
+p50 = 5_000_000.0
+p99 = 10_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "url_queue/pop_1000_urls" # baseline ~0.88 ms, very high variance
+p50 = 3_000_000.0
+p99 = 6_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "url_queue/push_pop_mixed_priorities" # baseline ~2.75 ms
+p50 = 10_000_000.0
+p99 = 20_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "storage/insert_100_pages" # baseline ~1.51 ms (in-memory SQLite)
+p50 = 5_000_000.0
+p99 = 10_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "storage/query_pages" # baseline ~716 us (in-memory SQLite)
+p50 = 2_500_000.0
+p99 = 5_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "storage/insert_and_query_issues" # baseline ~501 us (in-memory SQLite)
+p50 = 2_000_000.0
+p99 = 4_000_000.0
+max_regression_pct = 25.0
+
+# Baseline rounds to 0 ns/iter (single atomic check); budgeted
+# generously until CI data accumulates.
+[[budget]]
+metric = "circuit_breaker_state_check"
+p50 = 1_000.0
+p99 = 2_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "link_graph_pagerank_100_nodes" # baseline ~904 us
+p50 = 3_000_000.0
+p99 = 6_000_000.0
+max_regression_pct = 25.0
+
+[[budget]]
+metric = "feature_flags_get" # baseline ~42 ns
+p50 = 500.0
+p99 = 1_000.0
+max_regression_pct = 25.0

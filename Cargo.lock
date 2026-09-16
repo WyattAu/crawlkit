@@ -1185,6 +1185,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "crawlkit-budget-check"
+version = "5.4.0"
+dependencies = [
+ "percentile-kit",
+ "tempfile",
+ "thiserror 2.0.19",
+ "toml 0.8.23",
+ "workspace-hack",
+]
+
+[[package]]
 name = "crawlkit-engine"
 version = "5.4.0"
 dependencies = [
@@ -3668,6 +3679,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
+name = "percentile-kit"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "821537297c1e1bf92068a5dec6a70a079dd576aaf2b017fdcaf9c057300e415e"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
+ "toml 0.9.12+spec-1.1.0",
+]
+
+[[package]]
 name = "petgraph"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5355,7 +5378,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.3.4",
+ "getrandom 0.4.3",
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
@@ -6992,6 +7015,7 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+ "once_cell",
  "opentelemetry",
  "opentelemetry_sdk",
  "percent-encoding",

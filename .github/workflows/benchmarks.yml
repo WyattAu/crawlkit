@@ -176,3 +176,15 @@ jobs:
           issue-number: ${{ github.event.pull_request.number }}
           body-file: benchmark_comment.md
           edit-mode: replace
+
+      - name: Enforce percentile budgets via percentile-kit (estate standard §5)
+        # Second, percentile-explicit gate alongside the live
+        # main-vs-PR mean comparison above: percentile-budgets.toml
+        # commits P50/P99 budgets (first-pass values derived generously
+        # from docs/benchmarks/baseline; they tighten as CI data
+        # accumulates) and crawlkit-budget-check — a thin wrapper over
+        # percentile-kit's report feature
+        # (github.com/WyattAu/percentile-kit) — parses the criterion
+        # output this run just wrote under target/criterion.
+        # Parse-only: no re-benching.
+        run: cargo run -p crawlkit-budget-check --release -- --criterion-dir target/criterion --budgets percentile-budgets.toml

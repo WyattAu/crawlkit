@@ -54,6 +54,7 @@ in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 | 2026-09-16 | `00bb168d` | 0 / 5 | **Reset 4:** same failure mode as Reset 3 — 43.7/47.0/47.0 p/s, tightly clustered ±3.7%, vs the ~81 p/s baseline. **§3 escalation executed:** the flake source was fixed at the root — the relative gate now calibrates runner CPU speed and normalizes the throughput threshold (clamped ±40%; RSS raw; verified end-to-end on synthetic 2×-era baselines). CI baseline re-seeded (`-v3`) to attach calibration. |
 | 2026-09-16 | `02083151` | 1 / 5 | gate-fix commit green first attempt; `-v3` calibrated baseline seeded (ungated recording run, seed step confirmed in log) |
 | 2026-09-16 | `977429b0` | 2 / 5 | **first enforcing run on the calibrated gate: cache hit `-v3` → `CAPACITY_ENFORCE=1` → green on a hosted runner** — the environment class that caused Resets 2–4; first attempt externally cancelled (no failed job), re-run green |
+| 2026-09-16 | `fdd282e1` | 3 / 5 | streak rebuild holding on the normalized gate |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

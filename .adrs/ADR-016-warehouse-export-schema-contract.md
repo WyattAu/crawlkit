@@ -154,13 +154,19 @@ the release pipeline's reproducibility guarantees.
 
 ## 5. Open questions (resolve before implementation, not after)
 
-1. Parquet compression/encoding defaults (zstd level; dictionary
-   encoding thresholds) — pick by measured size/speed on a 100k-page
-   fixture, committed with the capacity-evidence work (PRODUCT_STRATEGY
-   6.0.0 row 1 shares the fixture).
-2. Partitioning guidance for BQ/SF (`fetched_at` day partitions vs.
-   `crawl_id` clustering) — document a recommendation, do not enforce.
-3. Incremental exports (crawl deltas) — out of scope for v1; the
-   idempotency rule makes a later addition non-breaking if `crawl_runs`
-   carries a monotonic sequence from day one (accepted into v1: yes, as
-   a nullable column).
+**Resolved 2026-09-16** — evidence in
+`docs/capacity/2026-09-16-adr016-open-questions/` (measurement on the real
+5 001-page / 816 711-findings Postgres capacity corpus):
+
+1. Parquet compression/encoding defaults: **keep
+   `Compression::ZSTD(Default::default())`** — 21.4 MB findings Parquet vs
+   351.9 MB JSONL (≈16.5×), 14.8 s export for 816 711 rows, far inside the
+   capacity plan's 120 s 100k-class gate. Re-measure only if that gate is
+   ever approached. (Also fixed while measuring: `PgStorage::get_pages`
+   bound `usize::MAX` as a negative LIMIT.)
+2. Partitioning guidance for BQ/SF: **day-partition on `fetched_at`,
+   cluster by `crawl_id`** — recommendation documented in the evidence
+   record, not enforced by the writer (per §2.4 status discipline).
+3. Incremental exports (crawl deltas): out of scope for v1; the nullable
+   monotonic `sequence` column shipped in schema v1, so the later addition
+   is non-breaking. Closed.

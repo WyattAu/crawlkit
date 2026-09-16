@@ -1,0 +1,39 @@
+# Hosted free-scan scanner (ADR-012) — production image.
+# Build:  docker build -f Dockerfile.scanner --build-arg FEATURES=shared-budget -t crawlkit-scanner .
+# Default build (no FEATURES arg) is the single-replica in-memory posture.
+# The multi-replica posture requires --build-arg FEATURES=shared-budget
+# (runbook §2; fail-closed without it — see SCANNER_DEPLOY.md).
+
+FROM rust:1.94-slim AS builder
+
+RUN apt-get update && apt-get install -y pkg-config libssl-dev && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+COPY Cargo.toml Cargo.lock ./
+COPY crates/ crates/
+COPY workspace-hack/ workspace-hack/
+
+# FEATURES is an ARG (not ENV) so the default posture build stays unprivileged;
+# an empty value keeps cargo's default feature set.
+ARG FEATURES=""
+RUN if [ -n "$FEATURES" ]; then \
+        cargo build --release -p crawlkit-scanner --features "$FEATURES"; \
+    else \
+        cargo build --release -p crawlkit-scanner; \
+    fi
+
+FROM debian:bookworm-slim AS runtime
+
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN useradd --create-home --shell /bin/bash crawlkit
+
+COPY --from=builder /app/target/release/crawlkit-scanner /usr/local/bin/
+
+USER crawlkit
+EXPOSE 8090
+
+# Posture is selected by CRAWLKIT_BUDGET_BACKEND (unset = single-replica
+# in-memory). Multi-replica also needs CRAWLKIT_REDIS_URL — startup aborts
+# when the backend is redis and the URL is missing (fail-closed by design).
+ENV RUST_LOG=info
+ENTRYPOINT ["crawlkit-scanner"]

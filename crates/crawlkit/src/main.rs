@@ -280,6 +280,12 @@ async fn main() -> Result<()> {
                 QueueCommands::Redrive { index, crawl_id } => {
                     cli::queue::redrive(index, &target(&crawl_id), &redis_url).await
                 }
+                QueueCommands::NamespaceList => cli::queue::namespace_list(&redis_url).await,
+                QueueCommands::NamespacePurge {
+                    crawl_id,
+                    all,
+                    force,
+                } => cli::queue::namespace_purge(crawl_id, all, force, &redis_url).await,
             }
         }
         #[cfg(feature = "full")]

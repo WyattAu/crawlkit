@@ -542,6 +542,23 @@ pub enum QueueCommands {
         #[arg(long)]
         crawl_id: Option<String>,
     },
+    /// Namespace hygiene: list every crawl namespace's queue volumes (NDJSON)
+    NamespaceList,
+    /// Namespace hygiene: clear a namespace's queue keys (pending, leases,
+    /// dead letters, visited). Refuses namespaces with live leases unless
+    /// --force. The 2026-09-16 capacity finding: stale namespaces grind
+    /// workers through breaker/backoff storms on dead hosts.
+    NamespacePurge {
+        /// Namespace (crawl ID) to purge
+        #[arg(long)]
+        crawl_id: Option<String>,
+        /// Purge every discovered namespace
+        #[arg(long)]
+        all: bool,
+        /// Purge even when entries are leased to a live worker
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.

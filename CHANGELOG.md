@@ -9,6 +9,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Scanner deploy dry-run**
+  (`docs/capacity/2026-09-16-scanner-deploy-dryrun/`): the redis-posture
+  bundle (`Dockerfile.scanner`, `docker-compose.scanner.yml`) executed
+  end-to-end — 2 replicas, posture log confirmed, submission on one
+  replica executed via the Redis queue and served by the other, metrics
+  and shared daily budget verified. Only the production XFF-overwriting
+  proxy remains operator-side.
+- Queue namespace-hygiene operator surface (ADR-015 §3 extension):
+  `crawlkit queue namespace list` (per-namespace volumes, NDJSON) and
+  `crawlkit queue namespace purge [--all] [--force]` — the fix for the
+  100k-run finding that stale namespaces grind workers through
+  breaker/backoff storms on dead hosts. Purge refuses namespaces with
+  live leases unless forced. Pinned by Redis-backed tests.
+- ADR-016 open questions resolved with measurement
+  (`docs/capacity/2026-09-16-adr016-open-questions/`): zstd-default
+  Parquet kept (21.4 MB vs 351.9 MB JSONL, ≈16.5×; 14.8 s per 816 711
+  findings — well inside the 100k-class 120 s gate); BQ/SF partition
+  guidance documented (day-partition `fetched_at`, cluster `crawl_id`);
+  incremental-export reserved column already in v1.
+- 6.0.0-alpha rolling-prerelease plan (`docs/RELEASE_6_0_0_ALPHA_PLAN.md`):
+  warehouse contracts → render budgets → metering → stable, modeled on
+  the 5.3.0 cadence decision.
+
+### Fixed
+
+- `PgStorage::get_pages` / `get_pages_for_tenant` bound the "everything"
+  sentinel (`usize::MAX`) as a negative Postgres `LIMIT`, breaking the
+  warehouse exporter against Postgres-backed storage; the bridge now
+  clamps to `i64::MAX` (SQLite path unaffected).
+
 - **Scanner GA signed (2026-09-15)**: ownership acceptance recorded in the
   runbook §7 (`hosted_scanner` → `stable-with-configuration` in
   `docs/capabilities.toml`; issue #19 closed). Accepted constraints recorded

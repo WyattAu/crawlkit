@@ -558,6 +558,9 @@ impl StorageBackend for PgStorage {
     fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
+        // Callers use usize::MAX for "everything" (warehouse export does);
+        // clamp to Postgres's positive bigint range so the LIMIT stays valid.
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
@@ -566,7 +569,7 @@ impl StorageBackend for PgStorage {
                  FROM pages WHERE crawl_id = $1 ORDER BY fetched_at ASC LIMIT $2",
             )
             .bind(&crawl_id)
-            .bind(limit as i64)
+            .bind(limit)
             .fetch_all(&pool)
             .await?;
 
@@ -586,6 +589,7 @@ impl StorageBackend for PgStorage {
         let pool = self.pool.clone();
         let crawl_id = crawl_id.to_string();
         let tenant_id = tenant_id.to_string();
+        let limit = i64::try_from(limit).unwrap_or(i64::MAX);
 
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
@@ -596,7 +600,7 @@ impl StorageBackend for PgStorage {
             )
             .bind(&crawl_id)
             .bind(&tenant_id)
-            .bind(limit as i64)
+            .bind(limit)
             .fetch_all(&pool)
             .await?;
 

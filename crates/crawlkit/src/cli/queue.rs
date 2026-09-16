@@ -16,6 +16,14 @@
 //! `redis://127.0.0.1/`). The queue is namespaced per crawl ID; use
 //! `--crawl-id` to select the namespace, or omit it to inspect every
 //! namespace's dead-letter set via the shared `crawlkit:*:dead` pattern.
+//!
+//! Namespace hygiene (2026-09-16 capacity finding): stale namespaces with
+//! pending entries from dead runs/hosts grind through breaker/backoff
+//! storms before reaching fresh work — score-ordered pops hit the oldest
+//! first. `crawlkit queue namespace list` surfaces every namespace's
+//! volumes; `crawlkit queue namespace purge` clears one (or all with
+//! `--all`), refusing when the namespace still holds leased work unless
+//! `--force` is given.
 
 use anyhow::{bail, Context, Result};
 use crawlkit_engine::distributed_queue::DistributedQueue;
@@ -130,6 +138,79 @@ pub async fn redrive(index: usize, target: &Target, redis_url: &str) -> Result<(
         bail!("entry {index} vanished while redriving; re-run `crawlkit queue dead-letter list`");
     }
     println!("redrived entry {index} from crawl {crawl_id}");
+    Ok(())
+}
+
+/// Namespace hygiene: list every crawl namespace's volumes (NDJSON).
+pub async fn namespace_list(redis_url: &str) -> Result<()> {
+    let client = redis::Client::open(redis_url).context("invalid CRAWLKIT_REDIS_URL")?;
+    let mut conn = client
+        .get_connection_manager()
+        .await
+        .context("cannot connect to Redis")?;
+    for crawl_id in DistributedQueue::discover_namespaces(&mut conn).await? {
+        let queue = DistributedQueue::new(redis_url, &crawl_id).context("queue handle")?;
+        let stats = queue.stats().await?;
+        println!(
+            "{}",
+            serde_json::to_string(&stats).context("serialize namespace stats")?
+        );
+    }
+    Ok(())
+}
+
+/// Namespace hygiene: clear one namespace (or all with `all`). Refuses
+/// namespaces with in-flight leases unless `force` — those entries belong
+/// to a live worker, and clearing under it turns its eventual acks into
+/// silent no-ops while its failures can resurrect cleared URLs.
+pub async fn namespace_purge(
+    crawl_id: Option<String>,
+    all: bool,
+    force: bool,
+    redis_url: &str,
+) -> Result<()> {
+    if !all && crawl_id.is_none() {
+        bail!("specify --crawl-id <id> or --all");
+    }
+    let client = redis::Client::open(redis_url).context("invalid CRAWLKIT_REDIS_URL")?;
+    let mut conn = client
+        .get_connection_manager()
+        .await
+        .context("cannot connect to Redis")?;
+    let ids = match (&crawl_id, all) {
+        (_, true) => DistributedQueue::discover_namespaces(&mut conn).await?,
+        (Some(id), false) => vec![id.clone()],
+        (None, false) => unreachable!("guarded above"),
+    };
+    if ids.is_empty() {
+        bail!("no crawl namespaces found");
+    }
+    let mut purged = 0usize;
+    for id in &ids {
+        let queue = DistributedQueue::new(redis_url, id).context("queue handle")?;
+        let stats = queue.stats().await?;
+        if stats.processing > 0 && !force {
+            eprintln!(
+                "skipped {id}: {} entr{} leased to a live worker (use --force)",
+                stats.processing,
+                if stats.processing == 1 {
+                    "y is"
+                } else {
+                    "ies are"
+                }
+            );
+            continue;
+        }
+        queue.clear().await?;
+        println!(
+            "purged {id} (pending {}, dead {}, visited {})",
+            stats.pending, stats.dead, stats.visited
+        );
+        purged += 1;
+    }
+    if purged == 0 && !ids.is_empty() {
+        bail!("nothing purged; every namespace held live leases");
+    }
     Ok(())
 }
 
@@ -288,6 +369,85 @@ mod tests {
                 .is_err(),
             "empty namespace index 7 must be out of range"
         );
+        queue.clear().await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Redis instance"]
+    async fn namespace_list_discovers_and_purge_clears() {
+        let crawl_id = unique_crawl_id("ns");
+        let queue = DistributedQueue::new(&redis_url(), &crawl_id).unwrap();
+        queue.clear().await.unwrap();
+        let entry = crawlkit_engine::distributed_queue::DistributedQueueEntry::new(
+            &format!("https://example.com/{}", now_ms()),
+            0,
+            10,
+            now_ms(),
+        );
+        queue.push(&entry).await.unwrap();
+
+        let mut conn = redis::Client::open(redis_url())
+            .unwrap()
+            .get_connection_manager()
+            .await
+            .unwrap();
+        let discovered = DistributedQueue::discover_namespaces(&mut conn)
+            .await
+            .unwrap();
+        assert!(
+            discovered.contains(&crawl_id),
+            "namespace with a pending entry must be discovered: {discovered:?}"
+        );
+
+        // list runs end-to-end and reports the namespace's volumes.
+        namespace_list(&redis_url()).await.unwrap();
+        let stats = queue.stats().await.unwrap();
+        assert_eq!(stats.pending, 1);
+        assert_eq!(stats.visited, 1);
+
+        // Purge clears it; the namespace vanishes from discovery.
+        namespace_purge(Some(crawl_id.clone()), false, false, &redis_url())
+            .await
+            .unwrap();
+        let after = queue.stats().await.unwrap();
+        assert_eq!(after.pending, 0);
+        assert_eq!(after.visited, 0);
+        let discovered = DistributedQueue::discover_namespaces(&mut conn)
+            .await
+            .unwrap();
+        assert!(
+            !discovered.contains(&crawl_id),
+            "purged namespace must vanish from discovery"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires running Redis instance"]
+    async fn namespace_purge_refuses_live_leases_without_force() {
+        let crawl_id = unique_crawl_id("nslease");
+        let queue = DistributedQueue::new(&redis_url(), &crawl_id).unwrap();
+        queue.clear().await.unwrap();
+        let entry = crawlkit_engine::distributed_queue::DistributedQueueEntry::new(
+            &format!("https://example.com/{}", now_ms()),
+            0,
+            10,
+            now_ms(),
+        );
+        queue.push(&entry).await.unwrap();
+        let _lease = queue.pop().await.unwrap().expect("entry leased");
+
+        assert!(
+            namespace_purge(Some(crawl_id.clone()), false, false, &redis_url())
+                .await
+                .is_err(),
+            "purge must refuse a namespace with live leases"
+        );
+        assert_eq!(queue.stats().await.unwrap().processing, 1, "lease intact");
+
+        namespace_purge(Some(crawl_id.clone()), false, true, &redis_url())
+            .await
+            .unwrap();
+        assert_eq!(queue.stats().await.unwrap().processing, 0);
         queue.clear().await.unwrap();
     }
 }

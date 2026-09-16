@@ -386,9 +386,24 @@ pub struct DistributedQueue {
     client: redis::Client,
     manager: std::sync::Arc<tokio::sync::OnceCell<ConnectionManager>>,
     prefix: String,
+    crawl_id: String,
     lease_ttl_ms: i64,
     max_attempts: u32,
     dead_letter_cap: usize,
+}
+
+/// Per-namespace cardinalities (operator surface, ADR-015 §3).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NamespaceStats {
+    pub crawl_id: String,
+    /// Entries in the pending zset (includes future-scored backoff entries).
+    pub pending: i64,
+    /// Entries currently leased (processing hash).
+    pub processing: i64,
+    /// Quarantined dead letters.
+    pub dead: i64,
+    /// Distinct URLs ever seen (visited set; never auto-shrinks).
+    pub visited: i64,
 }
 
 impl DistributedQueue {
@@ -430,6 +445,7 @@ impl DistributedQueue {
             client,
             manager: std::sync::Arc::new(tokio::sync::OnceCell::new()),
             prefix: format!("crawlkit:{crawl_id}"),
+            crawl_id: crawl_id.to_string(),
             lease_ttl_ms,
             max_attempts,
             dead_letter_cap,
@@ -719,6 +735,80 @@ impl DistributedQueue {
             .await
             .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
         Ok(is_member)
+    }
+
+    /// Per-namespace cardinalities for the operator surface
+    /// (`crawlkit queue namespace list`). Scan with cursor 0 so future
+    /// scores (backoff) still count — operators need the *total* stuck
+    /// volume, not just the currently-eligible subset.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RedisQueueError`] on connection failure.
+    pub async fn stats(&self) -> Result<NamespaceStats, RedisQueueError> {
+        let mut conn = self.manager().await?;
+        let (pending, processing, dead, visited): (i64, i64, i64, i64) = redis::pipe()
+            .cmd("ZCARD")
+            .arg(self.key("pending"))
+            .cmd("HLEN")
+            .arg(self.key("processing"))
+            .cmd("ZCARD")
+            .arg(self.key("dead"))
+            .cmd("SCARD")
+            .arg(self.key("visited"))
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
+        Ok(NamespaceStats {
+            crawl_id: self.crawl_id().to_string(),
+            pending,
+            processing,
+            dead,
+            visited,
+        })
+    }
+
+    /// The crawl ID this queue is namespaced under.
+    pub fn crawl_id(&self) -> &str {
+        &self.crawl_id
+    }
+
+    /// Every crawl namespace present in Redis (any of the five queue keys
+    /// exists), sorted for deterministic operator output.
+    ///
+    /// Uses a cursor-free `KEYS` match, same as the dead-letter surface —
+    /// acceptable at the crawl-namespace cardinalities this operates at;
+    /// never call per-pop.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`RedisQueueError`] on connection failure.
+    pub async fn discover_namespaces(
+        conn: &mut ConnectionManager,
+    ) -> Result<Vec<String>, RedisQueueError> {
+        let keys: Vec<String> = conn
+            .keys("crawlkit:*")
+            .await
+            .map_err(|e| RedisQueueError::OperationFailed(e.to_string()))?;
+        let mut ids: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for k in keys {
+            // `crawlkit:{id}:{pending|processing|leases|dead|visited}`;
+            // skip everything else (scanner uses `crawlkit:scanner:*`).
+            let rest = match k.strip_prefix("crawlkit:") {
+                Some(r) => r,
+                None => continue,
+            };
+            if let Some((id, suffix)) = rest.rsplit_once(':') {
+                if matches!(
+                    suffix,
+                    "pending" | "processing" | "leases" | "dead" | "visited"
+                ) && !id.is_empty()
+                {
+                    ids.insert(id.to_string());
+                }
+            }
+        }
+        Ok(ids.into_iter().collect())
     }
 
     /// Clear all keys for this crawl namespace.

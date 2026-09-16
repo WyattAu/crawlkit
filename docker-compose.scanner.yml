@@ -1,0 +1,53 @@
+# Scanner multi-replica posture (runbook §2) — validated dry-run compose.
+# The reference shape lives in docs/deploy/SCANNER_DEPLOY.md; this file is
+# the executable version used for the pre-launch dry-run (2026-09-16).
+#
+# Proxy invariant reminder: in production this sits behind a proxy that
+# OVERWRITES X-Forwarded-For (never appends) with the shared proxy rate
+# limit. This compose has no proxy — loopback testing only.
+#
+# Abuse ceilings: the code defaults ARE the ceiling (api.rs: 5 000 scans/day
+# service-wide, 10 submissions/min per IP) and env can only LOWER them. Set
+# these to the signed runbook §7 numbers when they differ from the defaults;
+# empty here means "use the code ceiling".
+
+services:
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  scanner:
+    image: crawlkit-scanner:shared-budget
+    build:
+      context: .
+      dockerfile: Dockerfile.scanner
+      args:
+        FEATURES: shared-budget
+    environment:
+      CRAWLKIT_BUDGET_BACKEND: redis
+      CRAWLKIT_REDIS_URL: redis://redis:6379/
+      CRAWLKIT_SCANNER_PORT: "8090"
+      CRAWLKIT_SCANNER_DAILY_BUDGET: "${SCANNER_DAILY_BUDGET:-5000}"
+      CRAWLKIT_SCANNER_IP_LIMIT_PER_MIN: "${SCANNER_IP_LIMIT_PER_MIN:-10}"
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8090"
+    healthcheck:
+      test: ["CMD", "sh", "-c", "command -v curl >/dev/null && curl -fsS http://127.0.0.1:8090/healthz || wget -qO- http://127.0.0.1:8090/healthz"]
+      interval: 10s
+      timeout: 3s
+      retries: 6
+    deploy:
+      replicas: 2
+
+volumes:
+  redis-data:

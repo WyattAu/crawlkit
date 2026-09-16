@@ -76,6 +76,13 @@ stand ready to execute:
    the constraint accepted with the §7 signature.
 2. Verify: `GET /healthz` live, one real self-scan end-to-end, `/metrics`
    scraped by the dashboard (docs/SCANNER_DASHBOARDS.md).
+   **Dry-run executed 2026-09-16** (docs/capacity/2026-09-16-scanner-deploy-dryrun/):
+   the deploy bundle (Dockerfile.scanner + docker-compose.scanner.yml) was
+   exercised end-to-end — both replicas green, posture log confirmed
+   `budget_backend=Redis queue_mode=true`, submission on replica 1 executed
+   via the Redis queue and served by replica 2, metrics + shared daily
+   budget verified. The only untestable-locally step is the production
+   XFF-overwriting proxy.
 3. Publish the GA_SIGNOFF_PACKAGE §2 copy **verbatim** — it is the only
    approved description of the free scan.
 4. Record the deployment in runbook §6.1 (drill log) with date + revision.

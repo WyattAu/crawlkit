@@ -190,7 +190,12 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    3-run valid set, 51.8–58.8 p/s, RSS peak 131–138 MB — the like-for-like
    per-worker anchor: lease overhead ~5–11% at reference scale (the
    2×5 000 set's ~10% aggregate figure overstated per-URL cost because
-   closeout dominates smaller runs).
+   closeout dominates smaller runs). **Paired same-HEAD refresh measured**
+   (`docs/capacity/2026-09-16-queue-overhead-refresh/`): inline vs queue,
+   2 × 5 000 pages, 3-run sets each on one commit in one session — inline
+   112.6–117.4 p/s vs queue 95.9–98.7 p/s, lease overhead ≈ 14.5%
+   mean-to-mean, RSS unchanged. The paired ratio is the citable number;
+   cross-session absolute comparisons remain invalid by this plan's rules.
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
 numbers (CI cannot provide it); whether the report renders into

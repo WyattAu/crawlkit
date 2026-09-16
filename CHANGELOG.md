@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   51.8–58.8 pages/s (13.5% spread), RSS peak 131–138 MB — lease overhead
   at reference scale is ~5–11% per worker vs the inline posture,
   amortizing better than the 2 × 5 000 runs suggested.
+- **Queue-overhead refresh, paired same-HEAD**
+  (`docs/capacity/2026-09-16-queue-overhead-refresh/`): inline vs Redis
+  lease queue, 2 × 5 000 pages, 3-run sets each on the same commit in one
+  session — inline 112.6–117.4 p/s vs queue 95.9–98.7 p/s (spreads 2.1%
+  and 2.8%), lease overhead ≈ 14.5% mean-to-mean; RSS unchanged by queue
+  mode. Supersedes cross-session overhead estimates as the citable paired
+  ratio.
 - **Redis lease queue in the crawl frontier (ADR-015 in the crawl path)**:
   `DistributedQueueAdapter` implements the engine's `Queue` trait over the
   graduated lease queue — every dispatched URL is a leased pop, acked on

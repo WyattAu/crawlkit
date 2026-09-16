@@ -1,0 +1,78 @@
+name: CI Health Audit
+
+# Observability for silent CI failure modes (2026-09-16 diagnosis): GitHub
+# reports a job killed by its `timeout-minutes` as job-level `cancelled`
+# with zero failed jobs, which reads as an external cancellation and hides
+# the real signal. This workflow audits the day's CI runs on main and
+# annotates any timeout-shaped cancellation so the next occurrence is
+# diagnosable from the Actions UI instead of requiring a manual timeline
+# pull.
+
+on:
+  schedule:
+    - cron: '23 5 * * *' # daily; staggered off the hour
+  workflow_dispatch: {}
+
+concurrency:
+  group: ci-health-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  timeout-audit:
+    name: Timeout-cancellation audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Find CI runs cancelled inside a single job while all others passed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          since=$(date -u -d '25 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Auditing CI runs on main created since $since"
+
+          gh api "repos/${GITHUB_REPOSITORY}/actions/workflows/ci.yml/runs?branch=main&created=>=${since}&per_page=100" \
+            --paginate \
+            --jq '.workflow_runs[] | select(.conclusion == "cancelled") | .id' > /tmp/runs.txt
+          count=$(wc -l < /tmp/runs.txt)
+          echo "Cancelled runs found: $count"
+
+          found=0
+          while read -r run_id; do
+            [ -z "$run_id" ] && continue
+            # A timeout-shaped cancellation: exactly one cancelled job, zero
+            # failed jobs, every other job successful.
+            pattern=$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs" \
+              --jq '[.jobs[] | .conclusion // "none"] |
+                    group_by(.) |
+                    map({(.[0]): length}) |
+                    add // {}')
+            echo "run ${run_id}: ${pattern}"
+            cancelled=$(echo "$pattern" | jq '.cancelled // 0')
+            failed=$(echo "$pattern" | jq '.failure // 0')
+            others=$(echo "$pattern" | jq '[to_entries[] | select(.key != "cancelled" and .key != "success") | .value] | add // 0')
+            if [ "$cancelled" -ge 1 ] && [ "$failed" -eq 0 ] && [ "$others" -eq 0 ]; then
+              echo "::warning title=CI timeout-shaped cancellation::run ${run_id} had one cancelled job and zero failed jobs — check the cancelled job's started/completed gap against its timeout-minutes (see .github/workflows/ci.yml semver: comment)"
+              gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs" \
+                --jq '.jobs[] | select(.conclusion == "cancelled") | "  suspect: \(.name) started \(.started_at) ended \(.completed_at)"'
+              found=$((found + 1))
+            fi
+          done < /tmp/runs.txt
+
+          echo "Timeout-shaped cancellations in the window: $found"
+          # Observability, not enforcement: annotate and surface in the job
+          # summary, but keep the audit itself green — the CI failure modes
+          # it reports have already happened by the time it runs.
+          {
+            echo "## CI health audit ($(date -u +%Y-%m-%d))"
+            echo ""
+            echo "- CI runs audited (cancelled): $count"
+            echo "- Timeout-shaped cancellations: $found"
+            echo ""
+            echo "A timeout-shaped cancellation = exactly one cancelled job, zero"
+            echo "failed jobs. Suspects are annotated as workflow warnings."
+          } >> "$GITHUB_STEP_SUMMARY"

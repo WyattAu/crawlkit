@@ -30,6 +30,16 @@ base the 6.0.0 stable gate requires.
 green in CI for all three destinations; no schema drift against
 `schemas/export/v1` (drift gate extended to warehouse manifests).
 
+**Progress 2026-09-16:** ADR-016 open questions closed by measurement;
+destination layout plans landed (`crawlkit export --layout
+s3|bigquery|snowflake` — deterministic NDJSON plans rendered from the
+manifest bindings, pinned by unit tests); ADR-017 metering spec drafted
+for the alpha.3 stream. **Remaining for this cut:** destination clients
+(BQ load jobs, SF COPY against a stage, S3 multipart upload), live
+round-trip contract tests (BQ emulator / MinIO), exporter failure metrics
+on the 5.3.0 surface. **The tag is NOT cut until the exit criteria are
+green** — per the cadence rule above.
+
 ### 6.0.0-alpha.2 — "Render Budgets"
 
 | Item | Gate | Notes |

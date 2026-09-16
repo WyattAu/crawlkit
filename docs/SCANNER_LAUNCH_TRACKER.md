@@ -57,6 +57,7 @@ in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 | 2026-09-16 | `fdd282e1` | 3 / 5 | streak rebuild holding on the normalized gate |
 | 2026-09-16 | `2288c867` | 4 / 5 | streak rebuild holding on the normalized gate |
 | 2026-09-16 | `437e7861` | 4 / 5 (held) | tip's CI cancelled 4× — diagnosed as the `Semver Check` job hitting its 15-min timeout (reported as job-level `cancelled`, zero failed jobs; every other job green). Timeout raised to 30 min (`d8567630`); the streak count is held, not reset — no job failed. |
+| 2026-09-16 | `e13dbcaa` | **5 / 5** | **GATE MET.** Semver Check completed in 16m43s under the raised timeout — confirming it genuinely needs >15 min. The streak includes two enforcing capacity runs on the machine-normalized gate. |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to
@@ -65,9 +66,11 @@ runs.
 
 ## 2. On reaching 5 / 5
 
-**Reached 2026-09-15** (`d0a7029c`), then **reset** the same day before
-the launch procedure executed (Reset 1). The steps below stand ready for
-when the streak rebuilds:
+**Reached 2026-09-15** (`d0a7029c`), reset the same day (Reset 1), reached
+again **2026-09-16** (`e13dbcaa`) after the capacity gate was
+machine-normalized (Resets 2–4) and the semver job timeout was fixed.
+The steps below are **operator-owned** (deployment + public copy) and
+stand ready to execute:
 1. Deploy the scanner in the `redis` posture (runbook §2): behind a proxy
    that overwrites `X-Forwarded-For`, with the shared proxy rate limit —
    the constraint accepted with the §7 signature.

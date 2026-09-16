@@ -381,6 +381,19 @@ pub enum Commands {
         #[arg(long, value_enum, default_value = "parquet")]
         format: export_warehouse::ExportFormat,
 
+        /// Print the destination layout plan (NDJSON) instead of exporting:
+        /// `--layout s3` | `--layout bigquery --dataset D` | `--layout snowflake --stage S`
+        #[arg(long, value_enum)]
+        layout: Option<export_warehouse::LayoutDestination>,
+
+        /// BigQuery dataset for `--layout bigquery`
+        #[arg(long, default_value = "crawlkit")]
+        dataset: String,
+
+        /// Snowflake stage for `--layout snowflake`
+        #[arg(long, default_value = "crawlkit")]
+        stage: String,
+
         /// Directory receiving the exported table files
         #[arg(short, long, default_value = "warehouse-export")]
         output: PathBuf,

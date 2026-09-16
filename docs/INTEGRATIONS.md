@@ -63,6 +63,19 @@ Read-only GA4 Data API v1beta connector per ADR-013 (`.adrs/ADR-013-ga4-connecto
 - **Testability.** Both the token endpoint and Data API base URL are injectable; error paths (HTTP errors, malformed JSON, connection refusal, OAuth rejection) are hermetically tested with no Google dependency in CI. Transport errors are URL-scrubbed (the CrUX/GSC leak class).
 - **Quotas.** GA4 Data API 429/5xx classify as retryable for `loop_retry` backoff; other 4xx are fatal.
 
+## Warehouse export (BigQuery / Snowflake / S3 — in development, 6.0.0-alpha.1)
+
+Export any crawl to warehouse destinations over the ADR-016 v1 schema contract. Status: **in development** — the export engine and load manifests are shipped and contract-tested; destination clients land in 6.0.0-alpha.1.
+
+What exists today (`crawlkit export --db <db> [--crawl-id ID] [--format parquet|jsonl]`):
+
+- **Parquet binding** (S3 / data-lake): key-sorted, zstd-compressed, byte-identical re-exports (idempotent overwrite per crawl). Measured: 21.4 MB vs 351.9 MB JSONL on an 816 711-finding corpus (docs/capacity/2026-09-16-adr016-open-questions/).
+- **JSONL binding** (BigQuery / Snowflake): NDJSON table files plus the `_schema` load manifest carrying the schema version and per-table BigQuery/Snowflake column types from `schemas/export/v1/*.toml`.
+- **Layout plans** (`crawlkit export --layout s3|bigquery|snowflake`): the crawl-scoped object prefix, the exact files to upload, and the destination load-command shape — deterministic NDJSON a pipeline can diff to detect drift. Types are read from the manifest bindings; a missing binding is a build-time contract error, never a load-time surprise.
+- **Round-trip evidence**: the migration drill (`crates/crawlkit-engine/tests/warehouse_drill.rs`) proves export → independent-reader load → query → verify on both bindings, and the ADR-016 evidence report records the compression/latency measurements.
+
+The manifest (`schemas/export/v1/`) is the only source of truth for types; the DDL fragments and load commands are conveniences rendered from it.
+
 ## Alert channels (experimental — Slack, Teams)
 
 Crawl-lifecycle alerts to human channels per ADR-014 (`.adrs/ADR-014-alert-channels.md`). Slack (Block Kit) and Teams (MessageCard) renderers deliver over the same loop-retry pipeline as webhooks — transport errors and 5xx/429 retry, other 4xx fatal.

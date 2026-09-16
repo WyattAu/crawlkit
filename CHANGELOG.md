@@ -31,6 +31,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 6.0.0-alpha rolling-prerelease plan (`docs/RELEASE_6_0_0_ALPHA_PLAN.md`):
   warehouse contracts → render budgets → metering → stable, modeled on
   the 5.3.0 cadence decision.
+- **6.0.0-alpha.1 groundwork — destination layout plans**: `crawlkit
+  export --layout s3|bigquery|snowflake` renders the crawl-scoped upload
+  plan (files + roles + load-command shape) as deterministic NDJSON from
+  the ADR-016 manifest bindings; a missing per-warehouse column binding
+  is a build-time contract error, never a load-time surprise. Usage
+  metering and quotas specified in ADR-017 (proposed; per-tenant,
+  storage-adjacent counters, unmetered default, ADR-012 exhaustion
+  posture).
 
 ### Fixed
 

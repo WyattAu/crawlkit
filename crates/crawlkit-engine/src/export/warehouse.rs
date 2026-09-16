@@ -882,6 +882,156 @@ pub struct JsonlCrawlExport {
     pub manifest: Vec<u8>,
 }
 
+/// Warehouse destination layout plan (6.0.0-alpha.1 groundwork): every
+/// object/file a destination upload needs, with the load command shape per
+/// destination. Deterministic — same inputs, byte-identical plan — so a
+/// pipeline can diff plans to detect drift before uploading.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct DestinationLayout {
+    /// Destination family: `s3`, `bigquery`, or `snowflake`.
+    pub destination: &'static str,
+    /// Crawl-scoped object/file prefix (ADR-016 §3 crawl-scoping rule).
+    pub prefix: String,
+    /// Files to upload (name → role). Roles are stable identifiers a
+    /// pipeline keys on, not prose.
+    pub files: Vec<LayoutFile>,
+    /// The load command shape for the destination, with `{stage}` /
+    /// `{dataset}` / `{table}` placeholders for operator secrets. This is
+    /// documentation in machine form; the manifest remains the source of
+    /// truth for column types.
+    pub load_command: String,
+}
+
+/// One file in a [`DestinationLayout`].
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+pub struct LayoutFile {
+    pub name: String,
+    /// `parquet-table`, `jsonl-table`, or `schema-manifest`.
+    pub role: &'static str,
+    /// Table this file belongs to (absent for the cross-table manifest).
+    pub table: Option<&'static str>,
+}
+
+/// Plan the S3 / data-lake layout: Parquet tables under the crawl-scoped
+/// prefix. Idempotent uploads follow from the byte-identical re-export
+/// guarantee (same key → overwrite).
+pub fn s3_layout(crawl_id: &str) -> DestinationLayout {
+    let prefix = format!("exports/{crawl_id}");
+    DestinationLayout {
+        destination: "s3",
+        files: vec![
+            LayoutFile {
+                name: format!("{prefix}/crawl_runs.parquet"),
+                role: "parquet-table",
+                table: Some("crawl_runs"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/pages.parquet"),
+                role: "parquet-table",
+                table: Some("pages"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/findings.parquet"),
+                role: "parquet-table",
+                table: Some("findings"),
+            },
+        ],
+        load_command:
+            "aws s3 cp findings.parquet s3://{bucket}/exports/{crawl_id}/findings.parquet"
+                .to_string(),
+        prefix,
+    }
+}
+
+/// Plan the BigQuery layout: JSONL load files + the `_schema` manifest, with
+/// the `bq load` command shape per table. Types come from the manifests'
+/// `bigquery` bindings via [`bigquery_schema_fragment`].
+pub fn bigquery_layout(crawl_id: &str, dataset: &str) -> Result<DestinationLayout, WarehouseError> {
+    // Fail fast on any missing bigquery binding — a contract gap, not a
+    // runtime condition (§2.4: manifests are data; gaps are build bugs).
+    for m in [
+        crawl_runs_manifest()?,
+        pages_manifest()?,
+        findings_manifest()?,
+    ] {
+        bigquery_schema_fragment(m)?;
+    }
+    let prefix = format!("exports/{crawl_id}");
+    Ok(DestinationLayout {
+        destination: "bigquery",
+        files: vec![
+            LayoutFile {
+                name: format!("{prefix}/crawl_runs.jsonl"),
+                role: "jsonl-table",
+                table: Some("crawl_runs"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/pages.jsonl"),
+                role: "jsonl-table",
+                table: Some("pages"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/findings.jsonl"),
+                role: "jsonl-table",
+                table: Some("findings"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/_schema"),
+                role: "schema-manifest",
+                table: None,
+            },
+        ],
+        load_command: format!(
+            "bq load --source_format=NEWLINE_DELIMITED_JSON --schema={prefix}/_schema \
+             {dataset}.findings {prefix}/findings.jsonl"
+        ),
+        prefix,
+    })
+}
+
+/// Plan the Snowflake layout: JSONL files landed on a stage, loaded per
+/// table with the manifest's `snowflake` binding types.
+pub fn snowflake_layout(crawl_id: &str, stage: &str) -> Result<DestinationLayout, WarehouseError> {
+    for m in [
+        crawl_runs_manifest()?,
+        pages_manifest()?,
+        findings_manifest()?,
+    ] {
+        snowflake_schema_fragment(m)?;
+    }
+    let prefix = format!("exports/{crawl_id}");
+    Ok(DestinationLayout {
+        destination: "snowflake",
+        files: vec![
+            LayoutFile {
+                name: format!("{prefix}/crawl_runs.jsonl"),
+                role: "jsonl-table",
+                table: Some("crawl_runs"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/pages.jsonl"),
+                role: "jsonl-table",
+                table: Some("pages"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/findings.jsonl"),
+                role: "jsonl-table",
+                table: Some("findings"),
+            },
+            LayoutFile {
+                name: format!("{prefix}/_schema"),
+                role: "schema-manifest",
+                table: None,
+            },
+        ],
+        load_command: format!(
+            "COPY INTO {stage}.findings FROM @{stage}/exports/{crawl_id}/findings.jsonl \
+             FILE_FORMAT = (TYPE = JSON)"
+        ),
+        prefix,
+    })
+}
+
 /// Export one crawl from any [`StorageBackend`] into JSONL files for
 /// BigQuery/Snowflake load jobs. Crawl-scoped (ADR-016 §3) and idempotent:
 /// same data → byte-identical bytes.
@@ -1421,5 +1571,39 @@ mod tests {
         assert!(!export.crawl_runs.is_empty());
         assert!(!export.pages.is_empty());
         assert!(!export.findings.is_empty());
+    }
+
+    #[test]
+    fn destination_layouts_are_crawl_scoped_and_deterministic() {
+        let cid = "0123abcd-4321-dcba-ba09-321fedcba012";
+        let s3 = s3_layout(cid);
+        let s3_again = s3_layout(cid);
+        assert_eq!(s3, s3_again, "layout plans must be byte-deterministic");
+        assert!(s3.prefix == format!("exports/{cid}"));
+        assert_eq!(s3.files.len(), 3);
+        assert!(s3.files.iter().all(|f| f.name.starts_with(&s3.prefix)));
+
+        let bq = bigquery_layout(cid, "crawlkit").unwrap();
+        assert_eq!(bq.files.len(), 4, "BQ/SF carry the _schema manifest");
+        assert!(bq
+            .files
+            .iter()
+            .any(|f| f.role == "schema-manifest" && f.table.is_none()));
+        let bq_again = bigquery_layout(cid, "crawlkit").unwrap();
+        assert_eq!(bq, bq_again);
+
+        let sf = snowflake_layout(cid, "crawlkit_stage").unwrap();
+        assert_eq!(sf.files.len(), 4);
+
+        // Every layout file names an existing contract table (or none, for
+        // the cross-table manifest) — guards against table-name drift.
+        let known = ["crawl_runs", "pages", "findings"];
+        for layout in [&s3, &bq, &sf] {
+            for f in &layout.files {
+                if let Some(t) = f.table {
+                    assert!(known.contains(&t), "unknown table {t} in layout");
+                }
+            }
+        }
     }
 }

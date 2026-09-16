@@ -175,8 +175,21 @@ async fn main() -> Result<()> {
             crawl_id,
             tenant,
             format,
+            layout,
+            dataset,
+            stage,
             output,
         } => {
+            // Layout planning is a pure manifest operation: no storage, no
+            // --db requirement. The crawl id is required to scope the prefix.
+            if let Some(destination) = layout {
+                let crawl_id = crawl_id.ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "--crawl-id is required with --layout (the plan is crawl-scoped)"
+                    )
+                })?;
+                return cli::export_warehouse::run_layout(destination, &crawl_id, &dataset, &stage);
+            }
             let db = db.ok_or_else(|| {
                 anyhow::anyhow!("--db is required (path to the crawlkit storage database, e.g. <out-dir>/crawlkit.db)")
             })?;

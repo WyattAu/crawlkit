@@ -36,6 +36,39 @@ impl ExportFormat {
     }
 }
 
+/// Destination family for `crawl export --layout <destination>`: print the
+/// crawl-scoped layout plan (NDJSON) for a warehouse upload without touching
+/// storage (6.0.0-alpha.1 groundwork).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum LayoutDestination {
+    /// S3 / data-lake object prefix (Parquet)
+    S3,
+    /// BigQuery dataset load (JSONL + `_schema`)
+    Bigquery,
+    /// Snowflake stage load (JSONL + `_schema`)
+    Snowflake,
+}
+
+/// Print the destination layout plan for one crawl (NDJSON, one object).
+pub fn run_layout(
+    destination: LayoutDestination,
+    crawl_id: &str,
+    dataset: &str,
+    stage: &str,
+) -> anyhow::Result<()> {
+    use crawlkit_engine::export::warehouse as wh;
+    let layout = match destination {
+        LayoutDestination::S3 => wh::s3_layout(crawl_id),
+        LayoutDestination::Bigquery => wh::bigquery_layout(crawl_id, dataset)?,
+        LayoutDestination::Snowflake => wh::snowflake_layout(crawl_id, stage)?,
+    };
+    println!(
+        "{}",
+        serde_json::to_string(&layout).context("serialize layout plan")?
+    );
+    Ok(())
+}
+
 pub struct ExportParams {
     /// Path to the crawlkit storage database (typically `<out>/crawlkit.db`).
     pub db: PathBuf,

@@ -49,6 +49,7 @@ in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 | 2026-09-15 | `d2066d5b` | 0 / 5 | **Reset 3:** capacity gate failed all 3 attempts at 49–52 p/s, tightly clustered — a sustained slow runner window, not single-sample jitter (retries cannot rescue a uniformly slow window) |
 | 2026-09-15 | `292c8dc9` | 1 / 5 | recovery proven: 65.0 p/s first attempt, baseline within — the slow window was transient |
 | 2026-09-15 | `493eb65b` | 2 / 5 | tracker history commit; first attempt externally cancelled, re-run green with no failed job |
+| 2026-09-15 | `5609cc25` | 3 / 5 | streak rebuild holding |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

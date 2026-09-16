@@ -302,7 +302,12 @@ jobs:
   semver:
     name: Semver Check
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # 30 min (2026-09-16): the workspace's rustdoc-metadata build against
+    # the last tag crosses 15 min on slow hosted-runner windows, and GitHub
+    # reports the timeout as job-level `cancelled` with zero failed jobs —
+    # four run-level cancellations on 2026-09-16 all died inside this job
+    # (started → cancelled ≈ 15:45) while every other job was green.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

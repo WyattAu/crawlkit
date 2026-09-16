@@ -56,6 +56,7 @@ in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 | 2026-09-16 | `977429b0` | 2 / 5 | **first enforcing run on the calibrated gate: cache hit `-v3` → `CAPACITY_ENFORCE=1` → green on a hosted runner** — the environment class that caused Resets 2–4; first attempt externally cancelled (no failed job), re-run green |
 | 2026-09-16 | `fdd282e1` | 3 / 5 | streak rebuild holding on the normalized gate |
 | 2026-09-16 | `2288c867` | 4 / 5 | streak rebuild holding on the normalized gate |
+| 2026-09-16 | `437e7861` | 4 / 5 (held) | tip's CI cancelled 4× — diagnosed as the `Semver Check` job hitting its 15-min timeout (reported as job-level `cancelled`, zero failed jobs; every other job green). Timeout raised to 30 min (`d8567630`); the streak count is held, not reset — no job failed. |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to

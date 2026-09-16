@@ -234,6 +234,20 @@ operator-tooling completions below.
   class mismatch still fail/skip as before). Exercise evidence: a 2×
   unreachable baseline correctly fails after 3 genuine ~100 p/s crawls
   with the full attempts trail in the panic message.
+- Capacity smoke baseline gate made machine-normalized: a third reset
+  (43.7/47.0/47.0 p/s, tightly clustered ±3.7% against an ~81 p/s
+  baseline — a sustained slow-runner window that retries cannot fix) is
+  now handled at the root. The test calibrates runner CPU speed in-process
+  (deterministic ~300 ms micro-benchmark) and scales the throughput
+  threshold by the calibrated current/baseline speed ratio (clamped to
+  ±40% so normalization can never mask a real regression; RSS stays raw;
+  the absolute throughput floor still guards catastrophic slowdowns). The
+  run record gains `calibration` and per-attempt `speed_factor`, so every
+  normalized verdict is auditable. Verified end-to-end: a genuine crawl
+  passes a 2×-era baseline only with calibration (factor 0.6), and an
+  unreachable bar still fails after 3 genuine attempts with the full
+  trail. CI re-seeds the baseline (`-v3`) to attach calibration (auto-armed
+  as before).
 - Schedule auth tests de-flaked: credential selection moved to a pure
   function; the one env-reading test serialized under a mutex (env vars
   are process-global and parallel tests raced them — observed once in

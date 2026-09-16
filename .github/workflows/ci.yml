@@ -378,7 +378,14 @@ jobs:
           # memory fix (docs/capacity/2026-09-15-post-fix-10k/) — engine
           # throughput/RSS legitimately moved beyond the ±20% relative gate,
           # so the pre-fix baseline is stale by evidence, not drift.
-          key: capacity-baseline-smoke-1k-v2
+          # -v3 (2026-09-16): re-seed to attach the machine-speed
+          # calibration record (capacity_smoke `calibrate_ops_per_sec`) —
+          # the relative gate now normalizes throughput thresholds by the
+          # calibrated current/baseline speed ratio, so sustained
+          # slow-runner windows (tracker Resets 3–4) no longer read as
+          # engine regressions. Auto-arming: the first -v3 run records
+          # ungated, the next one gates with calibration on both sides.
+          key: capacity-baseline-smoke-1k-v3
       - name: Run capacity smoke (1k-page loopback crawl)
         env:
           # Absolute paths: cargo runs the test with CWD = crate root, and

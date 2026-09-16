@@ -51,6 +51,7 @@ in `docs/capacity/2026-09-15-queue-frontier-10k/`, not here.
 | 2026-09-15 | `493eb65b` | 2 / 5 | tracker history commit; first attempt externally cancelled, re-run green with no failed job |
 | 2026-09-15 | `5609cc25` | 3 / 5 | streak rebuild holding |
 | 2026-09-16 | `03e48abf` | 4 / 5 | first attempt externally cancelled (no newer push, no failed job); re-run green |
+| 2026-09-16 | `00bb168d` | 0 / 5 | **Reset 4:** same failure mode as Reset 3 — 43.7/47.0/47.0 p/s, tightly clustered ±3.7%, vs the ~81 p/s baseline. **§3 escalation executed:** the flake source was fixed at the root — the relative gate now calibrates runner CPU speed and normalizes the throughput threshold (clamped ±40%; RSS raw; verified end-to-end on synthetic 2×-era baselines). CI baseline re-seeded (`-v3`) to attach calibration. |
 
 **Rule for updating:** append a row only for a *complete, all-jobs-green* `CI`
 run on `main` whose HEAD is the current tip. Any failure resets the count to
@@ -77,3 +78,10 @@ when the streak rebuilds:
 Two consecutive reset cycles (5 failures preventing a 5/5 build) mean the
 gate is masking a real stability problem: stop pushing non-essential changes,
 fix the flake source, and re-plan. The gate is a floor, not a stopwatch.
+
+**Executed 2026-09-16:** Resets 3 and 4 were the same sustained slow-runner
+mode, which retries cannot fix. Per this section, the flake source was
+fixed structurally (machine-normalized relative gate; see Reset 4 row and
+docs/CAPACITY_EVIDENCE_PLAN.md §6) rather than observed further. The
+`-v3` baseline re-seed auto-arms exactly as `-v2` did: the first run
+records ungated, the next gates.

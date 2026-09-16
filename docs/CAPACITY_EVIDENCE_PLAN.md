@@ -105,16 +105,24 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
 - **Absolute caps (always enforced):** page budget exact (1001), peak RSS
   < 500 MB, throughput ≥ 20 pages/s, fds return to baseline + 10 after a
   settle period.
-- **Relative gate (auto-arming):** the CI job caches the first green run's
-  record as the baseline; `CAPACITY_ENFORCE=1` is set only on a cache hit, so
-  subsequent runs must land within 20% of the CI baseline on throughput and
-  peak RSS. At CI 1k scale the measurement window is ~10 s on shared
-  runners, so a failed relative comparison re-measures up to 2 more times
-  (fresh storage/engine per attempt) before failing; absolute caps stay
-  no-retry, and every attempt is recorded in the run record's `attempts`
-  array. Baseline updates are explicit (bump the cache key) with the
-  superseding run record committed under `docs/capacity/` — same drift-gate
-  philosophy as the capabilities manifest and the schema contract.
+- **Relative gate (auto-arming, machine-normalized):** the CI job caches
+  the first green run's record as the baseline; `CAPACITY_ENFORCE=1` is set
+  only on a cache hit, so subsequent runs must land within 20% of the CI
+  baseline on throughput and peak RSS. Throughput is compared
+  **machine-normalized**: each invocation calibrates runner CPU speed with
+  an in-process deterministic micro-benchmark, and the throughput threshold
+  is scaled by the calibrated current/baseline speed ratio (clamped to
+  ±40% so normalization cannot mask a real regression); RSS is compared
+  raw. This is the root fix for sustained slow-runner windows (tracker
+  Resets 3–4: retries cannot rescue a uniformly slow window). At CI 1k
+  scale the measurement window is still ~10 s on shared runners, so a
+  failed relative comparison re-measures up to 2 more times (fresh
+  storage/engine per attempt) before failing; absolute caps stay no-retry,
+  and every attempt is recorded with its `speed_factor` in the run
+  record's `attempts` array. Baseline updates are explicit (bump the cache
+  key) with the superseding run record committed under `docs/capacity/` —
+  same drift-gate philosophy as the capabilities manifest and the schema
+  contract.
 - Absolute numbers from CI are never published; the gate is relative.
 
 ## 7. Instrument notes

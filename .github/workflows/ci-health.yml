@@ -55,7 +55,10 @@ jobs:
             cancelled=$(echo "$pattern" | jq '.cancelled // 0')
             failed=$(echo "$pattern" | jq '.failure // 0')
             others=$(echo "$pattern" | jq '[to_entries[] | select(.key != "cancelled" and .key != "success") | .value] | add // 0')
-            if [ "$cancelled" -ge 1 ] && [ "$failed" -eq 0 ] && [ "$others" -eq 0 ]; then
+            # Timeout shape is EXACTLY one cancelled job with the rest
+            # successful: a superseded push cancels every job at once
+            # (cancelled == job count), so >= 1 would misclassify those.
+            if [ "$cancelled" -eq 1 ] && [ "$failed" -eq 0 ] && [ "$others" -eq 0 ]; then
               echo "::warning title=CI timeout-shaped cancellation::run ${run_id} had one cancelled job and zero failed jobs — check the cancelled job's started/completed gap against its timeout-minutes (see .github/workflows/ci.yml semver: comment)"
               gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs" \
                 --jq '.jobs[] | select(.conclusion == "cancelled") | "  suspect: \(.name) started \(.started_at) ended \(.completed_at)"'

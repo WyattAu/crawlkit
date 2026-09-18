@@ -40,8 +40,8 @@ chrono.workspace = true
 url.workspace = true
 thiserror.workspace = true
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
-rand = "0.8"
-base64 = "0.22"
+rand = "0.10"
+base64 = "0.23"
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 [features]
 # Multi-replica posture (ADR-015 §A1): shared-state politeness budget via
@@ -51,7 +51,7 @@ workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 shared-budget = ["crawlkit-engine/unstable", "dep:redis"]
 
 [dependencies.redis]
-version = "0.25"
+version = "1.6"
 default-features = false
 features = ["tokio-comp", "connection-manager"]
 optional = true

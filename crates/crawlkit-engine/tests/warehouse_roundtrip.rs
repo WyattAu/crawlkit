@@ -8,6 +8,11 @@
 //! explicit reason line — when `WAREHOUSE_S3_ENDPOINT` is unset, so the
 //! plain `cargo test` path stays green everywhere.
 
+// Compiled only with the `warehouse` feature (like `warehouse_drill.rs`):
+// the destination clients are feature-gated, and CI's clippy/roadmap jobs
+// run `--all-targets` on default features, where these imports would not
+// exist. Without this gate the workspace build fails on default features.
+#![cfg(feature = "warehouse")]
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 
 use chrono::Utc;

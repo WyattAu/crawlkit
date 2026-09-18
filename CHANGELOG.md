@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Workspace version bumped to 6.0.0-alpha.1** (no tag cut; the 6.0.0-alpha.1
+  rolling cut remains held per docs/RELEASE_6_0_0_ALPHA_PLAN.md). Required by
+  the semver gate: `Metrics.connector_deliveries_total` (alpha.1 groundwork,
+  below) adds a public field to the exhaustively-constructible `Metrics`
+  struct, which is major-breaking against the `v5.4.0` baseline.
+
 ### Added
 
 - **Scanner deploy dry-run**

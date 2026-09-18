@@ -31,6 +31,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 6.0.0-alpha rolling-prerelease plan (`docs/RELEASE_6_0_0_ALPHA_PLAN.md`):
   warehouse contracts → render budgets → metering → stable, modeled on
   the 5.3.0 cadence decision.
+- **6.0.0-alpha.1 — warehouse destination clients**: S3 SigV4 uploads
+  (single PUT and multipart with `partSize`-driven part count), BigQuery
+  multipart/related load jobs, and Snowflake statement-API COPY commands —
+  all plan-driven from the ADR-016 layout generator, behind an injectable
+  transport seam for contract testing. `crawl export --upload
+  s3://bucket/prefix` (et al.) now exports **and uploads** in one step.
+  Round-trip contract test (`warehouse_roundtrip.rs`): real Parquet →
+  real S3 upload against MinIO → signed read-back byte-compare; runs in
+  CI (MinIO service added to the service-backed job) and locally against
+  any S3-compatible endpoint via `WAREHOUSE_S3_*` env.
 - **6.0.0-alpha.1 groundwork — destination layout plans**: `crawlkit
   export --layout s3|bigquery|snowflake` renders the crawl-scoped upload
   plan (files + roles + load-command shape) as deterministic NDJSON from
@@ -46,6 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sentinel (`usize::MAX`) as a negative Postgres `LIMIT`, breaking the
   warehouse exporter against Postgres-backed storage; the bridge now
   clamps to `i64::MAX` (SQLite path unaffected).
+- Alert delivery is now observable at the metric level:
+  `crawlkit_connector_deliveries_total{channel_type,outcome}` counts every
+  delivery attempt ("ok"/"error"), complementing the per-channel health
+  fields and the escalation log line. Bounded cardinality (fixed channel
+  types), so a tenant cannot explode the label space.
 
 - **Scanner GA signed (2026-09-15)**: ownership acceptance recorded in the
   runbook §7 (`hosted_scanner` → `stable-with-configuration` in

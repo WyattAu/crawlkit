@@ -1,4 +1,6 @@
 pub mod csv;
+#[cfg(feature = "warehouse")]
+pub mod destinations;
 mod helpers;
 pub mod html;
 pub mod json;
@@ -7,6 +9,11 @@ pub mod markdown;
 pub mod warehouse;
 
 pub use csv::{export_csv, CsvColumnSelector};
+#[cfg(feature = "warehouse")]
+pub use destinations::{
+    BigQueryClient, BigQueryConfig, HttpRequest, HttpResponse, LoadError, S3Client, S3Config,
+    SnowflakeClient, SnowflakeConfig, Transport,
+};
 pub use helpers::ExportError;
 pub use html::export_html;
 pub use json::{export_json, JsonCrawlMeta, JsonExport, JsonIssue, JsonPage, JSON_SCHEMA_VERSION};

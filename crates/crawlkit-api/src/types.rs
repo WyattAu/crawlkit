@@ -92,6 +92,16 @@ pub struct Metrics {
     pub crawls_started_by_tenant: Family<TenantLabel, Counter>,
     /// Pages crawled, labeled by tenant (incremented at crawl completion).
     pub pages_by_tenant: Family<TenantLabel, Counter>,
+    /// Alert/connector delivery attempts, labeled by channel type and
+    /// outcome ("ok" | "error"). Bounded cardinality: channel types are a
+    /// fixed enum, so the family cannot grow with channel population.
+    pub connector_deliveries_total: Family<ConnectorDeliveryLabel, Counter>,
+}
+
+#[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
+pub struct ConnectorDeliveryLabel {
+    pub channel_type: String,
+    pub outcome: String,
 }
 
 #[derive(Debug, Hash, Eq, PartialEq, Clone, prometheus_client::encoding::EncodeLabelSet)]
@@ -191,6 +201,13 @@ impl Metrics {
             pages_by_tenant.clone(),
         );
 
+        let connector_deliveries_total = Family::<ConnectorDeliveryLabel, Counter>::default();
+        registry.register(
+            "crawlkit_connector_deliveries_total",
+            "Alert/connector delivery attempts by channel type and outcome",
+            connector_deliveries_total.clone(),
+        );
+
         Self {
             registry: Arc::new(tokio::sync::RwLock::new(registry)),
             crawls_total,
@@ -204,6 +221,7 @@ impl Metrics {
             active_crawls,
             crawls_started_by_tenant,
             pages_by_tenant,
+            connector_deliveries_total,
         }
     }
 }

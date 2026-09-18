@@ -34,11 +34,19 @@ green in CI for all three destinations; no schema drift against
 destination layout plans landed (`crawlkit export --layout
 s3|bigquery|snowflake` — deterministic NDJSON plans rendered from the
 manifest bindings, pinned by unit tests); ADR-017 metering spec drafted
-for the alpha.3 stream. **Remaining for this cut:** destination clients
-(BQ load jobs, SF COPY against a stage, S3 multipart upload), live
-round-trip contract tests (BQ emulator / MinIO), exporter failure metrics
-on the 5.3.0 surface. **The tag is NOT cut until the exit criteria are
-green** — per the cadence rule above.
+for the alpha.3 stream. **Progress 2026-09-17:** destination clients
+landed and CLI-wired (`crawl export --upload s3://|bigquery://|
+snowflake://` — SigV4 S3 single PUT + multipart, BQ multipart/related
+load, Snowflake statement COPY; plan-driven, injectable transport seam);
+S3 round-trip contract test green locally against MinIO and wired into
+CI (MinIO service in the service-backed job); exporter failure metrics
+landed (`crawlkit_connector_deliveries_total{channel_type,outcome}` on
+the 5.3.0 surface). **Remaining for this cut:** BigQuery emulator
+contract test (the BQ client is request-shape-tested but not yet run
+against the emulator in CI), Snowflake stage decision (real dev account
+vs emulator-based), and the no-schema-drift extension of the manifest
+gate. **The tag is NOT cut until the exit criteria are green** — per the
+cadence rule above.
 
 ### 6.0.0-alpha.2 — "Render Budgets"
 

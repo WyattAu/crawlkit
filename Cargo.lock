@@ -1216,6 +1216,7 @@ dependencies = [
  "ego-tree",
  "futures",
  "getrandom 0.2.17",
+ "hmac 0.12.1",
  "http",
  "http-body",
  "http-body-util",

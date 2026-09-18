@@ -131,9 +131,25 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      minio:
+        image: quay.io/minio/minio:latest
+        ports:
+          - 9000:9000
+        options: >-
+          --health-cmd "mc ready local || exit 1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+        env:
+          MINIO_ROOT_USER: crawlkit
+          MINIO_ROOT_PASSWORD: crawlkit-secret
+        cmd: server /data
     env:
       DATABASE_URL: postgres://crawlkit:crawlkit@localhost:5432/crawlkit_test
       REDIS_URL: redis://127.0.0.1:6379/
+      WAREHOUSE_S3_ENDPOINT: http://127.0.0.1:9000
+      WAREHOUSE_S3_ACCESS_KEY: crawlkit
+      WAREHOUSE_S3_SECRET_KEY: crawlkit-secret
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
     steps:
@@ -165,6 +181,18 @@ jobs:
         run: cargo test -p crawlkit --features queue-ops --bin crawlkit queue -- --ignored --test-threads=1
       - name: Redis scanner worker tests (multi-replica posture)
         run: cargo test -p crawlkit-scanner --features shared-budget --lib worker -- --ignored --test-threads=1
+      # Warehouse round-trip contract test: real Parquet export -> real S3
+      # SigV4 upload against MinIO -> read back and byte-compare. Needs a
+      # bucket; create it with the MinIO client bundled in the image.
+      - name: Warehouse S3 round-trip contract test
+        run: |
+          docker exec "$(docker ps -qf name=minio)" sh -c '
+            mc alias set local http://127.0.0.1:9000 crawlkit crawlkit-secret &&
+            (mc stat local/crawlkit-test-exports >/dev/null 2>&1 || mc mb local/crawlkit-test-exports)'
+          # The round-trip test self-skips unless WAREHOUSE_S3_* is set;
+          # the job-level env points it at the MinIO service.
+          cargo test -p crawlkit-engine --features warehouse \
+            --test warehouse_roundtrip
 
   roadmap-controls:
     name: Roadmap and Security Controls

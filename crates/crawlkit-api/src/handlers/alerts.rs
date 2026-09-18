@@ -372,12 +372,14 @@ pub(crate) fn fire_alerts_with_validator(
     let client = state.http_client.clone();
     let store = state.credential_store.clone();
     let channels = state.alert_channels.clone();
+    let metrics = state.metrics.clone();
 
     tokio::spawn(async move {
         for channel in matching {
             let client = client.clone();
             let store = store.clone();
             let channels = channels.clone();
+            let metrics = metrics.clone();
             let validate = validate.clone();
             let event = alert_event.clone();
             tokio::spawn(async move {
@@ -407,6 +409,17 @@ pub(crate) fn fire_alerts_with_validator(
                         Err(e) => Err(format!("credential unavailable: {e}")),
                     },
                 };
+
+                // Exporter/connector failure metric (5.3.0 surface, now
+                // covering alert delivery too): outcome + channel type are
+                // fixed-cardinality labels.
+                metrics
+                    .connector_deliveries_total
+                    .get_or_create(&ConnectorDeliveryLabel {
+                        channel_type: channel.channel_type.clone(),
+                        outcome: if outcome.is_ok() { "ok" } else { "error" }.to_string(),
+                    })
+                    .inc();
 
                 match outcome {
                     Ok(()) => record_success(&channels, &channel.id),

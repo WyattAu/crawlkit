@@ -198,8 +198,11 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    cross-session absolute comparisons remain invalid by this plan's rules.
 
 Open: access to a pinned 8-core/16 GB machine for the published class of
-numbers (CI cannot provide it); whether the report renders into
-`docs/` or the release notes (default: both, release notes link out).
+numbers (CI cannot provide it). Sourcing is specified in
+`docs/REFERENCE_MACHINE_SPEC.md` (options, acceptance checks, fallback
+to an accepted interim machine) — the remaining step is the procurement
+decision itself; whether the report renders into `docs/` or the release
+notes (default: both, release notes link out).
 
 ## 9. What this plan does not claim
 

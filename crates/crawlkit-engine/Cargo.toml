@@ -79,8 +79,8 @@ required-features = ["full"]
 
 [features]
 default = ["full"]
-full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry"]
-warehouse = ["toml", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:parquet"]
+full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "dep:sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry"]
+warehouse = ["toml", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:parquet", "dep:hmac", "dep:sha2"]
 unstable = ["full"]
 wasm = []
 wasi-preview2 = [
@@ -153,6 +153,7 @@ opentelemetry = { version = "0.32", optional = true }
 opentelemetry-otlp = { version = "0.32", features = ["trace", "grpc-tonic"], optional = true }
 opentelemetry_sdk = { version = "0.32", features = ["trace", "rt-tokio"], optional = true }
 loop-retry = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 
 [dev-dependencies]

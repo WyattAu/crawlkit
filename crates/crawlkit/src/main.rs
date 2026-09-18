@@ -179,6 +179,8 @@ async fn main() -> Result<()> {
             dataset,
             stage,
             output,
+            upload,
+            s3_endpoint,
         } => {
             // Layout planning is a pure manifest operation: no storage, no
             // --db requirement. The crawl id is required to scope the prefix.
@@ -199,6 +201,8 @@ async fn main() -> Result<()> {
                 tenant,
                 format,
                 out_dir: output,
+                upload,
+                s3_endpoint,
             })
         }
         #[cfg(feature = "full")]

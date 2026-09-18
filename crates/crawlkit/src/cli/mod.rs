@@ -397,6 +397,21 @@ pub enum Commands {
         /// Directory receiving the exported table files
         #[arg(short, long, default_value = "warehouse-export")]
         output: PathBuf,
+
+        /// Upload the export to a destination instead of (or after) writing
+        /// local files: `s3://bucket/` | `bigquery://project/dataset` |
+        /// `snowflake://account/db/schema/STAGE`. Credentials come from env
+        /// (never CLI flags): AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY for s3,
+        /// BIGQUERY_TOKEN for bigquery, SNOWFLAKE_TOKEN (+SNOWFLAKE_WAREHOUSE)
+        /// for snowflake. Objects are keyed by the crawl-scoped layout plan,
+        /// so re-uploading the same export is idempotent.
+        #[arg(long)]
+        upload: Option<String>,
+
+        /// S3-compatible endpoint override (e.g. http://127.0.0.1:9000 for
+        /// MinIO). Implies path-style addressing.
+        #[arg(long)]
+        s3_endpoint: Option<String>,
     },
 
     /// Analyze trends across multiple crawl snapshots

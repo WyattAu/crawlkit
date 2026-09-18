@@ -79,6 +79,12 @@ pub struct ExportParams {
     pub format: ExportFormat,
     /// Directory receiving the table files (created if missing).
     pub out_dir: PathBuf,
+    /// Upload destination URI (see the CLI help for the scheme grammar).
+    /// `None` keeps the export local-only.
+    pub upload: Option<String>,
+    /// S3-compatible endpoint override (MinIO and friends); implies
+    /// path-style addressing.
+    pub s3_endpoint: Option<String>,
 }
 
 pub fn run(params: ExportParams) -> anyhow::Result<()> {
@@ -127,30 +133,222 @@ pub fn run(params: ExportParams) -> anyhow::Result<()> {
         )
     })?;
 
-    match params.format {
+    let parquet;
+    let jsonl;
+    let (files, layout) = match params.format {
         ExportFormat::Parquet => {
-            let export = wh::export_crawl_parquet(&storage, &crawl_id, tenant, None)
+            parquet = wh::export_crawl_parquet(&storage, &crawl_id, tenant, None)
                 .context("warehouse export failed (ADR-016 contract violation)")?;
-            write_out(&params.out_dir, "crawl_runs.parquet", &export.crawl_runs)?;
-            write_out(&params.out_dir, "pages.parquet", &export.pages)?;
-            write_out(&params.out_dir, "findings.parquet", &export.findings)?;
+            let e = &parquet;
+            (
+                vec![
+                    ("crawl_runs.parquet", &e.crawl_runs),
+                    ("pages.parquet", &e.pages),
+                    ("findings.parquet", &e.findings),
+                ],
+                wh::s3_layout(&crawl_id),
+            )
         }
         ExportFormat::Jsonl => {
-            let export = wh::export_crawl_jsonl(&storage, &crawl_id, tenant, None)
+            jsonl = wh::export_crawl_jsonl(&storage, &crawl_id, tenant, None)
                 .context("warehouse export failed (ADR-016 contract violation)")?;
-            write_out(&params.out_dir, "crawl_runs.jsonl", &export.crawl_runs)?;
-            write_out(&params.out_dir, "pages.jsonl", &export.pages)?;
-            write_out(&params.out_dir, "findings.jsonl", &export.findings)?;
-            write_out(&params.out_dir, "_schema", &export.manifest)?;
+            let e = &jsonl;
+            (
+                vec![
+                    ("crawl_runs.jsonl", &e.crawl_runs),
+                    ("pages.jsonl", &e.pages),
+                    ("findings.jsonl", &e.findings),
+                    ("_schema", &e.manifest),
+                ],
+                // The BigQuery/Snowflake prefix matches the S3 layout family
+                // (ADR-016 §3: crawl-scoped `exports/{crawl_id}/…`).
+                wh::s3_layout(&crawl_id),
+            )
         }
+    };
+
+    for (name, bytes) in &files {
+        write_out(&params.out_dir, name, bytes)?;
+    }
+
+    if let Some(uri) = &params.upload {
+        upload_to_destination(
+            uri,
+            params.s3_endpoint.as_deref(),
+            &layout,
+            &files
+                .iter()
+                .map(|(n, b)| (*n, b.as_slice()))
+                .collect::<Vec<_>>(),
+            &crawl_id,
+        )?;
     }
 
     println!(
-        "exported crawl {crawl_id} as {} to {}",
+        "exported crawl {crawl_id} as {} to {}{}",
         params.format.as_str(),
-        params.out_dir.display()
+        params.out_dir.display(),
+        if params.upload.is_some() {
+            " (uploaded)"
+        } else {
+            ""
+        }
     );
     Ok(())
+}
+
+/// Upload exported files to a warehouse destination. Credential material is
+/// read from environment variables only — it never appears in CLI flags
+/// (visible in `ps`), logs, or errors (5.3.0 §1 posture).
+fn upload_to_destination(
+    uri: &str,
+    s3_endpoint: Option<&str>,
+    layout: &crawlkit_engine::export::warehouse::DestinationLayout,
+    files: &[(&str, &[u8])],
+    _crawl_id: &str,
+) -> anyhow::Result<()> {
+    use crawlkit_engine::export::destinations::reqwest_transport::ReqwestTransport;
+    use crawlkit_engine::export::destinations::*;
+
+    let by_name: std::collections::BTreeMap<&str, &[u8]> =
+        files.iter().map(|(n, b)| (*n, *b)).collect();
+    let transport = ReqwestTransport::new();
+
+    // Map table file names to their layout-plan object keys (crawl-scoped).
+    let key_of = |table: &str, ext: &str| -> String {
+        layout
+            .files
+            .iter()
+            .find(|f| f.table == Some(table))
+            .map(|f| f.name.clone())
+            .unwrap_or_else(|| format!("{}/{}.{ext}", layout.prefix, table))
+    };
+    let tables = [
+        ("crawl_runs", "crawl_runs"),
+        ("pages", "pages"),
+        ("findings", "findings"),
+    ];
+
+    if let Some(bucket_uri) = uri.strip_prefix("s3://") {
+        let bucket = bucket_uri.trim_end_matches('/');
+        let access_key = std::env::var("AWS_ACCESS_KEY_ID")
+            .map_err(|_| anyhow::anyhow!("AWS_ACCESS_KEY_ID not set (credentials are env-only)"))?;
+        let secret_key = std::env::var("AWS_SECRET_ACCESS_KEY")
+            .map_err(|_| anyhow::anyhow!("AWS_SECRET_ACCESS_KEY not set"))?;
+        let cfg = S3Config {
+            bucket: bucket.to_string(),
+            region: std::env::var("AWS_REGION").unwrap_or_else(|_| "us-east-1".into()),
+            endpoint: s3_endpoint
+                .unwrap_or("https://s3.amazonaws.com")
+                .to_string(),
+            access_key,
+            secret_key,
+            session_token: std::env::var("AWS_SESSION_TOKEN").ok(),
+            path_style: s3_endpoint.is_some(),
+        };
+        let client = S3Client::new(cfg, &transport);
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("build tokio runtime for upload")?;
+        rt.block_on(async {
+            for (table, _) in tables {
+                let bytes = *by_name
+                    .get(format!("{table}.parquet").as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{table}.parquet not in export (need parquet format for s3)"
+                        )
+                    })?;
+                let key = key_of(table, "parquet");
+                client.put_object(&key, bytes.to_vec()).await?;
+                println!("  s3://{bucket}/{key}");
+            }
+            Ok::<(), anyhow::Error>(())
+        })?;
+        return Ok(());
+    }
+
+    if let Some(rest) = uri.strip_prefix("bigquery://") {
+        let (project, dataset) = rest
+            .split_once('/')
+            .ok_or_else(|| anyhow::anyhow!("bigquery URI must be bigquery://PROJECT/DATASET"))?;
+        let token = std::env::var("BIGQUERY_TOKEN")
+            .map_err(|_| anyhow::anyhow!("BIGQUERY_TOKEN not set (credentials are env-only)"))?;
+        let client = BigQueryClient::new(
+            BigQueryConfig {
+                project_id: project.to_string(),
+                dataset: dataset.to_string(),
+                bearer_token: token,
+                endpoint: None,
+            },
+            &transport,
+        );
+        let schema = *by_name.get("_schema").ok_or_else(|| {
+            anyhow::anyhow!("_schema manifest missing (need jsonl format for bigquery)")
+        })?;
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("build tokio runtime for upload")?;
+        rt.block_on(async {
+            for (table, _) in tables {
+                let bytes = *by_name
+                    .get(format!("{table}.jsonl").as_str())
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "{table}.jsonl not in export (need jsonl format for bigquery)"
+                        )
+                    })?;
+                client.load_jsonl(table, bytes.to_vec(), schema).await?;
+                println!("  bigquery:{project}.{dataset}.{table}");
+            }
+            Ok::<(), anyhow::Error>(())
+        })?;
+        return Ok(());
+    }
+
+    if let Some(rest) = uri.strip_prefix("snowflake://") {
+        // snowflake://ACCOUNT/DB/SCHEMA/STAGE
+        let parts: Vec<&str> = rest.split('/').collect();
+        if parts.len() != 4 {
+            return Err(anyhow::anyhow!(
+                "snowflake URI must be snowflake://ACCOUNT/DB/SCHEMA/STAGE"
+            ));
+        }
+        let (account, database, schema, stage) = (parts[0], parts[1], parts[2], parts[3]);
+        let token = std::env::var("SNOWFLAKE_TOKEN")
+            .map_err(|_| anyhow::anyhow!("SNOWFLAKE_TOKEN not set (credentials are env-only)"))?;
+        let client = SnowflakeClient::new(
+            SnowflakeConfig {
+                account: account.to_string(),
+                warehouse: std::env::var("SNOWFLAKE_WAREHOUSE")
+                    .unwrap_or_else(|_| "COMPUTE_WH".into()),
+                database: database.to_string(),
+                schema: schema.to_string(),
+                bearer_token: token,
+                endpoint: None,
+            },
+            &transport,
+        );
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .context("build tokio runtime for upload")?;
+        rt.block_on(async {
+            for (table, _) in tables {
+                let path = key_of(table, "jsonl");
+                client.copy_into(table, stage, &path).await?;
+                println!("  snowflake:{account}.{database}.{schema}.{table}");
+            }
+            Ok::<(), anyhow::Error>(())
+        })?;
+        return Ok(());
+    }
+
+    Err(anyhow::anyhow!(
+        "unsupported --upload URI: {uri} (expected s3://, bigquery://, or snowflake://)"
+    ))
 }
 
 fn write_out(dir: &std::path::Path, name: &str, bytes: &[u8]) -> anyhow::Result<()> {

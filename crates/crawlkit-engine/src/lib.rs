@@ -225,6 +225,10 @@ pub mod query_tracker;
 /// position history storage, and trend analysis.
 #[cfg(feature = "full")]
 pub mod rank;
+/// Render budgets (6.0.0-alpha.2): per-crawl and per-page ceilings on
+/// Playwright rendering with explicit degradation.
+#[cfg(feature = "full")]
+pub mod render_budget;
 /// SSRF (Server-Side Request Forgery) validation for URLs.
 ///
 /// Shared validation used by both the plugin network guard and the API
@@ -468,6 +472,8 @@ pub use playwright::{
     PlaywrightDetector, PlaywrightError, PlaywrightRenderer, RenderedPage,
     WasmError as PlaywrightWasmError,
 };
+#[cfg(feature = "full")]
+pub use render_budget::{RenderBudget, RenderGrant, RenderMetrics};
 #[cfg(feature = "full")]
 pub use resource_monitor::{set_default_limits, ResourceLimits, ResourceMonitor, ResourceUsage};
 #[cfg(feature = "full")]

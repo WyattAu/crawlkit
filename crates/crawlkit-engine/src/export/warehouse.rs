@@ -840,6 +840,160 @@ pub fn snowflake_schema_fragment(manifest: &TableManifest) -> Result<String, War
     Ok(cols.join(", "))
 }
 
+// ---------------------------------------------------------------------------
+// Schema-contract drift gate (6.0.0-alpha.1 exit criterion: "no schema drift
+// against `schemas/export/v1`" — the load-side counterpart of the arrow
+// schema conformance check in `ParquetCrawlExport`)
+// ---------------------------------------------------------------------------
+
+/// The closed set of logical types v1 may declare (ADR-016 §2.2: v1.x may
+/// add nullable columns, but a *new type vocabulary* is a v2 decision).
+const V1_LOGICAL_TYPES: &[&str] = &["bool", "float64", "int64", "string", "timestamp"];
+/// The closed set of Parquet physical bindings the deterministic writer maps.
+const V1_PARQUET_BINDINGS: &[&str] = &[
+    "BOOL",
+    "DOUBLE",
+    "INT32",
+    "INT64",
+    "TIMESTAMP_MILLIS",
+    "UTF8",
+];
+/// The closed set of BigQuery bindings the load path accepts.
+const V1_BIGQUERY_BINDINGS: &[&str] = &["BOOL", "FLOAT64", "INT64", "STRING", "TIMESTAMP"];
+/// The closed set of Snowflake bindings the COPY path accepts.
+const V1_SNOWFLAKE_BINDINGS: &[&str] = &[
+    "BOOLEAN",
+    "FLOAT",
+    "NUMBER(38,0)",
+    "TIMESTAMP_NTZ",
+    "VARCHAR",
+];
+
+/// Structurally validate one table manifest against the v1 contract:
+/// complete identity (name/version/keys), one definition per column, every
+/// column bound in all three destinations, and every binding drawn from the
+/// declared v1 vocabulary. Returns one aggregate `Contract` error listing
+/// every violation — a load job must never be the first thing to discover a
+/// drifted manifest.
+///
+/// This is the CI drift gate's engine: [`validate_schema_contract`] runs it
+/// over all three shipped v1 manifests.
+pub fn validate_table_manifest(manifest: &TableManifest) -> Result<(), WarehouseError> {
+    let mut errors: Vec<String> = Vec::new();
+
+    if manifest.table.name.is_empty() {
+        errors.push("[table] name is empty".to_string());
+    }
+    if manifest.table.version.split('.').count() != 3 {
+        errors.push(format!(
+            "[table] version `{}` is not semver-shaped (v1 contracts are `X.Y.Z`)",
+            manifest.table.version
+        ));
+    }
+    if manifest.table.keys.is_empty() {
+        errors.push("[table] keys is empty".to_string());
+    }
+    if manifest.columns.is_empty() {
+        errors.push("manifest declares no columns".to_string());
+    }
+
+    let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+    for c in &manifest.columns {
+        if !seen.insert(c.name.as_str()) {
+            errors.push(format!("duplicate column definition for `{}`", c.name));
+        }
+        if !V1_LOGICAL_TYPES.contains(&c.logical_type.as_str()) {
+            errors.push(format!(
+                "column `{}` declares logical_type `{}` outside the v1 vocabulary {V1_LOGICAL_TYPES:?}",
+                c.name, c.logical_type
+            ));
+        }
+        if !V1_PARQUET_BINDINGS.contains(&c.parquet.as_str()) {
+            errors.push(format!(
+                "column `{}` declares parquet binding `{}` outside the v1 vocabulary {V1_PARQUET_BINDINGS:?}",
+                c.name, c.parquet
+            ));
+        }
+        if !V1_BIGQUERY_BINDINGS.contains(&c.bigquery.as_str()) {
+            errors.push(format!(
+                "column `{}` declares bigquery binding `{}` outside the v1 vocabulary {V1_BIGQUERY_BINDINGS:?}",
+                c.name, c.bigquery
+            ));
+        }
+        if !V1_SNOWFLAKE_BINDINGS.contains(&c.snowflake.as_str()) {
+            errors.push(format!(
+                "column `{}` declares snowflake binding `{}` outside the v1 vocabulary {V1_SNOWFLAKE_BINDINGS:?}",
+                c.name, c.snowflake
+            ));
+        }
+        if c.added_in.is_empty() {
+            errors.push(format!("column `{}` is missing `added_in`", c.name));
+        }
+    }
+
+    for k in &manifest.table.keys {
+        if !seen.contains(k.as_str()) {
+            errors.push(format!("key `{}` has no matching column definition", k));
+        }
+    }
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(WarehouseError::Contract(format!(
+            "schema contract drift detected ({} violation{}):\n  - {}",
+            errors.len(),
+            if errors.len() == 1 { "" } else { "s" },
+            errors.join("\n  - ")
+        )))
+    }
+}
+
+/// Validate all three shipped v1 manifests. The alpha.1 drift gate: CI runs
+/// this so a manifest edit that breaks the destination vocabulary, drops a
+/// binding, or orphans a key fails the build before any export or load runs.
+pub fn validate_schema_contract() -> Result<(), WarehouseError> {
+    for manifest in [
+        crawl_runs_manifest()?,
+        pages_manifest()?,
+        findings_manifest()?,
+    ] {
+        validate_table_manifest(manifest)?;
+    }
+    Ok(())
+}
+
+/// Build the BigQuery fields schema for a table from its manifest `bigquery`
+/// bindings: the `configuration.load.schema` object (`{"fields":[...]}`) a
+/// jobs.insert load expects — *not* wrapped in another `"schema"` key.
+/// Deterministic: field order matches manifest column order. This — not the
+/// `_schema` load manifest, which is a version envelope for readers — is what
+/// a load job embeds.
+pub fn bigquery_schema_fields_json(manifest: &TableManifest) -> Result<Vec<u8>, WarehouseError> {
+    let fields: Vec<serde_json::Value> = manifest
+        .columns
+        .iter()
+        .map(|c| {
+            if c.bigquery.is_empty() {
+                return Err(WarehouseError::Contract(format!(
+                    "column `{}` declares no bigquery binding",
+                    c.name
+                )));
+            }
+            Ok(serde_json::json!({
+                "name": c.name,
+                "type": c.bigquery,
+                "mode": if c.nullable { "NULLABLE" } else { "REQUIRED" },
+                "description": c.description,
+            }))
+        })
+        .collect::<Result<Vec<_>, WarehouseError>>()?;
+    let doc = serde_json::json!({ "fields": fields });
+    let mut buf = serde_json::to_vec(&doc).map_err(|e| WarehouseError::Writer(e.to_string()))?;
+    buf.push(b'\n');
+    Ok(buf)
+}
+
 /// Build the JSONL load manifest for one exported file (ADR-016 §2.3: the
 /// version embedded in every artifact — `_schema` is this document for the
 /// JSONL bindings). Deterministic: keys sorted, stable field order.
@@ -1603,6 +1757,70 @@ mod tests {
                 if let Some(t) = f.table {
                     assert!(known.contains(&t), "unknown table {t} in layout");
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn schema_contract_drift_gate_passes_on_shipped_manifests() {
+        // The CI gate itself: all three v1 manifests are structurally valid
+        // and fully bound in every destination vocabulary.
+        validate_schema_contract().unwrap();
+    }
+
+    #[test]
+    fn drift_gate_rejects_unknown_binding_and_orphan_key() {
+        // Mutation test: a manifest edited outside the v1 vocabulary (here:
+        // a dropped Snowflake binding and an orphaned key) must fail loudly
+        // with an aggregate error naming every violation.
+        let mut drifted = pages_manifest().unwrap().clone();
+        drifted.table.keys.push("nonexistent_column".to_string());
+        let last = drifted.columns.last_mut().unwrap();
+        last.snowflake = "SUPER_AWESOME_TYPE".to_string();
+
+        let err = validate_table_manifest(&drifted).unwrap_err().to_string();
+        assert!(
+            err.contains("SUPER_AWESOME_TYPE"),
+            "error must name the drifted binding: {err}"
+        );
+        assert!(
+            err.contains("nonexistent_column"),
+            "error must name the orphaned key: {err}"
+        );
+        assert!(err.contains("2 violations"), "aggregate count: {err}");
+    }
+
+    #[test]
+    fn load_fragments_agree_with_manifest_bindings() {
+        // The load path (BQ multipart job, Snowflake COPY DDL) renders its
+        // column list from the manifest — pin the rendering to the bindings
+        // so a fragment generator drift is a test failure, not a load error.
+        for (manifest, name) in [
+            (crawl_runs_manifest().unwrap(), "crawl_runs"),
+            (pages_manifest().unwrap(), "pages"),
+            (findings_manifest().unwrap(), "findings"),
+        ] {
+            let bq = bigquery_schema_fragment(manifest).unwrap();
+            // Columns are comma-separated; names are identifiers, so
+            // splitting on ", " first keeps the comma out of the tokens.
+            let bq_tokens: Vec<&str> = bq.split(", ").flat_map(|c| c.split_whitespace()).collect();
+            assert_eq!(bq_tokens.len(), manifest.columns.len() * 3);
+            for (col, chunk) in manifest.columns.iter().zip(bq_tokens.chunks(3)) {
+                assert_eq!(chunk[0], col.name, "{name}: BQ column order drift");
+                assert_eq!(chunk[1], col.bigquery, "{name}: BQ type drift");
+                assert_eq!(
+                    chunk[2],
+                    if col.nullable { "NULLABLE" } else { "REQUIRED" },
+                    "{name}: BQ mode drift"
+                );
+            }
+
+            let sf = snowflake_schema_fragment(manifest).unwrap();
+            let sf_tokens: Vec<&str> = sf.split(", ").flat_map(|c| c.split_whitespace()).collect();
+            assert_eq!(sf_tokens.len(), manifest.columns.len() * 2);
+            for (col, chunk) in manifest.columns.iter().zip(sf_tokens.chunks(2)) {
+                assert_eq!(chunk[0], col.name, "{name}: SF column order drift");
+                assert_eq!(chunk[1], col.snowflake, "{name}: SF type drift");
             }
         }
     }

@@ -115,15 +115,16 @@ impl CrawlRun<'_> {
         };
 
         let mut rendered_page: Option<crate::playwright::RenderedPage> = None;
-        self.render_js_if_needed(
-            &fetched.entry.url,
-            &mut body_text,
-            &mut parsed,
-            &mut rendered_page,
-        )
-        .await;
+        let render_degradations = self
+            .render_js_if_needed(
+                &fetched.entry.url,
+                &mut body_text,
+                &mut parsed,
+                &mut rendered_page,
+            )
+            .await;
 
-        let (findings, analysis_time) = {
+        let (mut findings, analysis_time) = {
             let _analyze_span = tracing::info_span!(
                 "analyze",
                 url = %fetched.entry.url,
@@ -132,6 +133,10 @@ impl CrawlRun<'_> {
             let _analyze_enter = _analyze_span.enter();
             self.analyze(&parsed, &body_text, result, fetched, rendered_page.as_ref())
         };
+        // Render degradation findings (RENDER001/RENDER002) ride the same
+        // findings pipeline as analyzer output — a degraded page is visible
+        // in results, alerts, and exports, never silently static.
+        findings.extend(render_degradations);
         bump_by(&self.counters.issues_found, findings.len());
 
         let page_id = uuid::Uuid::new_v4().to_string();
@@ -156,40 +161,135 @@ impl CrawlRun<'_> {
     }
 
     /// Re-render with JavaScript when the decision engine requires it.
+    ///
+    /// Returns degradation findings for this page when rendering was wanted
+    /// but did not happen cleanly: `RENDER001` (per-crawl quota exhausted —
+    /// the page is analyzed statically) and `RENDER002` (per-page budget
+    /// exhausted or the render failed). The page is always analyzed on the
+    /// best available HTML; the finding makes the degradation explicit.
     async fn render_js_if_needed(
         &self,
         url: &Url,
         body_text: &mut String,
         parsed: &mut crate::ParsedPage,
         rendered_page: &mut Option<crate::playwright::RenderedPage>,
-    ) {
+    ) -> Vec<crate::Finding> {
         if !self.cfg.enable_js_rendering {
-            return;
+            return Vec::new();
         }
         let decision =
             crate::JsRenderDecisionEngine::new().should_render_js(url.as_ref(), Some(body_text));
         let crate::JsRenderDecision::Render { reason } = decision else {
-            return;
+            return Vec::new();
         };
         tracing::info!("JS render decision for {}: {}", url, reason);
 
         let Some(renderer) = self.cfg.js_renderer.as_ref() else {
-            return;
+            return Vec::new();
         };
         if !renderer.is_available() {
             tracing::warn!("JS renderer not available, using static HTML: {}", url);
-            return;
+            return Vec::new();
         }
-        match tokio::time::timeout(Duration::from_secs(30), renderer.render_rich(url.as_str()))
+
+        // Budget enforcement (6.0.0-alpha.2). A missing budget is the
+        // unbounded historical behavior.
+        let Some(budget) = self.cfg.render_budget.as_ref() else {
+            // No budget configured: render with the engine-default timeout,
+            // keeping the pre-budget failure semantics (warn, no finding).
+            return match tokio::time::timeout(
+                Duration::from_secs(30),
+                renderer.render_rich(url.as_str()),
+            )
             .await
+            {
+                Ok(Ok(page)) => {
+                    *body_text = page.html.clone();
+                    *parsed = crate::HtmlParser::parse(body_text, url);
+                    *rendered_page = Some(page);
+                    Vec::new()
+                }
+                Ok(Err(e)) => {
+                    tracing::warn!("JS render failed for {}: {}", url, e);
+                    Vec::new()
+                }
+                Err(_) => {
+                    tracing::warn!("JS render timed out for {}", url);
+                    Vec::new()
+                }
+            };
+        };
+
+        if budget.acquire() == crate::render_budget::RenderGrant::QuotaExhausted {
+            self.metrics.record_render_quota_exhausted();
+            tracing::info!("render quota exhausted; analyzing statically: {}", url);
+            return vec![crate::Finding {
+                severity: crate::Severity::Warning,
+                category: crate::IssueCategory::Performance,
+                code: "RENDER001".to_string(),
+                title: "Render quota exhausted".to_string(),
+                description: format!(
+                    "This page needed JavaScript rendering ({}), but the crawl's render quota \
+                     was already used. It was analyzed from static HTML, so client-rendered \n                     content may be missing.",
+                    reason
+                ),
+                url: url.to_string(),
+                recommendation: "Raise the crawl's render quota if client-rendered content \n                     matters for these pages."
+                    .to_string(),
+            }];
+        }
+        self.metrics.record_render_started();
+
+        match tokio::time::timeout(
+            budget.effective_timeout(),
+            renderer.render_rich(url.as_str()),
+        )
+        .await
         {
             Ok(Ok(page)) => {
+                self.metrics.record_render_completed();
                 *body_text = page.html.clone();
                 *parsed = crate::HtmlParser::parse(body_text, url);
                 *rendered_page = Some(page);
+                Vec::new()
             }
-            Ok(Err(e)) => tracing::warn!("JS render failed for {}: {}", url, e),
-            Err(_) => tracing::warn!("JS render timed out for {}", url),
+            Ok(Err(e)) => {
+                self.metrics.record_render_budget_exhausted();
+                tracing::warn!("JS render failed for {}: {}", url, e);
+                vec![crate::Finding {
+                    severity: crate::Severity::Warning,
+                    category: crate::IssueCategory::Performance,
+                    code: "RENDER002".to_string(),
+                    title: "Render failed".to_string(),
+                    description: format!(
+                        "JavaScript rendering failed for this page ({e}). It was analyzed \n                         from static HTML, so client-rendered content may be missing."
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Check the page for renderer-crashing scripts, or raise \n                         the per-page render budget."
+                        .to_string(),
+                }]
+            }
+            Err(_) => {
+                self.metrics.record_render_budget_exhausted();
+                tracing::warn!(
+                    "JS render timed out for {} (budget {:?})",
+                    url,
+                    budget.effective_timeout()
+                );
+                vec![crate::Finding {
+                    severity: crate::Severity::Warning,
+                    category: crate::IssueCategory::Performance,
+                    code: "RENDER002".to_string(),
+                    title: "Render budget exhausted".to_string(),
+                    description: format!(
+                        "JavaScript rendering exceeded the per-page budget ({:?}). The page \n                         was analyzed from static HTML, so client-rendered content may be \n                         missing.",
+                        budget.effective_timeout()
+                    ),
+                    url: url.to_string(),
+                    recommendation: "Raise the per-page render budget, or accept static \n                         analysis for this page."
+                        .to_string(),
+                }]
+            }
         }
     }
 

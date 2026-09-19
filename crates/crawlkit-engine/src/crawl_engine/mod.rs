@@ -59,6 +59,7 @@ pub trait JsRenderer: Send + Sync {
             console_messages: Vec::new(),
             network_requests: Vec::new(),
             wasm_errors: Vec::new(),
+            page_errors: Vec::new(),
             render_time: std::time::Duration::ZERO,
             memory_used: 0,
         })
@@ -81,6 +82,13 @@ pub struct CrawlEngineConfig {
 
     /// Optional JS renderer for rendering JavaScript-heavy pages.
     pub js_renderer: Option<Arc<dyn JsRenderer>>,
+
+    /// Ceilings on JavaScript rendering (6.0.0-alpha.2). `None` = unbounded
+    /// (the historical behavior), so existing configurations are unaffected
+    /// until an operator sets a budget. Exhaustion degrades explicitly:
+    /// RENDER001 (quota) / RENDER002 (per-page) findings, never silent
+    /// static fallback.
+    pub render_budget: Option<std::sync::Arc<crate::render_budget::RenderBudget>>,
 
     /// Whether to allow crawling external domains.
     pub allow_external: bool,
@@ -225,6 +233,7 @@ impl Default for CrawlEngineConfig {
             feature_flags: FeatureFlags::default(),
             enable_js_rendering: false,
             js_renderer: None,
+            render_budget: None,
             allow_external: false,
             include_patterns: Vec::new(),
             exclude_patterns: Vec::new(),
@@ -1430,7 +1439,7 @@ mod tests {
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
         // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 771);
+        assert_eq!(registry.len(), 772);
     }
 
     struct MockJsRenderer {

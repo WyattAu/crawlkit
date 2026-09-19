@@ -821,6 +821,7 @@ fn rendered_page_summary_is_owned_and_serializable() {
         console_message_count: 2,
         network_request_count: 4,
         wasm_error_count: 0,
+        page_error_count: 0,
         render_time_ms: Some(75),
         succeeded: true,
     };
@@ -836,7 +837,7 @@ fn test_registry_default() {
     let config = default_config();
     let registry = AnalyzerRegistry::new(&config);
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 778);
+    assert_eq!(registry.len(), 779);
     #[cfg(not(feature = "full"))]
     assert_eq!(registry.len(), 775);
     assert!(!registry.is_empty());

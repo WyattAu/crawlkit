@@ -471,6 +471,7 @@ mod tests {
             }],
             network_requests: Vec::new(),
             wasm_errors: Vec::new(),
+            page_errors: Vec::new(),
             render_time: Duration::from_millis(100),
             memory_used: 0,
         };
@@ -494,6 +495,7 @@ mod tests {
                 size: Some(15 * 1024 * 1024), // 15 MB
             }],
             wasm_errors: Vec::new(),
+            page_errors: Vec::new(),
             render_time: Duration::from_millis(100),
             memory_used: 0,
         };

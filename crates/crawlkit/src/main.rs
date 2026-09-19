@@ -110,6 +110,8 @@ async fn main() -> Result<()> {
             alert_threshold,
             llm,
             analyzer_profile,
+            render_max,
+            render_timeout,
         } => {
             feature_flags.set(crawlkit_engine::FLAG_AI_ANALYZERS, enable_ai);
             feature_flags.set(crawlkit_engine::FLAG_WASM_ANALYZERS, enable_wasm);
@@ -159,6 +161,9 @@ async fn main() -> Result<()> {
                 } else {
                     analyzer_profile
                 },
+                render_max: render_max.or_else(|| config.crawl.as_ref().and_then(|c| c.render_max)),
+                render_timeout: render_timeout
+                    .or_else(|| config.crawl.as_ref().and_then(|c| c.render_timeout_secs)),
             };
             cli::crawl::run(&params).await
         }

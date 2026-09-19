@@ -194,6 +194,23 @@ jobs:
           # The round-trip test self-skips unless WAREHOUSE_S3_* is set.
           cargo test -p crawlkit-engine --features warehouse \
             --test warehouse_roundtrip
+      # BigQuery load contract: real jobs.insert multipart loads + jobs.query
+      # verification against goccy/bigquery-emulator (dataset provisioned at
+      # startup — the same way ops provisions real BigQuery).
+      - name: Start BigQuery emulator
+        run: |
+          docker run -d --name bigquery-emulator -p 9050:9050 \
+            ghcr.io/goccy/bigquery-emulator:latest --project=crawlkit --dataset=crawlkit
+          for i in $(seq 1 30); do
+            curl -fsS -o /dev/null http://127.0.0.1:9050/discovery/bigquery/v2/rest && break
+            sleep 1
+          done
+      - name: Warehouse BigQuery load contract test
+        env:
+          WAREHOUSE_BQ_ENDPOINT: http://127.0.0.1:9050
+          WAREHOUSE_BQ_PROJECT: crawlkit
+          WAREHOUSE_BQ_DATASET: crawlkit
+        run: cargo test -p crawlkit-engine --features warehouse --test warehouse_roundtrip bigquery
 
   roadmap-controls:
     name: Roadmap and Security Controls

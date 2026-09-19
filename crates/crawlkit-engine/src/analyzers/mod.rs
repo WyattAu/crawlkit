@@ -47,6 +47,8 @@ pub mod hsts_analyzer;
 pub mod http_analyzers;
 /// Image accessibility analyzers.
 pub mod image_accessibility_analyzers;
+/// JavaScript error findings from rendered pages (6.0.0-alpha.2).
+pub mod js_error_analyzers;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;
 /// Landmark and heading-level accessibility validators.
@@ -421,6 +423,8 @@ pub struct RenderedPageSummary {
     pub network_request_count: usize,
     /// Number of rendering-time WASM errors captured.
     pub wasm_error_count: usize,
+    /// Number of uncaught page errors (`pageerror` events) captured.
+    pub page_error_count: usize,
     /// Rendering duration in milliseconds, when available.
     pub render_time_ms: Option<u64>,
     /// Whether the rendering operation completed successfully.
@@ -1550,6 +1554,14 @@ impl AnalyzerRegistry {
             ));
             analyzers.push(Box::new(crate::ai_analyzers::AiAnswerBoxAnalyzer::new()));
         }
+
+        // 6.0.0-alpha.2: JS-error findings — only meaningful when the
+        // renderer's error capture exists (feature `full`), like the WASM
+        // group below.
+        #[cfg(feature = "full")]
+        analyzers.push(Box::new(
+            crate::analyzers::js_error_analyzers::JsErrorAnalyzer::new(),
+        ));
 
         // Phase 8: WASM Error Detection Analyzers
         #[cfg(feature = "full")]

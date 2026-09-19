@@ -223,6 +223,21 @@ fn upload_to_destination(
             .map(|f| f.name.clone())
             .unwrap_or_else(|| format!("{}/{}.{ext}", layout.prefix, table))
     };
+    // Per-table BigQuery fields schemas derived from the ADR-016 manifests —
+    // what load jobs embed (the `_schema` artifact is a version envelope for
+    // readers, not a load-job schema).
+    let bq_schema_of = |table: &str| -> anyhow::Result<Vec<u8>> {
+        use crawlkit_engine::export::warehouse::{
+            bigquery_schema_fields_json, crawl_runs_manifest, findings_manifest, pages_manifest,
+        };
+        let manifest = match table {
+            "crawl_runs" => crawl_runs_manifest()?,
+            "pages" => pages_manifest()?,
+            "findings" => findings_manifest()?,
+            other => anyhow::bail!("no ADR-016 manifest for table {other}"),
+        };
+        bigquery_schema_fields_json(manifest).map_err(|e| anyhow::anyhow!(e.to_string()))
+    };
     let tables = [
         ("crawl_runs", "crawl_runs"),
         ("pages", "pages"),
@@ -284,9 +299,12 @@ fn upload_to_destination(
             },
             &transport,
         );
-        let schema = *by_name.get("_schema").ok_or_else(|| {
-            anyhow::anyhow!("_schema manifest missing (need jsonl format for bigquery)")
-        })?;
+        // The _schema artifact ships in the plan and is part of the reader
+        // contract; the load schema itself comes from the manifest bindings
+        // per table.
+        if !by_name.contains_key("_schema") {
+            anyhow::bail!("_schema manifest missing (need jsonl format for bigquery)");
+        }
         let rt = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -300,7 +318,9 @@ fn upload_to_destination(
                             "{table}.jsonl not in export (need jsonl format for bigquery)"
                         )
                     })?;
-                client.load_jsonl(table, bytes.to_vec(), schema).await?;
+                client
+                    .load_jsonl(table, bytes.to_vec(), &bq_schema_of(table)?[..])
+                    .await?;
                 println!("  bigquery:{project}.{dataset}.{table}");
             }
             Ok::<(), anyhow::Error>(())

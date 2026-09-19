@@ -52,6 +52,14 @@ pub struct Metrics {
     pub pages_skipped_duplicate: AtomicU64,
     /// Pages that answered 304 Not Modified during an incremental crawl.
     pub pages_unchanged: AtomicU64,
+    /// Renders started (granted and dispatched to the renderer).
+    pub renders_started: AtomicU64,
+    /// Renders that produced a rendered page.
+    pub renders_completed: AtomicU64,
+    /// Pages denied by the per-crawl render quota (RENDER001).
+    pub renders_quota_exhausted: AtomicU64,
+    /// Renders that hit the per-page budget or otherwise failed (RENDER002).
+    pub renders_budget_exhausted: AtomicU64,
 }
 
 impl Metrics {
@@ -73,6 +81,10 @@ impl Metrics {
             pages_skipped_robots: AtomicU64::new(0),
             pages_skipped_duplicate: AtomicU64::new(0),
             pages_unchanged: AtomicU64::new(0),
+            renders_started: AtomicU64::new(0),
+            renders_completed: AtomicU64::new(0),
+            renders_quota_exhausted: AtomicU64::new(0),
+            renders_budget_exhausted: AtomicU64::new(0),
         }
     }
 
@@ -130,6 +142,27 @@ impl Metrics {
     /// Record a 304 Not Modified response in an incremental crawl.
     pub fn record_page_unchanged(&self) {
         self.pages_unchanged.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a render being dispatched to the renderer.
+    pub fn record_render_started(&self) {
+        self.renders_started.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a render that produced a rendered page.
+    pub fn record_render_completed(&self) {
+        self.renders_completed.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a page denied by the per-crawl render quota (RENDER001).
+    pub fn record_render_quota_exhausted(&self) {
+        self.renders_quota_exhausted.fetch_add(1, Ordering::Relaxed);
+    }
+
+    /// Record a render that hit the per-page budget or failed (RENDER002).
+    pub fn record_render_budget_exhausted(&self) {
+        self.renders_budget_exhausted
+            .fetch_add(1, Ordering::Relaxed);
     }
 
     /// Increment active connections.
@@ -219,6 +252,10 @@ impl Metrics {
             pages_skipped_robots: self.pages_skipped_robots.load(Ordering::Relaxed),
             pages_skipped_duplicate: self.pages_skipped_duplicate.load(Ordering::Relaxed),
             pages_unchanged: self.pages_unchanged.load(Ordering::Relaxed),
+            renders_started: self.renders_started.load(Ordering::Relaxed),
+            renders_completed: self.renders_completed.load(Ordering::Relaxed),
+            renders_quota_exhausted: self.renders_quota_exhausted.load(Ordering::Relaxed),
+            renders_budget_exhausted: self.renders_budget_exhausted.load(Ordering::Relaxed),
         }
     }
 
@@ -239,6 +276,10 @@ impl Metrics {
         self.pages_skipped_robots.store(0, Ordering::Relaxed);
         self.pages_skipped_duplicate.store(0, Ordering::Relaxed);
         self.pages_unchanged.store(0, Ordering::Relaxed);
+        self.renders_started.store(0, Ordering::Relaxed);
+        self.renders_completed.store(0, Ordering::Relaxed);
+        self.renders_quota_exhausted.store(0, Ordering::Relaxed);
+        self.renders_budget_exhausted.store(0, Ordering::Relaxed);
     }
 }
 
@@ -282,6 +323,14 @@ pub struct MetricsSnapshot {
     pub pages_skipped_duplicate: u64,
     /// Pages that answered 304 Not Modified in an incremental crawl.
     pub pages_unchanged: u64,
+    /// Renders started (granted and dispatched to the renderer).
+    pub renders_started: u64,
+    /// Renders that produced a rendered page.
+    pub renders_completed: u64,
+    /// Pages denied by the per-crawl render quota (RENDER001).
+    pub renders_quota_exhausted: u64,
+    /// Renders that hit the per-page budget or otherwise failed (RENDER002).
+    pub renders_budget_exhausted: u64,
 }
 
 /// Shared metrics for concurrent access.

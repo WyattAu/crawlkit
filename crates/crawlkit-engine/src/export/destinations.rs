@@ -81,6 +81,9 @@ pub enum LoadError {
     InvalidInput(String),
     /// The transport itself failed (DNS, TLS, timeout).
     Transport(String),
+    /// The service answered 2xx but the body violates the API contract
+    /// (unparseable JSON, missing required fields).
+    Protocol(String),
 }
 
 impl fmt::Display for LoadError {
@@ -92,6 +95,7 @@ impl fmt::Display for LoadError {
             }
             LoadError::InvalidInput(msg) => write!(f, "invalid load input: {msg}"),
             LoadError::Transport(msg) => write!(f, "transport error: {msg}"),
+            LoadError::Protocol(msg) => write!(f, "protocol violation: {msg}"),
         }
     }
 }
@@ -568,22 +572,25 @@ impl<'a, T: Transport> BigQueryClient<'a, T> {
         Self { config, transport }
     }
 
-    /// Load one NDJSON table file with `WRITE_TRUNCATE` disposition and the
-    /// `_schema` manifest as the explicit schema (BigQuery accepts a JSON
-    /// Schema object in the job resource). Uses the JSON API simple-upload
-    /// path (`uploadType=media` on a job resource POST would lose metadata,
-    /// so the multipart/related body carries both).
+    /// Load one NDJSON table file with `WRITE_TRUNCATE` disposition and an
+    /// explicit BigQuery fields schema (`{"schema":{"fields":[...]}}` — the
+    /// standard jobs.insert `configuration.load.schema` object; see
+    /// [`crate::export::warehouse::bigquery_schema_fields_json`]). Uses the
+    /// JSON API multipart/related upload so the job resource and the data
+    /// travel in one request.
     pub async fn load_jsonl(
         &self,
         table: &str,
         jsonl: Vec<u8>,
-        schema_manifest: &[u8],
+        fields_schema: &[u8],
     ) -> Result<(), LoadError> {
         let endpoint = self
             .config
             .endpoint
             .clone()
             .unwrap_or_else(|| "https://bigquery.googleapis.com".to_string());
+        let schema: serde_json::Value = serde_json::from_slice(fields_schema)
+            .map_err(|e| LoadError::InvalidInput(format!("fields schema is not JSON: {e}")))?;
         let job = serde_json::json!({
             "configuration": {
                 "load": {
@@ -594,12 +601,10 @@ impl<'a, T: Transport> BigQueryClient<'a, T> {
                         "datasetId": self.config.dataset,
                         "tableId": table,
                     },
-                    // The `_schema` manifest is the column contract; pass it
-                    // through so the load fails loudly on drift rather than
+                    // The explicit fields schema is the column contract; a
+                    // load against a drifted manifest fails loudly instead of
                     // coercing silently.
-                    "schemaInline": serde_json::from_slice::<serde_json::Value>(schema_manifest)
-                        .map_err(|e| LoadError::InvalidInput(format!("schema manifest is not JSON: {e}")))?,
-                    "schemaInlineFormat": "RECORD_COLUMNS",
+                    "schema": schema,
                 }
             }
         });
@@ -639,6 +644,41 @@ impl<'a, T: Transport> BigQueryClient<'a, T> {
         };
         let resp = self.transport.send(req).await?;
         resp.outcome()
+    }
+
+    /// Run a GoogleSQL query and return the raw response JSON
+    /// (`jobs.query`). Verification surface for load round-trips: the
+    /// contract test asserts loaded row counts through the destination
+    /// itself, not through our own writer.
+    pub async fn query(&self, sql: &str) -> Result<serde_json::Value, LoadError> {
+        let endpoint = self
+            .config
+            .endpoint
+            .clone()
+            .unwrap_or_else(|| "https://bigquery.googleapis.com".to_string());
+        let url = format!(
+            "{}/bigquery/v2/projects/{}/queries",
+            endpoint.trim_end_matches('/'),
+            uri_encode(&self.config.project_id, false)
+        );
+        let req = HttpRequest {
+            method: "POST",
+            url,
+            headers: vec![(
+                "authorization".to_string(),
+                format!("Bearer {}", self.config.bearer_token),
+            )],
+            body: serde_json::to_vec(&serde_json::json!({
+                "query": sql,
+                "useLegacySql": false,
+                "timeoutMs": 30_000u64,
+            }))
+            .map_err(|e| LoadError::InvalidInput(e.to_string()))?,
+        };
+        let resp = self.transport.send(req).await?;
+        resp.outcome()?;
+        serde_json::from_slice(&resp.body)
+            .map_err(|e| LoadError::Protocol(format!("query response is not JSON: {e}")))
     }
 }
 
@@ -936,7 +976,11 @@ mod tests {
             &t,
         );
         client
-            .load_jsonl("findings", b"{\"a\":1}\n".to_vec(), b"{\"columns\":[]}")
+            .load_jsonl(
+                "findings",
+                b"{\"a\":1}\n".to_vec(),
+                br#"{"schema":{"fields":[{"name":"a","type":"INT64","mode":"REQUIRED"}]}}"#,
+            )
             .await
             .unwrap();
         let req = &t.recorded()[0];
@@ -953,7 +997,66 @@ mod tests {
         assert!(body.contains("NEWLINE_DELIMITED_JSON"), "{body}");
         assert!(body.contains("WRITE_TRUNCATE"), "{body}");
         assert!(body.contains("destinationTable"), "{body}");
+        // The standard jobs.insert schema object, not the undocumented
+        // `schemaInline` (which the emulator and strict parsers reject).
+        // (serde_json sorts keys, so assert components, not one raw string.)
+        assert!(
+            body.contains(r#""schema":{"fields":[{"mode":"REQUIRED","name":"a","type":"INT64"}]}"#),
+            "{body}"
+        );
+        assert!(!body.contains("schemaInline"), "{body}");
         assert!(body.contains("\"a\":1"), "jsonl part missing: {body}");
+    }
+
+    #[tokio::test]
+    async fn bq_query_posts_standard_sql_body() {
+        let t = MemoryTransport::new(|_| HttpResponse {
+            status: 200,
+            headers: vec![],
+            body: br#"{"jobComplete":true,"totalRows":"1"}"#.to_vec(),
+        });
+        let client = BigQueryClient::new(
+            BigQueryConfig {
+                project_id: "proj".into(),
+                dataset: "d".into(),
+                bearer_token: "tok".into(),
+                endpoint: None,
+            },
+            &t,
+        );
+        let resp = client
+            .query("SELECT COUNT(*) FROM d.findings")
+            .await
+            .unwrap();
+        assert_eq!(resp["jobComplete"], serde_json::json!(true));
+        let req = &t.recorded()[0];
+        assert_eq!(
+            req.url,
+            "https://bigquery.googleapis.com/bigquery/v2/projects/proj/queries"
+        );
+        let body = String::from_utf8_lossy(&req.body);
+        assert!(body.contains("useLegacySql\":false"), "{body}");
+        assert!(body.contains("SELECT COUNT(*)"), "{body}");
+    }
+
+    #[tokio::test]
+    async fn bq_query_rejects_non_json_response() {
+        let t = MemoryTransport::new(|_| HttpResponse {
+            status: 200,
+            headers: vec![],
+            body: b"<html>not json</html>".to_vec(),
+        });
+        let client = BigQueryClient::new(
+            BigQueryConfig {
+                project_id: "p".into(),
+                dataset: "d".into(),
+                bearer_token: "t".into(),
+                endpoint: None,
+            },
+            &t,
+        );
+        let err = client.query("SELECT 1").await.unwrap_err();
+        assert!(matches!(err, LoadError::Protocol(_)), "{err}");
     }
 
     #[tokio::test]
@@ -974,6 +1077,24 @@ mod tests {
             .unwrap_err();
         assert!(matches!(err, LoadError::InvalidInput(_)), "{err}");
         assert!(t.recorded().is_empty(), "no request should be sent");
+    }
+
+    #[test]
+    fn bigquery_fields_schema_from_manifest_is_standard_and_deterministic() {
+        // The manifest-derived fields schema (what load_jsonl embeds) must be
+        // the standard `{"schema":{"fields":[...]}}` object, in manifest
+        // column order, byte-deterministic.
+        let manifest = crate::export::warehouse::pages_manifest().unwrap();
+        let schema = crate::export::warehouse::bigquery_schema_fields_json(manifest).unwrap();
+        let again = crate::export::warehouse::bigquery_schema_fields_json(manifest).unwrap();
+        assert_eq!(schema, again, "fields schema must be deterministic");
+        let v: serde_json::Value = serde_json::from_slice(&schema).unwrap();
+        let fields = v["fields"].as_array().unwrap();
+        assert_eq!(fields.len(), manifest.columns.len());
+        for (f, c) in fields.iter().zip(&manifest.columns) {
+            assert_eq!(f["name"], serde_json::json!(c.name));
+            assert_eq!(f["type"], serde_json::json!(c.bigquery));
+        }
     }
 
     #[tokio::test]

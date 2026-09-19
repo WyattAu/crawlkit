@@ -42,11 +42,23 @@ S3 round-trip contract test green locally against MinIO and wired into
 CI (MinIO service in the service-backed job); exporter failure metrics
 landed (`crawlkit_connector_deliveries_total{channel_type,outcome}` on
 the 5.3.0 surface). **Remaining for this cut:** BigQuery emulator
-contract test (the BQ client is request-shape-tested but not yet run
-against the emulator in CI), Snowflake stage decision (real dev account
-vs emulator-based), and the no-schema-drift extension of the manifest
-gate. **The tag is NOT cut until the exit criteria are green** — per the
-cadence rule above.
+contract test (**done 2026-09-19** — `bigquery_roundtrip_load_and_query`
+loads all three tables with manifest-derived fields schemas and verifies
+row counts + a value round-trip through `jobs.query` against
+goccy/bigquery-emulator; wired into the CI service-backed job), Snowflake
+stage decision (**decided 2026-09-19: emulator-based for alpha.1** — a
+loopback fake of the SQL Statements API v2 pins the wire shape, handle
+extraction, and error classification over real HTTP
+(`snowflake_copy_over_real_http_shape_and_handle`); a real-account smoke
+is an operator-owned pre-stable item, not a CI dependency), and the
+no-schema-drift extension of the manifest gate (**done 2026-09-19** —
+`validate_schema_contract` runs over all three v1 manifests: closed
+type vocabularies per destination, complete bindings, no orphan keys;
+pinned by mutation tests). **Remaining for this cut:** cut the tag once
+the full CI battery is green on the tagged commit — the exit criteria
+(round-trip contract in CI for all three destinations, no schema drift)
+are now met. **The tag is NOT cut until the exit criteria are green on
+the tagged commit** — per the cadence rule above.
 
 ### 6.0.0-alpha.2 — "Render Budgets"
 

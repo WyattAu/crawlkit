@@ -15,8 +15,8 @@ license = "Apache-2.0"
 # Regenerate with: cargo run -p crawlkit-engine --example manifest_drift_check -- --print
 # CI fails on drift with the live analyzer registry (ROADMAP Phase 0.1).
 [counts]
-analyzer_count = 778
-unique_analyzer_types = 778
+analyzer_count = 779
+unique_analyzer_types = 779
 # Distinct finding codes emitted by the default registry on a representative
 # census page (see crawlkit_engine::manifest::generate). This is a lower bound
 # on the total check inventory, not the full catalogue size.

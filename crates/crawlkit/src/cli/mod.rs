@@ -81,6 +81,10 @@ pub struct CrawlConfig {
     pub user_agent: Option<String>,
     /// Whether to respect robots.txt.
     pub respect_robots_txt: Option<bool>,
+    /// Default per-crawl render quota (pages).
+    pub render_max: Option<u64>,
+    /// Default per-page render ceiling in seconds.
+    pub render_timeout_secs: Option<u64>,
 }
 
 /// Output configuration loaded from file.
@@ -242,6 +246,19 @@ pub enum Commands {
         /// Analyzer profile: full, core, standard, or deep (default: full)
         #[arg(long, default_value = "full")]
         analyzer_profile: String,
+
+        /// Maximum pages this crawl may render with JavaScript. When the
+        /// quota is exhausted, remaining pages are analyzed statically and
+        /// carry an explicit RENDER001 degradation finding (default:
+        /// unbounded).
+        #[arg(long)]
+        render_max: Option<u64>,
+
+        /// Wall-clock ceiling for rendering one page in seconds. Exceeding
+        /// it produces an explicit RENDER002 degradation finding for that
+        /// page instead of the engine default timeout.
+        #[arg(long)]
+        render_timeout: Option<u64>,
     },
 
     /// Compare two crawl results
@@ -627,4 +644,8 @@ pub struct CrawlParams {
     pub llm: bool,
     /// Selected analyzer registry profile.
     pub analyzer_profile: String,
+    /// Per-crawl render quota (pages). `None` = unbounded.
+    pub render_max: Option<u64>,
+    /// Per-page render ceiling in seconds. `None` = engine default.
+    pub render_timeout: Option<u64>,
 }

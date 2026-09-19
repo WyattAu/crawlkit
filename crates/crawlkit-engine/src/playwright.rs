@@ -124,6 +124,11 @@ pub struct RenderedPage {
     pub network_requests: Vec<NetworkRequest>,
     /// WASM-related errors detected.
     pub wasm_errors: Vec<WasmError>,
+    /// Uncaught page errors (`pageerror` events) — exceptions that escaped
+    /// every handler and are the strongest client-side reliability signal.
+    /// Empty when the page rendered cleanly.
+    #[serde(default)]
+    pub page_errors: Vec<PageError>,
     /// Time taken to render the page.
     pub render_time: Duration,
     /// Memory used during render (bytes).
@@ -141,6 +146,7 @@ impl RenderedPage {
             console_message_count: self.console_messages.len(),
             network_request_count: self.network_requests.len(),
             wasm_error_count: self.wasm_errors.len(),
+            page_error_count: self.page_errors.len(),
             render_time_ms: Some(self.render_time.as_millis().min(u128::from(u64::MAX)) as u64),
             succeeded: true,
         }
@@ -155,6 +161,22 @@ pub struct ConsoleMessage {
     /// Message text.
     pub text: String,
     /// Source file URL (if available).
+    pub source: Option<String>,
+    /// Line number in source (if available).
+    pub line: Option<u32>,
+}
+
+/// Uncaught exception on the page (`pageerror` event in Playwright).
+///
+/// Distinct from a console message: an uncaught exception can abort script
+/// execution and leave the page half-hydrated even when nothing was logged
+/// to the console, which is exactly the failure mode crawlers otherwise
+/// miss.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PageError {
+    /// Exception message.
+    pub message: String,
+    /// Script URL that threw (if attributable).
     pub source: Option<String>,
     /// Line number in source (if available).
     pub line: Option<u32>,
@@ -490,6 +512,7 @@ const targetUrl = process.argv[2];
     
     const consoleMessages = [];
     const networkRequests = [];
+    const pageErrors = [];
     
     page.on('console', msg => {{
         consoleMessages.push({{
@@ -497,6 +520,18 @@ const targetUrl = process.argv[2];
             text: msg.text(),
             source: msg.location().url || null,
             line: msg.location().lineNumber || null
+        }});
+    }});
+    
+    // Uncaught exceptions: the events that never reach the console and can
+    // abort hydration, so they must be captured separately.
+    page.on('pageerror', err => {{
+        pageErrors.push({{
+            message: String(err.message ?? err),
+            source: (err.stack && typeof err.stack === 'string')
+                ? (err.stack.match(/^\s+at\s+.*?(https?:\/\/[^):\s]+)/) || [])[1] || null
+                : null,
+            line: null
         }});
     }});
     
@@ -547,6 +582,7 @@ const targetUrl = process.argv[2];
         console_messages: consoleMessages,
         network_requests: networkRequests,
         wasm_errors: wasmErrors,
+        page_errors: pageErrors,
         memory_used: process.memoryUsage().heapUsed
     }};
     
@@ -600,6 +636,7 @@ const targetUrl = process.argv[2];
             network_requests: serde_json::from_value(result["network_requests"].clone())
                 .unwrap_or_default(),
             wasm_errors: serde_json::from_value(result["wasm_errors"].clone()).unwrap_or_default(),
+            page_errors: serde_json::from_value(result["page_errors"].clone()).unwrap_or_default(),
             render_time: Duration::from_millis(0), // Will be set by caller
             memory_used: result["memory_used"].as_u64().unwrap_or(0),
         })
@@ -654,6 +691,7 @@ mod tests {
             }],
             network_requests: Vec::new(),
             wasm_errors: Vec::new(),
+            page_errors: Vec::new(),
             render_time: Duration::from_millis(12),
             memory_used: 1024,
         };

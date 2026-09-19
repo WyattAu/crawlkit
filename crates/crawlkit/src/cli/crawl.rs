@@ -191,6 +191,16 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         analyzer_profile,
         custom_analyzers: None,
         allow_private: params.allow_private,
+        render_budget: if params.render_max.is_some() || params.render_timeout.is_some() {
+            Some(std::sync::Arc::new(
+                crawlkit_engine::render_budget::RenderBudget::new(
+                    params.render_max,
+                    params.render_timeout.map(std::time::Duration::from_secs),
+                ),
+            ))
+        } else {
+            None
+        },
     };
 
     let engine = CrawlEngine::new(engine_config, storage);

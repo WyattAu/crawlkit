@@ -7,7 +7,7 @@
 
 [project]
 name = "crawlkit"
-version = "6.0.0-alpha.1"
+version = "6.0.0-alpha.2"
 msrv = "1.94.0"
 license = "Apache-2.0"
 
@@ -109,8 +109,9 @@ notes = "Graduated per ADR-015 (5.4.0): at-least-once delivery with lease TTLs a
 
 [capabilities.javascript_rendering]
 status = "optional"
-evidence = ["crates/crawlkit-engine/src/playwright.rs"]
+evidence = ["crates/crawlkit-engine/src/playwright.rs", "crates/crawlkit-engine/src/render_budget.rs", "crates/crawlkit-engine/tests/render_budget_tests.rs"]
 requirements = ["Playwright/browser runtime"]
+notes = "6.0.0-alpha.2: rendering is budgeted — per-crawl render quota (RENDER001 on exhaustion) and per-page render timeout (RENDER002), both degrading explicitly to static analysis, never silently; render telemetry counters (spawn/exhaustion/timeout/denied) on the engine metrics surface. Uncaught pageerror capture feeds the full-gated JsErrorAnalyzer (JSERR001/JSERR002). Exit criterion pinned by render_budget_tests.rs (1-page budget -> 1 render + 2 explicit degradations, no hang)."
 
 [capabilities.oidc]
 status = "stable-with-configuration"

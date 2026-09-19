@@ -9,11 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Workspace version bumped to 6.0.0-alpha.1** (no tag cut; the 6.0.0-alpha.1
-  rolling cut remains held per docs/RELEASE_6_0_0_ALPHA_PLAN.md). Required by
-  the semver gate: `Metrics.connector_deliveries_total` (alpha.1 groundwork,
-  below) adds a public field to the exhaustively-constructible `Metrics`
-  struct, which is major-breaking against the `v5.4.0` baseline.
+- **Workspace version bumped to 6.0.0-alpha.2** (tag `v6.0.0-alpha.2` cut
+  2026-09-19 as a consolidated rolling prerelease carrying both the alpha.1
+  "Warehouse Contracts" and alpha.2 "Render Budgets" streams — see
+  docs/RELEASE_6_0_0_ALPHA_PLAN.md for the consolidation rationale).
+  Required by the semver gate: the additions below extend public,
+  exhaustively-constructible structs against the `v5.4.0` semver baseline.
 
 ### Added
 
@@ -49,14 +50,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   real S3 upload against MinIO → signed read-back byte-compare; runs in
   CI (MinIO service added to the service-backed job) and locally against
   any S3-compatible endpoint via `WAREHOUSE_S3_*` env.
-- **6.0.0-alpha.1 groundwork — destination layout plans**: `crawlkit
-  export --layout s3|bigquery|snowflake` renders the crawl-scoped upload
-  plan (files + roles + load-command shape) as deterministic NDJSON from
-  the ADR-016 manifest bindings; a missing per-warehouse column binding
-  is a build-time contract error, never a load-time surprise. Usage
-  metering and quotas specified in ADR-017 (proposed; per-tenant,
-  storage-adjacent counters, unmetered default, ADR-012 exhaustion
-  posture).
+- **6.0.0-alpha.1 — BigQuery + Snowflake round-trip contracts**: the
+  BigQuery load body now sends manifest-derived per-table `fields` schemas
+  (the `_schema` sidecar remains for Snowflake/auditing); the round-trip
+  contract test loads all three v1 tables into goccy/bigquery-emulator and
+  verifies row counts + a value round-trip through `jobs.query` — wired
+  into CI's service-backed job. Snowflake is pinned by a loopback fake of
+  the SQL Statements API v2 (wire shape, statement-handle extraction, error
+  classification over real HTTP); a real-account smoke is an operator-owned
+  pre-stable item, not a CI dependency. The ADR-016 manifest drift gate now
+  validates all three v1 schema contracts (closed type vocabularies,
+  complete bindings, no orphan keys), pinned by mutation tests.
+- **6.0.0-alpha.2 — render budgets** (`full` feature): per-crawl render
+  quota + per-page render budget (`RenderBudget` on `CrawlEngineConfig`;
+  CLI `--render-max` / `--render-timeout`), enforced in the Playwright
+  render path with explicit degradation — quota exhaustion emits `RENDER001`
+  and a budget-timeout page emits `RENDER002`, each analyzed statically
+  instead of hanging or silently skipping. Rendering telemetry counters
+  (spawn rate, quota exhaustion, budget timeouts, denied events) ride the
+  engine's existing metrics surface; budget exhaustion degrades explicitly
+  (like the scanner's daily budget), never silently. Pinned by
+  `render_budget_tests.rs` (loopback SPA corpus + counting renderer).
+- **6.0.0-alpha.2 — JS-error findings class** (`full` feature): the render
+  script captures uncaught `pageerror` events, and the new full-gated
+  `JsErrorAnalyzer` emits `JSERR001` (uncaught exception — hydration often
+  aborted) and `JSERR002` (console errors). Analyzer registry 778 → 779;
+  findings schema and clients admit the new codes unchanged (open
+  vocabularies).
 
 ### Fixed
 

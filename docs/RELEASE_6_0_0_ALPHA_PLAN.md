@@ -1,6 +1,8 @@
 # crawlkit 6.0.0-alpha — Rolling Prerelease Plan
 
-**Status:** Proposed (maintainer decision to adopt) · **Date:** 2026-09-16
+**Status:** Proposed (maintainer decision to adopt) · **Date:** 2026-09-16 ·
+**Cuts shipped:** alpha.1 + alpha.2 (consolidated tag `v6.0.0-alpha.2`,
+2026-09-19)
 **Precedent:** the 5.3.0 cadence decision — ship the signed-release pipeline
 as rolling `alpha` cuts on small increments rather than one big-bang stable
 gate; each cut practices signing, SBOM, and rollback on real artifacts.
@@ -60,7 +62,7 @@ the full CI battery is green on the tagged commit — the exit criteria
 are now met. **The tag is NOT cut until the exit criteria are green on
 the tagged commit** — per the cadence rule above.
 
-### 6.0.0-alpha.2 — "Render Budgets"
+### 6.0.0-alpha.2 — "Render Budgets" (consolidated with alpha.1 into tag `v6.0.0-alpha.2`)
 
 | Item | Gate | Notes |
 |---|---|---|
@@ -70,6 +72,25 @@ the tagged commit** — per the cadence rule above.
 
 **Exit criteria:** a crawl with a 1-page render budget produces an explicit
 degradation finding, not a hang; benchmark class 5 recorded.
+
+**Progress 2026-09-19 (code complete):** all three items landed in one
+stream on `main` — `RenderBudget` (per-crawl quota + per-page budget) on
+`CrawlEngineConfig`, enforced in `render_js_if_needed` with explicit
+`RENDER001`/`RENDER002` degradation findings and render telemetry counters
+(spawn rate, quota-exhaustion, budget-timeout, denied events); CLI flags
+`--render-max` / `--render-timeout`; `JsErrorAnalyzer` (`JSERR001` uncaught
+pageerror / `JSERR002` console errors) consuming the render script's new
+`pageerror` capture, registered behind the `full` gate (registry 778 → 779,
+drift gate updated). Exit criterion pinned by
+`tests/render_budget_tests.rs`: a 1-page-budget crawl produces 1 render +
+2 explicit `RENDER001` degradations, never a hang. **Consolidation note
+(maintainer-adopted deviation, 2026-09-19):** alpha.1's exit criteria went
+green in CI on `main` (run 35463179497 — BQ emulator round-trip,
+MinIO round-trip, schema-contract gate) *after* the alpha.2 code stream
+had also landed on the same commit; cutting two tags two minutes apart
+was judged ceremony without evidence value, so **one tag,
+`v6.0.0-alpha.2`, carries both streams.** Both exit-criteria sets are
+green on the tagged commit per the cadence rule.
 
 ### 6.0.0-alpha.3 — "Metering"
 

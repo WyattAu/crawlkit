@@ -48,6 +48,9 @@ pub mod http_analyzers;
 /// Image accessibility analyzers.
 pub mod image_accessibility_analyzers;
 /// JavaScript error findings from rendered pages (6.0.0-alpha.2).
+/// Gated with the `full` feature: the analyzer consumes render-capture data
+/// and full-gated finding types, and is registered only under the same gate.
+#[cfg(feature = "full")]
 pub mod js_error_analyzers;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;

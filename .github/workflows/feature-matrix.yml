@@ -20,7 +20,7 @@ jobs:
           - name: warehouse
             args: '--features warehouse'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check crawlkit-engine (${{ matrix.name }})
@@ -39,13 +39,13 @@ jobs:
     name: Warehouse migration drill (ADR-016 §2.4)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Export → load → query → verify (independent-reader cycle)
         run: cargo test -p crawlkit-engine --features warehouse --test warehouse_drill -- --nocapture
       - name: Upload drill record
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: warehouse-drill-record
           path: warehouse-drill-out/drill_record.json
@@ -62,7 +62,7 @@ jobs:
           - name: shared-budget (multi-replica posture)
             args: '--features shared-budget'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Check crawlkit-scanner (${{ matrix.name }})

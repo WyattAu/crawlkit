@@ -12,7 +12,7 @@
 //! [percentile-kit]: https://github.com/WyattAu/percentile-kit
 #![allow(clippy::print_stderr, clippy::print_stdout)]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use percentile_kit::ReportError;
@@ -66,9 +66,66 @@ fn parse_args(args: impl Iterator<Item = String>) -> Result<Args, GateError> {
     })
 }
 
-/// Runs the gate: parse criterion output against the budgets, print the
-/// markdown table, then hard-fail on the first breached budget.
+/// The gate consumes criterion's estimates through percentile-kit,
+/// whose schema requires a full `slope` estimate group. Criterion 0.5
+/// legitimately writes `"slope": null` for benchmarks whose per-iteration
+/// slope is undefined (grouped/multi-iteration routines such as the url
+/// queue and storage benches), which would hard-fail the gate with
+/// `invalid criterion report JSON` on real output. The gate itself only
+/// reads the median (P50) and per-iteration times (P99), so null slopes
+/// are sanitized to a zero estimate in place before parsing.
+fn sanitize_null_slopes(criterion_dir: &Path) -> Result<(), GateError> {
+    for entry in collect_estimate_files(criterion_dir)? {
+        let raw = std::fs::read_to_string(&entry)
+            .map_err(|_| GateError::Args(format!("unreadable: {}", entry.display())))?;
+        let mut value: serde_json::Value = serde_json::from_str(&raw)
+            .map_err(|_| GateError::Args(format!("invalid JSON: {}", entry.display())))?;
+        if value.get("slope") == Some(&serde_json::Value::Null) {
+            value["slope"] = serde_json::json!({
+                "confidence_interval": {
+                    "confidence_level": 0.95,
+                    "lower_bound": 0.0,
+                    "upper_bound": 0.0
+                },
+                "point_estimate": 0.0,
+                "standard_error": 0.0
+            });
+            std::fs::write(&entry, value.to_string())
+                .map_err(|_| GateError::Args(format!("unwritable: {}", entry.display())))?;
+        }
+    }
+    Ok(())
+}
+
+/// Collects every `<dir>/new/estimates.json` under the criterion root
+/// (bench groups nest one or two levels deep) without pulling in a glob
+/// crate for one call site.
+fn collect_estimate_files(root: &Path) -> Result<Vec<PathBuf>, GateError> {
+    let mut found = Vec::new();
+    let mut queue = vec![root.to_path_buf()];
+    while let Some(dir) = queue.pop() {
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                let new_estimates = path.join("new").join("estimates.json");
+                if new_estimates.is_file() {
+                    found.push(new_estimates);
+                }
+                queue.push(path);
+            }
+        }
+    }
+    Ok(found)
+}
+
+/// Runs the gate: sanitize criterion output, parse it against the
+/// budgets, print the markdown table, then hard-fail on the first
+/// breached budget.
 fn run(args: &Args) -> Result<(), GateError> {
+    sanitize_null_slopes(&args.criterion_dir)?;
     let report = percentile_kit::check_budgets(&args.budgets, &args.criterion_dir)?;
     println!("{}", report.to_markdown());
     report.ensure_pass()?;

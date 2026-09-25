@@ -1189,6 +1189,7 @@ name = "crawlkit-budget-check"
 version = "6.0.0-alpha.2"
 dependencies = [
  "percentile-kit",
+ "serde_json",
  "tempfile",
  "thiserror 2.0.19",
  "toml 0.8.23",

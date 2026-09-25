@@ -9,13 +9,13 @@ updates:
       rust-production:
         dependency-type: production
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
       rust-development:
         dependency-type: development
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
     labels:
       - dependencies
       - rust
@@ -35,13 +35,13 @@ updates:
       dashboard-production:
         dependency-type: production
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
       dashboard-development:
         dependency-type: development
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
     labels:
       - dependencies
       - dashboard
@@ -57,13 +57,13 @@ updates:
       nodejs-client-production:
         dependency-type: production
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
       nodejs-client-development:
         dependency-type: development
         update-types:
-          - "version-update:semver-minor"
-          - "version-update:semver-patch"
+          - minor
+          - patch
     labels:
       - dependencies
       - nodejs

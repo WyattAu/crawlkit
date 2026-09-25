@@ -163,6 +163,7 @@ jobs:
           PYEOF
 
       - name: Find existing comment
+        if: github.event_name == 'pull_request'
         uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
         id: find_comment
         with:
@@ -171,6 +172,7 @@ jobs:
           body-includes: '## Benchmark Results'
 
       - name: Create or update comment
+        if: github.event_name == 'pull_request'
         uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         with:
           comment-id: ${{ steps.find_comment.outputs.comment-id }}

@@ -8,8 +8,14 @@ updates:
     groups:
       rust-production:
         dependency-type: production
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       rust-development:
         dependency-type: development
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     labels:
       - dependencies
       - rust
@@ -50,8 +56,14 @@ updates:
     groups:
       nodejs-client-production:
         dependency-type: production
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       nodejs-client-development:
         dependency-type: development
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     labels:
       - dependencies
       - nodejs

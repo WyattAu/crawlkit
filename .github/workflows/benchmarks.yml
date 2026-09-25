@@ -3,6 +3,7 @@ name: Benchmark Regression Detection
 on:
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,7 +33,7 @@ jobs:
         if: github.base_ref == 'main'
         run: |
           git checkout origin/main -- crates/crawlkit-engine/benches/ || true
-          cargo bench --workspace -- --output-format bencher | tee baseline.txt
+          cargo bench -p crawlkit-engine --features full --bench crawlkit_benchmarks -- --output-format bencher | tee baseline.txt
           git checkout HEAD -- crates/crawlkit-engine/benches/
 
       - name: Capture benchmark environment
@@ -44,11 +45,11 @@ jobs:
             echo "cargo=$(cargo --version)"
             echo "os=$(uname -a)"
             echo "cpu=$(nproc)"
-            echo "command=cargo bench --workspace -- --output-format bencher"
+            echo "            command=cargo bench -p crawlkit-engine --features full --bench crawlkit_benchmarks -- --output-format bencher"
           } | tee benchmark-artifacts/metadata.txt
 
       - name: Run benchmarks (PR)
-        run: cargo bench --workspace -- --output-format bencher | tee output.txt
+        run: cargo bench -p crawlkit-engine --features full --bench crawlkit_benchmarks -- --output-format bencher | tee output.txt
 
       - name: Upload benchmark evidence
         if: always()
@@ -162,6 +163,7 @@ jobs:
           PYEOF
 
       - name: Find existing comment
+        if: github.event_name == 'pull_request'
         uses: peter-evans/find-comment@b30e6a3c0ed37e7c023ccd3f1db5c6c0b0c23aad # v4.0.0
         id: find_comment
         with:
@@ -170,6 +172,7 @@ jobs:
           body-includes: '## Benchmark Results'
 
       - name: Create or update comment
+        if: github.event_name == 'pull_request'
         uses: peter-evans/create-or-update-comment@e8674b075228eee787fea43ef493e45ece1004c9 # v5.0.0
         with:
           comment-id: ${{ steps.find_comment.outputs.comment-id }}

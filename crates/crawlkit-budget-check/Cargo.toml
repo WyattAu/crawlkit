@@ -14,6 +14,7 @@ workspace = true
 
 [dependencies]
 percentile-kit = { version = "0.1", default-features = false, features = ["report"] }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
 

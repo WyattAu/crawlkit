@@ -20,7 +20,10 @@ use crawlkit_engine::export::destinations::reqwest_transport::ReqwestTransport;
 use crawlkit_engine::export::warehouse as wh;
 use crawlkit_engine::export::{LoadError, S3Client, S3Config};
 
-fn minio_config() -> Option<S3Config> {
+fn s3_test_config() -> Option<S3Config> {
+    // CI and local runs use LocalStack's S3 (MinIO withdrew its freely
+    // pullable community images: Docker Hub no longer hosts `minio/minio`
+    // and quay.io returns 401 for anonymous pulls).
     let endpoint = std::env::var("WAREHOUSE_S3_ENDPOINT").ok()?;
     Some(S3Config {
         bucket: std::env::var("WAREHOUSE_S3_BUCKET").unwrap_or_else(|_| "crawlkit-exports".into()),
@@ -111,7 +114,7 @@ fn fixture_export(crawl_id: &str) -> wh::ParquetCrawlExport {
 /// for the S3 destination.
 #[tokio::test]
 async fn s3_roundtrip_parquet_is_byte_identical() {
-    let Some(cfg) = minio_config() else {
+    let Some(cfg) = s3_test_config() else {
         eprintln!(
             "skipping: WAREHOUSE_S3_ENDPOINT not set — start MinIO and set the \
              WAREHOUSE_S3_* variables to run the live round-trip contract"
@@ -176,19 +179,53 @@ async fn s3_roundtrip_parquet_is_byte_identical() {
 /// Bad credentials must classify as **Fatal**, not retryable — the same
 /// posture as every other connector (retrying 403s is the bug that turns a
 /// misconfiguration into an outage).
+///
+/// The rejection is served by a loopback server reproducing S3's canonical
+/// 403 wire response (status + `AccessDenied` XML body) over real HTTP with
+/// the production reqwest transport: the client performs full SigV4 signing
+/// and live response classification. LocalStack's community edition accepts
+/// any credentials, so the live-rejection path is pinned here
+/// deterministically instead.
 #[tokio::test]
 async fn s3_error_classification_surfaces_from_live_transport() {
-    let Some(mut cfg) = minio_config() else {
-        eprintln!("skipping: WAREHOUSE_S3_ENDPOINT not set");
-        return;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    let body = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\
+                <Error><Code>AccessDenied</Code><Message>Access Denied</Message>\
+                <RequestId>RT-CONTRACT</RequestId></Error>";
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    let server = tokio::spawn(async move {
+        let (mut sock, _) = listener.accept().await.unwrap();
+        // Drain the signed PUT request head; the verdict is fixed.
+        let mut buf = [0u8; 8192];
+        let _ = sock.read(&mut buf).await;
+        let resp = format!(
+            "HTTP/1.1 403 Forbidden\r\nContent-Type: application/xml\r\n\
+             Content-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body.len(),
+            body
+        );
+        sock.write_all(resp.as_bytes()).await.unwrap();
+        sock.shutdown().await.unwrap();
+    });
+
+    let cfg = S3Config {
+        bucket: "rt-contract-bucket".into(),
+        region: "us-east-1".into(),
+        endpoint: format!("http://{addr}"),
+        access_key: "crawlkit".into(),
+        secret_key: "definitely-wrong".into(),
+        session_token: None,
+        path_style: true,
     };
-    cfg.secret_key = "definitely-wrong".into();
     let transport = ReqwestTransport::new();
     let client = S3Client::new(cfg, &transport);
-    match client
+    let result = client
         .put_object("rt-contract/negative.parquet", b"x".to_vec())
-        .await
-    {
+        .await;
+    server.await.unwrap();
+    match result {
         Err(LoadError::Fatal { status: 403, .. }) => {}
         other => panic!("expected Fatal(403) for bad credentials, got {other:?}"),
     }

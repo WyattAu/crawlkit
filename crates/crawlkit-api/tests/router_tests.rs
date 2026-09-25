@@ -16,10 +16,11 @@ use dashmap::DashMap;
 use serde_json::Value;
 use tower::ServiceExt;
 
+use chrono::Utc;
 use crawlkit_api::auth::{AuthManager, User};
 use crawlkit_api::router::create_router;
 use crawlkit_api::types::{
-    ApiKey, AppState, CrawlResult, LoginAttemptRecord, MarketplaceState, Metrics,
+    ApiKey, AppState, CrawlResult, LoginAttemptRecord, MarketplaceState, Metrics, Tenant,
     DEFAULT_MAX_CONCURRENT_CRAWLS,
 };
 
@@ -2856,4 +2857,225 @@ async fn ga4_credential_boundary_and_report_flow() {
         !audit_text.contains("refresh-material"),
         "token leaked in audit trail"
     );
+}
+
+// ---------------------------------------------------------------------------
+// ADR-017 usage metering + quota surface (6.0.0-alpha.3 exit criteria)
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn quota_refusal_is_explicit_and_machine_readable() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "acme", "admin", "password123!X"));
+    test.state.tenants.insert(
+        "acme".into(),
+        Tenant {
+            id: "acme".into(),
+            name: "ACME".into(),
+            created_at: Utc::now(),
+            retention_days: None,
+        },
+    );
+
+    // Set a zero crawl_started quota: a hard pause of that unit.
+    let token = test.token_for("root");
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "PUT",
+            "/api/v1/tenants/acme/quotas",
+            Some(serde_json::json!({"crawl_started": 0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "quota set must succeed: {body}");
+
+    // New crawl work is refused with 402 + machine-readable cause.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/crawls",
+            Some(serde_json::json!({"start_url": "https://example.com"})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
+    assert_eq!(body["cause"]["cause"], "quota_exhausted");
+    assert_eq!(body["cause"]["unit"], "crawl_started");
+    assert_eq!(body["cause"]["tenant_id"], "acme");
+    assert_eq!(body["cause"]["limit"], 0);
+    assert!(body["cause"]["resets"].is_string());
+    // No crawl result leaked for the refused submission.
+    assert!(test.state.crawl_results.is_empty());
+}
+
+#[tokio::test]
+async fn unmetered_tenant_passes_quota_gate() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "default", "admin", "password123!X"));
+
+    // No quota row exists: the default posture is unmetered. The crawl
+    // request must get past the quota gate (it fails later only because
+    // the test app has no crawl backend — which is a different error).
+    let token = test.token_for("root");
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "POST",
+            "/api/v1/crawls",
+            Some(serde_json::json!({"start_url": "https://example.com"})),
+        ))
+        .await;
+    assert_ne!(
+        status,
+        StatusCode::PAYMENT_REQUIRED,
+        "unmetered tenant must not see a quota refusal: {body}"
+    );
+}
+
+#[tokio::test]
+async fn usage_read_path_returns_rollups() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "acme", "admin", "password123!X"));
+    test.state.tenants.insert(
+        "acme".into(),
+        Tenant {
+            id: "acme".into(),
+            name: "ACME".into(),
+            created_at: Utc::now(),
+            retention_days: None,
+        },
+    );
+
+    // Record usage directly through the storage backend.
+    let day = crawlkit_engine::metering::day_floor(Utc::now());
+    test.state
+        .storage
+        .record_usage(&crawlkit_engine::metering::MeterEvent {
+            tenant_id: "acme".into(),
+            day_utc: day,
+            unit: crawlkit_engine::metering::MeteredUnit::Pages,
+            delta: 42,
+            dedupe_key: "c1".into(),
+        })
+        .unwrap();
+    test.state
+        .storage
+        .record_usage(&crawlkit_engine::metering::MeterEvent {
+            tenant_id: "acme".into(),
+            day_utc: day,
+            unit: crawlkit_engine::metering::MeteredUnit::Findings,
+            delta: 7,
+            dedupe_key: "c1".into(),
+        })
+        .unwrap();
+
+    let token = test.token_for("root");
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            &format!(
+                "/api/v1/tenants/acme/usage?from={}&to={}",
+                day.format("%Y-%m-%d"),
+                day.format("%Y-%m-%d")
+            ),
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    let rows = body.as_array().expect("usage array");
+    assert_eq!(rows.len(), 2);
+    let pages = rows
+        .iter()
+        .find(|r| r["unit"] == "pages")
+        .expect("pages row");
+    assert_eq!(pages["total"], 42);
+    let findings = rows
+        .iter()
+        .find(|r| r["unit"] == "findings")
+        .expect("findings row");
+    assert_eq!(findings["total"], 7);
+}
+
+#[tokio::test]
+async fn quota_round_trip_and_validation() {
+    let dir = tempfile::tempdir().unwrap();
+    let test = setup(dir.path());
+    test.state
+        .auth
+        .add_user(make_user("root", "acme", "admin", "password123!X"));
+    test.state.tenants.insert(
+        "acme".into(),
+        Tenant {
+            id: "acme".into(),
+            name: "ACME".into(),
+            created_at: Utc::now(),
+            retention_days: None,
+        },
+    );
+
+    let token = test.token_for("root");
+
+    // Default: unmetered (empty object → all fields absent).
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/tenants/acme/quotas", None))
+        .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+    assert_eq!(body, serde_json::json!({}));
+
+    // Set mixed limits.
+    let (status, body) = test
+        .send(test.authed(
+            &token,
+            "PUT",
+            "/api/v1/tenants/acme/quotas",
+            Some(serde_json::json!({"pages": 1000, "findings": 0})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["pages"], 1000);
+    assert_eq!(body["findings"], 0);
+    assert!(
+        body.get("crawl_started").is_none(),
+        "unset units stay unmetered and are omitted"
+    );
+
+    // Read-back agrees.
+    let (status, body) = test
+        .send(test.authed(&token, "GET", "/api/v1/tenants/acme/quotas", None))
+        .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["pages"], 1000);
+    assert_eq!(body["findings"], 0);
+
+    // Negative limits are rejected.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "PUT",
+            "/api/v1/tenants/acme/quotas",
+            Some(serde_json::json!({"pages": -5})),
+        ))
+        .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    // Unknown tenant 404s.
+    let (status, _) = test
+        .send(test.authed(
+            &token,
+            "GET",
+            "/api/v1/tenants/ghost/quotas",
+            None,
+        ))
+        .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
 }

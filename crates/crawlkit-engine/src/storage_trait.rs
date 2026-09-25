@@ -270,6 +270,83 @@ pub trait StorageBackend: Send + Sync {
     fn remove_rank_keyword(&self, _id: &str) -> Result<(), StorageError> {
         Err(StorageError::Unsupported("rank tracking".to_string()))
     }
+
+    // -------------------------------------------------------------------
+    // Usage metering (ADR-017, 6.0.0-alpha.3)
+    // -------------------------------------------------------------------
+
+    /// Records one metered-usage event by rolling its delta into the
+    /// `(tenant_id, day_utc, unit)` counter row (upsert).
+    ///
+    /// ADR-017 §2: recording is inline with acceptance/persistence;
+    /// overage records even when a quota is exhausted (telemetry, never
+    /// silently dropped). Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn record_usage(&self, _event: &crate::metering::MeterEvent) -> Result<(), StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
+
+    /// Reads a tenant's usage rollups between two UTC days (inclusive),
+    /// ordered by day then unit — the `GET /tenants/{id}/usage` read path.
+    ///
+    /// Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn get_usage(
+        &self,
+        _tenant_id: &str,
+        _from_day: chrono::DateTime<chrono::Utc>,
+        _to_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<crate::metering::UsageEntry>, StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
+
+    /// Reads today's (UTC) total for one tenant/unit pair — the quota
+    /// check input. No row means zero used.
+    ///
+    /// Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn get_usage_today(
+        &self,
+        _tenant_id: &str,
+        _unit: crate::metering::MeteredUnit,
+    ) -> Result<i64, StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
+
+    /// Writes a tenant's quota row (all five units at once; `None` limits
+    /// are unmetered).
+    ///
+    /// Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn set_quota(
+        &self,
+        _tenant_id: &str,
+        _quota: &crate::metering::Quota,
+    ) -> Result<(), StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
+
+    /// Reads a tenant's quota row. No row means unmetered
+    /// ([`crate::metering::Quota::default()`] — the ADR-017 §3 default
+    /// posture).
+    ///
+    /// Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn get_quota(&self, _tenant_id: &str) -> Result<crate::metering::Quota, StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
+
+    /// Purges usage counter rows strictly older than `before_day`.
+    /// Returns the number of rows deleted.
+    ///
+    /// Backends without metering support return
+    /// [`StorageError::Unsupported`].
+    fn purge_usage_before(
+        &self,
+        _before_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, StorageError> {
+        Err(StorageError::Unsupported("usage metering".to_string()))
+    }
 }
 
 /// Create an in-memory storage backend suitable for testing.

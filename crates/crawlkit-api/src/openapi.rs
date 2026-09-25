@@ -89,6 +89,8 @@ use utoipa::{Modify, OpenApi};
             crate::types::RetentionResponse,
             crate::types::CreateUserRequest,
             crate::types::CreateWebhookRequest,
+            crate::handlers::usage::QuotaDto,
+            crate::handlers::usage::UsageEntryDto,
             crate::types::CrawlFinding,
             crate::types::CrawlResponse,
             crate::types::CrawlResult,

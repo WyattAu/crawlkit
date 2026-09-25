@@ -91,6 +91,35 @@ pub async fn start_crawl(
     let crawl_id = Uuid::new_v4().to_string();
     let tenant_id = extract_tenant(&claims).to_string();
 
+    // Quota enforcement (ADR-017 §3): refuse new work with an explicit,
+    // machine-readable cause when the tenant's daily `crawl_started`
+    // quota is exhausted. Unmetered tenants (no quota row) always pass.
+    {
+        let storage = state.storage.clone();
+        let tid = tenant_id.clone();
+        let (used, quota) = tokio::task::spawn_blocking(move || {
+            let used =
+                storage.get_usage_today(&tid, crawlkit_engine::metering::MeteredUnit::CrawlStarted);
+            let quota = storage.get_quota(&tid);
+            (used, quota)
+        })
+        .await
+        .map_err(|e| ApiError::Internal(format!("storage task panicked: {e}")))?;
+        let used = used.map_err(|e| ApiError::Internal(format!("usage read failed: {e}")))?;
+        let quota = quota.map_err(|e| ApiError::Internal(format!("quota read failed: {e}")))?;
+        if let crawlkit_engine::metering::QuotaVerdict::Exhausted { limit } = quota.verdict(
+            crawlkit_engine::metering::MeteredUnit::CrawlStarted,
+            used,
+            1,
+        ) {
+            return Err(ApiError::QuotaExhausted {
+                tenant_id,
+                unit: "crawl_started".into(),
+                limit,
+            });
+        }
+    }
+
     // The engine owns the storage row (it starts the crawl inside
     // `run_with_callback` and reports the id via `CrawlOutput`); the API-level
     // crawl_id above is the public identifier tracked in `crawl_results`.

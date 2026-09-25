@@ -1,5 +1,16 @@
 # Billing Integration Guide
 
+> **SUPERSEDED (2026-09-25):** This document was aspirational and predates
+> a working system. Billing/invoicing/payment integration is a non-goal
+> for this codebase (PRODUCT_STRATEGY §5). The source of truth for usage
+> accounting is **ADR-017** (`.adrs/ADR-017-usage-metering-and-quotas.md`),
+> implemented in 6.0.0-alpha.3: per-tenant metering and quota surface
+> (`crawlkit_engine::metering`, `GET|PUT /tenants/{id}/quotas`,
+> `GET /tenants/{id}/usage`, `crawlkit usage`). This guide is retained
+> below for historical context only.
+
+---
+
 This guide covers integrating Stripe for billing in crawlkit.
 
 ## Setup

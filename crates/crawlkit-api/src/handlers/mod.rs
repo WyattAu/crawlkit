@@ -8,5 +8,6 @@ pub mod health;
 pub mod marketplace;
 pub mod schedules;
 pub mod tenants;
+pub mod usage;
 pub mod users;
 pub mod webhooks;

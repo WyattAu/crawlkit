@@ -258,6 +258,18 @@ async fn main() -> Result<()> {
         Commands::Plugin { command } => cli::plugin::run(command),
         Commands::LogAnalyze(args) => cli::log_analyze::run(args),
         #[cfg(feature = "full")]
+        Commands::Usage {
+            db,
+            tenant,
+            from,
+            to,
+        } => cli::usage::run(cli::usage::UsageParams {
+            db,
+            tenant,
+            from,
+            to,
+        }),
+        #[cfg(feature = "full")]
         Commands::Trend {
             db,
             crawl_ids,

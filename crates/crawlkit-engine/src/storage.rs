@@ -521,6 +521,25 @@ impl Storage {
                 PRIMARY KEY (query, date, source)
             );
 
+            CREATE TABLE IF NOT EXISTS usage_counters (
+                tenant_id   TEXT NOT NULL,
+                day_utc     TEXT NOT NULL,
+                unit        TEXT NOT NULL,
+                total       INTEGER NOT NULL DEFAULT 0,
+                updated_at  DATETIME NOT NULL,
+                PRIMARY KEY (tenant_id, day_utc, unit)
+            );
+
+            CREATE TABLE IF NOT EXISTS usage_quotas (
+                tenant_id      TEXT PRIMARY KEY,
+                pages          INTEGER,
+                crawl_started  INTEGER,
+                findings       INTEGER,
+                export_bytes   INTEGER,
+                scan_submitted INTEGER,
+                updated_at     DATETIME NOT NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_pages_crawl ON pages(crawl_id);
             CREATE INDEX IF NOT EXISTS idx_pages_tenant ON pages(tenant_id);
             CREATE INDEX IF NOT EXISTS idx_links_source ON links(source_url);
@@ -531,6 +550,7 @@ impl Storage {
             CREATE INDEX IF NOT EXISTS idx_findings_tenant ON findings(tenant_id);
             CREATE INDEX IF NOT EXISTS idx_rank_keywords_project ON rank_keywords(project_id);
             CREATE INDEX IF NOT EXISTS idx_rank_positions_keyword ON rank_positions(keyword_id, checked_at);
+            CREATE INDEX IF NOT EXISTS idx_usage_counters_tenant ON usage_counters(tenant_id, day_utc);
             ",
         )?;
 
@@ -601,6 +621,199 @@ impl Storage {
             ],
         )?;
         Ok(())
+    }
+
+    // -----------------------------------------------------------------------
+    // Usage metering (ADR-017, 6.0.0-alpha.3)
+    // -----------------------------------------------------------------------
+
+    /// Records metered usage by rolling one event's delta into the
+    /// `(tenant_id, day_utc, unit)` counter row (upsert). Append-only in
+    /// effect: totals only ever increase; corrections are new events.
+    ///
+    /// Records even when the quota is exhausted — overage is recorded as
+    /// telemetry, never silently dropped (ADR-017 §3).
+    pub fn record_usage(&self, event: &crate::metering::MeterEvent) -> Result<(), StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO usage_counters (tenant_id, day_utc, unit, total, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)
+             ON CONFLICT(tenant_id, day_utc, unit)
+             DO UPDATE SET total = total + ?4, updated_at = ?5",
+            params![
+                event.tenant_id,
+                event.day_utc.to_rfc3339(),
+                event.unit.as_str(),
+                event.delta,
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Reads a tenant's usage rollups between two UTC days (inclusive),
+    /// ordered by day then unit — the `GET /tenants/{id}/usage` read path.
+    pub fn get_usage(
+        &self,
+        tenant_id: &str,
+        from_day: chrono::DateTime<chrono::Utc>,
+        to_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<crate::metering::UsageEntry>, StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT unit, day_utc, total FROM usage_counters
+             WHERE tenant_id = ?1 AND day_utc >= ?2 AND day_utc <= ?3
+             ORDER BY day_utc, unit",
+        )?;
+        let rows = stmt
+            .query_map(
+                params![tenant_id, from_day.to_rfc3339(), to_day.to_rfc3339()],
+                |row| {
+                    let unit_name: String = row.get(0)?;
+                    let day_raw: String = row.get(1)?;
+                    let total: i64 = row.get(2)?;
+                    Ok((unit_name, day_raw, total))
+                },
+            )?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+        drop(conn);
+        rows.into_iter()
+            .map(|(unit_name, day_raw, total)| {
+                let unit =
+                    crate::metering::MeteredUnit::from_str_opt(&unit_name).ok_or_else(|| {
+                        StorageError::Unsupported(format!("unknown metered unit {unit_name:?}"))
+                    })?;
+                let day_utc = chrono::DateTime::parse_from_rfc3339(&day_raw)
+                    .map_err(|e| {
+                        StorageError::Database(rusqlite::Error::ToSqlConversionFailure(Box::new(e)))
+                    })?
+                    .with_timezone(&chrono::Utc);
+                Ok(crate::metering::UsageEntry {
+                    unit,
+                    day_utc,
+                    total,
+                })
+            })
+            .collect()
+    }
+
+    /// Reads today's (UTC) total for one tenant/unit pair — the quota
+    /// check input. No row means zero used.
+    pub fn get_usage_today(
+        &self,
+        tenant_id: &str,
+        unit: crate::metering::MeteredUnit,
+    ) -> Result<i64, StorageError> {
+        let conn = self.conn.lock();
+        let day = crate::metering::day_floor(chrono::Utc::now());
+        let total: Option<i64> = conn
+            .query_row(
+                "SELECT total FROM usage_counters
+                 WHERE tenant_id = ?1 AND day_utc = ?2 AND unit = ?3",
+                params![tenant_id, day.to_rfc3339(), unit.as_str()],
+                |row| row.get(0),
+            )
+            .map(Some)
+            .or_else(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(other),
+            })?;
+        Ok(total.unwrap_or(0))
+    }
+
+    /// Writes a tenant's quota row (all five units at once; `None` limits
+    /// are unmetered). The quotas table is part of `usage_quotas`.
+    pub fn set_quota(
+        &self,
+        tenant_id: &str,
+        quota: &crate::metering::Quota,
+    ) -> Result<(), StorageError> {
+        let conn = self.conn.lock();
+        conn.execute(
+            "INSERT INTO usage_quotas (tenant_id, pages, crawl_started, findings, export_bytes, scan_submitted, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)
+             ON CONFLICT(tenant_id) DO UPDATE SET
+               pages = ?2, crawl_started = ?3, findings = ?4,
+               export_bytes = ?5, scan_submitted = ?6, updated_at = ?7",
+            params![
+                tenant_id,
+                quota.pages,
+                quota.crawl_started,
+                quota.findings,
+                quota.export_bytes,
+                quota.scan_submitted,
+                Utc::now().to_rfc3339(),
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Rolls metered usage into the counters table for a batch of work
+    /// attributed to one tenant. ADR-017 §2: recording is inline with
+    /// persistence; un-tenanted work (self-hosted default) records nothing.
+    /// Overage still records (telemetry, never silently dropped).
+    fn meter_batch(
+        &self,
+        tenant_id: Option<&str>,
+        unit: crate::metering::MeteredUnit,
+        delta: i64,
+        dedupe_key: &str,
+    ) -> Result<(), StorageError> {
+        if let Some(tenant) = tenant_id {
+            self.record_usage(&crate::metering::MeterEvent {
+                tenant_id: tenant.to_string(),
+                day_utc: crate::metering::day_floor(Utc::now()),
+                unit,
+                delta,
+                dedupe_key: dedupe_key.to_string(),
+            })?;
+        }
+        Ok(())
+    }
+
+    /// Purges usage counter rows strictly older than `before_day`.
+    ///
+    /// ADR-017 open question 2: usage rows follow the tenant retention
+    /// horizon; this is the aggregate-row sweep (default 400 days per the
+    /// ADR proposal). Returns the number of rows deleted.
+    pub fn purge_usage_before(
+        &self,
+        before_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, StorageError> {
+        let conn = self.conn.lock();
+        let n = conn.execute(
+            "DELETE FROM usage_counters WHERE day_utc < ?1",
+            params![before_day.to_rfc3339()],
+        )?;
+        Ok(n)
+    }
+
+    /// Reads a tenant's quota row. No row means unmetered
+    /// (`Quota::default()` — the ADR-017 §3 default posture).
+    pub fn get_quota(&self, tenant_id: &str) -> Result<crate::metering::Quota, StorageError> {
+        let conn = self.conn.lock();
+        let row = conn
+            .query_row(
+                "SELECT pages, crawl_started, findings, export_bytes, scan_submitted
+                 FROM usage_quotas WHERE tenant_id = ?1",
+                params![tenant_id],
+                |row| {
+                    Ok(crate::metering::Quota {
+                        pages: row.get(0)?,
+                        crawl_started: row.get(1)?,
+                        findings: row.get(2)?,
+                        export_bytes: row.get(3)?,
+                        scan_submitted: row.get(4)?,
+                    })
+                },
+            )
+            .map(Some)
+            .or_else(|e| match e {
+                rusqlite::Error::QueryReturnedNoRows => Ok(None),
+                other => Err(other),
+            })?;
+        Ok(row.unwrap_or_default())
     }
 
     /// Purge crawls older than `max_age_days` days.
@@ -915,6 +1128,27 @@ impl Storage {
         drop(link_stmt);
         drop(page_stmt);
         tx.commit()?;
+        // Meter `pages` per tenant (ADR-017 §1: one page fetched AND
+        // analyzed = the page-write acceptance point). A batch may mix
+        // tenants; group deltas per tenant so one upsert per tenant lands.
+        {
+            let mut per_tenant: std::collections::BTreeMap<&str, i64> =
+                std::collections::BTreeMap::new();
+            for page in pages {
+                if let Some(t) = page.tenant_id.as_deref() {
+                    *per_tenant.entry(t).or_insert(0) += 1;
+                }
+            }
+            drop(conn);
+            for (tenant, count) in per_tenant {
+                self.meter_batch(
+                    Some(tenant),
+                    crate::metering::MeteredUnit::Pages,
+                    count,
+                    crawl_id,
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -982,6 +1216,26 @@ impl Storage {
         }
         drop(stmt);
         tx.commit()?;
+        // Meter `findings` per tenant (ADR-017 §1: the analyzer output
+        // volume — drives downstream warehouse cost).
+        {
+            let mut per_tenant: std::collections::BTreeMap<&str, i64> =
+                std::collections::BTreeMap::new();
+            for issue in issues {
+                if let Some(t) = issue.tenant_id.as_deref() {
+                    *per_tenant.entry(t).or_insert(0) += 1;
+                }
+            }
+            drop(conn);
+            for (tenant, count) in per_tenant {
+                self.meter_batch(
+                    Some(tenant),
+                    crate::metering::MeteredUnit::Findings,
+                    count,
+                    "findings-batch",
+                )?;
+            }
+        }
         Ok(())
     }
 
@@ -1888,12 +2142,57 @@ impl crate::storage_trait::StorageBackend for Storage {
         Storage::remove_rank_keyword(self, id)
     }
 
-    fn start_crawl(
+    fn start_crawl(&self, seed_url: &str, tenant_id: Option<&str>) -> Result<String, StorageError> {
+        let crawl_id = self.start_crawl(seed_url, None)?;
+        // Meter `crawl_started` (ADR-017 §1: the single most billable
+        // event) at the acceptance point — the crawl row exists.
+        self.meter_batch(
+            tenant_id,
+            crate::metering::MeteredUnit::CrawlStarted,
+            1,
+            &crawl_id,
+        )?;
+        Ok(crawl_id)
+    }
+
+    fn record_usage(&self, event: &crate::metering::MeterEvent) -> Result<(), StorageError> {
+        Storage::record_usage(self, event)
+    }
+
+    fn get_usage(
         &self,
-        seed_url: &str,
-        _tenant_id: Option<&str>,
-    ) -> Result<String, StorageError> {
-        self.start_crawl(seed_url, None)
+        tenant_id: &str,
+        from_day: chrono::DateTime<chrono::Utc>,
+        to_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Vec<crate::metering::UsageEntry>, StorageError> {
+        Storage::get_usage(self, tenant_id, from_day, to_day)
+    }
+
+    fn get_usage_today(
+        &self,
+        tenant_id: &str,
+        unit: crate::metering::MeteredUnit,
+    ) -> Result<i64, StorageError> {
+        Storage::get_usage_today(self, tenant_id, unit)
+    }
+
+    fn set_quota(
+        &self,
+        tenant_id: &str,
+        quota: &crate::metering::Quota,
+    ) -> Result<(), StorageError> {
+        Storage::set_quota(self, tenant_id, quota)
+    }
+
+    fn get_quota(&self, tenant_id: &str) -> Result<crate::metering::Quota, StorageError> {
+        Storage::get_quota(self, tenant_id)
+    }
+
+    fn purge_usage_before(
+        &self,
+        before_day: chrono::DateTime<chrono::Utc>,
+    ) -> Result<usize, StorageError> {
+        Storage::purge_usage_before(self, before_day)
     }
 
     fn finish_crawl(
@@ -2908,5 +3207,176 @@ mod tests {
             assert_eq!(a.finding_codes, b.finding_codes);
             assert_eq!(a.recommendation, b.recommendation);
         }
+    }
+}
+
+#[cfg(test)]
+mod metering_tests {
+    #![allow(clippy::unwrap_used)]
+    use super::*;
+    use crate::metering::{day_floor, MeterEvent, MeteredUnit, Quota, QuotaVerdict};
+
+    #[test]
+    fn usage_rollup_upserts_accumulate_per_tenant_day_unit() {
+        let storage = Storage::new_in_memory().unwrap();
+        let day = day_floor(Utc::now());
+        let ev = |delta: i64| MeterEvent {
+            tenant_id: "tenant-a".into(),
+            day_utc: day,
+            unit: MeteredUnit::Pages,
+            delta,
+            dedupe_key: format!("p{delta}"),
+        };
+        storage.record_usage(&ev(10)).unwrap();
+        storage.record_usage(&ev(15)).unwrap();
+        // Same unit, different tenant: isolated.
+        storage
+            .record_usage(&MeterEvent {
+                tenant_id: "tenant-b".into(),
+                ..ev(7)
+            })
+            .unwrap();
+
+        let usage = storage.get_usage("tenant-a", day, day).unwrap();
+        assert_eq!(usage.len(), 1);
+        assert_eq!(usage[0].unit, MeteredUnit::Pages);
+        assert_eq!(usage[0].total, 25);
+    }
+
+    #[test]
+    fn usage_today_starts_at_zero_and_only_counts_today() {
+        let storage = Storage::new_in_memory().unwrap();
+        assert_eq!(
+            storage
+                .get_usage_today("t", MeteredUnit::CrawlStarted)
+                .unwrap(),
+            0
+        );
+        storage
+            .record_usage(&MeterEvent::rollup("t", MeteredUnit::CrawlStarted, 1, "c1"))
+            .unwrap();
+        assert_eq!(
+            storage
+                .get_usage_today("t", MeteredUnit::CrawlStarted)
+                .unwrap(),
+            1
+        );
+        // A yesterday-dated event does not affect today's counter.
+        let yesterday = day_floor(Utc::now()) - chrono::Duration::days(1);
+        storage
+            .record_usage(&MeterEvent {
+                day_utc: yesterday,
+                dedupe_key: "old".into(),
+                ..MeterEvent::rollup("t", MeteredUnit::Pages, 500, "old")
+            })
+            .unwrap();
+        assert_eq!(storage.get_usage_today("t", MeteredUnit::Pages).unwrap(), 0);
+        // …but the read path (range query) sees it.
+        assert_eq!(
+            storage
+                .get_usage("t", yesterday, day_floor(Utc::now()))
+                .unwrap()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn quota_round_trip_and_unmetered_default() {
+        let storage = Storage::new_in_memory().unwrap();
+        // No row → unmetered.
+        assert_eq!(storage.get_quota("t").unwrap(), Quota::default());
+
+        let quota = Quota {
+            pages: Some(1_000),
+            crawl_started: Some(10),
+            findings: None,
+            export_bytes: Some(50_000_000),
+            scan_submitted: None,
+        };
+        storage.set_quota("t", &quota).unwrap();
+        assert_eq!(storage.get_quota("t").unwrap(), quota);
+        // Upsert overwrites.
+        let updated = Quota {
+            pages: Some(2_000),
+            ..Quota::default()
+        };
+        storage.set_quota("t", &updated).unwrap();
+        assert_eq!(storage.get_quota("t").unwrap(), updated);
+    }
+
+    #[test]
+    fn quota_enforcement_semantics_end_to_end() {
+        let storage = Storage::new_in_memory().unwrap();
+        storage
+            .set_quota(
+                "t",
+                &Quota {
+                    crawl_started: Some(2),
+                    ..Quota::default()
+                },
+            )
+            .unwrap();
+        let unit = MeteredUnit::CrawlStarted;
+
+        // Crawl 1: allowed.
+        let used = storage.get_usage_today("t", unit).unwrap();
+        assert!(storage
+            .get_quota("t")
+            .unwrap()
+            .verdict(unit, used, 1)
+            .is_acceptable());
+        storage
+            .record_usage(&MeterEvent::rollup("t", unit, 1, "c1"))
+            .unwrap();
+
+        // Crawl 2: still allowed (used 1 + 1 <= 2).
+        let used = storage.get_usage_today("t", unit).unwrap();
+        assert!(storage
+            .get_quota("t")
+            .unwrap()
+            .verdict(unit, used, 1)
+            .is_acceptable());
+        storage
+            .record_usage(&MeterEvent::rollup("t", unit, 1, "c2"))
+            .unwrap();
+
+        // Crawl 3: exhausted — refuse with a machine-readable verdict.
+        let used = storage.get_usage_today("t", unit).unwrap();
+        match storage.get_quota("t").unwrap().verdict(unit, used, 1) {
+            QuotaVerdict::Exhausted { limit: 2 } => {}
+            other => panic!("expected Exhausted(2), got {other:?}"),
+        }
+        // Overage still records as telemetry.
+        storage
+            .record_usage(&MeterEvent::rollup("t", unit, 1, "c3-overage"))
+            .unwrap();
+        assert_eq!(storage.get_usage_today("t", unit).unwrap(), 3);
+    }
+
+    #[test]
+    fn usage_purge_respects_retention_horizon() {
+        // ADR-017 open question 2: usage rows follow the tenant retention
+        // horizon. The purge path is `purge_usage_before`; verify old rows
+        // go and fresh rows stay.
+        let storage = Storage::new_in_memory().unwrap();
+        let now = day_floor(Utc::now());
+        let old = now - chrono::Duration::days(500);
+        for (day, key) in [(old, "old"), (now, "new")] {
+            storage
+                .record_usage(&MeterEvent {
+                    tenant_id: "t".into(),
+                    day_utc: day,
+                    unit: MeteredUnit::Pages,
+                    delta: 1,
+                    dedupe_key: key.into(),
+                })
+                .unwrap();
+        }
+        let purged = storage.purge_usage_before(now).unwrap();
+        assert_eq!(purged, 1);
+        let remaining = storage.get_usage("t", old, now).unwrap();
+        assert_eq!(remaining.len(), 1);
+        assert_eq!(remaining[0].total, 1);
     }
 }

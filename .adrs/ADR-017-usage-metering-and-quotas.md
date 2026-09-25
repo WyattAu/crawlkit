@@ -1,6 +1,6 @@
 # ADR-017: Usage Metering and Quotas — Per-Tenant Accounting for the Scale Phase
 
-**Status:** Proposed (6.0.0-alpha.3 stream; maintainer acceptance required before implementation)
+**Status:** Accepted (2026-09-25; implemented for 6.0.0-alpha.3 — open questions resolved per the proposals below: refusals are telemetry, usage aggregate rows follow a 400-day default horizon via `purge_usage_before`)
 **Date:** 2026-09-16
 **Deciders:** Maintainers
 **Related:** ADR-008 (API backpressure and idempotency), ADR-012 (hosted scanner — the refusals posture precedent), ADR-015 (Redis lease queue), ADR-016 (warehouse export schema contract), docs/PRODUCT_STRATEGY.md §3 (6.0.0 "Usage metering + quota surface" row; replaces aspirational docs/BILLING.md), docs/ROADMAP.md Phase 3.4

@@ -907,6 +907,17 @@ pub enum ApiError {
     Overloaded {
         retry_after_secs: u32,
     },
+    /// Per-tenant daily quota exhausted (ADR-017 §3): explicit,
+    /// machine-readable refusal — new work is refused until the UTC
+    /// boundary, in-flight work finishes, overage records as telemetry.
+    QuotaExhausted {
+        /// Tenant the exhausted quota belongs to.
+        tenant_id: String,
+        /// Which unit hit its limit.
+        unit: String,
+        /// The configured daily limit.
+        limit: i64,
+    },
     Internal(String),
 }
 
@@ -922,15 +933,36 @@ impl ApiError {
             | ApiError::Internal(msg) => msg.clone(),
             ApiError::RateLimited => "Rate limit exceeded".to_string(),
             ApiError::Overloaded { .. } => "Server at crawl capacity".to_string(),
+            ApiError::QuotaExhausted {
+                tenant_id,
+                unit,
+                limit,
+            } => {
+                format!("Daily quota for `{unit}` exhausted for tenant `{tenant_id}` (limit {limit}); resets at the next UTC day")
+            }
         }
     }
 }
 
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
-        let retry_after = match &self {
-            ApiError::Overloaded { retry_after_secs } => Some(*retry_after_secs),
-            _ => None,
+        let (retry_after, quota_cause) = match &self {
+            ApiError::Overloaded { retry_after_secs } => (Some(*retry_after_secs), None),
+            ApiError::QuotaExhausted {
+                tenant_id,
+                unit,
+                limit,
+            } => (
+                None,
+                Some(serde_json::json!({
+                    "cause": "quota_exhausted",
+                    "tenant_id": tenant_id,
+                    "unit": unit,
+                    "limit": limit,
+                    "resets": "next UTC day",
+                })),
+            ),
+            _ => (None, None),
         };
         let (status, message) = match &self {
             ApiError::Unauthorized(msg) => (StatusCode::UNAUTHORIZED, msg.clone()),
@@ -945,6 +977,12 @@ impl IntoResponse for ApiError {
                 StatusCode::SERVICE_UNAVAILABLE,
                 "Server at crawl capacity; retry after the indicated interval".to_string(),
             ),
+            ApiError::QuotaExhausted { tenant_id, unit, limit } => (
+                StatusCode::PAYMENT_REQUIRED,
+                format!(
+                    "Daily quota for `{unit}` exhausted for tenant `{tenant_id}` (limit {limit}); resets at the next UTC day"
+                ),
+            ),
             ApiError::Internal(msg) => (StatusCode::INTERNAL_SERVER_ERROR, msg.clone()),
         };
 
@@ -956,10 +994,14 @@ impl IntoResponse for ApiError {
             );
         }
 
-        let body = Json(serde_json::json!({
+        let mut body = serde_json::json!({
             "error": message,
             "status": status.as_u16(),
-        }));
+        });
+        if let Some(cause) = quota_cause {
+            body["cause"] = cause;
+        }
+        let body = Json(body);
 
         let mut response = (status, body).into_response();
         if let Some(secs) = retry_after {

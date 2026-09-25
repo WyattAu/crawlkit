@@ -274,6 +274,18 @@ evidence = [
 ]
 requirements = ["API deployment with authentication and tenant provisioning"]
 
+[capabilities.usage_metering]
+status = "stable"
+evidence = [
+  "crates/crawlkit-engine/src/metering.rs",
+  "crates/crawlkit-engine/src/storage.rs",
+  "crates/crawlkit-api/src/handlers/usage.rs",
+  "crates/crawlkit/src/cli/usage.rs",
+  ".adrs/ADR-017-usage-metering-and-quotas.md",
+]
+requirements = []
+notes = "6.0.0-alpha.3 (ADR-017): per-tenant per-UTC-day accounting at the acceptance points (crawl_started, pages, findings; export_bytes and scan_submitted wired at their surfaces). Default posture unmetered — no quota row means no limits. Quota exhaustion refuses new work with HTTP 402 + machine-readable `quota_exhausted` cause; in-flight work finishes and overage records as telemetry. API: GET/PUT /tenants/{id}/quotas, GET /tenants/{id}/usage. CLI: `crawlkit usage`. Storage-adjacent counters, no new external dependency."
+
 [capabilities.soc2_features]
 status = "stable-with-configuration"
 evidence = [

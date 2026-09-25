@@ -27,6 +27,9 @@ pub mod report;
 pub mod schedule;
 #[cfg(feature = "full")]
 pub mod trend;
+/// `crawlkit usage` — ADR-017 read-only usage mirror.
+#[cfg(feature = "full")]
+pub mod usage;
 #[cfg(feature = "full")]
 pub mod util;
 
@@ -371,6 +374,26 @@ pub enum Commands {
 
     /// Analyze web server access logs
     LogAnalyze(LogAnalyzeArgs),
+
+    /// Show per-tenant usage metering rollups (ADR-017 read-only mirror)
+    #[cfg(feature = "full")]
+    Usage {
+        /// Path to the crawlkit storage database (e.g. <out-dir>/crawlkit.db)
+        #[arg(long)]
+        db: PathBuf,
+
+        /// Tenant id to report usage for
+        #[arg(long)]
+        tenant: String,
+
+        /// Inclusive start UTC date (YYYY-MM-DD; defaults to 30 days ago)
+        #[arg(long)]
+        from: Option<String>,
+
+        /// Inclusive end UTC date (YYYY-MM-DD; defaults to today)
+        #[arg(long)]
+        to: Option<String>,
+    },
 
     /// Inspect and re-drive dead-lettered queue entries (ADR-015 §3)
     #[cfg(feature = "queue-ops")]

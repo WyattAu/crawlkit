@@ -99,6 +99,27 @@ green on the tagged commit per the cadence rule.
 | Usage metering (per-tenant crawl/export/render accounting) | ADR required first | New ADR: units of measure, recording point, storage, retention. Replaces aspirational docs/BILLING.md. |
 | Quota surface (API + dashboard read path) | ADR for API changes | Quota exhaustion mirrors the scanner posture: explicit refusals with machine-readable cause. |
 
+**Progress 2026-09-25 (code complete):** ADR-017 accepted (open questions
+resolved per its own proposals: refusals are telemetry, aggregate rows use
+a 400-day default horizon). Metering core landed
+(`crawlkit_engine::metering`: units, quota verdicts, explicit-refusal
+semantics) with storage-adjacent counters (`usage_counters` /
+`usage_quotas` tables, delta upserts — no new external dependency).
+Recording is wired at the acceptance points: `start_crawl` (crawl_started,
+the trait acceptance including the engine path), `insert_pages` (pages,
+per-tenant batched), `insert_issues` (findings). Un-tenanted (self-hosted)
+work records nothing — zero overhead for the OSS default. API surface:
+`GET/PUT /api/v1/tenants/{id}/quotas`, `GET
+/api/v1/tenants/{id}/usage`; crawl submission refuses with HTTP 402 +
+machine-readable `quota_exhausted` cause when the tenant's daily
+`crawl_started` quota is exhausted. CLI read-only mirror: `crawlkit
+usage`. Exit criteria: ADR accepted before merge (done), API semver
+additive-only (new endpoints + one ApiError variant; semver check runs in
+CI), quota exhaustion pinned by tests (engine `metering` suite 16 tests,
+storage metering suite, and router integration tests for refusal shape,
+unmetered default, usage read path, and validation). docs/BILLING.md
+classified as superseded.
+
 **Exit criteria:** metering ADR accepted before merge; API semver check
 green; quota exhaustion pinned by tests.
 

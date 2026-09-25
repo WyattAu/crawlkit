@@ -195,6 +195,14 @@ pub mod http;
 /// and URL patterns to decide when to invoke Playwright.
 #[cfg(feature = "full")]
 pub mod js_render_decision;
+/// Keyword rank tracking across search engines.
+///
+/// Pluggable [`SerpProvider`](rank::SerpProvider) abstraction with
+/// DuckDuckGo (HTML scrape) and Google Search Console backends,
+/// Usage metering and quotas (ADR-017, 6.0.0-alpha.3): per-tenant
+/// accounting units, quota verdicts, and the explicit-refusal posture.
+#[cfg(feature = "full")]
+pub mod metering;
 /// Monitoring: delta analysis for scheduled crawl comparison.
 ///
 /// Compares two crawl results and determines whether significant changes
@@ -218,10 +226,6 @@ pub mod post_crawl;
 /// and analyzes ranking positions and changes.
 #[cfg(feature = "full")]
 pub mod query_tracker;
-/// Keyword rank tracking across search engines.
-///
-/// Pluggable [`SerpProvider`](rank::SerpProvider) abstraction with
-/// DuckDuckGo (HTML scrape) and Google Search Console backends,
 /// position history storage, and trend analysis.
 #[cfg(feature = "full")]
 pub mod rank;

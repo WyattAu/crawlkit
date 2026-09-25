@@ -8,8 +8,14 @@ updates:
     groups:
       rust-production:
         dependency-type: production
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       rust-development:
         dependency-type: development
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     labels:
       - dependencies
       - rust
@@ -17,6 +23,10 @@ updates:
       prefix: "chore(deps)"
 
   # Web dashboard
+  # NOTE: major-version updates are excluded from groups so they arrive as
+  # individual PRs. A previous grouped PR bundled 14 packages across 6
+  # major versions (vite 6->8, tailwind 3->4, eslint 9->10, TS 5->7, ...) and
+  # was unreviewable and unbuildable as one commit.
   - package-ecosystem: npm
     directory: "/dashboard"
     schedule:
@@ -24,8 +34,14 @@ updates:
     groups:
       dashboard-production:
         dependency-type: production
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       dashboard-development:
         dependency-type: development
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     labels:
       - dependencies
       - dashboard
@@ -40,8 +56,14 @@ updates:
     groups:
       nodejs-client-production:
         dependency-type: production
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
       nodejs-client-development:
         dependency-type: development
+        update-types:
+          - "version-update:semver-minor"
+          - "version-update:semver-patch"
     labels:
       - dependencies
       - nodejs

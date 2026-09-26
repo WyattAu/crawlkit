@@ -3070,12 +3070,7 @@ async fn quota_round_trip_and_validation() {
 
     // Unknown tenant 404s.
     let (status, _) = test
-        .send(test.authed(
-            &token,
-            "GET",
-            "/api/v1/tenants/ghost/quotas",
-            None,
-        ))
+        .send(test.authed(&token, "GET", "/api/v1/tenants/ghost/quotas", None))
         .await;
     assert_eq!(status, StatusCode::NOT_FOUND);
 }

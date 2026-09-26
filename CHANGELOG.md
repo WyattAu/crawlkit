@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Usage metering and quotas (ADR-017, 6.0.0-alpha.3 "Metering")**:
+  per-tenant per-UTC-day accounting at the acceptance points —
+  `crawl_started` (crawl acceptance), `pages` (page-write), `findings`
+  (batch insert), `export_bytes` (warehouse export acceptance).
+  `scan_submitted` is quota-surface-ready; its recording point lands with
+  the hosted multi-tenant deployment (the public scanner has no tenant
+  attribution by design, ADR-012 §5). Default posture unmetered — no
+  quota row means no limits (self-hosted users never meet a quota they
+  did not set). Quota exhaustion refuses new crawl work with **HTTP 402**
+  and a machine-readable `quota_exhausted` cause (tenant, unit, limit,
+  reset); in-flight work finishes and overage records as telemetry —
+  never silent truncation. API: `GET/PUT /tenants/{id}/quotas`,
+  `GET /tenants/{id}/usage?from=&to=`. CLI: `crawlkit usage --db …
+  --tenant …`. Storage-adjacent counters (`usage_counters`,
+  `usage_quotas` tables) — no new external dependency; engine `metering`
+  module (full-gated) with quota verdict semantics pinned by tests;
+  storage rollup/idempotency and end-to-end API tests. ADR-017 accepted
+  2026-09-25 with both open questions resolved per its proposals.
+
 ### Changed
 
 - **Workspace version bumped to 6.0.0-alpha.2** (tag `v6.0.0-alpha.2` cut
@@ -15,8 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   docs/RELEASE_6_0_0_ALPHA_PLAN.md for the consolidation rationale).
   Required by the semver gate: the additions below extend public,
   exhaustively-constructible structs against the `v5.4.0` semver baseline.
-
-### Added
 
 - **Scanner deploy dry-run**
   (`docs/capacity/2026-09-16-scanner-deploy-dryrun/`): the redis-posture

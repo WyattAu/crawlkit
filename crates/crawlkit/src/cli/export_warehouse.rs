@@ -171,6 +171,19 @@ pub fn run(params: ExportParams) -> anyhow::Result<()> {
         write_out(&params.out_dir, name, bytes)?;
     }
 
+    // Meter `export_bytes` (ADR-017 §1) at the acceptance point: the bytes
+    // the export emitted, attributed to the export's tenant. Un-tenanted
+    // exports record nothing (self-hosted default posture).
+    if let Some(tenant) = tenant {
+        let total: i64 = files.iter().map(|(_, b)| b.len() as i64).sum();
+        storage.record_usage(&crawlkit_engine::metering::MeterEvent::rollup(
+            tenant,
+            crawlkit_engine::metering::MeteredUnit::ExportBytes,
+            total,
+            &crawl_id,
+        ))?;
+    }
+
     if let Some(uri) = &params.upload {
         upload_to_destination(
             uri,

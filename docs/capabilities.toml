@@ -7,7 +7,7 @@
 
 [project]
 name = "crawlkit"
-version = "6.0.0-alpha.2"
+version = "6.0.0-alpha.3"
 msrv = "1.94.0"
 license = "Apache-2.0"
 
@@ -284,7 +284,7 @@ evidence = [
   ".adrs/ADR-017-usage-metering-and-quotas.md",
 ]
 requirements = []
-notes = "6.0.0-alpha.3 (ADR-017): per-tenant per-UTC-day accounting at the acceptance points (crawl_started, pages, findings; export_bytes and scan_submitted wired at their surfaces). Default posture unmetered — no quota row means no limits. Quota exhaustion refuses new work with HTTP 402 + machine-readable `quota_exhausted` cause; in-flight work finishes and overage records as telemetry. API: GET/PUT /tenants/{id}/quotas, GET /tenants/{id}/usage. CLI: `crawlkit usage`. Storage-adjacent counters, no new external dependency."
+notes = "6.0.0-alpha.3 (ADR-017): per-tenant per-UTC-day accounting at the acceptance points — crawl_started (StorageBackend::start_crawl), pages (page-write), findings (batch insert), export_bytes (warehouse export acceptance). scan_submitted is quota-surface-ready but its recording point lands with the hosted multi-tenant deployment (the public scanner has no tenant attribution by design; its budget stays fail-closed per ADR-012 §5). Default posture unmetered — no quota row means no limits. Quota exhaustion refuses new work with HTTP 402 + machine-readable `quota_exhausted` cause; in-flight work finishes and overage records as telemetry. API: GET/PUT /tenants/{id}/quotas, GET /tenants/{id}/usage. CLI: `crawlkit usage`. Storage-adjacent counters, no new external dependency."
 
 [capabilities.soc2_features]
 status = "stable-with-configuration"

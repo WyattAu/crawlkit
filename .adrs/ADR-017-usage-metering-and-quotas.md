@@ -120,10 +120,14 @@ point is deterministic under retry/failure.
    only with a hosted platform decision): correct at hyperscale, wrong
    at this phase's complexity budget.
 
-## Open questions (resolve before alpha.3, not after)
+## Open questions (resolved 2026-09-25 at implementation)
 
 1. Does `pages` count robots-denied or SSRF-denied fetch attempts?
-   (Proposal: no — only analyzed pages; refusals are telemetry.)
+   **Resolved: no** (proposal adopted) — only analyzed pages count;
+   refusals are telemetry. The unit vocabulary has no refusal units, and
+   a unit test pins that so one cannot silently appear.
 2. Retention of the usage rows: same as per-tenant retention config
-   (5.3.0) or a fixed 400 days? (Proposal: follow tenant retention;
-   default 400 days for the aggregate rows.)
+   (5.3.0) or a fixed 400 days? **Resolved: fixed 400-day default for
+   aggregate rows** (proposal adopted) — `purge_usage_before` sweeps
+   counters; wiring it to the per-tenant retention scheduler is an
+   alpha.4 follow-up if operators need per-tenant divergence.

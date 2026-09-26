@@ -29,12 +29,14 @@ jobs:
         run: cargo install cargo-mutants --locked
 
       - name: Run mutation tests (analyzers only)
+        # --in-place is incompatible with --jobs (cargo-mutants v27 CLI
+        # contract); results land in mutants.out/ either way, which is
+        # what the artifact + catch-rate step read.
         run: |
           cargo mutants \
             --file 'crates/crawlkit-engine/src/analyzers/' \
             --timeout 120 \
-            --jobs 4 \
-            --in-place
+            --jobs 4
         timeout-minutes: 90
 
       - name: Check catch rate

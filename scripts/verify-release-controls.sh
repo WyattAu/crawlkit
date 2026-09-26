@@ -4,6 +4,9 @@ set -euo pipefail
 scripts/verify-roadmap-baseline.sh
 scripts/verify-unsafe-inventory.sh
 scripts/verify-contracts.sh
+# Finding-code drift gate (ANALYZER_AUDIT Phase 4 follow-up): fails on a
+# new cross-analyzer code collision or a stale docs/FINDING_CODES.md.
+python3 scripts/generate_finding_catalog.py --check
 if git diff --check; then
   :
 else

@@ -139,6 +139,7 @@ green on the tagged commit (cadence rule).
 |---|---|---|
 | Distributed mode stable + published capacity evidence (10k and 100k with memory/fd/task bounds) | Phase 2.4/4.3 acceptance | Queue semantics + frontier wiring already graduated in 5.4.0; the paired-overhead and 100k evidence exist. **Open blocker: pinned 8-core/16 GB reference machine** (the plan's published class cannot come from CI). |
 | Phase 6.2/6.3 release gate in full | checksums, SBOM, migration/rollback evidence | Practiced four times by the alpha cuts. |
+| Dead-code gate-or-delete decision executed (`backpressure.rs`, `enterprise.rs`, `native_plugin.rs`; ~1.1k lines) | CODEBASE_AUDIT rec. 8 | Decided 2026-09-27: **gate, not delete** — move each behind a non-default `unstable-legacy` feature at the stable cut. Cannot land in an alpha: removing public modules from the default build is a semver-breaking change and the alphas are additive-only (see Cadence rules). `distributed_queue.rs` is **excluded** — it graduated as the stable queue substrate in 5.4.0 and has live production callers (scanner API, CLI queue, capacity tests); the CODEBASE_AUDIT entry predates that graduation. |
 
 ## Cadence and rules
 

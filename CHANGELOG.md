@@ -30,6 +30,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Finding-code drift gate + catalog (ANALYZER_AUDIT Phase 4 follow-up,
+  closed)**: `scripts/generate_finding_catalog.py` generates
+  `docs/FINDING_CODES.md` (1 152 distinct codes across 738
+  `impl Analyzer for` blocks) and the release-controls gate now fails on
+  a new cross-analyzer code collision or a stale catalog. Two
+  collisions remediated per the audit's namespace convention — emitted
+  finding codes changed:
+  - `ROBOTSDEEP-V2001` (missing User-agent, deep-deep robots validator)
+    → **`ROBOTSDEEP-V2001-DEEP-DEEP`** (bare code stays with the
+    blanket-disallow deep analyzer);
+  - `PERM-V2001` (schema.org Permit validator) →
+    **`PERM-V2001-SCHEMA`** (bare code stays with the
+    Permissions-Policy header analyzer).
+  The remaining 12 shared deep-generation codes are recorded with
+  ownership in the catalog; the runtime fixture guard could never see
+  these (unreachable condition pairs on one fixture).
+
+- **Dead-code decision recorded for the stable cut**
+  (CODEBASE_AUDIT rec. 8): `backpressure.rs`, `enterprise.rs`, and
+  `native_plugin.rs` (~1.1k lines) will be gated behind a non-default
+  `unstable-legacy` feature at 6.0.0 stable — not in an alpha, since
+  removing public modules from the default build is semver-breaking and
+  alphas are additive-only. `distributed_queue.rs` is excluded: it
+  graduated as the stable queue substrate in 5.4.0 with live production
+  callers; the audit entry predates that.
+
 - **Workspace version bumped to 6.0.0-alpha.3** (tag `v6.0.0-alpha.3` cut
   2026-09-26 carrying the "Metering" stream — see
   docs/RELEASE_6_0_0_ALPHA_3.md). Required by the semver gate: the

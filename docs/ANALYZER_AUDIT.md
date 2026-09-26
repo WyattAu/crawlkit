@@ -131,3 +131,19 @@ heuristic alone violates WCAG or OWASP.
 6. ~~Add registry profiles (`core`, `standard`, `deep`, and custom
    selection).~~ **Complete** — implemented and selectable via CLI; see
    `docs/ANALYZER_PROFILES.md`.
+7. **Closed 2026-09-27 (static drift gate).** A generated finding-code
+   catalog (`docs/FINDING_CODES.md`, from
+   `scripts/generate_finding_catalog.py --check` in the release-controls
+   gate) attributes every `code:` emit site to its owning
+   `impl Analyzer for` block via brace matching and fails CI when a code
+   is newly shared by a second analyzer without recorded ownership, or
+   when the doc drifts from source. The remaining runtime-invisible
+   collision was fixed (`ROBOTSDEEP-V2001` →
+   `ROBOTSDEEP-V2001-DEEP-DEEP` on the deep-deep validator; a single
+   robots.txt cannot trigger both conditions, so the fixture guard could
+   never see it), and one cross-domain collision was namespaced
+   (`PERM-V2001-SCHEMA` for the schema.org Permit validator; bare
+   `PERM-V2001` stays with the Permissions-Policy header analyzer).
+   Twelve deep-generation codes remain shared and are recorded with
+   ownership in the catalog; behavioral consolidation (item 3) continues
+   candidate-by-candidate with fixture evidence.

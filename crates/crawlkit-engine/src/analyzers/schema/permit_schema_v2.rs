@@ -40,7 +40,11 @@ impl Analyzer for PermitSchemaValidatorV2 {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Schema,
-                    code: "PERM-V2001".to_string(),
+                    // Namespaced per the ANALYZER_AUDIT Phase 4 convention:
+                    // `PERM-V2001` bare belongs to PermissionsPolicyAnalyzerV2
+                    // (Permissions-Policy HTTP header); this schema.org Permit
+                    // validator is a different domain and once collided with it.
+                    code: "PERM-V2001-SCHEMA".to_string(),
                     title: "Permit schema missing permitNumber".to_string(),
                     description: "A Permit structured data block is missing the \"permitNumber\" \
                                   property."
@@ -124,7 +128,7 @@ mod tests {
         }];
         let ctx = make_ctx(&page, None);
         let findings = PermitSchemaValidatorV2::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "PERM-V2001"));
+        assert!(findings.iter().any(|f| f.code == "PERM-V2001-SCHEMA"));
     }
 
     #[test]
@@ -168,7 +172,7 @@ mod tests {
         }];
         let ctx = make_ctx(&page, None);
         let findings = PermitSchemaValidatorV2::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "PERM-V2001"));
+        assert!(findings.iter().any(|f| f.code == "PERM-V2001-SCHEMA"));
     }
 
     #[test]
@@ -188,7 +192,7 @@ mod tests {
         ];
         let ctx = make_ctx(&page, None);
         let findings = PermitSchemaValidatorV2::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "PERM-V2001"));
+        assert!(findings.iter().any(|f| f.code == "PERM-V2001-SCHEMA"));
     }
 
     #[test]
@@ -227,7 +231,7 @@ mod tests {
         }];
         let ctx = make_ctx(&page, None);
         let findings = PermitSchemaValidatorV2::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "PERM-V2001"));
+        assert!(findings.iter().any(|f| f.code == "PERM-V2001-SCHEMA"));
     }
 
     #[test]

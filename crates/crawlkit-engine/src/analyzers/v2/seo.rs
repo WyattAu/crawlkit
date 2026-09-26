@@ -4616,7 +4616,11 @@ impl Analyzer for RobotsTxtAnalysisDeepDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Seo,
-                    code: "ROBOTSDEEP-V2001".to_string(),
+                    // Namespaced per the ANALYZER_AUDIT Phase 4 convention: this
+                    // deep-deep validator once collided with
+                    // RobotsTxtAnalysisDeepAnalyzerV2 (blanket-disallow), which
+                    // keeps the bare `ROBOTSDEEP-V2001`.
+                    code: "ROBOTSDEEP-V2001-DEEP-DEEP".to_string(),
                     title: "Missing User-agent in robots.txt (deep-deep)".to_string(),
                     description:
                         "robots.txt does not contain User-agent directive in deep analysis."

@@ -123,6 +123,16 @@ classified as superseded.
 **Exit criteria:** metering ADR accepted before merge; API semver check
 green; quota exhaustion pinned by tests.
 
+**Progress 2026-09-26 (cut complete):** all three exit criteria green on
+`main` — ADR-017 accepted 2026-09-25 before the metering merge; the CI
+semver job passes against the `v6.0.0-alpha.2` baseline with the new
+`ApiError::QuotaExhausted` and `AuditEventType::TenantUpdated` variants
+(additive-only, no `#[non_exhaustive]` needed); quota exhaustion pinned
+by the engine metering suite, storage metering tests, and four router
+integration tests. Release notes: docs/RELEASE_6_0_0_ALPHA_3.md.
+Remaining for this cut: tag `v6.0.0-alpha.3` once the full CI battery is
+green on the tagged commit (cadence rule).
+
 ### 6.0.0 stable — "Scale"
 
 | Item | Gate | Notes |

@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Workspace version bumped to 6.0.0-alpha.3** (tag `v6.0.0-alpha.3` cut
+  2026-09-26 carrying the "Metering" stream — see
+  docs/RELEASE_6_0_0_ALPHA_3.md). Required by the semver gate: the
+  additions above extend public API surface against the
+  `v6.0.0-alpha.2` baseline.
+
 - **Workspace version bumped to 6.0.0-alpha.2** (tag `v6.0.0-alpha.2` cut
   2026-09-19 as a consolidated rolling prerelease carrying both the alpha.1
   "Warehouse Contracts" and alpha.2 "Render Budgets" streams — see

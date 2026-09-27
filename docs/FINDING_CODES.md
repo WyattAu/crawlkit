@@ -15,9 +15,9 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1152 |
-| `impl Analyzer for` blocks scanned | 738 |
-| Codes shared by 2+ analyzers | 12 |
+| Distinct finding codes | 1147 |
+| `impl Analyzer for` blocks scanned | 737 |
+| Codes shared by 2+ analyzers | 9 |
 
 ## Shared codes (recorded ownership)
 
@@ -26,14 +26,11 @@ consolidate the analyzers).
 | `COOKIEHTTP001` | `CookieHttpOnlyDeepDeepValidator`, `CookieHttpOnlyFlagValidator` | base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `COOKIESEC001` | `CookieSecureDeepDeepValidator`, `CookieSecurityFlagAnalyzer` | base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `EXTLINKAUTH-V2001` | `ExternalLinkAuthorityDeepAnalyzerV2`, `ExternalLinkAuthorityDeepDeepValidator` | external link authority deep vs deep-deep validator |
-| `FORMLAB-V2001` | `ColorContrastLinkDeepValidator`, `FormLabelAssociationAnalyzerV2` | form label V2 analyzer vs deep validator |
 | `HSTSPR-V2001` | `HstsPreloadReadinessAnalyzerV2`, `HstsPreloadReadyDeepDeepValidator` | HSTS preload V2 analyzer vs deep-deep validator |
 | `HSTSPR001` | `HstsPreloadReadinessAnalyzer`, `HstsPreloadReadyDeepValidator` | HSTS preload analyzer vs deep validator |
-| `INTLINKQ-V2001` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | internal link quality V2 vs deep validator (branch A) |
-| `INTLINKQ-V2002` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | internal link quality V2 vs deep validator (branch B) |
 | `SITEMAPDEEP-V2001` | `SitemapCoverageDeepAnalyzerV2`, `SitemapCoverageDeepDeepValidator` | SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
-| `TBLCAP-V2001` | `ColorContrastLinkDeepValidator`, `TableCaptionPresenceAnalyzerV2` | table caption V2 analyzer vs deep validator |
-| `TBLSCOP-V2001` | `ColorContrastLinkDeepValidator`, `TableHeaderScopeAnalyzerV2` | table header scope V2 analyzer vs deep validator |
+| `TBLCAP-V2001` | `TableCaptionPresenceAnalyzerV2`, `TableCaptionPresenceDeepValidator` | TableCaptionPresenceAnalyzerV2 owns the code; the exact-duplicate deep emitter was unregistered 2026-09-27 (impl remains exported) |
+| `TBLSCOP-V2001` | `TableHeaderScopeAnalyzerV2`, `TableHeaderScopeDeepValidator` | complementary, not duplicates: TableHeaderScopeAnalyzerV2 fires on <th> elements lacking scope attributes; TableHeaderScopeDeepValidator fires on pages whose tables have no header cells at all (mutually exclusive preconditions) |
 | `XFODEEP-V2001` | `XFrameOptionsDeepAnalyzerV2`, `XFrameOptionsDeepDeepValidator` | X-Frame-Options deep vs deep-deep validator |
 
 ## All codes
@@ -60,7 +57,7 @@ consolidate the analyzers).
 | `ANCH-DIV002` | `AnchorTextDiversityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Overuse of generic anchor text |
 | `ANCH-V3001` | `InternalLinkAnchorAnalyzerV3` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Generic internal anchor text |
 | `ANCHGEN-V2001` | `AnchorTextGenericAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Generic anchor text |
-| `ANCHGEN-V2001-DEEP` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Generic anchor text (deep) |
+| `ANCHGEN-V2001-DEEP` | `AnchorTextGenericDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Generic anchor text (deep) |
 | `ANCHGEN001` | `AnchorTextGenericAnalyzer` | `crates/crawlkit-engine/src/analyzers/aria_focus_link_validator_analyzers.rs` | Link with generic anchor text |
 | `ANCHOR001` | `InternalLinkAnchorAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Anchor text identical to URL |
 | `ANCHOR002` | `InternalLinkAnchorAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Over-optimized anchor text |
@@ -83,7 +80,7 @@ consolidate the analyzers).
 | `ARIALAND001` | `AriaLandmarksAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_deep_analyzers.rs` | Missing main landmark |
 | `ARIALAND002` | `AriaLandmarksAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_deep_analyzers.rs` | Missing navigation landmark |
 | `ARIALAND003` | `AriaLandmarksAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_deep_analyzers.rs` | (no title literal) |
-| `ARIAREQ-V2001` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | ARIA roles without labels (deep) |
+| `ARIAREQ-V2001` | `AriaRequiredAttributesDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | ARIA roles without labels (deep) |
 | `ARIAREQ-V2002` | `AriaRequiredAttributesAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | progressbar missing aria-valuenow |
 | `ARIAREQ-V2003` | `AriaRequiredAttributesAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | slider missing required attributes |
 | `ARIAREQ-V2004` | `AriaRequiredAttributesAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | (no title literal) |
@@ -381,7 +378,8 @@ consolidate the analyzers).
 | `FORM-V2001` | `FormAccessibilityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/accessibility_v2_analyzers.rs` | Forms without labels |
 | `FORM001` | `FormAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Form missing action URL |
 | `FORMFSLG-V6123` | `FormFieldsetLegendValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Complex forms without fieldset |
-| `FORMLAB-V2001` | `ColorContrastLinkDeepValidator`, `FormLabelAssociationAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Form inputs without label association (deep) |
+| `FORMLAB-V2001` | `FormLabelAssociationAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Duplicate input IDs |
+| `FORMLAB-V2001-DEEP` | `FormLabelAssociationDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Form inputs without label association (deep) |
 | `FORMLAB001` | `FormLabelAssociationAnalyzer` | `crates/crawlkit-engine/src/analyzers/form_table_validator_analyzers.rs` | Form inputs missing label associations |
 | `FORMLBL-V2001` | `FormLabelsDeepAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Form elements without labels |
 | `FORMLBL-V2001-DEEP-DEEP` | `FormLabelsDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Form inputs without labels (deep-deep) |
@@ -424,13 +422,13 @@ consolidate the analyzers).
 | `HEADSKIP001` | `HeadingLevelSkipAnalyzer` | `crates/crawlkit-engine/src/analyzers/landmark_heading_validator_analyzers.rs` | Heading level skip detected |
 | `HEALTHY-001` | `HealthyAnalyzer` | `crates/crawlkit-engine/src/analyzers/tests/test_panic_isolation.rs` | Healthy analyzer ran |
 | `HHIER-V2001` | `HeadingHierarchyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No headings found (deep-deep) |
-| `HHIER-V2001-DEEP-DEEP-DEEP` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No headings found (deep-deep-deep) |
+| `HHIER-V2001-DEEP-DEEP-DEEP` | `HeadingHierarchyDeepDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No headings found (deep-deep-deep) |
 | `HHIER-V2002` | `HeadingHierarchyDeepAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Empty headings found |
 | `HHIER-V2002-DEEP-DEEP` | `HeadingHierarchyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing H1 heading (deep-deep) |
-| `HHIER-V2002-DEEP-DEEP-DEEP` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing H1 heading (deep-deep-deep) |
+| `HHIER-V2002-DEEP-DEEP-DEEP` | `HeadingHierarchyDeepDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing H1 heading (deep-deep-deep) |
 | `HHIER-V2003` | `HeadingHierarchyDeepAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Heading levels skipped |
 | `HHIER-V2003-DEEP-DEEP` | `HeadingHierarchyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Multiple H1 headings (deep-deep) |
-| `HHIER-V2003-DEEP-DEEP-DEEP` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Multiple H1 headings (deep-deep-deep) |
+| `HHIER-V2003-DEEP-DEEP-DEEP` | `HeadingHierarchyDeepDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Multiple H1 headings (deep-deep-deep) |
 | `HHIER-V2004` | `HeadingHierarchyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Heading level skipped (deep-deep) |
 | `HHIERDEEP001` | `HeadingHierarchyDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_deep_analyzers.rs` | Heading hierarchy skip |
 | `HHIERDEEP002` | `HeadingHierarchyDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_deep_analyzers.rs` | First heading is not H1 |
@@ -542,8 +540,10 @@ consolidate the analyzers).
 | `INTDIV-V2001` | `InternalLinksDiversityDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Low internal link diversity (deep-deep) |
 | `INTDIV-V6103` | `InternalLinksDiversityValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Low internal link text diversity |
 | `INTDIV001` | `InternalLinksDiversityDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Low internal link diversity |
-| `INTLINKQ-V2001` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Self-referencing links |
-| `INTLINKQ-V2002` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | All internal links nofollowed |
+| `INTLINKQ-V2001` | `InternalLinkQualityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Self-referencing links |
+| `INTLINKQ-V2001-DEEP` | `InternalLinkQualityDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | High nofollow internal link ratio (deep) |
+| `INTLINKQ-V2002` | `InternalLinkQualityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | All internal links nofollowed |
+| `INTLINKQ-V2002-DEEP` | `InternalLinkQualityDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Internal links without anchor text (deep) |
 | `INTLINKQ001` | `InternalLinkQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Page contains self-links |
 | `INTLINKQ002` | `InternalLinkQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | All internal links are nofollowed |
 | `INTLINKQ003` | `InternalLinkQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Internal links with empty anchor text |
@@ -585,9 +585,9 @@ consolidate the analyzers).
 | `LANDBAN-V2001` | `LandmarkBannerDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing banner landmark (deep) |
 | `LANDBAN001` | `LandmarkBannerAnalyzer` | `crates/crawlkit-engine/src/analyzers/landmark_heading_validator_analyzers.rs` | Page missing banner/header landmark |
 | `LANDBANNER-V5001` | `LandmarkBannerValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing banner landmark |
-| `LANDCINFO-V2001` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing contentinfo landmark (deep) |
+| `LANDCINFO-V2001` | `LandmarkContentinfoDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing contentinfo landmark (deep) |
 | `LANDCINFO-V6124` | `LandmarkContentinfoValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing contentinfo landmark |
-| `LANDCOMP-V2001` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No complementary landmark (deep) |
+| `LANDCOMP-V2001` | `LandmarkComplementaryDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No complementary landmark (deep) |
 | `LANDCOMP-V6125` | `LandmarkComplementaryValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No complementary landmark |
 | `LANDFORM001` | `LandformSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/landform_schema.rs` | Landform schema missing name |
 | `LANDFORM002` | `LandformSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/landform_schema.rs` | Landform schema missing geographic data |
@@ -1037,12 +1037,12 @@ consolidate the analyzers).
 | `TACC003` | `TableAccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/table_analyzers.rs` | Large number of tables missing scope attributes |
 | `TANAME-V6013` | `TouristAttractionMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | TouristAttraction missing name |
 | `TBL-V2001` | `TableAccessibilityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/accessibility_v2_analyzers.rs` | Tables without headers |
-| `TBLCAP-V2001` | `ColorContrastLinkDeepValidator`, `TableCaptionPresenceAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Tables without captions (deep) |
+| `TBLCAP-V2001` | `TableCaptionPresenceAnalyzerV2`, `TableCaptionPresenceDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No table captions |
 | `TBLCAP001` | `TableCaptionPresenceAnalyzer` | `crates/crawlkit-engine/src/analyzers/form_table_validator_analyzers.rs` | Tables missing caption element |
 | `TBLCAPT-V5001` | `TableCaptionValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Tables missing captions |
 | `TBLHDR-V5001` | `TableHeadersValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | All tables missing headers |
 | `TBLHDR-V5002` | `TableHeadersValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Some tables missing headers |
-| `TBLSCOP-V2001` | `ColorContrastLinkDeepValidator`, `TableHeaderScopeAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Tables without proper headers (deep) |
+| `TBLSCOP-V2001` | `TableHeaderScopeAnalyzerV2`, `TableHeaderScopeDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Table headers missing scope |
 | `TBLSCOP001` | `TableHeaderScopeAnalyzer` | `crates/crawlkit-engine/src/analyzers/form_table_validator_analyzers.rs` | Tables missing header cells with scope |
 | `TBLSCOPE-V5001` | `TableScopeValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Table headers missing scope |
 | `TDNAME-V6014` | `TouristDestinationMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | TouristDestination missing name |
@@ -1124,14 +1124,6 @@ consolidate the analyzers).
 | `WAPIDOC-V2001` | `WebAPIMissingDocumentationValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
 | `WAPIDOC-V6049` | `WebAPIMissingDocumentationValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
 | `WAPIDOCS001` | `WebAPIDocumentationMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
-| `WASM-P001` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Too many WASM modules |
-| `WASM-P002` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM bundle too large |
-| `WASM-P003` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Slow WASM compilation detected |
-| `WASM-P004` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Missing WASM module preload |
-| `WASM-R001` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM runtime error detected |
-| `WASM-R002` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM module load failure |
-| `WASM-R003` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM deprecation warning |
-| `WASM-R004` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM module HTTP error |
 | `WASM001` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Missing WASM module preload |
 | `WASM002` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Synchronous WASM compilation detected |
 | `WASM003` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM instantiation without error handling |

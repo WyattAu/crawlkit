@@ -114,28 +114,36 @@ heuristic alone violates WCAG or OWASP.
 2. ~~Produce behavior matrices for form labels, tables, links, headings,
    cookies, CSP, and metadata.~~ **Complete** — plus color-contrast,
    focus, heading-hierarchy, image-alt, and anchor-text families.
-3. **In progress** — select canonical implementations and remove
-   redundant default registrations. Five strict-subset/exact-duplicate
-   registrations are removed so far (`HeadingHierarchyDeepDeepDeepValidator`,
+3. **Complete (2026-09-27, pending CI)** — select canonical
+   implementations and remove redundant default registrations. Seven
+   strict-subset/exact-duplicate registrations are removed
+   (`HeadingHierarchyDeepDeepDeepValidator`,
    `ImageAltTextDeepDeepDeepValidator`, `CookieSecureDeepDeepValidator`,
-   `CookieHttpOnlyDeepDeepValidator`, `SitemapCoverageDeepDeepValidator` —
-   the cookie pair on exact-duplicate/strict-subset evidence: the deep-deep
-   secure validator only narrows the base `CookieSecurityFlagAnalyzer` trigger by exempting
-   session cookies, and the deep-deep http-only validator emits the
-   identical COOKIEHTTP001 condition as the base
-   `CookieHttpOnlyFlagValidator`; the sitemap deep-deep validator on
-   byte-identical-trigger evidence: it emits SITEMAPDEEP-V2001 on the
-   same robots.txt condition as the registered
-   `SitemapCoverageDeepAnalyzerV2`; the base analyzers keep ownership per
-   the Phase-4 convention, so every offending page now emits the finding
-   once instead of twice); continue candidate-by-candidate
-   with fixture evidence only.
+   `CookieHttpOnlyDeepDeepValidator`, `SitemapCoverageDeepDeepValidator`,
+   `TableCaptionPresenceDeepValidator`, plus the earlier
+   deep-deep-deep cookie triple — the cookie pair on exact-
+   duplicate/strict-subset evidence, the sitemap deep-deep on a
+   byte-identical trigger to `SitemapCoverageDeepAnalyzerV2`, and the
+   table-caption deep on an identical trigger with weaker severity than
+   `TableCaptionPresenceAnalyzerV2`; the base analyzers keep ownership
+   per the Phase-4 convention, so every offending page now emits the
+   finding once instead of twice). Two different-defect-same-code
+   semantic collisions were namespaced per the Phase-4 convention
+   (`INTLINKQ-V2001/-V2002` → `INTLINKQ-V2001-DEEP`/`-V2002-DEEP` on
+   `InternalLinkQualityDeepValidator`; `FORMLAB-V2001` →
+   `FORMLAB-V2001-DEEP` on `FormLabelAssociationDeepValidator` — both
+   pairs can fire on the same page with different meanings). Remaining
+   shared codes are recorded complementary pairs (e.g. TBLSCOP-V2001:
+   `<th>` without scope vs headerless tables; mutually exclusive
+   preconditions), verified complementary-by-fixture in
+   `tests/test_generation_dedup.rs`.
 4. Keep compatibility exports for public analyzer types where required
    (unregistered types remain exported and tested).
-5. **Measured (2026-09-27)** — default registry is 776 registrations
-   (2026-09-02 baseline 778, minus the cookie deep-deep pair and the
-   sitemap deep-deep duplicate removed per item 3; 824 total construction
-   sites across default + profile paths
+5. **Measured (2026-09-27)** — default registry is 775 registrations
+   (2026-09-02 baseline 778, minus the cookie deep-deep pair, the
+   sitemap deep-deep duplicate, and the table-caption deep duplicate
+   removed per item 3; 824 total construction sites across default +
+   profile paths
    at the 2026-09-02 measure). The
    kingstonpeptides.com full-profile output is unchanged (954 findings /
    10 pages) because the removed duplicates only fire on pages carrying
@@ -161,3 +169,15 @@ heuristic alone violates WCAG or OWASP.
    Twelve deep-generation codes remain shared and are recorded with
    ownership in the catalog; behavioral consolidation (item 3) continues
    candidate-by-candidate with fixture evidence.
+   **Scanner correctness (2026-09-27)**: attribution now runs on a
+   sanitized copy of each source file (string/char literals and comments
+   blanked, offsets preserved) after two mis-scan classes were found —
+   an unbalanced `{` in a comment (`// a { color: #fff`) made the naive
+   brace counter swallow every following `impl Analyzer for` block in
+   `v2/accessibility.rs` (≈14 codes mis-attributed to
+   `ColorContrastLinkDeepValidator`), and char literals such as
+   `('"',)` corrupted string handling (`MIXSCR001` mis-attributed).
+   Corrected ownership shifted no registered-vs-registered pairing: the
+   twelve shared codes keep the same recorded set, now with the true
+   owner names; emit sites inside inherent (non-`Analyzer`) impls and
+   doc-comment examples are correctly out of/inside scope respectively.

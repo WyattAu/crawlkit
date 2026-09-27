@@ -1556,7 +1556,14 @@ impl AnalyzerRegistry {
             Box::new(ColorContrastTextDeepValidator::new()),
             Box::new(ColorContrastLinkDeepValidator::new()),
             Box::new(AnchorTextGenericDeepValidator::new()),
-            Box::new(TableCaptionPresenceDeepValidator::new()),
+            // TableCaptionPresenceDeepValidator is intentionally NOT
+            // registered: duplicate emitter of the registered
+            // TableCaptionPresenceAnalyzerV2 — identical trigger (tables
+            // present, none captioned), same TBLCAP-V2001 code, only the
+            // severity wording differs (V2 Warning vs deep Info). The V2
+            // analyzer keeps ownership per the Phase-4 convention; the
+            // public type remains exported and pinned in
+            // `tests/test_generation_dedup.rs`.
             Box::new(TableHeaderScopeDeepValidator::new()),
             Box::new(FormLabelAssociationDeepValidator::new()),
             Box::new(AriaRequiredAttributesDeepValidator::new()),

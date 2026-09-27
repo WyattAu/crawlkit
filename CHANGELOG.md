@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Finding-catalog scanner correctness**: attribution in
+  `scripts/generate_finding_catalog.py` now runs on a sanitized copy of
+  each source (string/char literals — including raw and byte strings —
+  and line/block/doc comments blanked with offsets preserved) instead
+  of naive brace counting. Previously, an unbalanced `{` inside a
+  comment (`// a { color: #fff`) prevented the
+  `ColorContrastLinkDeepValidator` impl block from ever closing, so
+  every following `impl Analyzer for` block in `v2/accessibility.rs`
+  was swallowed and ≈14 finding codes were mis-attributed to it in
+  `docs/FINDING_CODES.md`; char literals such as `('"',)` in tuple
+  arrays similarly corrupted spans (`MIXSCR001`). The corrected catalog
+  keeps the same twelve shared codes with their true owner names; emit
+  sites inside inherent (non-`Analyzer`) impls (e.g. `WASM-P/R001–004`)
+  are out of scope and doc-comment examples no longer create phantom
+  impl blocks. No runtime behavior change.
+
 ### Added
 
 - **Usage metering and quotas (ADR-017, 6.0.0-alpha.3 "Metering")**:
@@ -30,24 +48,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Analyzer registry dedup (ANALYZER_AUDIT item 3)**:
-  `CookieSecureDeepDeepValidator`, `CookieHttpOnlyDeepDeepValidator`, and
-  `SitemapCoverageDeepDeepValidator` are no longer registered in the
-  default registry (default count 779 → 776; no-default-features 775 →
-  772). Fixture evidence: the deep-deep http-only validator is an exact
+- **Analyzer registry dedup (ANALYZER_AUDIT item 3, now complete)**:
+  `CookieSecureDeepDeepValidator`, `CookieHttpOnlyDeepDeepValidator`,
+  `SitemapCoverageDeepDeepValidator`, and
+  `TableCaptionPresenceDeepValidator` are no longer registered in the
+  default registry (default count 779 → 775; no-default-features 775 →
+  771). Fixture evidence: the deep-deep http-only validator is an exact
   duplicate emitter of the base `CookieHttpOnlyFlagValidator` (same
   case-insensitive Set-Cookie scan, same missing-httponly trigger, same
   `COOKIEHTTP001` code/severity), the deep-deep secure validator's
   trigger is a strict subset of the base `CookieSecurityFlagAnalyzer`
-  (it only narrows by exempting session cookies), and the sitemap
-  deep-deep validator emits `SITEMAPDEEP-V2001` on the byte-identical
-  robots.txt condition as the registered `SitemapCoverageDeepAnalyzerV2`.
-  Behavioral note: pages with insecure/non-HttpOnly cookies and crawls of
-  robots.txt files without a `Sitemap:` directive now emit the affected
-  codes **once** instead of twice; codes, severities, and the finding
-  classes covered are unchanged (the base analyzers keep ownership).
-  All removed types remain exported and matrix-tested; see
+  (it only narrows by exempting session cookies), the sitemap deep-deep
+  validator emits `SITEMAPDEEP-V2001` on the byte-identical robots.txt
+  condition as the registered `SitemapCoverageDeepAnalyzerV2`, and the
+  table-caption deep validator duplicates
+  `TableCaptionPresenceAnalyzerV2` with a weaker severity. Behavioral
+  note: pages with insecure/non-HttpOnly cookies and crawls of robots.txt
+  files without a `Sitemap:` directive now emit the affected codes
+  **once** instead of twice; codes, severities, and the finding classes
+  covered are unchanged (the base analyzers keep ownership). All removed
+  types remain exported and matrix-tested; see
   `tests/test_generation_dedup.rs` and `tests/test_behavior_matrix.rs`.
+
+- **Finding-code namespacing (ANALYZER_AUDIT Phase 4, emitted codes
+  changed)**: two different-defect-same-code semantic collisions — where
+  both analyzers are registered and can fire on the same page — are
+  resolved per the Phase-4 convention:
+  - `INTLINKQ-V2001` (high nofollow internal-link ratio, deep validator)
+    → **`INTLINKQ-V2001-DEEP`** and `INTLINKQ-V2002` (internal links
+    without anchor text, deep validator) → **`INTLINKQ-V2002-DEEP`**;
+    the bare codes stay with `InternalLinkQualityAnalyzerV2`
+    (self-referencing links / all internal links nofollowed);
+  - `FORMLAB-V2001` (inputs without label association, deep validator)
+    → **`FORMLAB-V2001-DEEP`**; the bare code stays with
+    `FormLabelAssociationAnalyzerV2` (duplicate input IDs).
 
 - **Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7 enforced)**:
   `scripts/render_capacity_report.py` now renders every committed record

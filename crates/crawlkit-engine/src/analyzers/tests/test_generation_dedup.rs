@@ -18,6 +18,16 @@
 //! | `FocusManagementDeepDeepDeepValidator` | Exact duplicate of deep-deep (this file) |
 //! | `TableAccessibilityDeepDeepValidator` | Reverse subset: deep-deep-deep adds captions (this file) |
 //! | `SitemapCoverageDeepDeepValidator` | Exact duplicate of SitemapCoverageDeepAnalyzerV2 (this file) |
+//! | `TableCaptionPresenceDeepValidator` | Exact duplicate of TableCaptionPresenceAnalyzerV2 (this file) |
+//!
+//! Namespaced semantic collisions (different defect, same code, can
+//! co-fire — emit codes changed per the Phase-4 convention):
+//!
+//! - `INTLINKQ-V2001`/`-V2002` → `INTLINKQ-V2001-DEEP`/`-V2002-DEEP` on
+//!   `InternalLinkQualityDeepValidator` (this file, no fixture needed:
+//!   the V2 codes keep their documented meanings).
+//! - `FORMLAB-V2001` → `FORMLAB-V2001-DEEP` on
+//!   `FormLabelAssociationDeepValidator` (this file).
 //!
 //! Deliberately retained pairs (neither is a subset):
 //!
@@ -26,6 +36,9 @@
 //!   deep-deep-deep variant excludes them.
 //! - `HreflangReciprocalDeepDeepValidator` vs `...DeepDeepDeepValidator`:
 //!   duplicate-lang/x-default checks vs reciprocal-return checks.
+//! - `TableHeaderScopeAnalyzerV2` vs `TableHeaderScopeDeepValidator`:
+//!   `<th>` elements lacking scope vs tables with no header cells at
+//!   all — mutually exclusive preconditions (this file).
 
 use crate::analyzers::*;
 use crate::meta::MetaTags;
@@ -349,5 +362,130 @@ fn hreflang_reciprocal_generations_differ_and_are_both_retained() {
     assert!(
         ddd.iter().any(|f| f.title.contains("reciprocal")),
         "deep-deep-deep must report missing reciprocal returns: {ddd:?}"
+    );
+}
+
+#[test]
+fn table_caption_deep_is_duplicate_of_v2() {
+    let mut p = page();
+    assert_eq!(p.tables_total, 2);
+    assert_eq!(p.tables_with_captions, 0);
+    // Identical trigger (tables present, none captioned), same code and
+    // category; the deep variant's Info is weaker than the V2 Warning,
+    // so unregistration keeps the stronger finding.
+    let v2 = TableCaptionPresenceAnalyzerV2::new().analyze(&ctx(&p, &[], ""));
+    let deep = TableCaptionPresenceDeepValidator::new().analyze(&ctx(&p, &[], ""));
+    assert_eq!(v2.len(), 1, "V2 flags tables without captions: {v2:?}");
+    assert_eq!(deep.len(), v2.len(), "deep must fire identically");
+    assert_eq!(v2[0].code, "TBLCAP-V2001");
+    assert_eq!(deep[0].code, v2[0].code);
+    assert_eq!(v2[0].severity, Severity::Warning);
+    assert_eq!(deep[0].severity, Severity::Info);
+    assert_eq!(deep[0].category, v2[0].category);
+    // Captioned tables: both silent.
+    let mut ok = page();
+    ok.tables_with_captions = 2;
+    assert!(TableCaptionPresenceAnalyzerV2::new()
+        .analyze(&ctx(&ok, &[], ""))
+        .is_empty());
+    assert!(TableCaptionPresenceDeepValidator::new()
+        .analyze(&ctx(&ok, &[], ""))
+        .is_empty());
+}
+#[test]
+fn table_scope_generations_are_complementary_not_duplicates() {
+    // V2 case: header cells exist (tables_with_headers > 0) but none
+    // carry a scope attribute. The deep validator stays silent because
+    // its precondition is tables_with_headers == 0.
+    let mut with_headers = page(); // tables_total = 2
+    with_headers.tables_with_headers = 1;
+    let th_no_scope = "<table><tr><th>H</th></tr></table>";
+    let v2 = TableHeaderScopeAnalyzerV2::new().analyze(&ctx(&with_headers, &[], th_no_scope));
+    assert_eq!(v2.len(), 1, "V2 flags <th> without scope: {v2:?}");
+    assert!(
+        TableHeaderScopeDeepValidator::new()
+            .analyze(&ctx(&with_headers, &[], th_no_scope))
+            .is_empty(),
+        "deep stays silent: tables_with_headers is nonzero"
+    );
+    // Deep case: tables exist but have no header cells at all. The V2
+    // guard (tables_with_headers == 0) returns early.
+    let p = page(); // tables_total = 2, tables_with_headers = 0
+    let headerless = "<table><tr><td>x</td></tr></table>";
+    let deep = TableHeaderScopeDeepValidator::new().analyze(&ctx(&p, &[], headerless));
+    assert_eq!(deep.len(), 1, "deep flags headerless tables: {deep:?}");
+    assert!(
+        TableHeaderScopeAnalyzerV2::new()
+            .analyze(&ctx(&p, &[], headerless))
+            .is_empty(),
+        "V2 stays silent: no tables_with_headers"
+    );
+    // No tables at all: both silent.
+    let mut none = page();
+    none.tables_total = 0;
+    assert!(TableHeaderScopeAnalyzerV2::new()
+        .analyze(&ctx(&none, &[], th_no_scope))
+        .is_empty());
+    assert!(TableHeaderScopeDeepValidator::new()
+        .analyze(&ctx(&none, &[], th_no_scope))
+        .is_empty());
+}
+
+#[test]
+fn form_label_v2_and_deep_defects_are_namespaced() {
+    let make_input = |id: &str, labeled: bool| crate::parser::ExtractedInput {
+        input_type: Some("text".to_string()),
+        name: None,
+        id: Some(id.to_string()),
+        has_label: labeled,
+        aria_label: None,
+        aria_labelledby: None,
+        aria_describedby: None,
+        placeholder: None,
+        required: false,
+    };
+    // V2 defect: duplicate input IDs inside one form; every input is
+    // labeled, so the deep validator must stay silent.
+    let mut p = page();
+    p.forms.push(crate::parser::ExtractedForm {
+        action: None,
+        method: "get".to_string(),
+        input_count: 2,
+        has_file_input: false,
+        has_search_input: false,
+        inputs: vec![make_input("email", true), make_input("email", true)],
+        has_fieldset: false,
+        has_legend: false,
+    });
+    let v2 = FormLabelAssociationAnalyzerV2::new().analyze(&ctx(&p, &[], ""));
+    assert_eq!(v2.len(), 1, "V2 flags duplicate input IDs: {v2:?}");
+    assert_eq!(v2[0].code, "FORMLAB-V2001");
+    assert!(
+        FormLabelAssociationDeepValidator::new()
+            .analyze(&ctx(&p, &[], ""))
+            .is_empty(),
+        "deep stays silent: no unlabeled inputs"
+    );
+    // Deep defect: an input with no label association; no duplicate IDs,
+    // so the V2 validator must stay silent.
+    let mut q = page();
+    q.forms.push(crate::parser::ExtractedForm {
+        action: None,
+        method: "post".to_string(),
+        input_count: 1,
+        has_file_input: false,
+        has_search_input: false,
+        inputs: vec![make_input("q", false)],
+        has_fieldset: false,
+        has_legend: false,
+    });
+    let deep = FormLabelAssociationDeepValidator::new().analyze(&ctx(&q, &[], ""));
+    assert_eq!(deep.len(), 1, "deep flags the unlabeled input: {deep:?}");
+    assert_eq!(deep[0].code, "FORMLAB-V2001-DEEP");
+    assert!(
+        FormLabelAssociationAnalyzerV2::new()
+            .analyze(&ctx(&q, &[], ""))
+            .is_empty(),
+        "V2 stays silent: IDs are unique"
     );
 }

@@ -33,6 +33,7 @@ DOC = ROOT / "docs" / "FINDING_CODES.md"
 IMPL_RE = re.compile(r"impl\s+Analyzer\s+for\s+(\w+)\s*\{")
 CODE_RE = re.compile(r'code:\s*"([A-Z][A-Z0-9-]+)"')
 TITLE_RE = re.compile(r'title:\s*"([^"]*)"')
+CHAR_RE = re.compile(r"'(\\.|[^'\\])'")
 TEST_SPLIT = re.compile(r"#\[cfg\(test\)\]|mod\s+tests")
 
 # Codes deliberately shared by two registered analyzers, with the owning
@@ -44,24 +45,150 @@ KNOWN_SHARED: dict[str, str] = {
     "COOKIEHTTP001": "base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "COOKIESEC001": "base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "EXTLINKAUTH-V2001": "external link authority deep vs deep-deep validator",
-    "FORMLAB-V2001": "form label V2 analyzer vs deep validator",
     "HSTSPR-V2001": "HSTS preload V2 analyzer vs deep-deep validator",
     "HSTSPR001": "HSTS preload analyzer vs deep validator",
-    "INTLINKQ-V2001": "internal link quality V2 vs deep validator (branch A)",
-    "INTLINKQ-V2002": "internal link quality V2 vs deep validator (branch B)",
     "SITEMAPDEEP-V2001": "SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
-    "TBLCAP-V2001": "table caption V2 analyzer vs deep validator",
-    "TBLSCOP-V2001": "table header scope V2 analyzer vs deep validator",
+    "TBLCAP-V2001": "TableCaptionPresenceAnalyzerV2 owns the code; the exact-duplicate deep emitter was unregistered 2026-09-27 (impl remains exported)",
+    "TBLSCOP-V2001": "complementary, not duplicates: TableHeaderScopeAnalyzerV2 fires on <th> elements lacking scope attributes; TableHeaderScopeDeepValidator fires on pages whose tables have no header cells at all (mutually exclusive preconditions)",
     "XFODEEP-V2001": "X-Frame-Options deep vs deep-deep validator",
 }
 
 
+def _blank(body: str, out: list[str], start: int, end: int) -> None:
+    """Blank out[start:end] in the sanitized buffer, keeping newlines (and
+    therefore all later offsets) intact."""
+    for k in range(start, min(end, len(body))):
+        if out[k] != "\n":
+            out[k] = " "
+
+
+def _find_raw_end(body: str, hashes_start: int, quote: int) -> int:
+    """End (exclusive) of a raw string whose opening quote is at `quote` with
+    `hashes_start` pointing at the first `#` of its hash run."""
+    hashes = quote - hashes_start
+    end = body.find('"' + "#" * hashes, quote + 1)
+    return len(body) if end == -1 else end + 1 + hashes
+
+
+def sanitize(body: str) -> str:
+    """Blank string/char literals and comments, preserving every offset.
+
+    String contents (ordinary, raw `r#"…"#`, byte `b"…"`, `br#"…"#`) and
+    comment text (line, block — including nested block comments, and doc
+    comments) are replaced with spaces so that brace matching sees only
+    structural tokens. Newlines are kept, so every index into the
+    returned text indexes into the original body.
+
+    Two classes of mis-scan motivated this pass:
+
+    - an unbalanced `{` inside a comment (`// a { color: #fff`) made a
+      naive brace counter never close the enclosing impl block, which
+      then swallowed every following impl in the file and mis-attributed
+      their finding codes (e.g. all `v2/accessibility.rs` deep codes to
+      `ColorContrastLinkDeepValidator`);
+    - char literals such as `('"',)` inside tuple arrays ended a naive
+      string scan early/at the wrong place, corrupting spans (e.g.
+      `MIXSCR001` attributed to `MixedContentFormValidator`).
+
+    Doc comments are blanked too, so Rust examples inside `///` no longer
+    produce phantom `impl Analyzer for` blocks or emit sites.
+    """
+    out = list(body)
+    n = len(body)
+    i = 0
+    while i < n:
+        c = body[i]
+        if c == "/" and i + 1 < n:
+            if body[i + 1] == "/":
+                j = body.find("\n", i)
+                j = n if j == -1 else j
+                _blank(body, out, i, j)
+                i = j
+                continue
+            if body[i + 1] == "*":
+                depth, k = 1, i + 2
+                while k + 1 < n and depth:
+                    if body[k] == "/" and body[k + 1] == "*":
+                        depth += 1
+                        k += 2
+                        continue
+                    if body[k] == "*" and body[k + 1] == "/":
+                        depth -= 1
+                        k += 2
+                        continue
+                    k += 1
+                k = min(k, n)
+                _blank(body, out, i, k)
+                i = k
+                continue
+        if c == "r" and (i == 0 or not (body[i - 1].isalnum() or body[i - 1] == "_")):
+            j = i + 1
+            while j < n and body[j] == "#":
+                j += 1
+            if j < n and body[j] == '"':
+                end = _find_raw_end(body, i + 1, j)
+                _blank(body, out, i, end)
+                i = end
+                continue
+        if c == "b" and (i == 0 or not (body[i - 1].isalnum() or body[i - 1] == "_")):
+            j = i + 1
+            if j < n and body[j] == "r":
+                k = j + 1
+                while k < n and body[k] == "#":
+                    k += 1
+                if k < n and body[k] == '"':
+                    end = _find_raw_end(body, j + 1, k)
+                    _blank(body, out, i, end)
+                    i = end
+                    continue
+            if j < n and body[j] == '"':
+                k = j + 1
+                while k < n:
+                    if body[k] == "\\":
+                        k += 2
+                        continue
+                    if body[k] == '"':
+                        break
+                    k += 1
+                end = min(k + 1, n)
+                _blank(body, out, i, end)
+                i = end
+                continue
+        if c == '"':
+            k = i + 1
+            while k < n:
+                if body[k] == "\\":
+                    k += 2
+                    continue
+                if body[k] == '"':
+                    break
+                k += 1
+            end = min(k + 1, n)
+            _blank(body, out, i, end)
+            i = end
+            continue
+        if c == "'":
+            m = CHAR_RE.match(body, i)
+            if m:
+                _blank(body, out, i, m.end())
+                i = m.end()
+                continue
+        i += 1
+    return "".join(out)
+
+
 def impl_spans(body: str) -> list[tuple[int, int, str]]:
-    """Return (start, end, type_name) for every `impl Analyzer for X { … }`."""
+    """Return (start, end, type_name) for every `impl Analyzer for X { … }`.
+
+    `body` must already be `sanitize()`d: braces inside string literals,
+    char literals, or comments never reach this function, so plain
+    counting is exact.
+    """
     spans: list[tuple[int, int, str]] = []
+    n = len(body)
     for im in IMPL_RE.finditer(body):
         depth, i = 0, im.end() - 1
-        while i < len(body):
+        while i < n:
             if body[i] == "{":
                 depth += 1
             elif body[i] == "}":
@@ -81,9 +208,12 @@ def collect() -> tuple[dict[str, dict[str, list[tuple[str, str]]]], int]:
         src = path.read_text()
         m = TEST_SPLIT.search(src)
         body = src[: m.start()] if m else src
-        spans = impl_spans(body)
+        clean = sanitize(body)
+        spans = impl_spans(clean)
         impl_count += len(spans)
         rel = path.relative_to(ROOT).as_posix()
+        # Emit sites (string literals) live in the raw body; spans index
+        # into the same offsets because sanitize() preserves them.
         for cm in CODE_RE.finditer(body):
             for s, e, name in spans:
                 if s < cm.start() < e:

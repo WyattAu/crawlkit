@@ -740,15 +740,18 @@ impl Analyzer for FormLabelAssociationAnalyzerV2 {
         }
         let mut dup_ids = 0;
         for form in &ctx.page.forms {
-            let ids: std::collections::HashSet<&str> =
-                form.inputs.iter().filter_map(|i| i.id.as_deref()).collect();
+            // Count occurrences of every declared id; collecting into a
+            // set first would make each count exactly 1 and the branch
+            // below unreachable (the duplicate-ID check could never
+            // fire). See tests/test_generation_dedup.rs
+            // `form_label_v2_and_deep_defects_are_namespaced`.
             let mut counts: std::collections::HashMap<&str, usize> =
                 std::collections::HashMap::new();
-            for id in &ids {
+            for id in form.inputs.iter().filter_map(|i| i.id.as_deref()) {
                 *counts.entry(id).or_insert(0) += 1;
             }
-            for &c in counts.values() {
-                if c > 1 {
+            for c in counts.values() {
+                if *c > 1 {
                     dup_ids += 1;
                 }
             }
@@ -3098,7 +3101,13 @@ impl Analyzer for FormLabelAssociationDeepValidator {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
-                code: "FORMLAB-V2001".to_string(),
+                // Namespaced: the bare FORMLAB-V2001 belongs to
+                // FormLabelAssociationAnalyzerV2 (duplicate input IDs).
+                // This deep check means a different defect (inputs with
+                // no label association) and the two can fire on the same
+                // page, so a shared code would be ambiguous for JSON
+                // consumers (ANALYZER_AUDIT Phase 4).
+                code: "FORMLAB-V2001-DEEP".to_string(),
                 title: "Form inputs without label association (deep)".to_string(),
                 description: format!(
                     "{unlabeled} input(s) have no associated label in deep analysis."

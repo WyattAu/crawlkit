@@ -4663,7 +4663,13 @@ impl Analyzer for InternalLinkQualityDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Seo,
-                    code: "INTLINKQ-V2001".to_string(),
+                    // Namespaced: the bare INTLINKQ-V2001 belongs to
+                    // InternalLinkQualityAnalyzerV2 (self-referencing
+                    // links). This deep check means a different defect
+                    // (high nofollow ratio) and the two can fire on the
+                    // same page, so a shared code would be ambiguous for
+                    // JSON consumers (ANALYZER_AUDIT Phase 4).
+                    code: "INTLINKQ-V2001-DEEP".to_string(),
                     title: "High nofollow internal link ratio (deep)".to_string(),
                     description: format!(
                         "{nofollow_count}/{} internal links are nofollowed in deep analysis.",
@@ -4684,7 +4690,7 @@ impl Analyzer for InternalLinkQualityDeepValidator {
                 })
                 .count();
             if empty_text > 0 {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ-V2002".to_string(), title: "Internal links without anchor text (deep)".to_string(), description: format!("{empty_text} internal link(s) have no text or aria-label in deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all internal links.".to_string() });
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Seo, code: "INTLINKQ-V2002-DEEP".to_string(), title: "Internal links without anchor text (deep)".to_string(), description: format!("{empty_text} internal link(s) have no text or aria-label in deep analysis."), url: url.clone(), recommendation: "Add descriptive text to all internal links.".to_string() });
             }
         }
         findings

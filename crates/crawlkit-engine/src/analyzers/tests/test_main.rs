@@ -837,9 +837,9 @@ fn test_registry_default() {
     let config = default_config();
     let registry = AnalyzerRegistry::new(&config);
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 776);
+    assert_eq!(registry.len(), 775);
     #[cfg(not(feature = "full"))]
-    assert_eq!(registry.len(), 772);
+    assert_eq!(registry.len(), 771);
     assert!(!registry.is_empty());
 }
 

@@ -23,8 +23,8 @@ consolidate the analyzers).
 
 | Code | Analyzers | Recorded reason |
 |---|---|---|
-| `COOKIEHTTP001` | `CookieHttpOnlyDeepDeepValidator`, `CookieHttpOnlyFlagValidator` | cookie flag (base) vs cookie deep-deep validator |
-| `COOKIESEC001` | `CookieSecureDeepDeepValidator`, `CookieSecurityFlagAnalyzer` | cookie security analyzer vs secure deep-deep validator |
+| `COOKIEHTTP001` | `CookieHttpOnlyDeepDeepValidator`, `CookieHttpOnlyFlagValidator` | base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
+| `COOKIESEC001` | `CookieSecureDeepDeepValidator`, `CookieSecurityFlagAnalyzer` | base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `EXTLINKAUTH-V2001` | `ExternalLinkAuthorityDeepAnalyzerV2`, `ExternalLinkAuthorityDeepDeepValidator` | external link authority deep vs deep-deep validator |
 | `FORMLAB-V2001` | `ColorContrastLinkDeepValidator`, `FormLabelAssociationAnalyzerV2` | form label V2 analyzer vs deep validator |
 | `HSTSPR-V2001` | `HstsPreloadReadinessAnalyzerV2`, `HstsPreloadReadyDeepDeepValidator` | HSTS preload V2 analyzer vs deep-deep validator |

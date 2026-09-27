@@ -30,6 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Analyzer registry dedup (ANALYZER_AUDIT item 3, cookie family)**:
+  `CookieSecureDeepDeepValidator` and `CookieHttpOnlyDeepDeepValidator`
+  are no longer registered in the default registry (default count
+  779 → 777). Fixture evidence: the deep-deep http-only validator is an
+  exact duplicate emitter of the base `CookieHttpOnlyFlagValidator`
+  (same case-insensitive Set-Cookie scan, same missing-httponly trigger,
+  same `COOKIEHTTP001` code/severity), and the deep-deep secure
+  validator's trigger is a strict subset of the base
+  `CookieSecurityFlagAnalyzer` (it only narrows by exempting session
+  cookies). Behavioral note: pages with insecure/non-HttpOnly cookies
+  now emit `COOKIESEC001`/`COOKIEHTTP001` **once** instead of twice;
+  codes, severities, and the finding classes covered are unchanged (the
+  base analyzers keep ownership). Both public types remain exported and
+  matrix-tested; see `tests/test_generation_dedup.rs` and
+  `tests/test_behavior_matrix.rs`.
+
 - **Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7 enforced)**:
   `scripts/render_capacity_report.py` now renders every committed record
   layout (inline `run_record/v1` sets, `distributed_run_record/v1` sets

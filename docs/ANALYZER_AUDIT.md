@@ -115,14 +115,24 @@ heuristic alone violates WCAG or OWASP.
    cookies, CSP, and metadata.~~ **Complete** — plus color-contrast,
    focus, heading-hierarchy, image-alt, and anchor-text families.
 3. **In progress** — select canonical implementations and remove
-   redundant default registrations. Two strict-subset registrations are
+   redundant default registrations. Four strict-subset registrations are
    removed so far (`HeadingHierarchyDeepDeepDeepValidator`,
-   `ImageAltTextDeepDeepDeepValidator`); continue candidate-by-candidate
+   `ImageAltTextDeepDeepDeepValidator`, `CookieSecureDeepDeepValidator`,
+   `CookieHttpOnlyDeepDeepValidator` — the cookie pair on exact-
+   duplicate/strict-subset evidence: the deep-deep secure validator only
+   narrows the base `CookieSecurityFlagAnalyzer` trigger by exempting
+   session cookies, and the deep-deep http-only validator emits the
+   identical COOKIEHTTP001 condition as the base
+   `CookieHttpOnlyFlagValidator`; the base analyzers keep ownership per
+   the Phase-4 convention, so every offending page now emits the finding
+   once instead of twice); continue candidate-by-candidate
    with fixture evidence only.
 4. Keep compatibility exports for public analyzer types where required
    (unregistered types remain exported and tested).
-5. **Measured (2026-09-02)** — default registry is 778 registrations
-   (824 total construction sites across default + profile paths). The
+5. **Measured (2026-09-27)** — default registry is 777 registrations
+   (2026-09-02 baseline 778, minus the cookie deep-deep pair removed per
+   item 3; 824 total construction sites across default + profile paths
+   at the 2026-09-02 measure). The
    kingstonpeptides.com full-profile output is unchanged (954 findings /
    10 pages) because the removed duplicates only fire on pages carrying
    the matching defects; the profile lever delivers the noise reduction

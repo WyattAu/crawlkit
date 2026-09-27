@@ -41,8 +41,8 @@ TEST_SPLIT = re.compile(r"#\[cfg\(test\)\]|mod\s+tests")
 # failure — namespace it (e.g. -DEEP, -DEEP-DEEP, -VALIDATOR, -SCHEMA)
 # or consolidate the analyzers.
 KNOWN_SHARED: dict[str, str] = {
-    "COOKIEHTTP001": "cookie flag (base) vs cookie deep-deep validator",
-    "COOKIESEC001": "cookie security analyzer vs secure deep-deep validator",
+    "COOKIEHTTP001": "base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
+    "COOKIESEC001": "base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "EXTLINKAUTH-V2001": "external link authority deep vs deep-deep validator",
     "FORMLAB-V2001": "form label V2 analyzer vs deep validator",
     "HSTSPR-V2001": "HSTS preload V2 analyzer vs deep-deep validator",

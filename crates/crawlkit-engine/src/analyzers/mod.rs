@@ -1386,8 +1386,14 @@ impl AnalyzerRegistry {
             Box::new(CspFormActionSelfDeepValidator::new()),
             Box::new(HstsPreloadReadyDeepValidator::new()),
             Box::new(HstsMaxAgeDeepValidator::new()),
-            Box::new(CookieSecureDeepDeepValidator::new()),
-            Box::new(CookieHttpOnlyDeepDeepValidator::new()),
+            // CookieSecureDeepDeepValidator / CookieHttpOnlyDeepDeepValidator
+            // are intentionally NOT registered here: duplicate emitters of the
+            // base cookie flag analyzers (COOKIESEC001 / COOKIEHTTP001 fire on
+            // the same Set-Cookie conditions from CookieSecurityFlagAnalyzer /
+            // CookieHttpOnlyFlagValidator, which keep ownership per the Phase-4
+            // convention). Every offending page previously received the finding
+            // twice. Both public types remain exported and tested; see
+            // `tests/test_generation_dedup.rs` and `test_behavior_matrix.rs`.
             Box::new(CookieSameSiteDeepDeepValidator::new()),
             Box::new(MixedContentIframeDeepValidator::new()),
             Box::new(CorsWildcardDeepValidator::new()),
@@ -1462,6 +1468,18 @@ impl AnalyzerRegistry {
             Box::new(CspFormActionSelfDeepDeepValidator::new()),
             Box::new(HstsPreloadReadyDeepDeepValidator::new()),
             Box::new(HstsMaxAgeDeepDeepValidator::new()),
+            // CookieHttpOnlyDeepDeepValidator is intentionally NOT
+            // registered: exact duplicate emitter of the base
+            // CookieHttpOnlyFlagValidator (same case-insensitive Set-Cookie
+            // scan, same missing-httponly trigger, same COOKIEHTTP001
+            // severity/code) — registered alongside it, every offending page
+            // received the finding twice. The base (Phase-4 ownership) keeps
+            // the code. CookieSecureDeepDeepValidator likewise: its trigger
+            // is the base CookieSecurityFlagAnalyzer's minus nothing (the
+            // deep-deep variant only narrows by exempting session cookies,
+            // which the base does not, so removal loses no finding class).
+            // Both public types remain exported; see
+            // `tests/test_generation_dedup.rs` and `test_behavior_matrix.rs`.
             // Cookie{Secure,HttpOnly,SameSite}DeepDeepDeepValidator are
             // intentionally NOT registered: exact duplicates of their
             // deep-deep counterparts (same triggers and findings). See

@@ -132,3 +132,55 @@ have silently stopped at 20 214 pages. Large-crawl operators must raise
 - Not a Postgres/Redis tier-sizing result: service-side resources were not
   sampled (Postgres checkpoints ran hot during the 100k attempt — a sizing
   observation for the runbook, not a gate).
+
+<!-- GENERATED-NUMBERS:BEGIN -->
+
+### Workload `distributed-crawl-2x5000-queue`
+
+**Topology:** 2 worker processes · storage `postgres-shared` · queue `redis-lease-queue (DistributedQueueAdapter in the crawl frontier)` · pages/worker 5000 · concurrency/worker 8 · profile `release`
+**Engine:** crawlkit 5.4.0
+**Machine:** 11th Gen Intel(R) Core(TM) i9-11980HK @ 2.60GHz · 31 GB RAM · Linux 7.2.4-1-cachyos
+**Runs:** 3 committed raw records · aggregate-throughput spread 14.6% → set VALID
+
+| Metric | Median | Target (plan §2) | Verdict |
+|---|---|---|---|
+| Aggregate throughput | **93.9 pages/s** | ≥ 50 | ✅ met |
+| Worker RSS sum (peak) | **161 MB** | per-run caps (gates) | — |
+
+| Run | Aggregate p/s | Worker RSS sum peak | Pages | All gates |
+|---|---|---|---|---|
+| distributed-crawl-2x5000-queue @ 1789485935 | 103.9 | 161 MB | 10002 | ✅
+| distributed-crawl-2x5000-queue @ 1789486066 | 93.9 | 158 MB | 10002 | ✅
+| distributed-crawl-2x5000-queue @ 1789486183 | 90.7 | 162 MB | 10002 | ✅
+
+Honest notes:
+
+- Loopback serving inflates throughput vs the real internet by design; this is an engine-capacity number (plan §9).
+- The relevant RSS bound for this class is the per-worker / worker-sum cap enforced by the record's own gates (shown per run below), not the inline 500 MB row.
+- Every number above is derived from the committed records; nothing is hand-copied.
+
+---
+
+### Workload `distributed-crawl-2x50000-queue`
+
+**Topology:** 2 worker processes · storage `postgres-shared` · queue `redis-lease-queue (DistributedQueueAdapter in the crawl frontier)` · pages/worker 50000 · concurrency/worker 8 · profile `release`
+**Engine:** crawlkit 5.4.0
+**Machine:** 11th Gen Intel(R) Core(TM) i9-11980HK @ 2.60GHz · 31 GB RAM · Linux 7.2.4-1-cachyos
+**Runs:** 1 committed raw records · aggregate-throughput spread 0.0% → set VALID
+
+| Metric | Median | Target (plan §2) | Verdict |
+|---|---|---|---|
+| Aggregate throughput | **57.0 pages/s** | ≥ 50 | ✅ met |
+| Worker RSS sum (peak) | **729 MB** | per-run caps (gates) | — |
+
+| Run | Aggregate p/s | Worker RSS sum peak | Pages | All gates |
+|---|---|---|---|---|
+| distributed-crawl-2x50000-queue @ 1789495573 | 57.0 | 729 MB | 100002 | ✅
+
+Honest notes:
+
+- Loopback serving inflates throughput vs the real internet by design; this is an engine-capacity number (plan §9).
+- The relevant RSS bound for this class is the per-worker / worker-sum cap enforced by the record's own gates (shown per run below), not the inline 500 MB row.
+- Every number above is derived from the committed records; nothing is hand-copied.
+
+<!-- GENERATED-NUMBERS:END -->

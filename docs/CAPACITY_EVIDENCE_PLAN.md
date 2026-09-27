@@ -87,7 +87,20 @@ distributed mode, whatever its speed.
    records.** A spread > 15% between runs invalidates the set (environment
    noise) — rerun, don't narrate.
 7. The capacity report renders the committed records into tables; it never
-   introduces a number that is not in a committed record.
+   introduces a number that is not in a committed record. **Enforced
+   mechanically since 2026-09-27**: `scripts/render_capacity_report.py
+   --check` (in the release-controls gate) verifies every
+   `docs/capacity/*/REPORT.md` generated-numbers section against a fresh
+   render of the committed records — narrative context is preserved above
+   the `<!-- GENERATED-NUMBERS -->` markers and only the marked section is
+   gated. The renderer covers all committed record layouts: inline
+   `run_record/v1` sets, `distributed_run_record/v1` sets (grouped by
+   workload label), paired `inline_N`/`queue_N` same-commit comparisons
+   (overhead computed median-to-median per §5.6), and the single-shot CI
+   smoke record. First catch on rollout: the 2026-09-16 paired-overhead
+   narrative cited ≈14.5% (a mean-to-mean figure) where §5.6's
+   publish-the-median rule yields ≈12.5% median-to-median — reports and
+   plan corrected to cite both, median primary.
 
 Artifacts live under `docs/capacity/<date>-<config>/` (run records, samples,
 report) — the Phase 4.2 "raw artifacts committed" requirement.
@@ -193,8 +206,9 @@ report) — the Phase 4.2 "raw artifacts committed" requirement.
    closeout dominates smaller runs). **Paired same-HEAD refresh measured**
    (`docs/capacity/2026-09-16-queue-overhead-refresh/`): inline vs queue,
    2 × 5 000 pages, 3-run sets each on one commit in one session — inline
-   112.6–117.4 p/s vs queue 95.9–98.7 p/s, lease overhead ≈ 14.5%
-   mean-to-mean, RSS unchanged. The paired ratio is the citable number;
+   112.6–117.4 p/s vs queue 95.9–98.7 p/s, lease overhead ≈ 12.5%
+   median-to-median (plan §5.6 publishes the median; mean-to-mean ≈
+   14.4%), RSS unchanged. The paired ratio is the citable number;
    cross-session absolute comparisons remain invalid by this plan's rules.
 
 Open: access to a pinned 8-core/16 GB machine for the published class of

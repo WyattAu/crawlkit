@@ -54,3 +54,31 @@ Validity: spread 13.5% (≤ 20% rule, plan §6) — a valid set.
   the Redis lease path — never conflate with inline numbers.
 - Postgres write amplification (~1.63 M issue rows per 10k pages) remains
   the service-side sizing signal (see the 100k report's checkpoint finding).
+
+<!-- GENERATED-NUMBERS:BEGIN -->
+
+### Workload `distributed-crawl-1x10000-queue`
+
+**Topology:** 1 worker processes · storage `postgres-shared` · queue `redis-lease-queue (DistributedQueueAdapter in the crawl frontier)` · pages/worker 10000 · concurrency/worker 8 · profile `release`
+**Engine:** crawlkit 5.4.0
+**Machine:** 11th Gen Intel(R) Core(TM) i9-11980HK @ 2.60GHz · 31 GB RAM · Linux 7.2.4-1-cachyos
+**Runs:** 3 committed raw records · aggregate-throughput spread 13.6% → set VALID
+
+| Metric | Median | Target (plan §2) | Verdict |
+|---|---|---|---|
+| Aggregate throughput | **55.6 pages/s** | ≥ 50 | ✅ met |
+| Worker RSS sum (peak) | **135 MB** | per-run caps (gates) | — |
+
+| Run | Aggregate p/s | Worker RSS sum peak | Pages | All gates |
+|---|---|---|---|---|
+| distributed-crawl-1x10000-queue @ 1789511124 | 55.6 | 135 MB | 10001 | ✅
+| distributed-crawl-1x10000-queue @ 1789511340 | 51.8 | 132 MB | 10001 | ✅
+| distributed-crawl-1x10000-queue @ 1789511516 | 58.8 | 138 MB | 10001 | ✅
+
+Honest notes:
+
+- Loopback serving inflates throughput vs the real internet by design; this is an engine-capacity number (plan §9).
+- The relevant RSS bound for this class is the per-worker / worker-sum cap enforced by the record's own gates (shown per run below), not the inline 500 MB row.
+- Every number above is derived from the committed records; nothing is hand-copied.
+
+<!-- GENERATED-NUMBERS:END -->

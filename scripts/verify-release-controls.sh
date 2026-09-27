@@ -7,6 +7,10 @@ scripts/verify-contracts.sh
 # Finding-code drift gate (ANALYZER_AUDIT Phase 4 follow-up): fails on a
 # new cross-analyzer code collision or a stale docs/FINDING_CODES.md.
 python3 scripts/generate_finding_catalog.py --check
+# Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7): every
+# docs/capacity/ REPORT.md's generated-numbers section must match a fresh
+# render of the committed run records.
+python3 scripts/render_capacity_report.py --check
 if git diff --check; then
   :
 else

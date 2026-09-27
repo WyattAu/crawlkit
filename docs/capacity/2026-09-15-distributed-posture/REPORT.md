@@ -55,3 +55,31 @@ Linux 7.2.4-1-cachyos
   inline-per-worker path explicitly.
 - Every number above is derived from the committed records; nothing is
   hand-copied.
+
+<!-- GENERATED-NUMBERS:BEGIN -->
+
+### Workload `distributed-crawl-2x5000`
+
+**Topology:** 2 worker processes · storage `postgres-shared` · queue `inline-per-worker (Redis lease queue not in crawl path; 6.0.0 engineering)` · pages/worker 5000 · concurrency/worker 8 · profile `release`
+**Engine:** crawlkit 5.4.0
+**Machine:** 11th Gen Intel(R) Core(TM) i9-11980HK @ 2.60GHz · 31 GB RAM · Linux 7.2.4-1-cachyos
+**Runs:** 3 committed raw records · aggregate-throughput spread 3.1% → set VALID
+
+| Metric | Median | Target (plan §2) | Verdict |
+|---|---|---|---|
+| Aggregate throughput | **115.4 pages/s** | ≥ 50 | ✅ met |
+| Worker RSS sum (peak) | **166 MB** | per-run caps (gates) | — |
+
+| Run | Aggregate p/s | Worker RSS sum peak | Pages | All gates |
+|---|---|---|---|---|
+| distributed-crawl-2x5000 @ 1789473462 | 116.4 | 167 MB | 10002 | ✅
+| distributed-crawl-2x5000 @ 1789473553 | 112.9 | 157 MB | 10002 | ✅
+| distributed-crawl-2x5000 @ 1789473641 | 115.4 | 166 MB | 10002 | ✅
+
+Honest notes:
+
+- Loopback serving inflates throughput vs the real internet by design; this is an engine-capacity number (plan §9).
+- The relevant RSS bound for this class is the per-worker / worker-sum cap enforced by the record's own gates (shown per run below), not the inline 500 MB row.
+- Every number above is derived from the committed records; nothing is hand-copied.
+
+<!-- GENERATED-NUMBERS:END -->

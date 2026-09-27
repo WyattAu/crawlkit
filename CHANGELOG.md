@@ -30,6 +30,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7 enforced)**:
+  `scripts/render_capacity_report.py` now renders every committed record
+  layout (inline `run_record/v1` sets, `distributed_run_record/v1` sets
+  grouped by workload, paired `inline_N`/`queue_N` same-commit sets with
+  overhead computed median-to-median, and the CI smoke record) and its
+  `--check` mode — wired into the release-controls gate — verifies each
+  `docs/capacity/*/REPORT.md` generated-numbers section against a fresh
+  render, while hand-written narrative is preserved outside the
+  `<!-- GENERATED-NUMBERS -->` markers. All 7 record-bearing directories
+  re-rendered; honest notes per §9 kept. Correction surfaced by the gate:
+  the 2026-09-16 paired-overhead figure is ≈**12.5% median-to-median**
+  (the previously cited ≈14.5% was mean-to-mean; §5.6 publishes the
+  median) — CHANGELOG, plan, and report now cite the median figure with
+  the mean noted.
+
 - **Finding-code drift gate + catalog (ANALYZER_AUDIT Phase 4 follow-up,
   closed)**: `scripts/generate_finding_catalog.py` generates
   `docs/FINDING_CODES.md` (1 152 distinct codes across 738
@@ -176,8 +191,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Queue-overhead refresh, paired same-HEAD**
   (`docs/capacity/2026-09-16-queue-overhead-refresh/`): inline vs Redis
   lease queue, 2 × 5 000 pages, 3-run sets each on the same commit in one
-  session — inline 112.6–117.4 p/s vs queue 95.9–98.7 p/s (spreads 2.1%
-  and 2.8%), lease overhead ≈ 14.5% mean-to-mean; RSS unchanged by queue
+  session — inline 112.6–117.4 p/s vs queue 95.9–98.7 p/s (spreads 4.3%
+  and 2.9%), lease overhead ≈ 12.5% median-to-median (§5.6 publishes the
+  median; mean-to-mean ≈ 14.4%); RSS unchanged by queue
   mode. Supersedes cross-session overhead estimates as the citable paired
   ratio.
 - **Redis lease queue in the crawl frontier (ADR-015 in the crawl path)**:

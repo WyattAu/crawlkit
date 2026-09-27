@@ -49,7 +49,7 @@ KNOWN_SHARED: dict[str, str] = {
     "HSTSPR001": "HSTS preload analyzer vs deep validator",
     "INTLINKQ-V2001": "internal link quality V2 vs deep validator (branch A)",
     "INTLINKQ-V2002": "internal link quality V2 vs deep validator (branch B)",
-    "SITEMAPDEEP-V2001": "sitemap coverage deep vs deep-deep validator",
+    "SITEMAPDEEP-V2001": "SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "TBLCAP-V2001": "table caption V2 analyzer vs deep validator",
     "TBLSCOP-V2001": "table header scope V2 analyzer vs deep validator",
     "XFODEEP-V2001": "X-Frame-Options deep vs deep-deep validator",

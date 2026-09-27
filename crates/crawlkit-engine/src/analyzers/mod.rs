@@ -1523,7 +1523,14 @@ impl AnalyzerRegistry {
             Box::new(InternalLinksDepthDeepDeepValidator::new()),
             Box::new(MetaDescriptionLengthDeepValidator::new()),
             Box::new(TitleLengthDeepValidator::new()),
-            Box::new(SitemapCoverageDeepDeepValidator::new()),
+            // SitemapCoverageDeepDeepValidator is intentionally NOT
+            // registered: exact duplicate emitter of the registered
+            // SitemapCoverageDeepAnalyzerV2 — both emit SITEMAPDEEP-V2001
+            // on the identical condition (a robots.txt without a `Sitemap:`
+            // line, case-insensitive), same severity/category, so every
+            // such crawl produced the finding twice. The V2 analyzer keeps
+            // ownership per the Phase-4 convention; the public type remains
+            // exported and pinned in `tests/test_generation_dedup.rs`.
             Box::new(RobotsTxtAnalysisDeepDeepValidator::new()),
             Box::new(InternalLinkQualityDeepValidator::new()),
             Box::new(ExternalLinkAuthorityDeepDeepValidator::new()),

@@ -17,6 +17,7 @@
 //! | `CanonicalChainDeepDeepDeepValidator` | Subset of deep-deep (misses curly-quote variant) (this file) |
 //! | `FocusManagementDeepDeepDeepValidator` | Exact duplicate of deep-deep (this file) |
 //! | `TableAccessibilityDeepDeepValidator` | Reverse subset: deep-deep-deep adds captions (this file) |
+//! | `SitemapCoverageDeepDeepValidator` | Exact duplicate of SitemapCoverageDeepAnalyzerV2 (this file) |
 //!
 //! Deliberately retained pairs (neither is a subset):
 //!
@@ -292,6 +293,36 @@ fn form_labels_generations_differ_and_are_both_retained() {
         .is_empty());
     assert!(FormLabelsDeepDeepDeepValidator::new()
         .analyze(&ctx(&hidden_only, &[], ""))
+        .is_empty());
+}
+
+#[test]
+fn sitemap_coverage_deep_deep_is_exact_duplicate_of_v2() {
+    let mut p = page();
+    p.url = "https://example.com/page".to_string();
+    // robots.txt without a Sitemap: directive: both generations must flag it.
+    let bare = "User-agent: *\nDisallow: /private/\n";
+    let v2 = SitemapCoverageDeepAnalyzerV2::new().analyze(&ctx(&p, &[], ""));
+    assert!(v2.is_empty(), "no robots.txt in context: neither fires");
+    let mut ctx_bare = ctx(&p, &[], "");
+    ctx_bare.robots_txt = Some(bare);
+    let v2 = SitemapCoverageDeepAnalyzerV2::new().analyze(&ctx_bare);
+    let dd = SitemapCoverageDeepDeepValidator::new().analyze(&ctx_bare);
+    assert_eq!(v2.len(), 1, "V2 fires on robots.txt without Sitemap:");
+    assert_eq!(dd.len(), v2.len(), "deep-deep must fire identically");
+    assert_eq!(v2[0].code, "SITEMAPDEEP-V2001");
+    assert_eq!(dd[0].code, v2[0].code);
+    assert_eq!(dd[0].severity, v2[0].severity);
+    assert_eq!(dd[0].category, v2[0].category);
+    // robots.txt declaring a sitemap: both must stay silent.
+    let declared = "User-agent: *\nDisallow: /private/\nSITEMAP: https://example.com/sitemap.xml\n";
+    let mut ctx_declared = ctx(&p, &[], "");
+    ctx_declared.robots_txt = Some(declared);
+    assert!(SitemapCoverageDeepAnalyzerV2::new()
+        .analyze(&ctx_declared)
+        .is_empty());
+    assert!(SitemapCoverageDeepDeepValidator::new()
+        .analyze(&ctx_declared)
         .is_empty());
 }
 

@@ -31,7 +31,7 @@ consolidate the analyzers).
 | `HSTSPR001` | `HstsPreloadReadinessAnalyzer`, `HstsPreloadReadyDeepValidator` | HSTS preload analyzer vs deep validator |
 | `INTLINKQ-V2001` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | internal link quality V2 vs deep validator (branch A) |
 | `INTLINKQ-V2002` | `InternalLinkQualityAnalyzerV2`, `InternalLinkQualityDeepValidator` | internal link quality V2 vs deep validator (branch B) |
-| `SITEMAPDEEP-V2001` | `SitemapCoverageDeepAnalyzerV2`, `SitemapCoverageDeepDeepValidator` | sitemap coverage deep vs deep-deep validator |
+| `SITEMAPDEEP-V2001` | `SitemapCoverageDeepAnalyzerV2`, `SitemapCoverageDeepDeepValidator` | SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `TBLCAP-V2001` | `ColorContrastLinkDeepValidator`, `TableCaptionPresenceAnalyzerV2` | table caption V2 analyzer vs deep validator |
 | `TBLSCOP-V2001` | `ColorContrastLinkDeepValidator`, `TableHeaderScopeAnalyzerV2` | table header scope V2 analyzer vs deep validator |
 | `XFODEEP-V2001` | `XFrameOptionsDeepAnalyzerV2`, `XFrameOptionsDeepDeepValidator` | X-Frame-Options deep vs deep-deep validator |

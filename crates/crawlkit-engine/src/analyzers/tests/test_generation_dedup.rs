@@ -367,7 +367,7 @@ fn hreflang_reciprocal_generations_differ_and_are_both_retained() {
 
 #[test]
 fn table_caption_deep_is_duplicate_of_v2() {
-    let mut p = page();
+    let p = page();
     assert_eq!(p.tables_total, 2);
     assert_eq!(p.tables_with_captions, 0);
     // Identical trigger (tables present, none captioned), same code and

@@ -157,7 +157,22 @@ green on the tagged commit (cadence rule).
 
 ## Immediate next actions
 
-1. Source the pinned 8-core/16 GB reference machine (long pole; start now).
-2. Draft the metering ADR (needs product input on units + quota defaults).
-3. alpha.1 exporter work can start immediately — the schema contract and
-   its open questions are closed as of 2026-09-16.
+*Updated 2026-09-27 — all three alpha streams (warehouse contracts,
+render budgets, metering) are cut and tagged through
+`v6.0.0-alpha.3`; the finding-code drift gate is enforced in CI and the
+dead-code gate decision is recorded for the stable cut. What remains
+for 6.0.0 stable:*
+
+1. Source the pinned 8-core/16 GB reference machine (long pole,
+   operator-owned; see docs/REFERENCE_MACHINE_SPEC.md).
+2. Produce the 10k/100k capacity evidence package with raw artifacts
+   (docs/CAPACITY_EVIDENCE_PLAN.md).
+3. Execute the dead-code gate decision: move `backpressure.rs`,
+   `enterprise.rs`, `native_plugin.rs` behind a non-default
+   `unstable-legacy` feature at the stable cut.
+4. Continue analyzer behavioral consolidation candidate-by-candidate
+   with fixture evidence (ANALYZER_AUDIT item 3); the static drift gate
+   now prevents new cross-analyzer code collisions.
+5. Practice the Phase 6.2/6.3 release gate on every remaining cut
+   (checksums, SBOM, migration/rollback evidence — five consecutive
+   so far).

@@ -114,7 +114,7 @@ heuristic alone violates WCAG or OWASP.
 2. ~~Produce behavior matrices for form labels, tables, links, headings,
    cookies, CSP, and metadata.~~ **Complete** — plus color-contrast,
    focus, heading-hierarchy, image-alt, and anchor-text families.
-3. **Complete (2026-09-27, pending CI)** — select canonical
+3. **Complete (2026-09-27)** — select canonical
    implementations and remove redundant default registrations. Seven
    strict-subset/exact-duplicate registrations are removed
    (`HeadingHierarchyDeepDeepDeepValidator`,

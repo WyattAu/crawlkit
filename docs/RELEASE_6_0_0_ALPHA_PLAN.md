@@ -159,7 +159,10 @@ green on the tagged commit (cadence rule).
 
 *Updated 2026-09-27 — all three alpha streams (warehouse contracts,
 render budgets, metering) are cut and tagged through
-`v6.0.0-alpha.3`; the finding-code drift gate is enforced in CI and the
+`v6.0.0-alpha.3`; the finding-code drift gate is enforced in CI, the
+scanner behind it is literal-aware (strings/chars/comments), and
+ANALYZER_AUDIT behavioral consolidation (item 3) is complete with
+every shared code carrying an explicit recorded decision. The
 dead-code gate decision is recorded for the stable cut. What remains
 for 6.0.0 stable:*
 
@@ -170,9 +173,11 @@ for 6.0.0 stable:*
 3. Execute the dead-code gate decision: move `backpressure.rs`,
    `enterprise.rs`, `native_plugin.rs` behind a non-default
    `unstable-legacy` feature at the stable cut.
-4. Continue analyzer behavioral consolidation candidate-by-candidate
-   with fixture evidence (ANALYZER_AUDIT item 3); the static drift gate
-   now prevents new cross-analyzer code collisions.
+4. ~~Continue analyzer behavioral consolidation candidate-by-candidate
+   with fixture evidence (ANALYZER_AUDIT item 3).~~ **Complete** —
+   seven duplicate registrations removed, two semantic collisions
+   namespaced, complementary pairs verified by fixture; the static
+   drift gate prevents new cross-analyzer code collisions.
 5. Practice the Phase 6.2/6.3 release gate on every remaining cut
    (checksums, SBOM, migration/rollback evidence — five consecutive
    so far).

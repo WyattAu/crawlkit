@@ -18,6 +18,7 @@ Phase 4 of docs/ANALYZER_AUDIT.md left two debts, both closed here:
 Usage:
     python3 scripts/generate_finding_catalog.py            # regenerate docs/FINDING_CODES.md
     python3 scripts/generate_finding_catalog.py --check    # gate: fail if the doc is stale or a new code is shared
+    python3 scripts/generate_finding_catalog.py --self-test  # scanner edge cases (no repo access needed)
 """
 
 from __future__ import annotations
@@ -275,7 +276,145 @@ def render(catalog: dict[str, dict[str, list[tuple[str, str]]]], impl_count: int
     return "\n".join(lines)
 
 
+def self_test() -> int:
+    """Verify the scanner against the mis-scan classes that broke attribution.
+
+    Each case is a synthetic source exercising one scoping hazard; the
+    assertion is that `impl Analyzer for` spans still close where the
+    blocks end and that emit sites land in the right owner. These pin
+    the 2026-09-27 hardening (unbalanced brace in a comment swallowed
+    every following impl; char literals with embedded quotes corrupted
+    string handling); the gate script runs this before --check.
+    """
+    failures: list[str] = []
+
+    def owner_of(body: str, code: str) -> str | None:
+        clean = sanitize(body)
+        spans = impl_spans(clean)
+        cm = CODE_RE.search(body, 0, len(body))
+        while cm is not None and cm.group(1) != code:
+            cm = CODE_RE.search(body, cm.end())
+        if cm is None:
+            return None
+        for s, e, name in spans:
+            if s < cm.start() < e:
+                return name
+        return None
+
+    # 1. Unbalanced `{` in a line comment must not swallow the next impl.
+    comment_brace = '''
+impl Analyzer for A {
+    fn f(&self) -> u32 {
+        // a { color: #fff  <- unbalanced brace in a comment
+        1
+    }
+}
+impl Analyzer for B {
+    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
+        vec![Finding { code: "X001".to_string(), title: "x" }]
+    }
+}
+'''
+    spans = impl_spans(sanitize(comment_brace))
+    if [n for _, _, n in spans] != ["A", "B"]:
+        failures.append(f"comment-brace: spans {spans}")
+    if owner_of(comment_brace, "X001") != "B":
+        failures.append("comment-brace: emit site mis-attributed")
+
+    # 2. Char literal with an embedded quote (tuple-array element) must
+    #    not corrupt string handling.
+    char_quote = '''
+impl Analyzer for C {
+    fn f(&self) {
+        let x = [("src=\\"http://", '"')];
+        if x.len() == 1 {
+            let _ = 1;
+        }
+    }
+}
+impl Analyzer for D {
+    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
+        vec![Finding { code: "X002".to_string(), title: "x" }]
+    }
+}
+'''
+    spans = impl_spans(sanitize(char_quote))
+    if [n for _, _, n in spans] != ["C", "D"]:
+        failures.append(f"char-quote: spans {spans}")
+    if owner_of(char_quote, "X002") != "D":
+        failures.append("char-quote: emit site mis-attributed")
+
+    # 3. Raw string with braces + nested block comment must be inert.
+    raw_nested = '''
+impl Analyzer for E {
+    fn f(&self) {
+        let s = r#"body { color: red } "#;
+        /* /* nested } */ still comment } */
+        let _ = 1;
+    }
+}
+impl Analyzer for F {
+    fn g(&self) {
+        let _ = 2;
+    }
+}
+'''
+    spans = impl_spans(sanitize(raw_nested))
+    if [n for _, _, n in spans] != ["E", "F"]:
+        failures.append(f"raw-nested: spans {spans}")
+
+    # 4. Byte strings and escaped quotes inside ordinary strings.
+    byte_escape = '''
+impl Analyzer for G {
+    fn f(&self) {
+        let b = b"}";
+        let s = "a\\"}b";
+        if s.len() > 0 {
+            let _ = b;
+        }
+    }
+}
+impl Analyzer for H {
+    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
+        vec![Finding { code: "X003".to_string(), title: "x" }]
+    }
+}
+'''
+    spans = impl_spans(sanitize(byte_escape))
+    if [n for _, _, n in spans] != ["G", "H"]:
+        failures.append(f"byte-escape: spans {spans}")
+    if owner_of(byte_escape, "X003") != "H":
+        failures.append("byte-escape: emit site mis-attributed")
+
+    # 5. Doc-comment examples must not create phantom impl blocks (the
+       # `MyAnalyzer` incident) nor contribute emit sites.
+    doc_phantom = '''
+/// Example:
+/// impl Analyzer for Ghost {
+///     fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> { vec![] }
+/// }
+pub struct Real;
+impl Analyzer for Real {
+    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
+        vec![]
+    }
+}
+'''
+    spans = impl_spans(sanitize(doc_phantom))
+    if [n for _, _, n in spans] != ["Real"]:
+        failures.append(f"doc-phantom: spans {spans}")
+
+    if failures:
+        for f in failures:
+            print(f"FAIL: {f}", file=sys.stderr)
+        return 1
+    print("self-test OK: comment/char/raw/byte/doc scoping (5 cases)")
+    return 0
+
+
 def main() -> int:
+    if "--self-test" in sys.argv[1:]:
+        return self_test()
     check = "--check" in sys.argv[1:]
     catalog, impl_count = collect()
     shared = {c: owners for c, owners in catalog.items() if len(owners) > 1}

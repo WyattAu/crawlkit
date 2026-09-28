@@ -6,6 +6,9 @@ scripts/verify-unsafe-inventory.sh
 scripts/verify-contracts.sh
 # Finding-code drift gate (ANALYZER_AUDIT Phase 4 follow-up): fails on a
 # new cross-analyzer code collision or a stale docs/FINDING_CODES.md.
+# --self-test first pins the scanner's literal/comment scoping so a
+# scoping regression cannot silently mis-attribute codes again.
+python3 scripts/generate_finding_catalog.py --self-test
 python3 scripts/generate_finding_catalog.py --check
 # Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7): every
 # docs/capacity/ REPORT.md's generated-numbers section must match a fresh

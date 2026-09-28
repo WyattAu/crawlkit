@@ -66,8 +66,11 @@ collisions are closed:
 | `ANCHGEN-V2001` | Deep generation namespaced; trigger lists overlap but neither contains the other, so both retained | `test_anchorgen_matrix.rs` |
 | `LINKTQ-V2002` | Already namespaced (`-V2`, `-DEEP`) in Phase 4 with matrix coverage | `test_behavior_matrix.rs` |
 
-The registry now ships 785 analyzers with unique, ownership-documented
-finding codes guarded by runtime fixtures. Aggregate generation analyzers
+At the 2026-09-02 measure the registry shipped 785 analyzers; after the
+2026-09-27 behavioral consolidation (item 3) it ships 775, with unique,
+ownership-documented finding codes guarded by runtime fixtures and the
+static drift gate (`scripts/generate_finding_catalog.py --check`).
+Aggregate generation analyzers
 emit at most one finding per code; per-link analyzers legitimately emit
 one finding per link, and the matrices assert the difference.
 

@@ -2905,7 +2905,13 @@ impl Analyzer for HstsPreloadReadyDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
-                    code: "HSTSPR001".to_string(),
+                    // Namespaced: the bare HSTSPR001 belongs to
+                    // HstsPreloadReadinessAnalyzer (per-defect findings).
+                    // This deep check aggregates all readiness gaps into
+                    // one Info and co-fires with the base, so a shared
+                    // code would be ambiguous for JSON consumers
+                    // (ANALYZER_AUDIT Phase 4).
+                    code: "HSTSPR001-DEEP".to_string(),
                     title: "HSTS preload readiness incomplete".to_string(),
                     description: format!("Missing: {}.", missing.join(", ")),
                     url: url.clone(),
@@ -3943,7 +3949,12 @@ impl Analyzer for HstsPreloadReadyDeepDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
-                    code: "HSTSPR-V2001".to_string(),
+                    // Namespaced: the bare HSTSPR-V2001 belongs to
+                    // HstsPreloadReadinessAnalyzerV2 (missing
+                    // includeSubDomains, Warning). This deep-deep check
+                    // aggregates readiness gaps and can co-fire with the
+                    // V2 analyzer (ANALYZER_AUDIT Phase 4).
+                    code: "HSTSPR-V2001-DEEP-DEEP".to_string(),
                     title: "HSTS preload readiness incomplete (deep-deep)".to_string(),
                     description: format!("Missing: {}.", missing.join(", ")),
                     url: url.clone(),
@@ -5676,7 +5687,7 @@ mod tests {
         };
         let f = HstsPreloadReadyDeepValidator::new().analyze(&ctx);
         assert!(!f.is_empty());
-        assert_eq!(f[0].code, "HSTSPR001");
+        assert_eq!(f[0].code, "HSTSPR001-DEEP");
     }
     #[test]
     fn test_hsts_preload_ready_ok() {

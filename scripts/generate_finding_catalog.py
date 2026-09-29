@@ -45,13 +45,10 @@ TEST_SPLIT = re.compile(r"#\[cfg\(test\)\]|mod\s+tests")
 KNOWN_SHARED: dict[str, str] = {
     "COOKIEHTTP001": "base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "COOKIESEC001": "base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
-    "EXTLINKAUTH-V2001": "external link authority deep vs deep-deep validator",
-    "HSTSPR-V2001": "HSTS preload V2 analyzer vs deep-deep validator",
-    "HSTSPR001": "HSTS preload analyzer vs deep validator",
     "SITEMAPDEEP-V2001": "SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "TBLCAP-V2001": "TableCaptionPresenceAnalyzerV2 owns the code; the exact-duplicate deep emitter was unregistered 2026-09-27 (impl remains exported)",
     "TBLSCOP-V2001": "complementary, not duplicates: TableHeaderScopeAnalyzerV2 fires on <th> elements lacking scope attributes; TableHeaderScopeDeepValidator fires on pages whose tables have no header cells at all (mutually exclusive preconditions)",
-    "XFODEEP-V2001": "X-Frame-Options deep vs deep-deep validator",
+    "XFODEEP-V2001": "complementary, not duplicates: XFrameOptionsDeepAnalyzerV2 fires when neither X-Frame-Options nor CSP frame-ancestors is present; XFrameOptionsDeepDeepValidator fires when the header exists but carries an invalid value (mutually exclusive preconditions, pinned by fixture)",
 }
 
 

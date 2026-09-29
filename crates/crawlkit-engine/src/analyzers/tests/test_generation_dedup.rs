@@ -39,6 +39,24 @@
 //! - `TableHeaderScopeAnalyzerV2` vs `TableHeaderScopeDeepValidator`:
 //!   `<th>` elements lacking scope vs tables with no header cells at
 //!   all — mutually exclusive preconditions (this file).
+//! - `XFrameOptionsDeepAnalyzerV2` vs `XFrameOptionsDeepDeepValidator`:
+//!   absent clickjacking protection vs present-but-invalid
+//!   X-Frame-Options value — mutually exclusive preconditions (this
+//!   file).
+//!
+//! Co-fire ambiguity namespacings (different granularity, same code,
+//! can fire together on one page — emit codes changed per the Phase-4
+//! convention; bare codes stay with the earlier/base generation):
+//!
+//! - `HSTSPR001` → `HSTSPR001-DEEP` on `HstsPreloadReadyDeepValidator`
+//!   (aggregate readiness Info vs per-defect findings; this file).
+//! - `HSTSPR-V2001` → `HSTSPR-V2001-DEEP-DEEP` on
+//!   `HstsPreloadReadyDeepDeepValidator` (aggregate vs missing
+//!   includeSubDomains Warning; this file).
+//! - `EXTLINKAUTH-V2001` → `EXTLINKAUTH-V2001-DEEP-DEEP` on
+//!   `ExternalLinkAuthorityDeepDeepValidator` (ratio threshold + larger
+//!   TLD list vs any-suspicious-link; each can fire where the other is
+//!   silent; this file).
 
 use crate::analyzers::*;
 use crate::meta::MetaTags;
@@ -488,4 +506,149 @@ fn form_label_v2_and_deep_defects_are_namespaced() {
             .is_empty(),
         "V2 stays silent: IDs are unique"
     );
+}
+
+fn ext_link(href: &str) -> crate::parser::ExtractedLink {
+    crate::parser::ExtractedLink {
+        href: href.to_string(),
+        text: "ext".to_string(),
+        rel: Vec::new(),
+        is_external: true,
+        aria_label: None,
+        img_alt: None,
+    }
+}
+
+#[test]
+fn xfo_deep_generations_are_complementary_not_duplicates() {
+    // V2 case: no X-Frame-Options header and no CSP frame-ancestors.
+    let v2 = XFrameOptionsDeepAnalyzerV2::new().analyze(&ctx(&page(), &[], ""));
+    assert_eq!(v2.len(), 1, "V2 flags absent protection: {v2:?}");
+    assert_eq!(v2[0].code, "XFODEEP-V2001");
+    assert!(
+        XFrameOptionsDeepDeepValidator::new()
+            .analyze(&ctx(&page(), &[], ""))
+            .is_empty(),
+        "deep-deep stays silent: no header at all"
+    );
+    // Deep-deep case: header present with an invalid value. The V2
+    // guard (xfo.is_none()) returns early.
+    let invalid = header(&[("X-Frame-Options", "ALLOW-FROM https://a.com")]);
+    let dd = XFrameOptionsDeepDeepValidator::new().analyze(&ctx(&page(), &invalid, ""));
+    assert_eq!(dd.len(), 1, "deep-deep flags the invalid value: {dd:?}");
+    assert!(
+        XFrameOptionsDeepAnalyzerV2::new()
+            .analyze(&ctx(&page(), &invalid, ""))
+            .is_empty(),
+        "V2 stays silent: header exists"
+    );
+    // Valid value and CSP-protected variants: both silent.
+    let valid = header(&[("X-Frame-Options", "DENY")]);
+    assert!(XFrameOptionsDeepDeepValidator::new()
+        .analyze(&ctx(&page(), &valid, ""))
+        .is_empty());
+    let csp = header(&[("Content-Security-Policy", "frame-ancestors 'self'")]);
+    assert!(XFrameOptionsDeepAnalyzerV2::new()
+        .analyze(&ctx(&page(), &csp, ""))
+        .is_empty());
+}
+
+#[test]
+fn hsts_readiness_generations_co_fire_and_are_namespaced() {
+    let p = page();
+    // Header missing includeSubDomains: base fires per-defect Warnings,
+    // deep fires its aggregate Info, and the codes must not collide.
+    let partial = header(&[("Strict-Transport-Security", "max-age=31536000")]);
+    let base = HstsPreloadReadinessAnalyzer::new().analyze(&ctx(&p, &partial, ""));
+    let deep = HstsPreloadReadyDeepValidator::new().analyze(&ctx(&p, &partial, ""));
+    assert!(
+        base.iter().any(|f| f.code == "HSTSPR001"),
+        "base emits bare HSTSPR001: {base:?}"
+    );
+    assert_eq!(
+        deep.len(),
+        1,
+        "deep aggregates all readiness gaps into one finding: {deep:?}"
+    );
+    assert_eq!(deep[0].code, "HSTSPR001-DEEP");
+    // Fully ready header: both silent.
+    let ready = header(&[(
+        "Strict-Transport-Security",
+        "max-age=31536000; includeSubDomains; preload",
+    )]);
+    assert!(HstsPreloadReadinessAnalyzer::new()
+        .analyze(&ctx(&p, &ready, ""))
+        .is_empty());
+    assert!(HstsPreloadReadyDeepValidator::new()
+        .analyze(&ctx(&p, &ready, ""))
+        .is_empty());
+    // V2 vs deep-deep: the V2 emits bare HSTSPR-V2001 (missing
+    // includeSubDomains, Warning); the deep-deep aggregates and is
+    // namespaced.
+    let v2 = HstsPreloadReadinessAnalyzerV2::new().analyze(&ctx(&p, &partial, ""));
+    let dd = HstsPreloadReadyDeepDeepValidator::new().analyze(&ctx(&p, &partial, ""));
+    assert!(
+        v2.iter().any(|f| f.code == "HSTSPR-V2001"),
+        "V2 emits bare HSTSPR-V2001: {v2:?}"
+    );
+    assert!(dd.iter().any(|f| f.code == "HSTSPR-V2001-DEEP-DEEP"));
+    // A short max-age is a V2-only defect (its own code); the deep-deep
+    // still aggregates it.
+    let short = header(&[(
+        "Strict-Transport-Security",
+        "max-age=86400; includeSubDomains; preload",
+    )]);
+    assert!(
+        HstsPreloadReadinessAnalyzerV2::new()
+            .analyze(&ctx(&p, &short, ""))
+            .iter()
+            .all(|f| f.code != "HSTSPR-V2001"),
+        "V2: isd+preload present, so no V2001"
+    );
+    assert!(
+        HstsPreloadReadyDeepDeepValidator::new()
+            .analyze(&ctx(&p, &short, ""))
+            .iter()
+            .any(|f| f.code == "HSTSPR-V2001-DEEP-DEEP"),
+        "deep-deep flags the short max-age"
+    );
+}
+
+#[test]
+fn extlink_auth_generations_can_diverge_and_are_namespaced() {
+    let mut p = page();
+    // 9 external links, 2 suspicious (2/9 <= 1/3): V2 fires (any
+    // suspicious link), deep-deep stays silent (below its ratio).
+    for i in 0..7 {
+        p.links.push(ext_link(&format!("https://trusted{i}.com/x")));
+    }
+    p.links.push(ext_link("https://spam-x.ru/a"));
+    p.links.push(ext_link("https://junk-xyz.cn/b"));
+    let v2 = ExternalLinkAuthorityDeepAnalyzerV2::new().analyze(&ctx(&p, &[], ""));
+    let dd = ExternalLinkAuthorityDeepDeepValidator::new().analyze(&ctx(&p, &[], ""));
+    assert_eq!(v2.len(), 1, "V2 fires on any suspicious link: {v2:?}");
+    assert_eq!(v2[0].code, "EXTLINKAUTH-V2001");
+    assert!(
+        dd.is_empty(),
+        "deep-deep silent below the ratio threshold: {dd:?}"
+    );
+    // 9 external links, 7 on a deep-deep-only TLD (.buzz is absent from
+    // the V2 list): V2 stays silent (no .ru/.cn/.tk/.ml/.xyz/.top),
+    // deep-deep fires (7/9 > 1/3).
+    let mut q = page();
+    for i in 0..2 {
+        q.links.push(ext_link(&format!("https://trusted{i}.com/x")));
+    }
+    for i in 0..7 {
+        q.links.push(ext_link(&format!("https://junk{i}.buzz/a")));
+    }
+    assert!(
+        ExternalLinkAuthorityDeepAnalyzerV2::new()
+            .analyze(&ctx(&q, &[], ""))
+            .is_empty(),
+        "V2 silent: .buzz is not in its TLD list"
+    );
+    let dd2 = ExternalLinkAuthorityDeepDeepValidator::new().analyze(&ctx(&q, &[], ""));
+    assert_eq!(dd2.len(), 1, "deep-deep fires on the .buzz ratio: {dd2:?}");
+    assert_eq!(dd2[0].code, "EXTLINKAUTH-V2001-DEEP-DEEP");
 }

@@ -15,9 +15,9 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1147 |
+| Distinct finding codes | 1150 |
 | `impl Analyzer for` blocks scanned | 737 |
-| Codes shared by 2+ analyzers | 9 |
+| Codes shared by 2+ analyzers | 6 |
 
 ## Shared codes (recorded ownership)
 
@@ -25,13 +25,10 @@ consolidate the analyzers).
 |---|---|---|
 | `COOKIEHTTP001` | `CookieHttpOnlyDeepDeepValidator`, `CookieHttpOnlyFlagValidator` | base CookieHttpOnlyFlagValidator owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `COOKIESEC001` | `CookieSecureDeepDeepValidator`, `CookieSecurityFlagAnalyzer` | base CookieSecurityFlagAnalyzer owns the code; the duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
-| `EXTLINKAUTH-V2001` | `ExternalLinkAuthorityDeepAnalyzerV2`, `ExternalLinkAuthorityDeepDeepValidator` | external link authority deep vs deep-deep validator |
-| `HSTSPR-V2001` | `HstsPreloadReadinessAnalyzerV2`, `HstsPreloadReadyDeepDeepValidator` | HSTS preload V2 analyzer vs deep-deep validator |
-| `HSTSPR001` | `HstsPreloadReadinessAnalyzer`, `HstsPreloadReadyDeepValidator` | HSTS preload analyzer vs deep validator |
 | `SITEMAPDEEP-V2001` | `SitemapCoverageDeepAnalyzerV2`, `SitemapCoverageDeepDeepValidator` | SitemapCoverageDeepAnalyzerV2 owns the code; the exact-duplicate deep-deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `TBLCAP-V2001` | `TableCaptionPresenceAnalyzerV2`, `TableCaptionPresenceDeepValidator` | TableCaptionPresenceAnalyzerV2 owns the code; the exact-duplicate deep emitter was unregistered 2026-09-27 (impl remains exported) |
 | `TBLSCOP-V2001` | `TableHeaderScopeAnalyzerV2`, `TableHeaderScopeDeepValidator` | complementary, not duplicates: TableHeaderScopeAnalyzerV2 fires on <th> elements lacking scope attributes; TableHeaderScopeDeepValidator fires on pages whose tables have no header cells at all (mutually exclusive preconditions) |
-| `XFODEEP-V2001` | `XFrameOptionsDeepAnalyzerV2`, `XFrameOptionsDeepDeepValidator` | X-Frame-Options deep vs deep-deep validator |
+| `XFODEEP-V2001` | `XFrameOptionsDeepAnalyzerV2`, `XFrameOptionsDeepDeepValidator` | complementary, not duplicates: XFrameOptionsDeepAnalyzerV2 fires when neither X-Frame-Options nor CSP frame-ancestors is present; XFrameOptionsDeepDeepValidator fires when the header exists but carries an invalid value (mutually exclusive preconditions, pinned by fixture) |
 
 ## All codes
 
@@ -346,7 +343,8 @@ consolidate the analyzers).
 | `EXTAUTHDP001` | `ExternalLinksAuthorityScoreDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | No high-authority external links |
 | `EXTAUTHDP002` | `ExternalLinksAuthorityScoreDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Links to low-reputation TLDs |
 | `EXTAUTHDP003` | `ExternalLinksAuthorityScoreDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Low authority link ratio |
-| `EXTLINKAUTH-V2001` | `ExternalLinkAuthorityDeepAnalyzerV2`, `ExternalLinkAuthorityDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Links to suspicious TLDs |
+| `EXTLINKAUTH-V2001` | `ExternalLinkAuthorityDeepAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Links to suspicious TLDs |
+| `EXTLINKAUTH-V2001-DEEP-DEEP` | `ExternalLinkAuthorityDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Many low-authority external links (deep-deep) |
 | `EXTLINKAUTH001` | `ExternalLinkAuthorityDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Many followed external links |
 | `EXTLINKAUTH002` | `ExternalLinkAuthorityDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | External links with empty anchor text |
 | `EXTLINKAUTH003` | `ExternalLinkAuthorityDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | External links pointing to same domain |
@@ -489,10 +487,12 @@ consolidate the analyzers).
 | `HSTSMAX-V5002` | `HstsMaxAgeValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS max-age too low |
 | `HSTSMAX-V5003` | `HstsMaxAgeValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing max-age |
 | `HSTSMAX001` | `HstsMaxAgeDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS max-age below 1 year |
-| `HSTSPR-V2001` | `HstsPreloadReadinessAnalyzerV2`, `HstsPreloadReadyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing includeSubDomains |
+| `HSTSPR-V2001` | `HstsPreloadReadinessAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing includeSubDomains |
+| `HSTSPR-V2001-DEEP-DEEP` | `HstsPreloadReadyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS preload readiness incomplete (deep-deep) |
 | `HSTSPR-V2002` | `HstsPreloadReadinessAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing preload |
 | `HSTSPR-V2003` | `HstsPreloadReadinessAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS max-age below preload minimum |
-| `HSTSPR001` | `HstsPreloadReadinessAnalyzer`, `HstsPreloadReadyDeepValidator` | `crates/crawlkit-engine/src/analyzers/mixed_content_analyzers.rs`, `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing includeSubDomains for preload |
+| `HSTSPR001` | `HstsPreloadReadinessAnalyzer` | `crates/crawlkit-engine/src/analyzers/mixed_content_analyzers.rs` | HSTS missing includeSubDomains for preload |
+| `HSTSPR001-DEEP` | `HstsPreloadReadyDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS preload readiness incomplete |
 | `HSTSPR002` | `HstsPreloadReadinessAnalyzer` | `crates/crawlkit-engine/src/analyzers/mixed_content_analyzers.rs` | HSTS missing preload directive |
 | `HSTSPR003` | `HstsPreloadReadinessAnalyzer` | `crates/crawlkit-engine/src/analyzers/mixed_content_analyzers.rs` | HSTS max-age too low for preload |
 | `HSTSPRE-V5001` | `HstsPreloadValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | HSTS missing preload |

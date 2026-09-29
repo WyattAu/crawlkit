@@ -4734,7 +4734,13 @@ impl Analyzer for ExternalLinkAuthorityDeepDeepValidator {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Seo,
-                    code: "EXTLINKAUTH-V2001".to_string(),
+                    // Namespaced: the bare EXTLINKAUTH-V2001 belongs to
+                    // ExternalLinkAuthorityDeepAnalyzerV2 (any suspicious
+                    // link, smaller TLD list). This deep-deep check has a
+                    // ratio threshold and a larger TLD list, so it can
+                    // co-fire with the V2 analyzer and also fires where
+                    // the V2 stays silent (ANALYZER_AUDIT Phase 4).
+                    code: "EXTLINKAUTH-V2001-DEEP-DEEP".to_string(),
                     title: "Many low-authority external links (deep-deep)".to_string(),
                     description: format!(
                         "{}/{} external links to low-authority TLDs in deep analysis.",

@@ -7,7 +7,7 @@
 
 [project]
 name = "crawlkit"
-version = "6.0.0-alpha.3"
+version = "6.0.0-alpha.4"
 msrv = "1.94.0"
 license = "Apache-2.0"
 

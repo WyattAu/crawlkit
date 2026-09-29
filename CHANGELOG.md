@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Wasmtime dependency patched (RUSTSEC-2026-0314/0315/0316)**: the
+  workspace moves from Wasmtime 47.0.4 — flagged by `cargo deny` for
+  `call_ref` / exception-`catch` fuel-amplification advisories with no
+  patched 47.x — to the patched **48 series (48.0.3)**, with the
+  `p2` / `default-send-request` feature set unchanged. Wasmtime remains
+  behind the engine's non-default `full` / `wasi-preview2` features;
+  default and no-default builds never compile it.
+
 - **Finding-catalog scanner correctness**: attribution in
   `scripts/generate_finding_catalog.py` now runs on a sanitized copy of
   each source (string/char literals — including raw and byte strings —
@@ -107,7 +115,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Finding-code drift gate + catalog (ANALYZER_AUDIT Phase 4 follow-up,
   closed)**: `scripts/generate_finding_catalog.py` generates
-  `docs/FINDING_CODES.md` (1 152 distinct codes across 738
+  `docs/FINDING_CODES.md` (1 150 distinct codes across 737
   `impl Analyzer for` blocks) and the release-controls gate now fails on
   a new cross-analyzer code collision or a stale catalog. Two
   collisions remediated per the audit's namespace convention — emitted
@@ -118,9 +126,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `PERM-V2001` (schema.org Permit validator) →
     **`PERM-V2001-SCHEMA`** (bare code stays with the
     Permissions-Policy header analyzer).
-  The remaining 12 shared deep-generation codes are recorded with
-  ownership in the catalog; the runtime fixture guard could never see
-  these (unreachable condition pairs on one fixture).
+  The retained shared deep-generation codes were subsequently
+  fixture-proven pair by pair (the earlier "unreachable on one fixture"
+  assumption was wrong): four duplicate emitters were unregistered and
+  the five co-fire-ambiguous codes above were namespaced, leaving the
+  shared-code register at six fully dispositioned entries — see the
+  registry-dedup and namespacing entries above.
 
 - **Dead-code decision recorded for the stable cut**
   (CODEBASE_AUDIT rec. 8): `backpressure.rs`, `enterprise.rs`, and
@@ -130,6 +141,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   alphas are additive-only. `distributed_queue.rs` is excluded: it
   graduated as the stable queue substrate in 5.4.0 with live production
   callers; the audit entry predates that.
+
+- **Workspace version bumped to 6.0.0-alpha.4** (tag `v6.0.0-alpha.4`
+  cut 2026-09-29 carrying the "Consolidation" stream — registry dedup,
+  finding-code namespacing, catalog-scanner correctness, capacity-report
+  drift gate, Wasmtime RustSec patch — see
+  docs/RELEASE_6_0_0_ALPHA_4.md). This cut claims no public API surface
+  change; the bump keeps the prerelease line moving and lets the semver
+  gate re-baseline against `v6.0.0-alpha.3`.
 
 - **Workspace version bumped to 6.0.0-alpha.3** (tag `v6.0.0-alpha.3` cut
   2026-09-26 carrying the "Metering" stream — see

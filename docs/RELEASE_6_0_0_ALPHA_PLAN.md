@@ -133,6 +133,34 @@ integration tests. Release notes: docs/RELEASE_6_0_0_ALPHA_3.md.
 Remaining for this cut: tag `v6.0.0-alpha.3` once the full CI battery is
 green on the tagged commit (cadence rule).
 
+### 6.0.0-alpha.4 — "Consolidation"
+
+Added late (2026-09-29) when the ANALYZER_AUDIT item-3 stream outgrew a
+docs-only landing: registry dedup with fixture evidence, finding-code
+namespacing, catalog-scanner correctness, capacity-report drift gate,
+and the Wasmtime RustSec patch.
+
+| Item | Gate | Notes |
+|---|---|---|
+| Analyzer registry dedup (4 duplicate emitters unregistered) | Fixture evidence per pair | `tests/test_generation_dedup.rs` pins each relationship; removed types stay exported and matrix-tested. 779 → 775 full / 775 → 771 no-default. |
+| Finding-code namespacing (5 co-fire-ambiguous codes) | Catalog drift gate | Bare codes stay with the earlier/base generation; new codes carry `-DEEP` / `-DEEP-DEEP` suffixes. |
+| Catalog-scanner correctness + `--self-test` | Wired into release controls BEFORE `--check` | Literal-aware attribution (strings/chars/comments); corrected catalog 1 150 codes / 737 impls / 6 shared. |
+| Capacity-report drift gate (§5.7 enforced) | Wired into release controls | All 7 record-bearing dirs re-rendered; paired-overhead corrected to ≈12.5% median-to-median. |
+| Wasmtime 47 → 48 | `cargo deny` clean | RUSTSEC-2026-0314/0315/0316; no patched 47.x; patched 48.0.3. |
+
+**Exit criteria:** no public API surface change (emitted codes are
+values, not signatures); semver gate green against `v6.0.0-alpha.3`;
+registry pins and catalog `--check` green; full CI battery green on the
+tagged commit (cadence rule).
+
+**Progress 2026-09-29 (code complete):** all dedup fixtures landed
+(`785508a6`, `b2de008f`), the scanner root-cause fix and `--self-test`
+landed (`965aa50a`, `b545e4fe`), the Wasmtime bump landed (`4685edbc`),
+and the version/caps/docs bump is this commit. Release notes:
+docs/RELEASE_6_0_0_ALPHA_4.md. Remaining for this cut: tag
+`v6.0.0-alpha.4` once the full CI battery is green on the tagged commit
+(cadence rule).
+
 ### 6.0.0 stable — "Scale"
 
 | Item | Gate | Notes |
@@ -157,14 +185,14 @@ green on the tagged commit (cadence rule).
 
 ## Immediate next actions
 
-*Updated 2026-09-27 — all three alpha streams (warehouse contracts,
-render budgets, metering) are cut and tagged through
-`v6.0.0-alpha.3`; the finding-code drift gate is enforced in CI, the
-scanner behind it is literal-aware (strings/chars/comments), and
-ANALYZER_AUDIT behavioral consolidation (item 3) is complete with
-every shared code carrying an explicit recorded decision. The
-dead-code gate decision is recorded for the stable cut. What remains
-for 6.0.0 stable:*
+*Updated 2026-09-29 — all four alpha streams (warehouse contracts,
+render budgets, metering, consolidation) are cut and tagged through
+`v6.0.0-alpha.4`; the finding-code drift gate is enforced in CI, the
+scanner behind it is literal-aware (strings/chars/comments) and
+self-tested, and ANALYZER_AUDIT behavioral consolidation (item 3) is
+complete with every shared code carrying an explicit recorded decision.
+The dead-code gate decision is recorded for the stable cut and is being
+branch-prepped. What remains for 6.0.0 stable:*
 
 1. Source the pinned 8-core/16 GB reference machine (long pole,
    operator-owned; see docs/REFERENCE_MACHINE_SPEC.md).
@@ -172,7 +200,8 @@ for 6.0.0 stable:*
    (docs/CAPACITY_EVIDENCE_PLAN.md).
 3. Execute the dead-code gate decision: move `backpressure.rs`,
    `enterprise.rs`, `native_plugin.rs` behind a non-default
-   `unstable-legacy` feature at the stable cut.
+   `unstable-legacy` feature at the stable cut (branch prep in progress;
+   the gate itself is semver-breaking and cannot land in an alpha).
 4. ~~Continue analyzer behavioral consolidation candidate-by-candidate
    with fixture evidence (ANALYZER_AUDIT item 3).~~ **Complete** —
    seven duplicate registrations removed, two semantic collisions

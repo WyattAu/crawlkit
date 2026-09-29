@@ -130,16 +130,18 @@ heuristic alone violates WCAG or OWASP.
    table-caption deep on an identical trigger with weaker severity than
    `TableCaptionPresenceAnalyzerV2`; the base analyzers keep ownership
    per the Phase-4 convention, so every offending page now emits the
-   finding once instead of twice). Two different-defect-same-code
-   semantic collisions were namespaced per the Phase-4 convention
+   finding once instead of twice). Five different-defect-same-code
+   co-fire ambiguities were namespaced per the Phase-4 convention
    (`INTLINKQ-V2001/-V2002` → `INTLINKQ-V2001-DEEP`/`-V2002-DEEP` on
    `InternalLinkQualityDeepValidator`; `FORMLAB-V2001` →
-   `FORMLAB-V2001-DEEP` on `FormLabelAssociationDeepValidator` — both
-   pairs can fire on the same page with different meanings). Remaining
-   shared codes are recorded complementary pairs (e.g. TBLSCOP-V2001:
-   `<th>` without scope vs headerless tables; mutually exclusive
-   preconditions), verified complementary-by-fixture in
-   `tests/test_generation_dedup.rs`.
+   `FORMLAB-V2001-DEEP` on `FormLabelAssociationDeepValidator`; then on
+   fixture review also `HSTSPR001` → `HSTSPR001-DEEP`,
+   `HSTSPR-V2001` → `HSTSPR-V2001-DEEP-DEEP`, and `EXTLINKAUTH-V2001` →
+   `EXTLINKAUTH-V2001-DEEP-DEEP` — aggregate generation findings vs the
+   base generation's per-defect granular findings, all co-firing).
+   Remaining shared codes are recorded unregistered duplicates and
+   fixture-pinned complementary pairs (TBLSCOP-V2001, XFODEEP-V2001),
+   verified complementary-by-fixture in `tests/test_generation_dedup.rs`.
 4. Keep compatibility exports for public analyzer types where required
    (unregistered types remain exported and tested).
 5. **Measured (2026-09-27)** — default registry is 775 registrations

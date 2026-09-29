@@ -81,7 +81,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (self-referencing links / all internal links nofollowed);
   - `FORMLAB-V2001` (inputs without label association, deep validator)
     → **`FORMLAB-V2001-DEEP`**; the bare code stays with
-    `FormLabelAssociationAnalyzerV2` (duplicate input IDs).
+    `FormLabelAssociationAnalyzerV2` (duplicate input IDs);
+  - `HSTSPR001` (aggregate preload-readiness Info, deep validator) →
+    **`HSTSPR001-DEEP`**, `HSTSPR-V2001` (aggregate readiness Info,
+    deep-deep validator) → **`HSTSPR-V2001-DEEP-DEEP`**, and
+    `EXTLINKAUTH-V2001` (low-authority external-link ratio,
+    deep-deep validator) → **`EXTLINKAUTH-V2001-DEEP-DEEP`**; in each
+    pair the bare code stays with the earlier/base generation, whose
+    per-defect granular findings co-fire with the aggregate one.
 
 - **Capacity-report drift gate (CAPACITY_EVIDENCE_PLAN §5.7 enforced)**:
   `scripts/render_capacity_report.py` now renders every committed record

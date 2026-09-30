@@ -997,7 +997,7 @@ dependencies = [
  "libm",
  "log",
  "postcard",
- "pulley-interpreter 48.0.3",
+ "pulley-interpreter",
  "regalloc2",
  "rustc-hash 2.1.3",
  "serde",
@@ -1018,7 +1018,7 @@ dependencies = [
  "cranelift-codegen-shared",
  "cranelift-srcgen",
  "heck",
- "pulley-interpreter 48.0.3",
+ "pulley-interpreter",
 ]
 
 [[package]]
@@ -3986,37 +3986,14 @@ dependencies = [
 
 [[package]]
 name = "pulley-interpreter"
-version = "47.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed2bd641cb6a3ec5bffe60405568933163e0ea619da0943e9d2a417ceaa7fe82"
-dependencies = [
- "cranelift-bitset 0.134.4",
- "log",
- "pulley-macros 47.0.4",
- "wasmtime-internal-core 47.0.4",
-]
-
-[[package]]
-name = "pulley-interpreter"
 version = "48.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "76169f68135d6e5b956787c0c20954b40ae30bf60c46dde8e887ee78c1bee63a"
 dependencies = [
  "cranelift-bitset 0.135.3",
  "log",
- "pulley-macros 48.0.3",
+ "pulley-macros",
  "wasmtime-internal-core 48.0.3",
-]
-
-[[package]]
-name = "pulley-macros"
-version = "47.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3fd4024d1e559eaf5579bc8ad84a2b5915f34b47acc13a06ffba7dac401b166"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
@@ -6349,7 +6326,7 @@ dependencies = [
  "object 0.39.1",
  "once_cell",
  "postcard",
- "pulley-interpreter 48.0.3",
+ "pulley-interpreter",
  "rayon",
  "rustix",
  "semver",
@@ -6489,7 +6466,7 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "object 0.39.1",
- "pulley-interpreter 48.0.3",
+ "pulley-interpreter",
  "smallvec",
  "target-lexicon",
  "thiserror 2.0.20",
@@ -7064,7 +7041,7 @@ dependencies = [
  "percent-encoding",
  "ppv-lite86",
  "proc-macro2",
- "pulley-interpreter 47.0.4",
+ "pulley-interpreter",
  "quote",
  "rand 0.8.7",
  "rand 0.9.5",

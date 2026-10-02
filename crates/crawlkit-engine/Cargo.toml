@@ -161,3 +161,6 @@ tempfile = "3"
 criterion.workspace = true
 tokio = { workspace = true, features = ["test-util", "macros"] }
 proptest = "1"
+
+[package.metadata.layers]
+tier = "L3"

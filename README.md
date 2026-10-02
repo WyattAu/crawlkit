@@ -211,7 +211,7 @@ Pre-commit hooks enforce:
 7. `cargo audit` -- security advisories
 8. Hardcoded secret scan
 9. Unsafe code without SAFETY comment
-10. MSRV check (Rust 1.94.0)
+10. MSRV check (Rust 1.95.0)
 11. Dead code detection
 
 ## Plugins

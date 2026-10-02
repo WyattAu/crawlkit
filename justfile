@@ -89,7 +89,7 @@ pre-commit:
 # Full quality gate (all checks)
 qa: fmt-check clippy test test-integration deny audit release-controls
     @cargo test --doc --workspace
-    @cargo +1.94.0 check --workspace
+    @cargo +1.95.0 check --workspace
     @bash scripts/pre-commit.sh
     @echo "All quality gates passed."
 
@@ -120,4 +120,4 @@ update:
 
 # Check MSRV (Minimum Supported Rust Version)
 msrv:
-    cargo +1.94.0 check --workspace
+    cargo +1.95.0 check --workspace

@@ -50,6 +50,7 @@
 //! - **Gate 4**: WASI CLI (stdout/stderr capture) — IMPLEMENTED
 //! - **Gate 5**: WASI HTTP outcalls — IMPLEMENTED
 
+use std::future::Future;
 use std::path::Path;
 use std::task::Poll;
 use std::time::Duration;
@@ -58,12 +59,8 @@ use bytes::Bytes;
 use http_body_util::combinators::UnsyncBoxBody;
 use wasmtime_wasi::p2::pipe::MemoryOutputPipe;
 use wasmtime_wasi_http::p2::bindings::http::types::ErrorCode;
-use wasmtime_wasi_http::p2::body::{HyperIncomingBody, HyperOutgoingBody};
-use wasmtime_wasi_http::p2::types::{
-    HostFutureIncomingResponse, IncomingResponse, OutgoingRequestConfig,
-};
-use wasmtime_wasi_http::p2::{
-    default_send_request_handler, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
+use wasmtime_wasi_http::{
+    Error, RequestOptions, WasiBody, WasiHttpCtxView, WasiHttpHooks, WasiHttpView,
 };
 
 use crate::plugin::manifest::PluginMetadata;
@@ -186,6 +183,20 @@ impl WasiHttpView for WasiPluginState {
     }
 }
 
+/// Boxed future returned by [`WasiHttpHooks::send_request`]: the response
+/// plus the guest-visible request-processing error future.
+type SendRequestFuture = Box<
+    dyn Future<
+            Output = Result<
+                (
+                    http::Response<WasiBody>,
+                    Box<dyn Future<Output = Result<(), Error>> + Send>,
+                ),
+                Error,
+            >,
+        > + Send,
+>;
+
 /// Host hooks for `wasi:http/outgoing-handler`.
 ///
 /// Every guest HTTP request flows through [`WasiHttpHooks::send_request`],
@@ -225,65 +236,89 @@ impl PluginHttpHooks {
 impl WasiHttpHooks for PluginHttpHooks {
     fn send_request(
         &mut self,
-        request: hyper::Request<HyperOutgoingBody>,
-        mut config: OutgoingRequestConfig,
-    ) -> wasmtime_wasi_http::p2::HttpResult<HostFutureIncomingResponse> {
+        request: http::Request<WasiBody>,
+        options: Option<RequestOptions>,
+        fut: Box<dyn Future<Output = Result<(), Error>> + Send>,
+    ) -> SendRequestFuture {
         if !self.allow_network {
             tracing::debug!("WASI HTTP outcall denied: network capability not granted");
-            return Err(ErrorCode::HttpRequestDenied.into());
+            return Box::new(async move {
+                drop((request, options, fut));
+                Err(Error::HttpRequestDenied)
+            });
         }
-        PluginHttpHooks::check_target(request.uri())?;
-        clamp_outcall_config(&mut config);
+        if let Err(code) = PluginHttpHooks::check_target(request.uri()) {
+            return Box::new(async move {
+                drop((request, options, fut));
+                Err(error_code_to_error(code))
+            });
+        }
+        let options = clamp_outcall_options(options);
 
-        let handle = wasmtime_wasi::runtime::spawn(async move {
-            match default_send_request_handler(request, config).await {
-                Ok(mut response) => {
-                    cap_response_body(&mut response, MAX_OUTCALL_BODY_BYTES);
-                    Ok(Ok(response))
-                }
-                Err(code) => Ok(Err(code)),
-            }
-        });
-        Ok(HostFutureIncomingResponse::pending(handle))
+        Box::new(async move {
+            use http_body_util::BodyExt as _;
+            let (response, io) = wasmtime_wasi_http::default_send_request(request, options).await?;
+            let mut response = response.map(|b| b.boxed_unsync());
+            cap_response_body(&mut response, MAX_OUTCALL_BODY_BYTES);
+            Ok((
+                response,
+                Box::new(io) as Box<dyn Future<Output = Result<(), Error>> + Send>,
+            ))
+        })
+    }
+}
+
+/// Map the two rejection codes [`PluginHttpHooks::check_target`] produces
+/// onto the crate-root [`Error`] the 48-series hook API expects.
+fn error_code_to_error(code: ErrorCode) -> Error {
+    match code {
+        ErrorCode::HttpRequestUriInvalid => Error::HttpRequestUriInvalid,
+        ErrorCode::DestinationIpProhibited => Error::DestinationIpProhibited,
+        // check_target only produces the two codes above; keep the mapping
+        // total for safety rather than panicking inside a hook.
+        other => Error::InternalError(Some(format!("WASI HTTP outcall rejected: {other:?}"))),
     }
 }
 
 /// Clamp every outcall timeout phase to [`MAX_OUTCALL_TIMEOUT`].
-fn clamp_outcall_config(config: &mut OutgoingRequestConfig) {
-    let clamp = |phase: &mut Duration| {
-        if *phase > MAX_OUTCALL_TIMEOUT {
-            *phase = MAX_OUTCALL_TIMEOUT;
+fn clamp_outcall_options(mut options: Option<RequestOptions>) -> Option<RequestOptions> {
+    let clamp = |phase: &mut Option<Duration>| {
+        if phase.is_some_and(|d| d > MAX_OUTCALL_TIMEOUT) {
+            *phase = Some(MAX_OUTCALL_TIMEOUT);
         }
     };
-    clamp(&mut config.connect_timeout);
-    clamp(&mut config.first_byte_timeout);
-    clamp(&mut config.between_bytes_timeout);
+    if let Some(opts) = &mut options {
+        clamp(&mut opts.connect_timeout);
+        clamp(&mut opts.first_byte_timeout);
+        clamp(&mut opts.between_bytes_timeout);
+    }
+    options
 }
-
 /// Replace a response body with a size-limited wrapper so a guest cannot
 /// stream an unbounded amount of data through an outcall.
-fn cap_response_body(response: &mut IncomingResponse, max_bytes: usize) {
+fn cap_response_body(response: &mut http::Response<WasiBody>, max_bytes: usize) {
     use http_body_util::BodyExt as _;
     let empty = http_body_util::Empty::<Bytes>::new()
-        .map_err(|_: std::convert::Infallible| ErrorCode::InternalError(None));
+        .map_err(|_: std::convert::Infallible| Error::InternalError(None));
     let empty = UnsyncBoxBody::new(empty);
-    let body = std::mem::replace(response.resp.body_mut(), empty);
+    let body = std::mem::replace(response.body_mut(), empty);
     let limited = UnsyncBoxBody::new(BodySizeLimit {
         inner: body,
         remaining: max_bytes,
     });
-    *response.resp.body_mut() = limited;
+
+    *response.body_mut() = limited;
 }
 
 /// [`http_body::Body`] wrapper rejecting bodies that exceed a byte budget.
 struct BodySizeLimit {
-    inner: HyperIncomingBody,
+    inner: WasiBody,
     remaining: usize,
 }
 
 impl http_body::Body for BodySizeLimit {
     type Data = Bytes;
-    type Error = ErrorCode;
+    type Error = Error;
 
     fn poll_frame(
         self: std::pin::Pin<&mut Self>,
@@ -295,7 +330,7 @@ impl http_body::Body for BodySizeLimit {
             Some(Ok(frame)) => {
                 if let Some(data) = frame.data_ref() {
                     if data.len() > this.remaining {
-                        return Poll::Ready(Some(Err(ErrorCode::InternalError(Some(
+                        return Poll::Ready(Some(Err(Error::InternalError(Some(
                             "WASI HTTP response body exceeds the host's 1 MiB cap".to_string(),
                         )))));
                     }
@@ -674,12 +709,12 @@ mod tests {
         assert!(tiny.contents().is_empty());
     }
 
-    /// Box a payload into the hyper body type WASI HTTP uses, mapping the
-    /// infallible error of `Full` onto the component error code.
-    fn boxed_body(payload: Bytes) -> UnsyncBoxBody<Bytes, ErrorCode> {
+    /// Box a payload into the body type WASI HTTP uses, mapping the
+    /// infallible error of `Full` onto the crate-root error type.
+    fn boxed_body(payload: Bytes) -> WasiBody {
         use http_body_util::BodyExt as _;
         let body = http_body_util::Full::new(payload)
-            .map_err(|_: std::convert::Infallible| ErrorCode::InternalError(None));
+            .map_err(|_: std::convert::Infallible| Error::InternalError(None));
         UnsyncBoxBody::new(body)
     }
 
@@ -692,18 +727,24 @@ mod tests {
             .uri("https://example.com/")
             .body(boxed_body(Bytes::new()))
             .unwrap_or_else(|e| panic!("valid request rejected: {e}"));
-        let err = hooks
-            .send_request(
-                request,
-                OutgoingRequestConfig {
-                    use_tls: true,
-                    connect_timeout: Duration::from_secs(1),
-                    first_byte_timeout: Duration::from_secs(1),
-                    between_bytes_timeout: Duration::from_secs(1),
-                },
-            )
-            .expect_err("denied capability must fail");
-        assert!(matches!(err.downcast(), Ok(ErrorCode::HttpRequestDenied)));
+        let mut fut = Box::into_pin(hooks.send_request(
+            request,
+            None,
+            Box::new(async { Ok::<(), Error>(()) }),
+        ));
+        // The denial is decided synchronously: a single poll must observe it.
+        let waker = std::task::Waker::noop();
+        let mut cx = std::task::Context::from_waker(waker);
+        match fut.as_mut().poll(&mut cx) {
+            std::task::Poll::Ready(Err(Error::HttpRequestDenied)) => {}
+            std::task::Poll::Ready(Err(err)) => {
+                panic!("expected HttpRequestDenied denial, got {err:?}")
+            }
+            std::task::Poll::Ready(Ok(_)) => {
+                panic!("expected capability denial, request unexpectedly succeeded")
+            }
+            std::task::Poll::Pending => panic!("expected synchronous denial, got Pending"),
+        }
     }
 
     #[test]
@@ -747,34 +788,33 @@ mod tests {
 
     #[test]
     fn outcall_timeouts_are_clamped_to_10s() {
-        let mut config = OutgoingRequestConfig {
-            use_tls: true,
-            connect_timeout: Duration::from_secs(600),
-            first_byte_timeout: Duration::from_secs(600),
-            between_bytes_timeout: Duration::from_millis(500),
-        };
-        clamp_outcall_config(&mut config);
-        assert_eq!(config.connect_timeout, MAX_OUTCALL_TIMEOUT);
-        assert_eq!(config.first_byte_timeout, MAX_OUTCALL_TIMEOUT);
-        assert_eq!(config.between_bytes_timeout, Duration::from_millis(500));
+        let clamped = clamp_outcall_options(Some(RequestOptions {
+            connect_timeout: Some(Duration::from_secs(600)),
+            first_byte_timeout: Some(Duration::from_secs(600)),
+            between_bytes_timeout: Some(Duration::from_millis(500)),
+        }))
+        .expect("Some input stays Some");
+        assert_eq!(clamped.connect_timeout, Some(MAX_OUTCALL_TIMEOUT));
+        assert_eq!(clamped.first_byte_timeout, Some(MAX_OUTCALL_TIMEOUT));
+        assert_eq!(
+            clamped.between_bytes_timeout,
+            Some(Duration::from_millis(500))
+        );
+        assert!(clamp_outcall_options(None).is_none(), "None stays None");
     }
 
     #[test]
     fn response_body_cap_enforced() {
         let payload = Bytes::from(vec![0u8; MAX_OUTCALL_BODY_BYTES + 1]);
-        let mut response = IncomingResponse {
-            resp: hyper::Response::new(boxed_body(payload)),
-            worker: None,
-            between_bytes_timeout: Duration::from_secs(1),
-        };
+        let mut response = hyper::Response::new(boxed_body(payload));
         cap_response_body(&mut response, MAX_OUTCALL_BODY_BYTES);
 
         use http_body::Body as _;
         let waker = std::task::Waker::noop();
         let mut cx = std::task::Context::from_waker(waker);
-        let body = response.resp.into_body();
+        let body = response.into_body();
         match std::pin::pin!(body).poll_frame(&mut cx) {
-            Poll::Ready(Some(Err(ErrorCode::InternalError(Some(msg))))) => {
+            std::task::Poll::Ready(Some(Err(Error::InternalError(Some(msg))))) => {
                 assert!(msg.contains("1 MiB"), "unexpected message: {msg}");
             }
             other => panic!("expected body-cap error, got {other:?}"),

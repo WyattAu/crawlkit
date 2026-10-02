@@ -172,6 +172,10 @@ impl Metrics {
 
     /// Decrement active connections.
     /// Uses `fetch_update` to prevent underflow below zero.
+    // `fetch_update` is deprecated in Rust 1.99 (renamed `try_update`), but
+    // `try_update` stabilized in the same release; MSRV is 1.95, so the
+    // rename can only land here when the MSRV itself is raised.
+    #[allow(deprecated)]
     pub fn dec_connections(&self) {
         // `fetch_update` returns `Err` only if the closure returns `None` on every
         // attempt, which in our case means the count was already zero. This is

@@ -86,15 +86,27 @@ directories re-rendered. One correction surfaced by the gate: the
 2026-09-16 paired-overhead figure is ≈**12.5% median-to-median** (the
 previously cited ≈14.5% was mean-to-mean; §5.6 publishes the median).
 
-## Dependencies: Wasmtime 47 → 48 (RustSec)
+## Dependencies: Wasmtime 47 → 48 (RustSec), MSRV → 1.95.0
 
 `cargo deny` flagged the Wasmtime 47.0.4 family with
 **RUSTSEC-2026-0314/0315/0316** (`call_ref` / exception-`catch` fuel
 amplification and related). No patched 47.x exists; the workspace moves
-to the patched **48 series (48.0.3)** with the `p2` /
-`default-send-request` feature set unchanged. Wasmtime remains behind
+to the patched **48 series (48.0.3)**. Wasmtime remains behind
 the engine's non-default `full`/`wasi-preview2` features — the default
 and no-default builds never compile it.
+
+Two follow-on consequences are handled in the same stream:
+
+- **MSRV 1.94.0 → 1.95.0** — Wasmtime 48's cranelift requires Rust
+  1.95.0; the bump is enforced consistently across `Cargo.toml`, the CI
+  MSRV job, pre-commit, the justfile, and the docs.
+- **WASI-HTTP hook port** — the 48 series reworked
+  `WasiHttpHooks::send_request` (now
+  `http::Request<WasiBody>` + `Option<RequestOptions>` → boxed future of
+  the response plus the request-error future). `PluginHttpHooks` is
+  ported with every host guarantee preserved: network capability gate,
+  SSRF target validation, 10 s timeout clamp, and the 1 MiB response
+  body cap, all pinned by updated in-module tests.
 
 ## Numbers, honestly stated
 

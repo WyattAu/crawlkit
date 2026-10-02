@@ -4,7 +4,7 @@
 
 ## Prerequisites
 
-- Rust 1.94.0 or newer (the repository MSRV)
+- Rust 1.95.0 or newer (the repository MSRV)
 - Git
 - `cargo-audit` (optional, for dependency auditing)
 

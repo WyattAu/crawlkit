@@ -21,8 +21,8 @@ check_not_contains() {
   fi
 }
 
-check_contains Cargo.toml 'rust-version = "1.94.0"'
-check_contains docs/capabilities.toml 'msrv = "1.94.0"'
+check_contains Cargo.toml 'rust-version = "1.95.0"'
+check_contains docs/capabilities.toml 'msrv = "1.95.0"'
 check_contains README.md 'unsafe FFI exists in ABI/plugin components'
 check_not_contains README.md 'unsafe_code = "forbid"'
 check_not_contains README.md 'zero unsafe code'

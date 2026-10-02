@@ -338,7 +338,7 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.11
       - name: sccache stats
         run: sccache --start-server || true
-      - uses: dtolnay/rust-toolchain@1.94.0
+      - uses: dtolnay/rust-toolchain@1.95.0
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: msrv

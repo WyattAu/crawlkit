@@ -146,7 +146,7 @@ and the Wasmtime RustSec patch.
 | Finding-code namespacing (5 co-fire-ambiguous codes) | Catalog drift gate | Bare codes stay with the earlier/base generation; new codes carry `-DEEP` / `-DEEP-DEEP` suffixes. |
 | Catalog-scanner correctness + `--self-test` | Wired into release controls BEFORE `--check` | Literal-aware attribution (strings/chars/comments); corrected catalog 1 150 codes / 737 impls / 6 shared. |
 | Capacity-report drift gate (§5.7 enforced) | Wired into release controls | All 7 record-bearing dirs re-rendered; paired-overhead corrected to ≈12.5% median-to-median. |
-| Wasmtime 47 → 48 | `cargo deny` clean | RUSTSEC-2026-0314/0315/0316; no patched 47.x; patched 48.0.3. |
+| Wasmtime 47 → 48 | `cargo deny` clean; all-features cargo-doc (semver job) compiles | RUSTSEC-2026-0314/0315/0316; no patched 47.x; patched 48.0.3. Follow-ons: MSRV 1.94 → 1.95 (cranelift 0.135) and the `WasiHttpHooks::send_request` port in `plugin/wasi_preview2.rs`. |
 
 **Exit criteria:** no public API surface change (emitted codes are
 values, not signatures); semver gate green against `v6.0.0-alpha.3`;

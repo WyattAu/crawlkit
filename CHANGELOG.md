@@ -12,10 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Wasmtime dependency patched (RUSTSEC-2026-0314/0315/0316)**: the
   workspace moves from Wasmtime 47.0.4 — flagged by `cargo deny` for
   `call_ref` / exception-`catch` fuel-amplification advisories with no
-  patched 47.x — to the patched **48 series (48.0.3)**, with the
-  `p2` / `default-send-request` feature set unchanged. Wasmtime remains
+  patched 47.x — to the patched **48 series (48.0.3)**. Wasmtime remains
   behind the engine's non-default `full` / `wasi-preview2` features;
-  default and no-default builds never compile it.
+  default and no-default builds never compile it. Two follow-on
+  consequences handled in the same stream: the workspace **MSRV moves
+  from 1.94.0 to 1.95.0** (Wasmtime 48's cranelift requires it;
+  enforcement updated consistently in `Cargo.toml`, CI, pre-commit, the
+  justfile, and the docs), and the WASI-HTTP outcall hooks
+  (`PluginHttpHooks`) were **ported to the reworked 48 hook API** —
+  `send_request` now receives `http::Request<WasiBody>` plus
+  `Option<RequestOptions>` and returns a boxed future — with the
+  capability gate, SSRF guard, 10 s timeout clamp, and 1 MiB response
+  cap preserved and pinned by updated tests.
 
 - **Finding-catalog scanner correctness**: attribution in
   `scripts/generate_finding_catalog.py` now runs on a sanitized copy of

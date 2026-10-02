@@ -8,7 +8,7 @@
 [project]
 name = "crawlkit"
 version = "6.0.0-alpha.4"
-msrv = "1.94.0"
+msrv = "1.95.0"
 license = "Apache-2.0"
 
 # Generated counts — DO NOT hand-edit.

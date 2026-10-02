@@ -2,7 +2,7 @@
 name = "meta-description-checker"
 version = "1.0.0"
 edition = "2021"
-rust-version = "1.94.0"
+rust-version = "1.95.0"
 authors = ["Wyatt Au"]
 license = "Apache-2.0"
 description = "crawlkit WASM plugin: flags missing, short, and overlong meta descriptions"

@@ -145,7 +145,14 @@ impl CrawlRun<'_> {
         self.store(&page_data, &findings).await;
 
         self.metrics.record_page_success(
-            result.body.len() as u64,
+            // Prefer the wire size. `body` is the decoded document, so using its
+            // length understates real transfer by whatever compression saved —
+            // on a brotli-compressed site that is a factor of four or more, and
+            // the metric is what a user compares against their bandwidth bill.
+            // Falls back to the decoded length when the server did not send
+            // `Content-Length` (chunked transfer), in which case it is an upper
+            // bound rather than an exact figure.
+            result.transfer_size.unwrap_or(result.body_size) as u64,
             fetched.fetch_time.as_micros() as u64,
             analysis_time.as_micros() as u64,
             0, // storage_time not tracked per page

@@ -31,6 +31,13 @@ pub struct Metrics {
     /// Total findings generated.
     pub findings_generated: AtomicU64,
     /// Total bytes fetched.
+    ///
+    /// This is the number of bytes that crossed the network, taken from
+    /// `Content-Length` where the server supplied it. When the response used
+    /// chunked transfer the length is unknown and the decoded document length is
+    /// recorded instead, which overstates transfer for a compressed response —
+    /// so treat this figure as a lower bound in general and exact when
+    /// `Content-Length` was present.
     pub bytes_fetched: AtomicU64,
     /// Total fetch time (microseconds).
     pub fetch_time_us: AtomicU64,

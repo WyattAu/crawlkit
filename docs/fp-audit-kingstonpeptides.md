@@ -271,7 +271,77 @@ not simply being suppressed.
 
 ---
 
+---
+
+## Round 2 — verification at scale, and a second site
+
+The fixes above were then re-verified rather than assumed, on a 200-page crawl
+and on a second architecture (gov.uk). That surfaced five further classes,
+three of which were invisible on a 60-page crawl of one site.
+
+| # | Defect | Scale | Root cause |
+|---|---|---|---|
+| 13 | **CSP wildcard false positive at Critical** | 40 findings | `script-src` tested with `contains("*")`, so `*.youtube.com` read as "any host". gov.uk pins a long specific list using scoped wildcards plus a per-response nonce. |
+| 14 | **Non-HTML resources audited as HTML** | 62 findings | `/llms.txt` (`text/plain`) got a **Critical "missing title tag"**. Every "missing X" analyzer fired on a plain-text file. |
+| 15 | **`inspect` bypassed the crawl pipeline** | 64 findings | The content-type gate existed in `crawl` only; `inspect` ran the registry unconditionally. |
+| 16 | **Short anchors flagged on indexes** | ~100 findings | Glossary pages link `A`→`#a`; a single character *is* the label. |
+| 17 | **`http://schema.org` rejected** | 160 findings | Three analyzers compared `@context` against the `https` literal only. |
+
+Two non-FP correctness bugs were also fixed:
+
+- **Non-deterministic report text.** Codes were reproducible; the text was not.
+  Six analyzers summarize a `HashMap` frequency table and sorted on the count
+  alone, leaving ties in randomized order. `crawl` reports, `log-analyze` JSON,
+  and cross-code deduplication were all affected.
+- **`bytes fetched` reported decoded size**, understating real transfer ~4×.
+
+Plus two CLI defects: `crawlkit report` defaulted to `html`, which was
+advertised but never implemented, so a bare invocation always failed; and
+cross-page findings were written only to a JSON file, invisible to `report`,
+`compare`, `insights`, `trend`, `--monitor`, the dashboard and the API.
+
+### Verified true positives (round 2)
+
+| Finding | Verdict |
+|---|---|
+| `NAP001` missing `telephone` | **True.** `Organization` and `Store` both lack it. |
+| `CSP001`/`CSPDIR002` `unsafe-inline` | **True.** Present in both directives. |
+| gov.uk Article missing `headline` | **True.** Verified in the live JSON-LD: the block carries `name`, not `headline`. |
+| gov.uk hreflang/canonical hygiene | **True** where reported. |
+
+### Round 2 results
+
+| Metric | kingstonpeptides (200pp) | gov.uk (40pp) |
+|---|---:|---:|
+| Critical findings | 0 | 0 |
+| Cross-code redundancy | 0 | 0 |
+| Error tier | 26 | 39 (was 117) |
+| Warning tier | 3,039 | 871 (was 1,110) |
+
+Every remaining same-`(page, title)` group is a same-code per-element finding —
+12 short anchors, 8 links on one broken page, 2 JSON-LD blocks per page — which
+are legitimately distinct defects, not duplicates.
+
+**Losslessness.** Each change to the deduplication rule was proven not to lose
+defects by running the corpus with dedupe enabled and disabled and comparing the
+distinct normalized defect set: **1,831 = 1,831**. Each new regression test was
+also verified to *fail* without its fix.
+
+### Known remaining, with measurements
+
+| Item | Impact | Why not fixed here |
+|---|---:|---|
+| `ELINK001` "entity needs a Wikipedia link" | 1/page | The rule is questionable for brands with no article; deduplicated but the advice is still weak. |
+| `COLRCL-V2001-UNDERLINE` | ~1/page | "Links without underline" fires on nearly every link; WCAG 1.4.1 admits other means. Pure noise. |
+| `CANDEP-V2003` "canonical has trailing slash" | 1/page | Unactionable: there is no way to know a "preferred" slash format. |
+| Informational metric findings | ~60% of volume | Readability indices, TF-IDF, sentiment, scores. Metrics, not defects — but they dominate raw counts. |
+| `METAKEY`/`OPDESC`-style near-synonym codes | 3 codes/1 defect | Titles differ by synonyms ("No" vs "Missing"), which signature normalization cannot safely unify. Needs analyzer consolidation, not heuristics. |
+
+---
+
 ## Engineering changes
+
+### Round 1
 
 | Change | File(s) |
 |---|---|
@@ -279,6 +349,26 @@ not simply being suppressed.
 | robots.txt group resolution | `robots_group.rs` (new) — `AnalysisContext.user_agent` added, plumbed through `FetchedPage` |
 | Explicit transfer-encoding negotiation + decode | `compression.rs` (new) — `FetchResult.{content_encoding, transfer_size}` |
 | Cross-code finding collapse | `analyzers/dedupe.rs` (new) — applied in `AnalyzerRegistry::analyze` |
+
+### Round 2
+
+| Change | File(s) |
+|---|---|
+| Deterministic top-N ordering | `content_analyzers.rs`, `seo_analyzers.rs`, `log_analyzer.rs` — tiebreak on the key |
+| Ordered map serialization | `log_analyzer.rs` — `HashMap` → `BTreeMap` |
+| CSP wildcard parsing | `analyzers/csp_wildcard.rs` (new) — bare vs scoped subdomain wildcard |
+| Document content-type gate | `analyzers::is_auditable_as_document`, `analyzers::non_html_finding` — shared by `crawl` and `inspect` |
+| Index/jump-link detection | `seo_analyzers::is_index_or_jump_link` |
+| Wider dedupe key + schema.org context | `analyzers/dedupe.rs`, `content_analyzers::is_schema_org_context` |
+| Self-identification in logs | `log_analyzer::classify_user_agent` |
+| Transferred-byte metric | `crawl_engine/pipeline.rs`, `observability.rs` |
+| Cross-page finding persistence | `cli/crawl.rs` |
+| Report format contract | `cli/report.rs`, `cli/mod.rs`, `main.rs` |
+
+New tests: `tests/determinism_of_text.rs` (6), `tests/non_html_resources.rs`
+(6), plus `analyzers/url_norm.rs` (7), `robots_group.rs` (11),
+`analyzers/dedupe.rs` (14), `analyzers/csp_wildcard.rs` (6), `compression.rs`
+(23), and analyzer-level cases for each fix.
 
 New dependencies: `flate2` (already in the lock transitively) and `brotli`.
 Both added because reqwest's built-in decoders destroy the signal the

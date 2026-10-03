@@ -82,6 +82,11 @@ default = ["full"]
 full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "dep:sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry", "dep:flate2", "dep:brotli"]
 warehouse = ["toml", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:parquet", "dep:hmac", "dep:sha2"]
 unstable = ["full"]
+# Legacy surfaces pending delete-or-graduate (CODEBASE_AUDIT rec 8):
+# backpressure, enterprise, native_plugin. Implies `unstable` so a single
+# switch also reaches the unstable-only queue/politeness surfaces, while
+# `--features unstable` alone no longer compiles the legacy trio.
+unstable-legacy = ["unstable"]
 wasm = []
 wasi-preview2 = [
     "wasmtime/component-model",

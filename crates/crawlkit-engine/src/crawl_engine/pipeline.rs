@@ -318,12 +318,10 @@ impl CrawlRun<'_> {
             response_time: Some(fetched.fetch_time),
             redirect_chain: &empty_chain,
             robots_txt: robots_ref,
+            user_agent: Some(fetched.user_agent.as_str()),
             body_size: Some(result.body_size),
-            compressed_size: result
-                .headers
-                .iter()
-                .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
-                .and_then(|(_, v)| v.parse().ok()),
+            compressed_size: result.transfer_size,
+            content_encoding: result.content_encoding.as_deref(),
             server: result
                 .headers
                 .iter()

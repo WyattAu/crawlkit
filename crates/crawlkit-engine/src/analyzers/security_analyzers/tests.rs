@@ -62,8 +62,10 @@ fn make_ctx<'a>(
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type,
         rendered: None,
@@ -451,8 +453,10 @@ fn test_mixed_http_resources_on_https() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -473,8 +477,10 @@ fn test_mixed_http_form_on_https() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -495,8 +501,10 @@ fn test_mixed_all_https_no_finding() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -517,8 +525,10 @@ fn test_mixed_http_page_not_checked() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -545,8 +555,10 @@ fn test_mixed_multiple_http_resources() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -569,8 +581,10 @@ fn test_mixed_relative_urls_not_flagged() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -594,8 +608,10 @@ fn test_mixed_both_resource_and_form() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -617,8 +633,10 @@ fn test_mixed_form_with_single_quotes() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -639,8 +657,10 @@ fn test_mixed_data_uris_not_flagged() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -674,8 +694,10 @@ fn test_cookie_missing_secure() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -699,8 +721,10 @@ fn test_cookie_missing_httponly() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -724,8 +748,10 @@ fn test_cookie_both_flags_missing() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -750,8 +776,10 @@ fn test_cookie_all_flags_present() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -775,8 +803,10 @@ fn test_cookie_http_page_not_checked() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -803,8 +833,10 @@ fn test_cookie_multiple_cookies() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -829,8 +861,10 @@ fn test_cookie_case_insensitive_flags() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -854,8 +888,10 @@ fn test_cookie_session_cookie_name_extracted() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -921,7 +957,12 @@ fn test_xpcdp_missing() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
     let findings = XPermittedCrossDomainPoliciesAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "XPCDP001"));
+    // The header only governed Flash/Acrobat-era cross-domain policy files;
+    // no current browser reads it, so its absence is not reported.
+    assert!(
+        !findings.iter().any(|f| f.code == "XPCDP001"),
+        "legacy X-Permitted-Cross-Domain-Policies must not be reported: {findings:?}"
+    );
 }
 
 #[test]
@@ -1580,8 +1621,10 @@ fn form_label_ctx<'a>(
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2225,8 +2268,10 @@ fn test_focus_has_focus_visible_style() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2256,8 +2301,10 @@ fn test_focus_has_focus_style() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2549,8 +2596,14 @@ fn test_hsts_missing_max_age_param() {
 fn test_xss_missing() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
+    // `X-XSS-Protection` was deprecated by the WHATWG and removed from every
+    // current browser; several versions treated `1; mode=block` as an XSS
+    // vector of its own. Its absence is not reported.
     let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "XSS001"));
+    assert!(
+        !findings.iter().any(|f| f.code == "XSS001"),
+        "deprecated X-XSS-Protection must not be reported: {findings:?}"
+    );
 }
 
 #[test]
@@ -2607,8 +2660,13 @@ fn test_xss_whitespace_around_value() {
 fn test_xss_no_header_and_no_csp() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
+    // Absence of the deprecated header is never a finding; XSS protection is
+    // the job of Content-Security-Policy, which is checked separately.
     let findings = XSSProtectionAnalyzer::new().analyze(&ctx);
-    assert!(findings.iter().any(|f| f.code == "XSS001"));
+    assert!(
+        !findings.iter().any(|f| f.code == "XSS001"),
+        "deprecated X-XSS-Protection must not be reported: {findings:?}"
+    );
 }
 
 #[test]

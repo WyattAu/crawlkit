@@ -17,7 +17,7 @@
     clippy::redundant_clone,
     clippy::useless_conversion
 )]
-use crate::analyzers::{robots_txt_star_blanket_disallows_all, AnalysisContext, Analyzer, Finding};
+use crate::analyzers::{robots_txt_star_blanket_disallows_all, url_norm, AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
 /// Counts real `<link rel="canonical">` elements in an HTML document.
@@ -812,7 +812,7 @@ impl Analyzer for HreflangSelfReferenceValidatorV2 {
         if tags.is_empty() {
             return findings;
         }
-        let has_self = tags.iter().any(|t| t.url.as_str() == *url);
+        let has_self = tags.iter().any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
         if !has_self {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -1535,9 +1535,10 @@ impl Analyzer for CanonicalSelfReferenceValidatorV5 {
         let url = &ctx.page.url;
         if let Some(canonical) = &ctx.page.meta.canonical {
             let canonical_str = canonical.as_str();
-            if canonical_str != url {
+            if !url_norm::urls_equivalent(canonical_str, url) {
                 if let Ok(page_url) = url::Url::parse(url) {
-                    if canonical.path() == page_url.path() && canonical.query() == page_url.query()
+                    if url_norm::paths_equivalent(canonical.path(), page_url.path())
+                        && canonical.query() == page_url.query()
                     {
                         // Same path - might be a trailing slash issue, not a real problem
                     } else {
@@ -1584,15 +1585,7 @@ impl Analyzer for CanonicalChainValidatorV5 {
             // confirmed self-reference with a raw `href="..."` body match,
             // which missed single-quoted or reordered attributes and then
             // flagged genuinely self-referencing pages as "off-page".
-            let is_self = canonical.as_str() == url
-                || url::Url::parse(url)
-                    .ok()
-                    .zip(url::Url::parse(canonical.as_str()).ok())
-                    .map_or(false, |(page, can)| {
-                        page.path() == can.path()
-                            && page.query() == can.query()
-                            && page.host_str() == can.host_str()
-                    });
+            let is_self = url_norm::urls_equivalent(canonical.as_str(), url);
             if !is_self {
                 findings.push(Finding {
                     severity: Severity::Info,
@@ -1675,7 +1668,7 @@ impl Analyzer for HreflangReciprocalValidatorV5 {
         if tags.is_empty() {
             return findings;
         }
-        let has_self = tags.iter().any(|t| t.url.as_str() == *url);
+        let has_self = tags.iter().any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
         if !has_self {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -2280,7 +2273,7 @@ impl Analyzer for CanonicalSelfReferenceDeepValidator {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(canonical) = &ctx.page.meta.canonical {
-            if canonical.as_str() != url {
+            if !url_norm::urls_equivalent(canonical.as_str(), url) {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Seo,
@@ -3280,7 +3273,7 @@ impl Analyzer for CanonicalSelfReferenceDeepDeepValidator {
         let url = &ctx.page.url;
         if let Some(canonical) = &ctx.page.meta.canonical {
             let canonical_str = canonical.as_str();
-            if canonical_str != url {
+            if !url_norm::urls_equivalent(canonical_str, url) {
                 let same_path = canonical.path()
                     == url::Url::parse(url)
                         .map(|u| u.path().to_string())
@@ -4077,7 +4070,7 @@ impl Analyzer for CanonicalSelfReferenceDeepDeepDeepValidator {
         let url = &ctx.page.url;
         if let Some(canonical) = &ctx.page.meta.canonical {
             let canonical_str = canonical.as_str();
-            if canonical_str != url {
+            if !url_norm::urls_equivalent(canonical_str, url) {
                 let same_path = canonical.path()
                     == url::Url::parse(url)
                         .map(|u| u.path().to_string())
@@ -4898,8 +4891,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5201,8 +5196,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5236,8 +5233,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5408,8 +5407,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nDisallow: /admin"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5428,8 +5429,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(""),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5448,8 +5451,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nDisallow: /a/b/c/d/e/f"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5468,8 +5473,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nDisallow: /"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5488,8 +5495,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("Disallow: /admin"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5653,8 +5662,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5675,8 +5686,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5757,8 +5770,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nDisallow: /admin"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5777,8 +5792,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nSitemap: https://example.com/sitemap.xml"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5795,8 +5812,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(""),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5815,8 +5834,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some("User-agent: *\nDisallow: /admin"),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,

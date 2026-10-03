@@ -50,8 +50,10 @@ fn make_ctx<'a>(page: &'a ParsedPage, status: Option<u16>) -> AnalysisContext<'a
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -114,8 +116,10 @@ fn test_http_status_slow_response() {
         response_time: Some(Duration::from_secs(10)),
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -152,8 +156,10 @@ fn test_redirect_long_chain() {
         response_time: None,
         redirect_chain: &hops,
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -185,8 +191,10 @@ fn test_redirect_loop() {
         response_time: None,
         redirect_chain: &hops,
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -211,8 +219,10 @@ fn test_redirect_mixed_protocol() {
         response_time: None,
         redirect_chain: &hops,
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -237,8 +247,10 @@ fn test_redirect_single_hop() {
         response_time: None,
         redirect_chain: &hops,
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1059,12 +1071,21 @@ fn test_full_analysis_minimal_page() {
     let ctx = make_ctx(&page, Some(200));
     let findings = registry.analyze(&ctx);
 
-    // A minimal page should produce several findings
+    // A minimal page should produce several findings.
+    //
+    // Missing title, description, and canonical are each reported by several
+    // analyzer families; cross-code duplicates are collapsed, so these assert
+    // the defect is present rather than pinning one contributing code.
+    let has = |needle: &str| {
+        findings
+            .iter()
+            .any(|f| f.title.to_lowercase().contains(needle))
+    };
     let codes: Vec<&str> = findings.iter().map(|f| f.code.as_str()).collect();
-    assert!(codes.contains(&"META001")); // missing title
-    assert!(codes.contains(&"META004")); // missing description
-    assert!(codes.contains(&"CANON001")); // missing canonical
-    assert!(codes.contains(&"HEAD001")); // no headings
+    assert!(has("title"), "missing title: {codes:?}");
+    assert!(has("description"), "missing description: {codes:?}");
+    assert!(has("canonical"), "missing canonical: {codes:?}");
+    assert!(codes.contains(&"HEAD001"), "no headings: {codes:?}");
 }
 
 #[test]
@@ -1910,8 +1931,10 @@ fn test_security_headers_all_present() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1942,8 +1965,10 @@ fn test_security_headers_invalid_xfo() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1964,8 +1989,10 @@ fn test_security_headers_invalid_xcto() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1986,8 +2013,10 @@ fn test_security_headers_xfo_sameorigin() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2013,8 +2042,10 @@ fn test_security_headers_hsts_weak_max_age() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2038,8 +2069,10 @@ fn test_security_headers_hsts_missing_max_age() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2063,8 +2096,10 @@ fn test_security_headers_invalid_csp() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2088,8 +2123,10 @@ fn test_security_headers_valid_csp() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2121,8 +2158,10 @@ fn test_security_headers_case_insensitive_lookup() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,

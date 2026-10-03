@@ -723,6 +723,7 @@ impl CrawlEngine {
                 let incremental = cfg.incremental;
                 let force = cfg.force;
 
+                let user_agent_token = client.crawler_product_token().to_string();
                 let handle = tokio::spawn(async move {
                     let _fetch_span = tracing::info_span!(
                         "fetch",
@@ -747,6 +748,7 @@ impl CrawlEngine {
                         robots_raw,
                         fetch_time,
                         outcome,
+                        user_agent: user_agent_token,
                     })
                 });
                 in_flight.push(handle);

@@ -1822,26 +1822,60 @@ impl Analyzer for ImageAspectRatioValidator {
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
+        // A logo, badge, divider, or icon is *supposed* to be wide or tall.
+        // Flagging them buries the genuine cases (a stretched hero image, a
+        // wrongly scaled thumbnail) under a stream of expected ones.
+        let is_decorative_asset = |src: &str, alt: &str| {
+            let lower = src.to_ascii_lowercase();
+            let alt = alt.trim().to_ascii_lowercase();
+            const MARKERS: &[&str] = &[
+                "logo",
+                "badge",
+                "icon",
+                "sprite",
+                "divider",
+                "spacer",
+                "placeholder",
+                "avatar",
+                "/btn",
+                "button",
+                "banner-wordmark",
+            ];
+            MARKERS.iter().any(|m| lower.contains(m))
+                // An empty alt marks the image decorative by design.
+                || alt.is_empty()
+        };
+
+        // The same image legitimately appears more than once per page (header
+        // and footer logo). Report each distinct source once.
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+
         for img in &ctx.page.images {
-            if let (Some(w), Some(h)) = (img.width, img.height) {
-                if w > 0 && h > 0 {
-                    let ratio = w as f64 / h as f64;
-                    if ratio > 3.0 || ratio < 0.33 {
-                        findings.push(Finding {
-                            severity: Severity::Warning,
-                            category: IssueCategory::Images,
-                            code: "IMGAR001".to_string(),
-                            title: "Unusual image aspect ratio".to_string(),
-                            description: format!(
-                                "Image {} has unusual aspect ratio {:.2}:1.",
-                                img.src, ratio
-                            ),
-                            url: url.clone(),
-                            recommendation: "Check if the image dimensions are correct."
-                                .to_string(),
-                        });
-                    }
-                }
+            let (Some(w), Some(h)) = (img.width, img.height) else {
+                continue;
+            };
+            if w == 0 || h == 0 {
+                continue;
+            }
+            if !seen.insert(img.src.as_str()) {
+                continue;
+            }
+            if is_decorative_asset(&img.src, &img.alt) {
+                continue;
+            }
+            let ratio = w as f64 / h as f64;
+            // Extreme only: a mild 3:1 photo is unremarkable, but a 12:1 strip
+            // almost always indicates a scaled or broken asset.
+            if ratio > 10.0 || ratio < 0.1 {
+                findings.push(Finding {
+                    severity: Severity::Warning,
+                    category: IssueCategory::Images,
+                    code: "IMGAR001".to_string(),
+                    title: "Unusual image aspect ratio".to_string(),
+                    description: format!("Image {} has unusual aspect ratio {ratio:.2}:1.", img.src),
+                    url: url.clone(),
+                    recommendation: "Check if the image dimensions are correct.".to_string(),
+                });
             }
         }
         findings
@@ -2080,8 +2114,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2731,8 +2767,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(600 * 1024), // 600KB
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2751,8 +2789,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(50 * 1024), // 50KB
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2797,8 +2837,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(100 * 1024), // 100KB HTML
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2818,8 +2860,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(10 * 1024), // 10KB
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2838,8 +2882,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(500 * 1024), // Exactly 500KB
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2859,8 +2905,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(500 * 1024 + 1), // Just over 500KB
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -3520,8 +3568,10 @@ mod new_media_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,

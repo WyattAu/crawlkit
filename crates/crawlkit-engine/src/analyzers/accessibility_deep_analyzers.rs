@@ -410,11 +410,15 @@ impl Analyzer for ImageAltTextDeepAnalyzer {
             return findings;
         }
 
+        // `alt=""` is not a missing alt attribute. It is the WCAG-sanctioned way
+        // to mark an image decorative, so the image is correctly hidden from
+        // assistive technology. Counting it as "missing" flagged every page
+        // using decorative imagery (logos, spacers, icons) as broken.
         let missing_alt: usize = ctx
             .page
             .images
             .iter()
-            .filter(|img| !img.has_alt || img.alt.trim().is_empty())
+            .filter(|img| !img.has_alt)
             .count();
         if missing_alt > 0 {
             findings.push(Finding {

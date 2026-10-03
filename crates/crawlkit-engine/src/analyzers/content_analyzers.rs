@@ -1433,11 +1433,17 @@ impl EntityLinkingAnalyzer {
     }
 
     fn get_entity_names(ctx: &AnalysisContext) -> Vec<String> {
+        // A page describing one organisation typically repeats its name across
+        // several schema blocks (`Organization`, `Store`, `WebSite`). Emitting
+        // one finding per block produced three identical findings per page, so
+        // distinct names are collected and deduplicated case-insensitively.
+        let mut seen: HashSet<String> = HashSet::new();
         let mut names = Vec::new();
         for sd in &ctx.page.structured_data {
             if let Some(name) = sd.data.get("name").and_then(|v| v.as_str()) {
-                if !name.is_empty() {
-                    names.push(name.to_string());
+                let trimmed = name.trim();
+                if !trimmed.is_empty() && seen.insert(trimmed.to_lowercase()) {
+                    names.push(trimmed.to_string());
                 }
             }
         }
@@ -2260,8 +2266,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -2281,8 +2289,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -3925,24 +3935,15 @@ impl Analyzer for TitleLengthAnalyzer {
             });
         }
 
-        // Check for pipe separators suggesting CMS auto-generation
-        if title.contains('|') || title.contains(" – ") || title.contains(" - ") {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Seo,
-                code: "TITLE003".to_string(),
-                title: "Title contains separator characters".to_string(),
-                description: format!(
-                    "Title \"{title}\" contains pipe (|) or dash separators, which often \
-                     indicates CMS auto-generation. Search engines may truncate these at the \
-                     separator."
-                ),
-                url: url.to_string(),
-                recommendation: "Consider removing separator-based title patterns (e.g., \
-                                 \"Page | Site Name\") and writing unique, descriptive titles."
-                    .into(),
-            });
-        }
+        // Title separators (TITLE003) are deliberately not reported.
+        //
+        // `Brand - Page` and `Page | Brand` are an entirely conventional title
+        // shape, and the original rationale — that search engines "may truncate
+        // these at the separator" — is not how any current engine behaves:
+        // truncation is driven by rendered pixel width, not by the presence of a
+        // separator character. The check reported a stylistic preference as a
+        // defect on 40 of 60 pages of a site using an ordinary title
+        // convention. Title *length* is already measured separately above.
 
         findings
     }
@@ -5438,8 +5439,10 @@ mod meta_desc_length_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -5623,7 +5626,12 @@ mod meta_desc_length_tests {
         page.meta.title = Some("Page Title | Site Name".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "TITLE003"));
+        // Title separators are a conventional, non-defective pattern: SERP
+    // truncation is driven by pixel width, not by separator characters.
+    assert!(
+        !findings.iter().any(|f| f.code == "TITLE003"),
+        "separator in a title is not a defect: {findings:?}"
+    );
     }
 
     #[test]
@@ -5632,7 +5640,12 @@ mod meta_desc_length_tests {
         page.meta.title = Some("Page Title - Site Name".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "TITLE003"));
+        // Title separators are a conventional, non-defective pattern: SERP
+    // truncation is driven by pixel width, not by separator characters.
+    assert!(
+        !findings.iter().any(|f| f.code == "TITLE003"),
+        "separator in a title is not a defect: {findings:?}"
+    );
     }
 
     #[test]
@@ -5641,7 +5654,12 @@ mod meta_desc_length_tests {
         page.meta.title = Some("Page Title \u{2013} Site Name".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "TITLE003"));
+        // Title separators are a conventional, non-defective pattern: SERP
+    // truncation is driven by pixel width, not by separator characters.
+    assert!(
+        !findings.iter().any(|f| f.code == "TITLE003"),
+        "separator in a title is not a defect: {findings:?}"
+    );
     }
 
     #[test]
@@ -6029,8 +6047,10 @@ mod meta_desc_extra_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6137,8 +6157,10 @@ mod title_extra_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6169,7 +6191,12 @@ mod title_extra_tests {
         page.meta.title = Some("Blog | My Site - Post Title".to_string());
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "TITLE003"));
+        // Title separators are a conventional, non-defective pattern: SERP
+    // truncation is driven by pixel width, not by separator characters.
+    assert!(
+        !findings.iter().any(|f| f.code == "TITLE003"),
+        "separator in a title is not a defect: {findings:?}"
+    );
     }
 
     #[test]
@@ -6188,7 +6215,12 @@ mod title_extra_tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "TITLE001"));
-        assert!(findings.iter().any(|f| f.code == "TITLE003"));
+        // Title separators are a conventional, non-defective pattern: SERP
+    // truncation is driven by pixel width, not by separator characters.
+    assert!(
+        !findings.iter().any(|f| f.code == "TITLE003"),
+        "separator in a title is not a defect: {findings:?}"
+    );
     }
 }
 
@@ -6243,8 +6275,10 @@ mod thin_extra_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6454,8 +6488,10 @@ mod new_validator_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6530,8 +6566,10 @@ mod new_validator_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6561,8 +6599,10 @@ mod new_validator_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6902,8 +6942,10 @@ mod new_content_analyzer_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -8777,8 +8819,10 @@ mod content_analyzer_v2_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -8798,8 +8842,10 @@ mod content_analyzer_v2_tests {
             response_time: None,
             redirect_chain,
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9650,8 +9696,10 @@ mod content_analyzer_v2_tests {
             response_time: Some(std::time::Duration::from_millis(100)),
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(100_000),
             compressed_size: Some(30_000),
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9672,8 +9720,10 @@ mod content_analyzer_v2_tests {
             response_time: Some(std::time::Duration::from_millis(3000)),
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9693,8 +9743,10 @@ mod content_analyzer_v2_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(6_000_000),
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9714,8 +9766,10 @@ mod content_analyzer_v2_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(1_000_000),
             compressed_size: Some(950_000),
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9751,8 +9805,10 @@ mod content_analyzer_v2_tests {
             response_time: Some(std::time::Duration::from_millis(5000)),
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: Some(10_000_000),
             compressed_size: Some(9_500_000),
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -9772,8 +9828,10 @@ mod content_analyzer_v2_tests {
             response_time: Some(std::time::Duration::from_millis(1500)),
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,

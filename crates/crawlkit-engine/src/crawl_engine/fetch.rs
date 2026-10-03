@@ -21,8 +21,11 @@ pub(crate) enum Freshness {
 /// the freshness classification needed for incremental-crawl statistics.
 pub(crate) enum FetchOutcome {
     /// Page fetched successfully.
+    ///
+    /// The result is boxed: it is far larger than the other two variants, and
+    /// leaving it inline made every `FetchOutcome` allocation-sized.
     Fetched {
-        result: crate::FetchResult,
+        result: Box<crate::FetchResult>,
         freshness: Freshness,
     },
     /// Server answered 304 Not Modified. `page_id` identifies the stored page
@@ -38,6 +41,9 @@ pub(crate) struct FetchedPage {
     pub(crate) robots_raw: String,
     pub(crate) fetch_time: Duration,
     pub(crate) outcome: FetchOutcome,
+    /// Crawler product token presented to robots.txt, so analyzers can select
+    /// the group that actually governs this crawl instead of every group.
+    pub(crate) user_agent: String,
 }
 
 /// Execute a single fetch, applying conditional-request logic when the crawl
@@ -53,7 +59,7 @@ pub(crate) async fn execute_fetch(
     if !incremental || force {
         return match client.fetch(&entry.url).await {
             Ok(result) => FetchOutcome::Fetched {
-                result,
+                result: Box::new(result),
                 freshness: Freshness::Unconditional,
             },
             Err(e) => FetchOutcome::Failed(e),
@@ -92,7 +98,7 @@ pub(crate) async fn execute_fetch(
             page_id: previous.map(|(id, _, _)| id),
         },
         Ok(r) => FetchOutcome::Fetched {
-            result: r,
+            result: Box::new(r),
             freshness: if previous.is_some() {
                 Freshness::Modified
             } else {

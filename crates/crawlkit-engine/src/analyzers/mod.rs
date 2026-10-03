@@ -98,6 +98,8 @@ pub mod social_analyzers;
 /// Strict-Transport-Security / COOP / COEP / Feature-Policy / Expect-CT / CT
 /// analyzers (extracted from security_analyzers).
 pub mod sts_analyzers;
+pub mod url_norm;
+pub mod dedupe;
 /// Tabindex accessibility analyzer.
 pub mod tabindex_analyzers;
 /// Table accessibility analyzers.
@@ -393,10 +395,20 @@ pub struct AnalysisContext<'a> {
     pub redirect_chain: &'a [RedirectHop],
     /// Pre-fetched robots.txt content for this page's domain (if available).
     pub robots_txt: Option<&'a str>,
+
+    /// User agent this crawl identified as, used to select the robots.txt group
+    /// that actually governs it. `None` falls back to the `*` group.
+    pub user_agent: Option<&'a str>,
     /// Response body size in bytes (uncompressed).
     pub body_size: Option<usize>,
     /// Compressed response size in bytes (if Content-Length available).
     pub compressed_size: Option<usize>,
+    /// Transfer encoding the body arrived with, captured before decoding.
+    ///
+    /// Needed because the transport removes `Content-Encoding` from the
+    /// header list as it decodes, which would otherwise make a compressed
+    /// response indistinguishable from an uncompressed one.
+    pub content_encoding: Option<&'a str>,
     /// Server header value (e.g., "nginx/1.24.0").
     pub server: Option<&'a str>,
     /// Content-Type header value (e.g., "text/html; charset=utf-8").
@@ -407,6 +419,34 @@ pub struct AnalysisContext<'a> {
     /// Core builds do not include a browser runtime.
     #[cfg(not(feature = "full"))]
     pub rendered: Option<&'a ()>,
+}
+
+impl<'a> AnalysisContext<'a> {
+    /// Build an [`AnalysisContext`] with every field defaulted.
+    ///
+    /// Most call sites (tests, embedders, and analyzers that only need a page)
+    /// populate two or three fields and would otherwise have to spell out all
+    /// fourteen. This keeps adding an [`AnalysisContext`] field from breaking
+    /// every construction site in the workspace.
+    #[must_use]
+    pub fn new(page: &'a ParsedPage) -> Self {
+        Self {
+            page,
+            body: None,
+            status_code: None,
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            user_agent: None,
+            body_size: None,
+            compressed_size: None,
+            content_encoding: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        }
+    }
 }
 
 /// Feature-neutral facts produced by an optional rendering integration.
@@ -1680,6 +1720,11 @@ impl AnalyzerRegistry {
 
         // Canonical ordering: stable sort by (code, url) so identical input
         // always produces identical output regardless of parallel scheduling.
+        findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
+
+        // Collapse the same defect reported by several analyzer families under
+        // different codes (see `dedupe` for the measured impact).
+        let mut findings = dedupe::collapse_duplicates(findings);
         findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
         findings
     }

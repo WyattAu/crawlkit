@@ -117,39 +117,31 @@ impl Analyzer for XPermittedCrossDomainPoliciesAnalyzer {
 
         match Self::get_header(ctx.headers, "X-Permitted-Cross-Domain-Policies") {
             None => {
+                // `X-Permitted-Cross-Domain-Policies` only ever governed
+                // cross-domain policy files for Flash and Acrobat-era PDF
+                // viewers, both of which are retired. No current browser reads
+                // it, and no browser ever warned when it was absent. Reporting
+                // its absence produced 38 findings across a 60-page audit while
+                // recommending a header that protects nothing today.
+            }
+            Some(value) if value.trim().eq_ignore_ascii_case("all") => {
                 findings.push(Finding {
-                    severity: Severity::Info,
+                    severity: Severity::Warning,
                     category: IssueCategory::Security,
-                    code: "XPCDP001".to_string(),
-                    title: "Missing X-Permitted-Cross-Domain-Policies header".to_string(),
-                    description: "No X-Permitted-Cross-Domain-Policies header was found. This \
-                                  header controls cross-domain policy files for Flash, PDF, and \
-                                  other plugins."
+                    code: "XPCDP002".to_string(),
+                    title: "X-Permitted-Cross-Domain-Policies set to all".to_string(),
+                    description: "The X-Permitted-Cross-Domain-Policies header is set to \
+                                  \"all\", which allows any cross-domain policy file. This \
+                                  weakens security by permitting cross-domain data access."
                         .to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-Permitted-Cross-Domain-Policies: none to prevent \
-                                     cross-domain policy loading."
+                    recommendation: "Set X-Permitted-Cross-Domain-Policies: none to block \
+                                     all cross-domain policy files."
                         .to_string(),
                 });
             }
-            Some(value) => {
-                if value.trim().eq_ignore_ascii_case("all") {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Security,
-                        code: "XPCDP002".to_string(),
-                        title: "X-Permitted-Cross-Domain-Policies set to all".to_string(),
-                        description: "The X-Permitted-Cross-Domain-Policies header is set to \
-                                      \"all\", which allows any cross-domain policy file. This \
-                                      weakens security by permitting cross-domain data access."
-                            .to_string(),
-                        url: url.to_string(),
-                        recommendation: "Set X-Permitted-Cross-Domain-Policies: none to block \
-                                         all cross-domain policy files."
-                            .to_string(),
-                    });
-                }
-            }
+            // Header present with a restrictive value: nothing to report.
+            Some(_) => {}
         }
 
         findings

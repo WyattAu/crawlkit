@@ -14,8 +14,65 @@ use serde::{Deserialize, Serialize};
 use tokio::time::sleep;
 use url::Url;
 
+#[cfg(feature = "full")]
+use reqwest::header::ACCEPT_ENCODING;
+
 use crate::ssrf::is_private_ip;
 use crate::{CrawlConfig, CrawlError, FetchResult, RedirectHop};
+
+/// A response body plus the transfer facts needed to reason about compression.
+pub(crate) struct DecodedBody {
+    /// UTF-8 body text, transfer-decoded.
+    pub text: String,
+    /// Raw `Content-Encoding` value, if the server sent one.
+    pub content_encoding: Option<String>,
+    /// Bytes on the wire, from `Content-Length`, when present.
+    pub transfer_size: Option<usize>,
+}
+
+/// Read a response body, applying transfer decoding explicitly.
+///
+/// `headers` must have been captured from the response *before* the body was
+/// read, because reading it consumes the response. Decoding happens here rather
+/// than inside reqwest so that the advertised `Content-Encoding` survives and
+/// analyzers can still tell a compressed response from an uncompressed one.
+async fn read_decoded_body(
+    response: reqwest::Response,
+    headers: &[(String, String)],
+    max_body_size: usize,
+) -> Result<DecodedBody, CrawlError> {
+    let content_encoding = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-encoding"))
+        .map(|(_, v)| v.clone());
+    let transfer_size = headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("content-length"))
+        .and_then(|(_, v)| v.trim().parse::<usize>().ok());
+
+    let raw = response.bytes().await.map_err(CrawlError::RequestFailed)?;
+    let decoded = crate::compression::decode(
+        &raw,
+        crate::compression::TransferEncoding::parse(content_encoding.as_deref()),
+    );
+
+    // The body-size cap applies to the decoded document: it exists to bound
+    // memory and parse cost, both of which are driven by decoded size.
+    let limited = &decoded[..decoded.len().min(max_body_size)];
+    Ok(DecodedBody {
+        text: String::from_utf8_lossy(limited).to_string(),
+        content_encoding,
+        transfer_size,
+    })
+}
+
+/// Case-insensitive header lookup returning the first value.
+fn header_value(headers: &[(String, String)], name: &str) -> Option<String> {
+    headers
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(name))
+        .map(|(_, v)| v.clone())
+}
 
 /// Extract conditional request headers (ETag, Last-Modified) from response headers.
 fn extract_conditional_headers(headers: &[(String, String)]) -> (Option<String>, Option<String>) {
@@ -448,6 +505,15 @@ impl HttpClient {
         }
     }
 
+    /// Public accessor for the crawler identity.
+    ///
+    /// Analyzers that must resolve robots.txt group membership need to know
+    /// which `User-agent` token this crawl presents, which is the first
+    /// whitespace-delimited component of the configured user agent.
+    pub fn crawler_product_token(&self) -> &str {
+        crate::robots_group::product_token(self.config.user_agent.ua_for_url("", 0))
+    }
+
     /// Fetches a URL with retry logic and redirect tracking.
     ///
     /// Returns a [`FetchResult`] with the final URL, status, headers, and body.
@@ -496,7 +562,15 @@ impl HttpClient {
         let start = Instant::now();
         let user_agent = self.ua_for(url);
 
-        let mut request = self.client.get(url.as_str()).header(USER_AGENT, user_agent);
+        let mut request = self
+            .client
+            .get(url.as_str())
+            .header(USER_AGENT, user_agent)
+            .header(ACCEPT_ENCODING, crate::compression::ACCEPT_ENCODING)
+            // Advertise the encodings a browser accepts. Without this the
+            // server has no reason to compress, so every page looks
+            // uncompressed to the compression analyzer.
+            .header(ACCEPT_ENCODING, crate::compression::ACCEPT_ENCODING);
 
         if let Some(etag_val) = etag {
             request = request.header("If-None-Match", etag_val);
@@ -531,29 +605,28 @@ impl HttpClient {
                 body: String::new(),
                 response_time: elapsed,
                 body_size: 0,
+                content_encoding: None,
+                transfer_size: None,
                 fetched_at: chrono::Utc::now(),
                 etag: resp_etag,
                 last_modified: resp_lm,
             });
         }
 
-        let body = if self.config.max_body_size > 0 {
-            let bytes = response.bytes().await.map_err(CrawlError::RequestFailed)?;
-            let limited = &bytes[..bytes.len().min(self.config.max_body_size)];
-            String::from_utf8_lossy(limited).to_string()
-        } else {
-            response.text().await.map_err(CrawlError::RequestFailed)?
-        };
+        let decoded =
+            read_decoded_body(response, &headers, self.config.max_body_size.max(1)).await?;
+        let body_size = decoded.text.len();
 
         let (resp_etag, resp_lm) = extract_conditional_headers(&headers);
-        let body_size = body.len();
         Ok(FetchResult {
             final_url,
             status_code: status.as_u16(),
             headers,
-            body,
+            body: decoded.text,
             response_time: elapsed,
             body_size,
+            content_encoding: decoded.content_encoding,
+            transfer_size: decoded.transfer_size,
             fetched_at: chrono::Utc::now(),
             etag: resp_etag,
             last_modified: resp_lm,
@@ -578,7 +651,15 @@ impl HttpClient {
 
         for _ in 0..=max_hops {
             match self.fetch_once(&current_url).await {
-                Ok((final_url, status, headers, body, elapsed)) => {
+                Ok((
+                    final_url,
+                    status,
+                    headers,
+                    body,
+                    content_encoding,
+                    transfer_size,
+                    elapsed,
+                )) => {
                     if status.is_redirection() {
                         let next_url = headers
                             .iter()
@@ -607,6 +688,8 @@ impl HttpClient {
                                     body,
                                     response_time: elapsed,
                                     body_size,
+                                    content_encoding,
+                                    transfer_size,
                                     fetched_at: chrono::Utc::now(),
                                     etag,
                                     last_modified,
@@ -624,6 +707,8 @@ impl HttpClient {
                         body,
                         response_time: elapsed,
                         body_size,
+                        content_encoding,
+                        transfer_size,
                         fetched_at: chrono::Utc::now(),
                         etag,
                         last_modified,
@@ -641,11 +726,24 @@ impl HttpClient {
 
     /// Performs a single HTTP request with retry logic.
     ///
-    /// Returns the final URL, status, headers, body text, and elapsed time.
+    /// Returns the final URL, status, headers, decoded body text, the transfer
+    /// encoding and wire size, and the elapsed time.
+    #[allow(clippy::type_complexity)]
     async fn fetch_once(
         &self,
         url: &Url,
-    ) -> Result<(Url, StatusCode, Vec<(String, String)>, String, Duration), CrawlError> {
+    ) -> Result<
+        (
+            Url,
+            StatusCode,
+            Vec<(String, String)>,
+            String,
+            Option<String>,
+            Option<usize>,
+            Duration,
+        ),
+        CrawlError,
+    > {
         dns_pin_check(url).await?;
         let mut last_error: Option<CrawlError> = None;
         let max_retries = self.config.retry_policy.max_retries;
@@ -658,6 +756,7 @@ impl HttpClient {
                 .client
                 .get(url.as_str())
                 .header(USER_AGENT, user_agent)
+                .header(ACCEPT_ENCODING, crate::compression::ACCEPT_ENCODING)
                 .send()
                 .await;
 
@@ -714,15 +813,19 @@ impl HttpClient {
                     // Extract final_url before consuming the response body
                     let final_url = response.url().clone();
 
-                    let body = if self.config.max_body_size > 0 {
-                        let bytes = response.bytes().await.map_err(CrawlError::RequestFailed)?;
-                        let limited = &bytes[..bytes.len().min(self.config.max_body_size)];
-                        String::from_utf8_lossy(limited).to_string()
-                    } else {
-                        response.text().await.map_err(CrawlError::RequestFailed)?
-                    };
+                    let decoded =
+                        read_decoded_body(response, &headers, self.config.max_body_size.max(1))
+                            .await?;
 
-                    return Ok((final_url, status, headers, body, elapsed));
+                    return Ok((
+                        final_url,
+                        status,
+                        headers,
+                        decoded.text,
+                        decoded.content_encoding,
+                        decoded.transfer_size,
+                        elapsed,
+                    ));
                 }
                 Err(e) => {
                     if (e.is_timeout() || e.is_connect()) && attempt < max_retries {
@@ -784,6 +887,7 @@ impl HttpClient {
                 .client
                 .get(current_url.as_str())
                 .header(USER_AGENT, user_agent)
+                .header(ACCEPT_ENCODING, crate::compression::ACCEPT_ENCODING)
                 .send()
                 .await
                 .map_err(CrawlError::RequestFailed)?;
@@ -827,6 +931,8 @@ impl HttpClient {
                             body: String::new(),
                             response_time: elapsed,
                             body_size: 0,
+                            content_encoding: None,
+                            transfer_size: None,
                             fetched_at: chrono::Utc::now(),
                             etag: None,
                             last_modified: None,
@@ -854,6 +960,7 @@ impl HttpClient {
             }
 
             let (etag, last_modified) = extract_conditional_headers(&headers);
+            let content_encoding = header_value(&headers, "content-encoding");
             return Ok(FetchResult {
                 final_url,
                 status_code: status.as_u16(),
@@ -861,6 +968,8 @@ impl HttpClient {
                 body,
                 response_time: elapsed,
                 body_size: total_size,
+                content_encoding,
+                transfer_size: None,
                 fetched_at: chrono::Utc::now(),
                 etag,
                 last_modified,
@@ -886,6 +995,7 @@ impl HttpClient {
             .client
             .get(url.as_str())
             .header(USER_AGENT, user_agent)
+            .header(ACCEPT_ENCODING, crate::compression::ACCEPT_ENCODING)
             .send()
             .await
             .map_err(CrawlError::RequestFailed)?;
@@ -922,6 +1032,10 @@ impl HttpClient {
                 async { output }
             });
 
+        let content_encoding = header_value(&headers, "content-encoding");
+        let transfer_size = header_value(&headers, "content-length")
+            .and_then(|v| v.trim().parse::<usize>().ok());
+
         Ok(FetchStreamReader {
             final_url,
             status_code: status.as_u16(),
@@ -930,6 +1044,8 @@ impl HttpClient {
             stream: Box::pin(stream),
             body_size: 0,
             max_body_size,
+            content_encoding,
+            transfer_size,
         })
     }
 }
@@ -961,6 +1077,13 @@ pub struct FetchStreamReader {
     pub status_code: u16,
     pub headers: Vec<(String, String)>,
     pub response_time: Duration,
+
+    /// Transfer encoding advertised by `Content-Encoding`, preserved across the
+    /// streamed read so the compression analyzer can still see it.
+    pub content_encoding: Option<String>,
+
+    /// `Content-Length` as sent on the wire, when the server provided it.
+    pub transfer_size: Option<usize>,
     stream: Pin<Box<dyn Stream<Item = Result<bytes::Bytes, reqwest::Error>> + Send>>,
     pub body_size: usize,
     max_body_size: usize,
@@ -1025,6 +1148,7 @@ impl FetchStreamReader {
     pub async fn into_fetch_result(mut self) -> Result<FetchResult, CrawlError> {
         let body = self.read_body().await?;
         let body_size = self.body_size;
+        let transfer_encoding = self.content_encoding.clone();
         let (etag, last_modified) = extract_conditional_headers(&self.headers);
         Ok(FetchResult {
             final_url: self.final_url,
@@ -1033,6 +1157,8 @@ impl FetchStreamReader {
             body,
             response_time: self.response_time,
             body_size,
+            content_encoding: transfer_encoding,
+            transfer_size: self.transfer_size,
             fetched_at: chrono::Utc::now(),
             etag,
             last_modified,

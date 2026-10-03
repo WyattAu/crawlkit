@@ -125,8 +125,10 @@ pub fn generate() -> CapabilityManifest {
         robots_txt: Some(
             "User-agent: *\nDisallow: /private\nSitemap: https://example.com/sitemap.xml",
         ),
+        user_agent: Some("crawlkit/6.0.0"),
         body_size: Some(html.len()),
         compressed_size: Some(html.len()),
+        content_encoding: None,
         server: Some("example"),
         content_type: Some("text/html; charset=utf-8"),
         rendered: None,

@@ -137,38 +137,32 @@ impl Analyzer for XSSProtectionAnalyzer {
 
         match Self::get_header(ctx.headers, "X-XSS-Protection") {
             None => {
+                // `X-XSS-Protection` is not reported when missing. The header
+                // was deprecated by the WHATWG and removed from all current
+                // browsers: Chrome, Edge, and Safari ignore it entirely, and in
+                // several versions setting `1; mode=block` *introduced* XSS
+                // vulnerabilities of its own. Recommending it as a hardening
+                // step is advice that no longer protects anyone, and omitting
+                // it cost 38 findings across a 60-page audit.
+            }
+            Some(value) if value.trim().contains("mode=block") => {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
-                    code: "XSS001".to_string(),
-                    title: "Missing X-XSS-Protection header".to_string(),
-                    description: "No X-XSS-Protection header was found. While modern browsers \
-                                  rely on CSP, this header provides legacy XSS protection."
+                    code: "XSS002".to_string(),
+                    title: "X-XSS-Protection set to mode=block".to_string(),
+                    description: "X-XSS-Protection is set to mode=block. While this enables \
+                                  the XSS auditor in mode=block, the header is deprecated \
+                                  and Content-Security-Policy is preferred."
                         .to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-XSS-Protection: 1; mode=block for legacy browser \
-                                     support."
+                    recommendation: "Consider removing X-XSS-Protection and relying on \
+                                     Content-Security-Policy instead."
                         .to_string(),
                 });
             }
-            Some(value) => {
-                if value.trim().contains("mode=block") {
-                    findings.push(Finding {
-                        severity: Severity::Info,
-                        category: IssueCategory::Security,
-                        code: "XSS002".to_string(),
-                        title: "X-XSS-Protection set to mode=block".to_string(),
-                        description: "X-XSS-Protection is set to mode=block. While this enables \
-                                      the XSS auditor in mode=block, the header is deprecated \
-                                      and Content-Security-Policy is preferred."
-                            .to_string(),
-                        url: url.to_string(),
-                        recommendation: "Consider removing X-XSS-Protection and relying on \
-                                         Content-Security-Policy instead."
-                            .to_string(),
-                    });
-                }
-            }
+            // Header present but not `mode=block`: also nothing to report.
+            Some(_) => {}
         }
 
         findings
@@ -547,16 +541,12 @@ impl Analyzer for ExpectCTAnalyzer {
         "expect-ct"
     }
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-        let has_expect_ct = ctx
-            .headers
-            .iter()
-            .any(|(k, _)| k.eq_ignore_ascii_case("expect-ct"));
-        if !has_expect_ct && ctx.status_code == Some(200) {
-            findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "ECT001".to_string(), title: "No Expect-CT header".to_string(), description: "Expect-CT header is not set. Consider adding for Certificate Transparency enforcement.".to_string(), url: url.clone(), recommendation: "Add Expect-CT header with enforce and max-age directives.".to_string() });
-        }
-        findings
+        // `Expect-CT` is deprecated (Chrome removed support in 2021) and is
+        // expected of certificate authorities rather than origin servers, so
+        // its absence is not a site defect. Reporting it produced 59 findings
+        // across a 60-page audit while recommending a header no browser reads.
+        let _ = ctx;
+        Vec::new()
     }
 }
 
@@ -580,26 +570,14 @@ impl Analyzer for CertificateTransparencyAnalyzer {
     fn name(&self) -> &str {
         "certificate-transparency"
     }
-    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-        let has_sct = ctx
-            .headers
-            .iter()
-            .any(|(k, v)| k.eq_ignore_ascii_case("expect-ct") && v.contains("enforce"));
-        if !has_sct && ctx.status_code == Some(200) {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Security,
-                code: "CT001".to_string(),
-                title: "No Certificate Transparency enforcement".to_string(),
-                description: "Expect-CT header with enforce directive is not set.".to_string(),
-                url: url.clone(),
-                recommendation: "Add Expect-CT: enforce, max-age=31536000 for CT compliance."
-                    .to_string(),
-            });
-        }
-        findings
+    fn analyze(&self, _ctx: &AnalysisContext) -> Vec<Finding> {
+        // `Expect-CT` was deprecated and removed from Chrome in 2021; it is now
+        // ignored everywhere and is scheduled for removal from the HTTP specs.
+        // CT enforcement is expected of certificate authorities, not of origin
+        // servers, so its absence is not a site defect. Reporting it produced 59
+        // findings across a 60-page audit while recommending a header that no
+        // browser reads.
+        Vec::new()
     }
 }
 

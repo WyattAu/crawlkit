@@ -79,7 +79,7 @@ required-features = ["full"]
 
 [features]
 default = ["full"]
-full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "dep:sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry"]
+full = ["reqwest", "rusqlite", "tokio", "tokio-stream", "tracing", "dashmap", "parking_lot", "uuid", "rayon", "wasmtime", "aes-gcm", "dirs", "quick-xml", "csv", "lru", "dep:sha2", "futures", "toml", "async-trait", "urlencoding", "getrandom", "bytes", "libloading", "sqlx", "redis", "ed25519-dalek", "loop-retry", "dep:flate2", "dep:brotli"]
 warehouse = ["toml", "dep:arrow", "dep:arrow-array", "dep:arrow-schema", "dep:parquet", "dep:hmac", "dep:sha2"]
 unstable = ["full"]
 wasm = []
@@ -101,6 +101,12 @@ observability = ["opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk"]
 [dependencies]
 # Always available
 crawlkit-types = { path = "../crawlkit-types" }
+# Transfer-encoding negotiation. reqwest's own `gzip`/`brotli`/`deflate`
+# features strip `Content-Encoding` while decoding, which makes a compressed
+# response indistinguishable from an uncompressed one; crawlkit decodes
+# explicitly so the wire header stays observable. See `src/compression.rs`.
+flate2 = { version = "1", optional = true }
+brotli = { version = "8", optional = true }
 serde.workspace = true
 serde_json.workspace = true
 scraper.workspace = true

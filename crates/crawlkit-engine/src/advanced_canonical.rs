@@ -14,11 +14,6 @@ use std::collections::HashMap;
 use crate::analyzers::{AnalysisContext, Analyzer, Finding};
 use crate::types::{IssueCategory, Severity};
 
-/// Normalize a URL by stripping trailing slashes for consistent comparison.
-fn normalize_url(url: &str) -> &str {
-    url.strip_suffix('/').unwrap_or(url)
-}
-
 /// Advanced canonical and hreflang analyzer that catches issues
 /// Ahrefs and other premium tools detect but basic crawlers miss.
 pub struct AdvancedCanonicalAnalyzer;
@@ -254,7 +249,7 @@ impl Analyzer for CanonicalChainDetector {
         let canonical_str = canonical.as_str();
 
         // CANCH001: Canonical URL points to another domain (possible chain > 2)
-        if canonical_str != url {
+        if !crate::analyzers::url_norm::urls_equivalent(canonical_str, url) {
             let page_url = url::Url::parse(url).ok();
             let canonical_url = Some(canonical.clone());
 
@@ -292,7 +287,7 @@ impl Analyzer for CanonicalChainDetector {
                 k.to_lowercase() == "x-robots-tag" && v.to_lowercase().contains("noindex")
             });
 
-        if canonical_str != url && is_noindex {
+        if !crate::analyzers::url_norm::urls_equivalent(canonical_str, url) && is_noindex {
             findings.push(Finding {
                 severity: Severity::Error,
                 category: IssueCategory::Seo,
@@ -349,36 +344,27 @@ impl Analyzer for HreflangReciprocalValidator {
             return findings;
         }
 
-        // HREFR001: Hreflang references a URL that doesn't link back
-        for tag in hreflang_tags {
-            let tag_url = normalize_url(tag.url.as_str());
-            if tag_url != normalize_url(url) {
-                let has_link_back = ctx
-                    .page
-                    .links
-                    .iter()
-                    .any(|l| normalize_url(&l.href) == tag_url);
-                if !has_link_back {
-                    findings.push(Finding {
-                        severity: Severity::Warning,
-                        category: IssueCategory::Seo,
-                        code: "HREFR001".to_string(),
-                        title: "Hreflang references URL without reciprocal link".to_string(),
-                        description: format!(
-                            "Hreflang tag lang=\"{}\" references \"{}\" which is not linked \
-                             from this page. Search engines require reciprocal hreflang \
-                             references for international targeting.",
-                            tag.lang, tag_url
-                        ),
-                        url: url.clone(),
-                        recommendation: "Add the referenced URL to this page's links, or \
-                                         verify the target page has a reciprocal hreflang \
-                                         tag pointing back to this URL."
-                            .to_string(),
-                    });
-                }
-            }
-        }
+        // HREFR001 (hreflang reciprocity) was previously reported here by
+        // checking whether each hreflang target also appeared in this page's
+        // outbound `<a href>` links. That is not what reciprocity means, and a
+        // single-page analyzer structurally cannot evaluate it:
+        //
+        //   * Google requires the *referenced* page to carry a hreflang tag
+        //     pointing back at this page. Whether it does is a property of the
+        //     other page, not of this one's link set.
+        //   * `<link rel="alternate" hreflang>` in `<head>` is the normal,
+        //     correct way to publish alternates, and those URLs are
+        //     essentially never duplicated as visible `<a>` links. So the old
+        //     check fired on every alternate of every internationalized page
+        //     (594 findings across 60 pages on a single site audit) while
+        //     describing correct markup as broken.
+        //
+        // The parts of hreflang that *are* checkable from a single page —
+        // presence of a self-reference and of duplicate language codes — are
+        // covered by the HREFSELF-* analyzers and by HREFR002 below.
+        // Cross-page reciprocity needs the target page's hreflang set, which
+        // requires hreflang to be persisted in the crawl graph; it is
+        // deliberately not guessed at here.
 
         // HREFR002: Multiple hreflang tags with same language code
         let mut lang_counts: HashMap<&str, usize> = HashMap::new();
@@ -457,8 +443,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -478,8 +466,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -499,8 +489,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -655,8 +647,13 @@ mod tests {
         assert!(!findings.iter().any(|f| f.code == "HREFR001"));
     }
 
+    /// A page whose only hreflang alternate points at a sibling page, with no
+    /// visible `<a>` link to it, is *correct* markup — that is exactly how
+    /// `<link rel="alternate" hreflang>` is meant to be used. The analyzer must
+    /// not claim the reference is non-reciprocal, because whether the sibling
+    /// links back is a property of the sibling page.
     #[test]
-    fn test_hreflang_reciprocal_different_url_no_link() {
+    fn test_hreflang_alternate_without_visible_link_is_not_flagged() {
         let mut page = make_page("https://example.com/en");
         page.meta.hreflang = vec![HreflangTag {
             lang: "fr".to_string(),
@@ -664,11 +661,15 @@ mod tests {
         }];
         let ctx = make_ctx(&page, Some(200));
         let findings = HreflangReciprocalValidator::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "HREFR001"));
+        assert!(
+            !findings.iter().any(|f| f.code == "HREFR001"),
+            "single-page analysis must not assert hreflang reciprocity: {:?}",
+            findings
+        );
     }
 
     #[test]
-    fn test_hreflang_reciprocal_different_url_with_link() {
+    fn test_hreflang_different_url_with_link() {
         use crate::parser::ExtractedLink;
 
         let mut page = make_page("https://example.com/en");
@@ -775,21 +776,24 @@ mod tests {
     }
 
     #[test]
-    fn test_hreflang_reciprocal_self_referencing_no_link_issue() {
+    fn test_hreflang_self_referencing_with_trailing_slash_not_flagged() {
+        // Regression: a self-reference that differs only by a trailing slash is
+        // the same resource. This shape produced 60 false
+        // "missing self-referencing hreflang" findings on a 60-page audit.
         let mut page = make_page("https://example.com/en");
         page.meta.hreflang = vec![
             HreflangTag {
                 lang: "en".to_string(),
-                url: url::Url::parse("https://example.com/en").unwrap(),
+                url: url::Url::parse("https://example.com/en/").unwrap(),
             },
             HreflangTag {
                 lang: "fr".to_string(),
-                url: url::Url::parse("https://example.com/fr").unwrap(),
+                url: url::Url::parse("https://example.com/fr/").unwrap(),
             },
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HreflangReciprocalValidator::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "HREFR001"));
+        assert!(!findings.iter().any(|f| f.code == "HREFR001"));
     }
 
     #[test]
@@ -816,7 +820,6 @@ mod tests {
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HreflangReciprocalValidator::new().analyze(&ctx);
-        assert!(findings.iter().any(|f| f.code == "HREFR001"));
         assert!(findings.iter().any(|f| f.code == "HREFR002"));
     }
 
@@ -867,14 +870,12 @@ mod tests {
         ];
         let ctx = make_ctx(&page, Some(200));
         let findings = HreflangReciprocalValidator::new().analyze(&ctx);
-        // Valid setup: all hreflang URLs have reciprocal links.
-        // HREFR001 should not appear (all links are present).
-        // Other findings (e.g., HREFR002 for duplicate lang) are acceptable.
-        let hrefr001_count = findings.iter().filter(|f| f.code == "HREFR001").count();
-        assert_eq!(
-            hrefr001_count, 0,
-            "unexpected HREFR001 findings: {:?}",
+        // Valid setup: unique language codes, so no duplicate-lang finding.
+        assert!(
+            !findings.iter().any(|f| f.code == "HREFR001"),
+            "HREFR001 must not be emitted by single-page analysis: {:?}",
             findings
         );
+        assert!(!findings.iter().any(|f| f.code == "HREFR002"));
     }
 }

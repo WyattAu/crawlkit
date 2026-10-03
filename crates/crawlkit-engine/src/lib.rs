@@ -229,6 +229,20 @@ pub mod query_tracker;
 /// position history storage, and trend analysis.
 #[cfg(feature = "full")]
 pub mod rank;
+/// Transfer-encoding negotiation and decoding.
+///
+/// crawlkit advertises the same `Accept-Encoding` a browser does and decodes
+/// responses itself, so that `Content-Encoding` remains observable to
+/// analyzers instead of being stripped during decode.
+#[cfg(feature = "full")]
+pub mod compression;
+/// robots.txt group selection scoped to the auditing crawler.
+///
+/// A crawler matches exactly one group in robots.txt — the most specific
+/// `User-agent` token that matches — so `Disallow:` directives from a group
+/// addressed to some *other* crawler (training bots, for example) say nothing
+/// about whether this crawl may fetch the page.
+pub mod robots_group;
 /// Render budgets (6.0.0-alpha.2): per-crawl and per-page ceilings on
 /// Playwright rendering with explicit degradation.
 #[cfg(feature = "full")]
@@ -797,8 +811,23 @@ pub struct FetchResult {
     #[serde(with = "duration_ms")]
     pub response_time: Duration,
 
-    /// Size of the response body in bytes.
+    /// Size of the response body in bytes, after transfer decoding.
     pub body_size: usize,
+
+    /// The transfer encoding the body arrived with, as advertised by
+    /// `Content-Encoding`.
+    ///
+    /// Recorded because reqwest removes that header while decoding, which would
+    /// otherwise make a `br`-compressed response indistinguishable from an
+    /// uncompressed one. Analyzers read this instead of the header.
+    pub content_encoding: Option<String>,
+
+    /// Bytes actually transferred on the wire, before transfer decoding.
+    ///
+    /// `None` when the server did not send a `Content-Length` (chunked
+    /// transfer). Comparing this against [`Self::body_size`] gives the real
+    /// compression ratio a visitor experiences.
+    pub transfer_size: Option<usize>,
 
     /// When the request was made.
     pub fetched_at: DateTime<Utc>,
@@ -896,6 +925,8 @@ mod tests {
             body: "<html></html>".into(),
             response_time: Duration::from_millis(123),
             body_size: 14,
+            content_encoding: Some("br".into()),
+            transfer_size: Some(9),
             fetched_at: Utc::now(),
             etag: Some("\"abc123\"".into()),
             last_modified: None,

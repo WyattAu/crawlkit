@@ -133,16 +133,25 @@ impl ServerHeaderAnalyzer {
     }
 
     /// Known version patterns that leak in Server headers.
+    ///
+    /// Each entry is a product token *followed by a version separator*, so the
+    /// match implies a version number is present. `cloudflare` alone does not
+    /// qualify: `Server: cloudflare` names the CDN edge product and discloses
+    /// no version, yet listing it here reported every page of every
+    /// Cloudflare-fronted site as leaking version information.
     const VERSION_PATTERNS: &[&str] = &[
         "Apache/",
         "nginx/",
         "Microsoft-IIS/",
         "LiteSpeed/",
         "OpenResty/",
-        "Cloudflare",
+        "Cloudflare/",
         "GWS/",
         "gws/",
-        "AmazonS3",
+        "AmazonS3/",
+        "Werkzeug/",
+        "gunicorn/",
+        "Passenger/",
     ];
 
     /// Known technology stack keywords.
@@ -981,14 +990,6 @@ impl ResponseSizeAnalyzer {
     pub fn new() -> Self {
         Self
     }
-
-    /// Look up a header value by name (case-insensitive).
-    fn get_header<'a>(headers: &'a [(String, String)], name: &str) -> Option<&'a str> {
-        headers
-            .iter()
-            .find(|(k, _)| k.eq_ignore_ascii_case(name))
-            .map(|(_, v)| v.as_str())
-    }
 }
 
 impl Default for ResponseSizeAnalyzer {
@@ -1047,21 +1048,22 @@ impl Analyzer for ResponseSizeAnalyzer {
             });
         }
 
-        // SIZE003: No Content-Length header when body is present
-        if Self::get_header(ctx.headers, "Content-Length").is_none() {
-            findings.push(Finding {
-                severity: Severity::Info,
-                category: IssueCategory::Http,
-                code: "SIZE003".to_string(),
-                title: "Missing Content-Length header".to_string(),
-                description: "Response has a body but no Content-Length header was found."
-                    .to_string(),
-                url: url.clone(),
-                recommendation:
-                    "Add a Content-Length header to enable caching and bandwidth optimization."
-                        .to_string(),
-            });
-        }
+        // SIZE003 (missing `Content-Length`) was previously reported whenever the
+        // header was absent. That is not a defect:
+        //
+        //   * HTTP/2 and HTTP/3 carry the message length in the frame layer and
+        //     forbid `Content-Length` outright (RFC 9113 §8.1), so adding it is
+        //     not merely pointless but a protocol error.
+        //   * HTTP/1.1 chunked transfer encoding carries no length by design.
+        //   * A compressed response's length is only known after encoding.
+        //
+        // Distinguishing the one genuinely ambiguous case — HTTP/1.1 with no
+        // length and no chunked framing, where the body is delimited by
+        // connection close — requires the negotiated protocol version, which
+        // `AnalysisContext` does not carry. Rather than guess from an unrelated
+        // header, the finding is withheld: on a 60-page audit of an HTTP/2 site
+        // it fired 60 times (once per page) and recommended adding a header the
+        // specification prohibits.
 
         findings
     }
@@ -1306,7 +1308,15 @@ impl Analyzer for CompressionAnalyzer {
             None => return findings,
         };
 
-        let has_compression = Self::get_header(ctx.headers, "Content-Encoding").is_some();
+        // The transport strips `Content-Encoding` while decoding, so the raw header is
+        // absent from `ctx.headers` for any response that was actually
+        // compressed. `ctx.content_encoding` carries the value captured before
+        // decoding; fall back to the header for callers that construct a context
+        // by hand with an already-decoded body plus its headers.
+        let has_compression = ctx
+            .content_encoding
+            .is_some_and(|v| !v.trim().is_empty())
+            || Self::get_header(ctx.headers, "Content-Encoding").is_some();
 
         // COMP001: Response not compressed when >1KB
         if body_size > 1024 && !has_compression {
@@ -1403,8 +1413,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -1543,8 +1555,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("nginx/1.24.0"),
             content_type: None,
             rendered: None,
@@ -1565,8 +1579,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("nginx/1.10.0"),
             content_type: None,
             rendered: None,
@@ -1626,8 +1642,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("cloudflare"),
             content_type: None,
             rendered: None,
@@ -1658,8 +1676,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -1679,8 +1699,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("nginx/1.24.0"),
             content_type: None,
             rendered: None,
@@ -1700,8 +1722,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("Apache/2.4.51 (Ubuntu)"),
             content_type: None,
             rendered: None,
@@ -1721,8 +1745,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("Microsoft-IIS/10.0"),
             content_type: None,
             rendered: None,
@@ -1742,8 +1768,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("Apache"),
             content_type: None,
             rendered: None,
@@ -1764,8 +1792,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("nginx/1.20.0 + WordPress"),
             content_type: None,
             rendered: None,
@@ -1786,8 +1816,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("WebServer"),
             content_type: None,
             rendered: None,
@@ -1807,8 +1839,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("MyServer PHP/8.1"),
             content_type: None,
             rendered: None,
@@ -1828,14 +1862,46 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("cloudflare"),
             content_type: None,
             rendered: None,
         };
         let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
-        // "cloudflare" matches VERSION_PATTERNS (SERVER001) but not TECH_KEYWORDS
+        // `Server: cloudflare` names the edge product and discloses no version.
+        // Flagging it as a version leak reported every page of every
+        // Cloudflare-fronted site (60 findings across a 60-page audit).
+        assert!(
+            !findings.iter().any(|f| f.code == "SERVER001"),
+            "bare CDN product name is not a version leak: {:?}",
+            findings
+        );
+    }
+
+    #[test]
+    fn test_server_cloudflare_with_version_is_flagged() {
+        let page = make_page("https://example.com");
+        let ctx = AnalysisContext {
+            page: &page,
+            body: None,
+            status_code: Some(200),
+            headers: &[],
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            user_agent: None,
+            body_size: None,
+            compressed_size: None,
+            content_encoding: None,
+            // A product name *with* a version still counts as a leak.
+            server: Some("cloudflare/1.2.3"),
+            content_type: None,
+            rendered: None,
+        };
+        let findings = ServerHeaderAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "SERVER001"));
     }
 
@@ -1850,8 +1916,10 @@ mod tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: Some("LiteSpeed/1.7.16"),
             content_type: None,
             rendered: None,

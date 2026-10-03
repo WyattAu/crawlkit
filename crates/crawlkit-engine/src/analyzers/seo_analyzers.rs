@@ -17,6 +17,7 @@
 use std::collections::{HashMap, HashSet};
 use url::Url;
 
+use crate::analyzers::url_norm;
 use crate::parser::ExtractedLink;
 use crate::types::{IssueCategory, Severity};
 
@@ -93,7 +94,7 @@ impl Analyzer for CanonicalUrlValidator {
                 } else {
                     // Canonical points elsewhere — check if it's intentional
                     let same_host = canonical.host_str() == page_url.host_str();
-                    let same_path = canonical.path() == page_url.path();
+                    let same_path = url_norm::paths_equivalent(canonical.path(), page_url.path());
 
                     if same_host && same_path {
                         // Likely a parameter difference — info
@@ -3574,7 +3575,9 @@ impl Analyzer for CanonicalValidationDeepAnalyzer {
         if let Ok(page_url) = url::Url::parse(url) {
             let canonical_path = canonical_url.path();
             let page_path = page_url.path();
-            if canonical_path != page_path && canonical_url.host_str() == page_url.host_str() {
+            if !url_norm::paths_equivalent(canonical_path, page_path)
+                && canonical_url.host_str() == page_url.host_str()
+            {
                 findings.push(Finding { severity: Severity::Warning, category: IssueCategory::Seo, code: "CANDEEP001".to_string(), title: "Canonical path mismatch".to_string(), description: format!("Canonical path '{canonical_path}' differs from page path '{page_path}' on the same host."), url: url.clone(), recommendation: "Canonical should point to the same path unless intentionally consolidating pages.".to_string() });
             }
 
@@ -3978,8 +3981,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -4366,8 +4371,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: Some("text/html; charset=utf-8"),
             rendered: None,
@@ -4389,8 +4396,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: Some("text/html; charset=utf-8"),
             rendered: None,
@@ -4446,8 +4455,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: Some("text/html; charset=windows-1252"),
             rendered: None,
@@ -6026,8 +6037,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6048,8 +6061,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6070,8 +6085,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6092,8 +6109,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6114,8 +6133,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6137,8 +6158,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6159,8 +6182,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6181,8 +6206,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6205,8 +6232,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6227,8 +6256,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -6249,8 +6280,10 @@ mod tests_new_analyzers {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -8595,16 +8628,16 @@ impl Analyzer for RobotsTxtAnalyzerV2 {
         let mut findings = Vec::new();
         let url = &ctx.page.url;
         if let Some(robots) = ctx.robots_txt {
-            let lines: Vec<&str> = robots.lines().collect();
-            let disallowed: Vec<&str> = lines
-                .iter()
-                .filter(|l| l.starts_with("Disallow:") || l.starts_with("disallow:"))
-                .map(|l| l.split(':').nth(1).unwrap_or("").trim())
-                .filter(|p| !p.is_empty())
-                .collect();
+            // Scope the directives to the group that actually governs this
+            // crawler. Collecting every `Disallow:` line in the file regardless
+            // of its `User-agent:` block reports rules that were never in
+            // effect — a layout like `User-agent: * / Allow: /` followed by
+            // `User-agent: CCBot / Disallow: /` reads as "the site disallows
+            // everything" and fires on every page of the crawl.
+            let user_agent = ctx.user_agent.unwrap_or("*");
             let important_paths = ["/", "/index.html", "/sitemap.xml"];
             for imp in important_paths {
-                if disallowed.iter().any(|d| *d == imp) {
+                if crate::robots_group::disallowed_for_user_agent(robots, user_agent, imp) {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Seo,
@@ -8651,13 +8684,22 @@ impl Analyzer for InternalLinkAnalyzerV2 {
             .ok()
             .and_then(|u| u.host_str().map(|s| s.to_string()));
         if let Some(host) = &page_host {
+            // A link's accessible name may come from its text, an
+            // `aria-label`, or a descendant image's `alt`. Logo links and
+            // language switchers conventionally use the latter two, and all
+            // three name the link for both assistive technology and crawlers.
+            // Testing only `text` reported every icon-only link as nameless.
             let empty_text_internal: Vec<&str> = ctx
                 .page
                 .links
                 .iter()
                 .filter(|l| !l.is_external)
                 .filter(|l| l.href.contains(host) || l.href.starts_with('/'))
-                .filter(|l| l.text.trim().is_empty())
+                .filter(|l| {
+                    l.text.trim().is_empty()
+                        && l.aria_label.as_deref().unwrap_or("").trim().is_empty()
+                        && l.img_alt.as_deref().unwrap_or("").trim().is_empty()
+                })
                 .map(|l| l.href.as_str())
                 .collect();
             if !empty_text_internal.is_empty() {
@@ -8976,8 +9018,10 @@ mod new_seo_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -8996,8 +9040,10 @@ mod new_seo_tests {
             response_time: None,
             redirect_chain: chain,
             robots_txt: None,
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -10653,8 +10699,10 @@ mod new_seo_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -10677,8 +10725,10 @@ mod new_seo_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,
@@ -10718,8 +10768,10 @@ mod new_seo_tests {
             response_time: None,
             redirect_chain: &[],
             robots_txt: Some(robots),
+            user_agent: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
             server: None,
             content_type: None,
             rendered: None,

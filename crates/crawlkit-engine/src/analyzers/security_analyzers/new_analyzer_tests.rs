@@ -52,8 +52,10 @@ fn make_ctx<'a>(
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -415,10 +417,10 @@ fn test_feature_policy_info_severity() {
 fn test_expect_ct_no_header() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
-    assert!(ExpectCTAnalyzer::new()
-        .analyze(&ctx)
-        .iter()
-        .any(|f| f.code == "ECT001"));
+    // `Expect-CT` is deprecated and ignored by every current browser; its
+    // absence is not a site defect.
+    let findings = ExpectCTAnalyzer::new().analyze(&ctx);
+    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
 }
 
 #[test]
@@ -468,8 +470,9 @@ fn test_expect_ct_404_no_finding() {
 fn test_expect_ct_info_severity() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
+    // Deprecated header: the analyzer reports nothing at all now.
     let findings = ExpectCTAnalyzer::new().analyze(&ctx);
-    assert_eq!(findings[0].severity, Severity::Info);
+    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
 }
 
 #[test]
@@ -493,10 +496,9 @@ fn test_expect_ct_500_no_finding() {
 fn test_ct_no_header() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
-    assert!(CertificateTransparencyAnalyzer::new()
-        .analyze(&ctx)
-        .iter()
-        .any(|f| f.code == "CT001"));
+    // CT enforcement is a CA responsibility; the header is deprecated.
+    let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
+    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
 }
 
 #[test]
@@ -560,8 +562,9 @@ fn test_ct_404_no_finding() {
 fn test_ct_info_severity() {
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &[], None);
+    // Deprecated header: the analyzer reports nothing at all now.
     let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
-    assert_eq!(findings[0].severity, Severity::Info);
+    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
 }
 
 #[test]
@@ -569,11 +572,10 @@ fn test_ct_header_without_enforce() {
     let headers = vec![("Expect-CT".to_string(), "max-age=0".to_string())];
     let page = make_page("https://example.com");
     let ctx = make_ctx(&page, Some(200), &headers, None);
-    // Has Expect-CT header but without "enforce" — CT analyzer requires enforce
-    assert!(CertificateTransparencyAnalyzer::new()
-        .analyze(&ctx)
-        .iter()
-        .any(|f| f.code == "CT001"));
+    // Expect-CT is deprecated and ignored by every current browser, so neither
+    // its presence nor its absence is a reportable site defect.
+    let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
+    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
 }
 
 #[test]
@@ -1676,8 +1678,10 @@ fn test_mixed_form_http_action() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1700,8 +1704,10 @@ fn test_mixed_form_https_action() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1721,8 +1727,10 @@ fn test_mixed_form_http_page_skipped() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1762,8 +1770,10 @@ fn test_mixed_form_category() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1785,8 +1795,10 @@ fn test_mixed_form_severity() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1811,8 +1823,10 @@ fn test_mixed_script_http() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1835,8 +1849,10 @@ fn test_mixed_script_https() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1856,8 +1872,10 @@ fn test_mixed_script_http_page_skipped() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1897,8 +1915,10 @@ fn test_mixed_script_category() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1922,8 +1942,10 @@ fn test_mixed_img_http() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1946,8 +1968,10 @@ fn test_mixed_img_https() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -1967,8 +1991,10 @@ fn test_mixed_img_http_page_skipped() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2008,8 +2034,10 @@ fn test_mixed_img_category() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2727,8 +2755,10 @@ fn test_colrct_good_contrast() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2748,8 +2778,10 @@ fn test_colrct_low_contrast() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2785,8 +2817,10 @@ fn test_colrct_category() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2817,8 +2851,10 @@ fn test_colrcl_good_contrast() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2838,8 +2874,10 @@ fn test_colrcl_low_contrast() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,
@@ -2875,8 +2913,10 @@ fn test_colrcl_category() {
         response_time: None,
         redirect_chain: &[],
         robots_txt: None,
+        user_agent: None,
         body_size: None,
         compressed_size: None,
+        content_encoding: None,
         server: None,
         content_type: None,
         rendered: None,

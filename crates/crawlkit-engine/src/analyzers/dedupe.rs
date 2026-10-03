@@ -78,7 +78,13 @@ fn defect_signature(title: &str) -> String {
                 && core.chars().all(|c| matches!(c, 'd' | 'e' | 'a' | 'p')))
             || (core.starts_with('v')
                 && core.len() > 1
-                && core[1..].chars().all(|c| c.is_ascii_digit()));
+                && core[1..].chars().all(|c| c.is_ascii_digit()))
+            // "schema", "structured", "data" name the technology being checked,
+            // not the defect. Without this, "Article schema missing headline"
+            // and "Article missing headline" are two signatures and the same
+            // missing `headline` is reported under two codes - on gov.uk that
+            // alone tripled a single real issue into 117 findings.
+            || matches!(core, "schema" | "structured");
         if is_decoration {
             continue;
         }
@@ -253,6 +259,31 @@ mod tests {
             out.len(),
             1,
             "one defect under three categories must collapse to one"
+        );
+    }
+
+    #[test]
+    fn technology_words_do_not_split_one_defect() {
+        // gov.uk: one Article `headline` gap, reported by ART001 and ART-HL001
+        // (and aliased ARTHL-V2001) purely because one title says "schema" and
+        // the other does not.
+        let findings = vec![
+            f("https://e.com/", "ART001", "Article schema missing headline", Severity::Error),
+            f("https://e.com/", "ART-HL001", "Article missing headline", Severity::Error),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(out.len(), 1, "one missing headline must report once");
+    }
+
+    #[test]
+    fn stripping_schema_does_not_merge_different_defects() {
+        assert_ne!(
+            defect_signature("Article schema missing headline"),
+            defect_signature("Article schema missing author")
+        );
+        assert_ne!(
+            defect_signature("Product schema missing price"),
+            defect_signature("Product schema missing availability")
         );
     }
 

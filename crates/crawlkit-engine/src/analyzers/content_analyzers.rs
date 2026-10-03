@@ -268,7 +268,22 @@ impl Analyzer for StructuredDataValidator {
                                 severity: Severity::Error,
                                 category: IssueCategory::Schema,
                                 code: "SD006".to_string(),
-                                title: "Missing required properties".to_string(),
+                                // The title names the type and the property so
+                                // this generic validator collapses into the
+                                // per-property analyzers (ART-HL001 and
+                                // friends) instead of reporting one defect under
+                                // a second, unrelated-looking code. A fixed
+                                // "Missing required properties" title matched
+                                // nothing, which left gov.uk's single Article
+                                // `headline` gap reported twice.
+                                title: if missing.len() == 1 {
+                                    format!("{type_val} missing {}", missing[0])
+                                } else {
+                                    format!(
+                                        "{type_val} missing required properties: {}",
+                                        missing.join(", ")
+                                    )
+                                },
                                 description: format!(
                                     "Schema type \"{type_val}\" is missing required properties: \
                                      {}.",

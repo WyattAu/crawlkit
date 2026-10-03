@@ -217,9 +217,11 @@ async fn main() -> Result<()> {
             format,
             theme,
         } => {
+            // Default is markdown: `html` was the previous default and had no
+            // implementation, so a bare `crawlkit report` always failed.
             let format = format
                 .or_else(|| config.output.as_ref().and_then(|o| o.format.clone()))
-                .unwrap_or_else(|| "html".to_string());
+                .unwrap_or_else(|| "markdown".to_string());
             cli::report::run(&crawl, output.as_deref(), &format, &theme, &feature_flags)
         }
         #[cfg(feature = "full")]

@@ -202,6 +202,57 @@ fn full_registry_output_is_reproducible() {
     }
 }
 
+/// `log-analyze` output must be byte-identical between runs.
+///
+/// The two breakdown maps were `HashMap`, and serde serializes map keys in
+/// iteration order, so the same access log produced differently ordered JSON on
+/// every process. Serde's own advice is to use `BTreeMap` when output order
+/// matters.
+#[test]
+fn log_analysis_serializes_deterministically() {
+    use crawlkit_engine::log_analyzer::LogAnalysis;
+
+    let build = || {
+        let mut crawler = std::collections::BTreeMap::new();
+        let mut status = std::collections::BTreeMap::new();
+        for (bot, n) in [
+            ("Googlebot", 5usize),
+            ("bingbot", 3),
+            ("Human", 9),
+            ("Crawlkit", 1),
+            ("YandexBot", 2),
+        ] {
+            *crawler.entry(bot.to_string()).or_default() += n;
+        }
+        for (code, n) in [(200u16, 12usize), (404, 3), (500, 5)] {
+            *status.entry(code).or_default() += n;
+        }
+        LogAnalysis {
+            total_requests: 20,
+            crawler_breakdown: crawler,
+            status_breakdown: status,
+            top_urls: vec![("/a".into(), 12), ("/b".into(), 8)],
+            error_urls: vec![("/c".into(), 500)],
+        }
+    };
+
+    let first = serde_json::to_string(&build()).expect("serializes");
+    for round in 1..16 {
+        assert_eq!(
+            first,
+            serde_json::to_string(&build()).expect("serializes"),
+            "log analysis JSON differed on round {round}"
+        );
+    }
+    // Keys must come out ordered, not merely coincidentally equal.
+    let human = first.find("Human").expect("Human key present");
+    let google = first.find("Googlebot").expect("Googlebot key present");
+    assert!(
+        google < human,
+        "breakdown keys should be sorted, got: {first}"
+    );
+}
+
 /// Guard the fixture itself: the test is only meaningful while every heading
 /// term occurs exactly once.
 #[test]

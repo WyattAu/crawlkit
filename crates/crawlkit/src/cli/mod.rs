@@ -293,12 +293,19 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Report format: html or md
+        /// Report format: json, markdown (md), or csv
+        ///
+        /// Defaults to markdown. `html` was previously advertised here and was
+        /// also the built-in default, but no HTML report was ever implemented,
+        /// so both the documented value and the default failed at runtime.
         #[arg(long)]
         format: Option<String>,
 
-        /// Report theme: light or dark
-        #[arg(long, default_value = "light")]
+        /// Report theme: light or dark.
+        ///
+        /// Only affects HTML output and is currently a no-op, since no HTML
+        /// report format is offered.
+        #[arg(long, default_value = "light", hide = true)]
         theme: String,
     },
 

@@ -73,8 +73,13 @@ pub fn run(
         "json" => build_json_report(&crawl_id, &stats, &backlink_data)?,
         "markdown" | "md" => build_markdown_report(&crawl_id, &stats, &backlink_data),
         "csv" => build_csv_report(&crawl_id, &stats),
-        _ => {
-            return Err(anyhow::anyhow!("Unsupported format: {}", format));
+        other => {
+            // Name the values that exist. `--help` previously advertised `html`,
+            // which had no implementation, so the error a user hit listed no
+            // way forward.
+            return Err(anyhow::anyhow!(
+                "Unsupported report format '{other}'. Supported: json, markdown (md), csv."
+            ));
         }
     };
 

@@ -1,19 +1,24 @@
 use crate::log_parser::LogEntry;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogAnalysis {
     pub total_requests: usize,
-    pub crawler_breakdown: HashMap<String, usize>,
-    pub status_breakdown: HashMap<u16, usize>,
+    /// Ordered by bot name so the serialized report is byte-identical between
+    /// runs. A `HashMap` serialized by serde emits keys in randomized
+    /// iteration order, which made two analyses of the same access log produce
+    /// different JSON and defeated diffing.
+    pub crawler_breakdown: BTreeMap<String, usize>,
+    /// Ordered by status code, for the same reason.
+    pub status_breakdown: BTreeMap<u16, usize>,
     pub top_urls: Vec<(String, usize)>,
     pub error_urls: Vec<(String, u16)>,
 }
 
 pub fn analyze_log_entries(entries: &[LogEntry]) -> LogAnalysis {
-    let mut crawler_breakdown: HashMap<String, usize> = HashMap::new();
-    let mut status_breakdown: HashMap<u16, usize> = HashMap::new();
+    let mut crawler_breakdown: BTreeMap<String, usize> = BTreeMap::new();
+    let mut status_breakdown: BTreeMap<u16, usize> = BTreeMap::new();
     let mut url_counts: HashMap<String, usize> = HashMap::new();
     let mut error_urls: Vec<(String, u16)> = Vec::new();
 
@@ -51,7 +56,14 @@ pub fn analyze_log_entries(entries: &[LogEntry]) -> LogAnalysis {
 
 pub fn classify_user_agent(ua: &str) -> String {
     let ua_lower = ua.to_lowercase();
-    if ua_lower.contains("googlebot") {
+    // Checked before the generic `bot`/`crawler`/`spider` sweep because
+    // crawlkit's own product token contains none of those substrings, so an
+    // audit's own traffic was being counted as human visitors. On a site that
+    // is being audited, that inflates the human share of the access log and
+    // hides crawler traffic from the very analysis meant to characterise it.
+    if ua_lower.contains("crawlkit") {
+        "Crawlkit".to_string()
+    } else if ua_lower.contains("googlebot") {
         "Googlebot".to_string()
     } else if ua_lower.contains("bingbot") {
         "Bingbot".to_string()
@@ -130,6 +142,30 @@ mod tests {
             classify_user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"),
             "Human"
         );
+    }
+
+    /// crawlkit's own token contains no `bot`/`crawler`/`spider` substring, so
+    /// without an explicit case an audit's own requests were tallied as human
+    /// visitors.
+    #[test]
+    fn test_classify_crawlkit_is_a_bot() {
+        assert_eq!(classify_user_agent("crawlkit/6.0.0-alpha.4"), "Crawlkit");
+        assert_eq!(
+            classify_user_agent("crawlkit/6.0.0-alpha.4 (SEO audit; +https://github.com/WyattAu/crawlkit)"),
+            "Crawlkit"
+        );
+    }
+
+    #[test]
+    fn test_analyze_counts_crawlkit_as_bot_not_human() {
+        let entries = vec![
+            make_entry("crawlkit/6.0.0", "/a", 200),
+            make_entry("crawlkit/6.0.0", "/b", 200),
+            make_entry("Mozilla/5.0 (Windows NT 10.0)", "/c", 200),
+        ];
+        let analysis = analyze_log_entries(&entries);
+        assert_eq!(analysis.crawler_breakdown.get("Crawlkit"), Some(&2));
+        assert_eq!(analysis.crawler_breakdown.get("Human"), Some(&1));
     }
 
     #[test]

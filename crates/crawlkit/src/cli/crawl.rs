@@ -395,9 +395,60 @@ fn write_output(
         );
 
         if !post_analysis.findings.is_empty() {
+            // Persist cross-page findings alongside the single-page ones.
+            //
+            // They were previously written only to `post-crawl-findings.json`,
+            // which made them invisible to every downstream surface: `report`
+            // reported 2,035 issues for a crawl whose real total was 2,092,
+            // and `compare`, `insights`, `trend`, `--monitor`, the dashboard
+            // and the API could not see them at all. Orphan pages, broken
+            // internal link chains and canonicals with no incoming links are
+            // among the highest-value cross-page results, so losing them after
+            // the crawl finished was a substantive gap.
+            let storage = engine.storage();
+            let crawl_id = result.crawl_id.clone();
+            let tenant_id = params.tenant.clone();
+            // Borrowed rather than cloned: `PostCrawlFinding` is not `Clone`.
+            let post_findings = &post_analysis.findings;
+
+            let issues: Vec<crawlkit_engine::Issue> = post_findings
+                .iter()
+                .filter_map(|f| {
+                    // A cross-page finding may reference a URL outside the crawl
+                    // (an external orphan, a sitemap URL never fetched). Those
+                    // have no page row to attach to, so they stay file-only.
+                    let page = storage
+                        .get_page(&crawl_id, &f.page_url)
+                        .ok()
+                        .flatten()?;
+                    Some(crawlkit_engine::Issue {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        page_id: page.id,
+                        category: f.category.clone(),
+                        severity: f.severity,
+                        code: f.code.clone(),
+                        title: f.title.clone(),
+                        description: f.description.clone(),
+                        element: None,
+                        recommendation: f.recommendation.clone(),
+                        tenant_id: tenant_id.clone(),
+                    })
+                })
+                .collect();
+
+            if !issues.is_empty() {
+                match storage.insert_issues_batch(&issues) {
+                    Ok(()) => tracing::info!(
+                        "Persisted {} of {} post-crawl findings",
+                        issues.len(),
+                        post_findings.len()
+                    ),
+                    Err(e) => tracing::warn!("Failed to persist post-crawl findings: {e}"),
+                }
+            }
+
             let post_findings_path = output_dir.join("post-crawl-findings.json");
-            let findings_json: Vec<serde_json::Value> = post_analysis
-                .findings
+            let findings_json: Vec<serde_json::Value> = post_findings
                 .iter()
                 .map(|f| {
                     // Canonical wire shape per docs/schema/findings.schema.json.
@@ -410,7 +461,7 @@ fn write_output(
             )?;
             tracing::info!(
                 "Wrote {} post-crawl findings to {}",
-                post_analysis.findings.len(),
+                post_findings.len(),
                 post_findings_path.display()
             );
         }

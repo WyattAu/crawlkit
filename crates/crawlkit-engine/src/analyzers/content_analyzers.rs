@@ -192,7 +192,7 @@ impl Analyzer for StructuredDataValidator {
                     });
                 }
                 Some(ctx_val) => {
-                    if ctx_val != "https://schema.org" && ctx_val != "schema.org" {
+                    if !is_schema_org_context(ctx_val) {
                         findings.push(Finding {
                             severity: Severity::Warning,
                             category: IssueCategory::Schema,
@@ -2237,6 +2237,30 @@ impl Analyzer for BreadcrumbListDepthAnalyzer {
 // =========================================================================
 
 #[cfg(test)]
+mod schema_context_tests {
+    use super::is_schema_org_context;
+
+    #[test]
+    fn http_and_https_schema_org_are_the_same_vocabulary() {
+        // gov.uk uses the http form in every JSON-LD block; it is not a defect.
+        assert!(is_schema_org_context("http://schema.org"));
+        assert!(is_schema_org_context("https://schema.org"));
+        assert!(is_schema_org_context("schema.org"));
+        assert!(is_schema_org_context("  https://schema.org  "));
+        assert!(is_schema_org_context("https://schema.org/"));
+    }
+
+    #[test]
+    fn genuinely_wrong_contexts_still_rejected() {
+        assert!(!is_schema_org_context("http://example.com/schema"));
+        assert!(!is_schema_org_context("https://schema.org.evil.example"));
+        assert!(!is_schema_org_context("http://www.schema.org"));
+        assert!(!is_schema_org_context(""));
+        assert!(!is_schema_org_context("schema"));
+    }
+}
+
+#[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
@@ -3750,7 +3774,7 @@ impl Analyzer for JsonLdValidator {
                     });
                 }
                 Some(ctx_val) => {
-                    if ctx_val != "https://schema.org" && ctx_val != "schema.org" {
+                    if !is_schema_org_context(ctx_val) {
                         findings.push(Finding {
                             severity: Severity::Warning,
                             category: IssueCategory::Schema,
@@ -7703,6 +7727,26 @@ mod new_content_analyzer_tests {
 // JsonLdContextValidator
 // =========================================================================
 
+/// True when a JSON-LD `@context` value designates the schema.org vocabulary.
+///
+/// All four of these are the same vocabulary and all are accepted by Google's
+/// structured-data parsers:
+///
+/// ```text
+/// https://schema.org    http://schema.org    schema.org    https://schema.org/
+/// ```
+///
+/// The `http://` form is not a weaker or deprecated spelling - it is the one
+/// schema.org itself has published in its examples for years, and it remains the
+/// most common on the web. Checking only for the `https` literal flagged
+/// gov.uk, whose every JSON-LD block uses `http://schema.org`, on all 40 pages
+/// of an audit - 160 findings, none of them actionable.
+#[must_use]
+pub fn is_schema_org_context(context: &str) -> bool {
+    let trimmed = context.trim().trim_end_matches('/');
+    matches!(trimmed, "schema.org" | "http://schema.org" | "https://schema.org")
+}
+
 pub struct JsonLdContextValidator;
 
 impl Default for JsonLdContextValidator {
@@ -7728,7 +7772,7 @@ impl Analyzer for JsonLdContextValidator {
 
         for sd in &ctx.page.structured_data {
             if let Some(ref ctx_val) = sd.context {
-                if ctx_val != "https://schema.org" && ctx_val != "schema.org" {
+                if !is_schema_org_context(ctx_val) {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Schema,

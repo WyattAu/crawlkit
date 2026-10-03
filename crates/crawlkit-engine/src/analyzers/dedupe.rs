@@ -32,7 +32,7 @@
 
 use std::collections::HashMap;
 
-use crate::types::{Finding, IssueCategory, Severity};
+use crate::types::{Finding, Severity};
 
 /// Severity ordering, highest first. Used to decide which representative of a
 /// duplicate group is kept.
@@ -90,8 +90,16 @@ fn defect_signature(title: &str) -> String {
     cleaned
 }
 
-/// Identity of a defect: the page, its category, and its normalized message.
-type Key = (String, IssueCategory, String);
+/// Identity of a defect: the page and its normalized message.
+///
+/// `category` is deliberately **not** part of the key. Several analyzers
+/// describe one defect under different categories — "Multiple H1 headings"
+/// arrives as `accessibility` (A11Y004), `content` (CDEPTH003) and `seo`
+/// (HEAD003) — so including the category let the same defect survive under
+/// three codes. The normalized title already identifies the defect; the
+/// category is metadata about it, and the surviving finding keeps the most
+/// severe member's severity plus every contributing code.
+type Key = (String, String);
 
 /// Codes retained behind a collapsed finding, for auditability.
 type AliasMap = HashMap<Key, Vec<String>>;
@@ -115,7 +123,7 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
     let mut out: Vec<Finding> = Vec::with_capacity(findings.len());
 
     for f in findings {
-        let key: Key = (f.url.clone(), f.category.clone(), defect_signature(&f.title));
+        let key: Key = (f.url.clone(), defect_signature(&f.title));
         aliases.entry(key.clone()).or_default().push(f.code.clone());
 
         match representative.get(&key).copied() {
@@ -147,7 +155,7 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
     aliases.retain(|_, codes| codes.len() > 1);
 
     for f in &mut out {
-        let key: Key = (f.url.clone(), f.category.clone(), defect_signature(&f.title));
+        let key: Key = (f.url.clone(), defect_signature(&f.title));
         if let Some(codes) = aliases.get(&key) {
             let others: Vec<&str> = codes.iter().filter(|c| **c != f.code).map(String::as_str).collect();
             if !others.is_empty() {
@@ -166,6 +174,7 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::types::IssueCategory;
 
     fn f(url: &str, code: &str, title: &str, sev: Severity) -> Finding {
         Finding {
@@ -218,6 +227,33 @@ mod tests {
         let out = collapse_duplicates(findings);
         assert_eq!(out.len(), 1, "four identical reports must collapse to one");
         assert!(out[0].description.contains("also reported by"));
+    }
+
+    #[test]
+    fn same_defect_under_different_categories_is_collapsed() {
+        // Regression: "Multiple H1 headings" is reported as accessibility,
+        // content and seo by three analyzers. Keying on category let all three
+        // survive, so the defect still counted three times.
+        let mk = |code: &str, cat: IssueCategory| Finding {
+            severity: Severity::Warning,
+            category: cat,
+            code: code.to_string(),
+            title: "Multiple H1 headings".to_string(),
+            description: "desc".into(),
+            url: "https://e.com/".to_string(),
+            recommendation: "rec".into(),
+        };
+        let findings = vec![
+            mk("A11Y004", IssueCategory::Accessibility),
+            mk("CDEPTH003", IssueCategory::Content),
+            mk("HEAD003", IssueCategory::Seo),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(
+            out.len(),
+            1,
+            "one defect under three categories must collapse to one"
+        );
     }
 
     #[test]

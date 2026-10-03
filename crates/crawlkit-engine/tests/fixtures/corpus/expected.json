@@ -66,7 +66,7 @@
   },
   "dark_mode_heavy.html": {
     "must_have": [
-      "SD001",
+      "AI-CIT005",
       "KW001",
       "LINK001"
     ],
@@ -100,9 +100,9 @@
     "must_have": [
       "META001",
       "TITLE-V4001",
-      "HEAD001",
-      "LANG001",
-      "SD001"
+      "A11Y002",
+      "A11Y016",
+      "AI-CIT005"
     ],
     "must_not_have": [
       "IMG001",
@@ -118,7 +118,7 @@
       "ROBOTS001",
       "META-V3001",
       "THIN002",
-      "SD001"
+      "AI-CIT005"
     ],
     "must_not_have": [
       "MIXSCR001",
@@ -131,7 +131,7 @@
       "THIN002",
       "KW001",
       "LINK001",
-      "SD001"
+      "AI-CIT005"
     ],
     "must_not_have": [
       "MIXSCR001",
@@ -159,7 +159,7 @@
   "minimal_landing.html": {
     "must_have": [
       "META-V3001",
-      "HEAD001",
+      "A11Y002",
       "THIN002",
       "AI-CIT001",
       "META009"
@@ -255,7 +255,7 @@
   },
   "security_heavy.html": {
     "must_have": [
-      "SD001"
+      "AI-CIT005"
     ],
     "must_not_have": [
       "FLABEL001",
@@ -271,9 +271,9 @@
   "spa_react.html": {
     "must_have": [
       "META-V3001",
-      "HEAD001",
+      "A11Y002",
       "AI-CIT001",
-      "SD001",
+      "AI-CIT005",
       "A11Y006"
     ],
     "must_not_have": [
@@ -289,9 +289,9 @@
     "must_have": [
       "META001",
       "TITLE-V4001",
-      "HEAD001",
+      "A11Y002",
       "META-V3001",
-      "LANG001"
+      "A11Y016"
     ],
     "must_not_have": [
       "IMG001",

@@ -1085,7 +1085,10 @@ fn test_full_analysis_minimal_page() {
     assert!(has("title"), "missing title: {codes:?}");
     assert!(has("description"), "missing description: {codes:?}");
     assert!(has("canonical"), "missing canonical: {codes:?}");
-    assert!(codes.contains(&"HEAD001"), "no headings: {codes:?}");
+    // Missing headings is reported by several analyzer families, so the
+    // specific code depends on which one survives cross-code collapse; assert
+    // the defect instead.
+    assert!(has("heading"), "no headings: {codes:?}");
 }
 
 #[test]

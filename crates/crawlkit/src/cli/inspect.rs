@@ -85,7 +85,18 @@ pub async fn run(
         content_type,
         rendered: None,
     };
-    let findings = registry.analyze(&ctx);
+    // Same document gate as the crawl pipeline: HTML analyzers do not apply to
+// `/llms.txt`, JSON feeds, stylesheets and the rest. `inspect` previously
+// reported 64 findings for a plain-text file, including a Critical "missing
+// title tag", because it ran the registry unconditionally.
+    let findings = if crawlkit_engine::analyzers::is_auditable_as_document(content_type) {
+        registry.analyze(&ctx)
+    } else {
+        vec![crawlkit_engine::analyzers::non_html_finding(
+            result.final_url.as_str(),
+            content_type,
+        )]
+    };
 
     let crux_data = if feature_flags.get(crawlkit_engine::feature_flags::FLAG_RUM_INTEGRATION) {
         let adapter = crawlkit_engine::CruxAdapter::from_env();

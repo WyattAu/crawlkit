@@ -411,6 +411,22 @@ fn write_output(
             // Borrowed rather than cloned: `PostCrawlFinding` is not `Clone`.
             let post_findings = &post_analysis.findings;
 
+            // Some codes are emitted by both a single-page analyzer and a
+            // cross-page one. SITEMAP006 is the clearest case: the per-page
+            // analyzer says "Non-canonical page with canonical tag" and the
+            // cross-page analyzer says "Non-canonical page may be in sitemap",
+            // so comparing titles alone does not catch the overlap. Matching on
+            // the code as well does. Persisting both would double-count one
+            // defect in every downstream total. Cross-page-only codes
+            // (CANON005 and friends) are unaffected.
+            let existing: std::collections::HashSet<(String, String)> = storage
+                .get_issues(&crawl_id, &crawlkit_engine::IssueFilter::default())
+                .unwrap_or_default()
+                .into_iter()
+                .map(|i| (i.page_id, i.code))
+                .collect();
+
+            let mut skipped_duplicates = 0usize;
             let issues: Vec<crawlkit_engine::Issue> = post_findings
                 .iter()
                 .filter_map(|f| {
@@ -421,6 +437,10 @@ fn write_output(
                         .get_page(&crawl_id, &f.page_url)
                         .ok()
                         .flatten()?;
+                    if existing.contains(&(page.id.clone(), f.code.clone())) {
+                        skipped_duplicates += 1;
+                        return None;
+                    }
                     Some(crawlkit_engine::Issue {
                         id: uuid::Uuid::new_v4().to_string(),
                         page_id: page.id,
@@ -439,9 +459,10 @@ fn write_output(
             if !issues.is_empty() {
                 match storage.insert_issues_batch(&issues) {
                     Ok(()) => tracing::info!(
-                        "Persisted {} of {} post-crawl findings",
+                        "Persisted {} of {} post-crawl findings ({} already reported per-page)",
                         issues.len(),
-                        post_findings.len()
+                        post_findings.len(),
+                        skipped_duplicates
                     ),
                     Err(e) => tracing::warn!("Failed to persist post-crawl findings: {e}"),
                 }

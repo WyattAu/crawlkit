@@ -422,6 +422,60 @@ pub struct AnalysisContext<'a> {
     pub rendered: Option<&'a ()>,
 }
 
+/// Whether a response should be audited as an HTML *document*.
+///
+/// Crawls reach non-HTML resources through ordinary links: `/llms.txt`,
+/// `sitemap.xml`, JSON feeds, stylesheets, PDFs. Parsed as markup they contain
+/// no elements, so every "missing `<title>`", "no H1", "no meta description"
+/// analyzer fires and reports defects for a file that was never meant to have a
+/// title. Auditing kingstonpeptides.com at 200 pages, `llms.txt`
+/// (content-type `text/plain`) produced 62 such findings, one Critical.
+///
+/// Document-shaped media types are HTML, XHTML, and structured XML dialects
+/// (Atom, RSS, SOAP) which crawlers still analyse as pages. `image/svg+xml` is
+/// excluded despite the `+xml` suffix: it is a picture.
+///
+/// A missing or empty content type is treated as HTML, preserving the previous
+/// behaviour for servers that omit the header.
+#[must_use]
+pub fn is_auditable_as_document(content_type: Option<&str>) -> bool {
+    let Some(ct) = content_type else {
+        return true;
+    };
+    let media = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    media.is_empty()
+        || media == "text/html"
+        || media == "application/xhtml+xml"
+        || media == "application/xml"
+        || media == "text/xml"
+        || (media.ends_with("+xml") && !media.starts_with("image/"))
+}
+
+/// The single finding emitted for a resource that is not an HTML document.
+#[must_use]
+pub fn non_html_finding(url: &str, content_type: Option<&str>) -> Finding {
+    let media = content_type
+        .and_then(|ct| ct.split(';').next())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    Finding {
+        severity: Severity::Info,
+        category: IssueCategory::Http,
+        code: "MIMETYPE001".to_string(),
+        title: "Non-HTML resource not audited as a page".to_string(),
+        description: format!(
+            "Response is {media}, not an HTML document, so document analyzers (title, \
+             headings, meta description, structured data) do not apply. The resource is \
+             still recorded in the crawl graph."
+        ),
+        url: url.to_string(),
+        recommendation: "No action needed for page-level SEO. Review this resource only if \
+                        it was not intended to be public."
+            .to_string(),
+    }
+}
+
 impl<'a> AnalysisContext<'a> {
     /// Build an [`AnalysisContext`] with every field defaulted.
     ///

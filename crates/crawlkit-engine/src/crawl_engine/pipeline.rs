@@ -342,7 +342,27 @@ impl CrawlRun<'_> {
             rendered,
         };
         let analysis_start = std::time::Instant::now();
-        let mut findings = self.analyzer_registry.analyze(&ctx);
+
+        // HTML analyzers only make sense on HTML.
+        //
+        // A crawl picks up non-HTML resources that are linked from pages:
+        // `/llms.txt`, `sitemap.xml`, `.json` feeds, `.css`, PDFs. Parsed as
+        // markup they yield no elements, so every "missing <title>", "no H1",
+        // "no meta description" analyzer fires and reports a Critical for a
+        // plain-text file that was never supposed to have a title. Auditing
+        // kingstonpeptides.com at 200 pages, `llms.txt` (content-type
+        // `text/plain`) produced 62 such findings.
+        //
+        // The response is still stored and linked — it is a real resource in
+        // the crawl graph — it is simply not audited as a document.
+        let is_html_document =
+            crate::analyzers::is_auditable_as_document(ctx.content_type);
+
+        let mut findings = if is_html_document {
+            self.analyzer_registry.analyze(&ctx)
+        } else {
+            vec![crate::analyzers::non_html_finding(&ctx.page.url, ctx.content_type)]
+        };
 
         // Crawl plugins run after the built-ins, with the B4 structured
         // context; failures degrade to no findings (never abort a crawl).

@@ -132,28 +132,41 @@ fn both_stay_silent_on_descriptive_anchor_text() {
     assert!(v2.is_empty() && deep.is_empty());
 }
 
-/// Full-registry regression: the aggregate generation analyzers must
-/// emit at most one finding each (a second finding would indicate a
-/// collision or double registration). The base analyzer legitimately
-/// emits one finding per generic link, so its multiplicity is checked
-/// against the link count instead.
+/// Full-registry regression: the generic-anchor-text defect must be reported
+/// once per page, not once per reporting variant and not once per link.
+///
+/// The page has two generic links, and three analyzers describe the same
+/// aggregate defect (`ANCHGEN001` per-link, plus `ANCHGEN-V2001` and
+/// `ANCHGEN-V2001-DEEP` aggregating). Cross-code duplicates are collapsed after
+/// analysis, so the aggregate family contributes exactly one finding. The
+/// per-link analyzer is a *different* code and must survive, once per link.
 #[test]
 fn full_registry_has_no_duplicate_anchorgen_codes() {
     let registry = AnalyzerRegistry::new(&crate::CrawlConfig::default());
     let page = page_with_links(&["click here", "learn more"]);
     let findings = registry.analyze(&ctx(&page));
     let count = |prefix: &str| findings.iter().filter(|f| f.code == prefix).count();
-    // Aggregate analyzers: exactly one finding each on this page.
-    assert_eq!(count("ANCHGEN-V2001"), 1, "V2 must aggregate, not per-link");
-    assert_eq!(
-        count("ANCHGEN-V2001-DEEP"),
-        1,
-        "deep must aggregate, not per-link"
-    );
-    // Per-link base analyzer: one finding per generic link.
+
+    // Per-link base analyzer: one finding per generic link, never collapsed
+    // because same-code repeats are distinct defects.
     assert_eq!(
         count("ANCHGEN001"),
         2,
         "base analyzer emits one finding per generic link"
+    );
+
+    // The aggregate family collapses to a single report.
+    let aggregate = findings
+        .iter()
+        .filter(|f| f.code.starts_with("ANCHGEN-V2001"))
+        .count();
+    assert_eq!(
+        aggregate, 1,
+        "the aggregate generic-anchor family must report once per page, got {aggregate}: {:?}",
+        findings
+            .iter()
+            .filter(|f| f.code.starts_with("ANCHGEN-V2001"))
+            .map(|f| f.code.clone())
+            .collect::<Vec<_>>()
     );
 }

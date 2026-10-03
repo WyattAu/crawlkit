@@ -721,6 +721,31 @@ pub struct LinkAnalyzer {
     inbound_links: HashMap<String, usize>,
 }
 
+/// True when a short anchor is an index or in-page jump link rather than
+/// missing descriptive text.
+///
+/// A glossary or alphabetical index links `A` to `#a`, `B` to `#b`, and so on.
+/// There the single character *is* the complete, correct label: the surrounding
+/// navigation gives it meaning, and lengthening it would make the control worse.
+/// Flagging these reported 12 "very short anchor text" findings on each of 8
+/// pages of a single 200-page crawl — all correct markup.
+///
+/// Recognises two shapes:
+/// - a one-character alphanumeric anchor, and
+/// - any anchor whose target is a same-page fragment (`#section`).
+#[must_use]
+pub fn is_index_or_jump_link(text: &str, href: &str) -> bool {
+    let t = text.trim();
+    // `A`, `7`, `→` style index labels.
+    if t.chars().count() == 1 && t.chars().all(char::is_alphanumeric) {
+        return true;
+    }
+    // In-page jump links are labelled by their target section, not by the
+    // anchor sentence, so anchor brevity is expected.
+    href.trim_start().starts_with('#')
+}
+
+
 impl LinkAnalyzer {
     pub fn new() -> Self {
         Self {
@@ -839,7 +864,10 @@ impl Analyzer for LinkAnalyzer {
                                      understand the link destination."
                         .to_string(),
                 });
-            } else if link.text.trim().len() < 3 && !link.text.trim().is_empty() {
+            } else if link.text.trim().len() < 3
+                && !link.text.trim().is_empty()
+                && !is_index_or_jump_link(&link.text, &link.href)
+            {
                 findings.push(Finding {
                     severity: Severity::Info,
                     category: IssueCategory::Links,
@@ -3951,6 +3979,34 @@ impl Analyzer for ExternalLinkAuthorityDeepAnalyzer {
 // ---------------------------------------------------------------------------
 // Tests for new analyzers
 // ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod index_link_tests {
+    use super::is_index_or_jump_link;
+
+    #[test]
+    fn alphabetical_index_anchors_are_not_short_anchor_defects() {
+        // The exact shape on kingstonpeptides.com/en/glossary.
+        assert!(is_index_or_jump_link("A", "#a"));
+        assert!(is_index_or_jump_link("B", "#b"));
+        assert!(is_index_or_jump_link("7", "#7"));
+        assert!(is_index_or_jump_link(" a ", "#a"));
+    }
+
+    #[test]
+    fn in_page_fragment_links_are_not_short_anchor_defects() {
+        assert!(is_index_or_jump_link("go", "#top"));
+        assert!(is_index_or_jump_link("ab", " #main-content"));
+    }
+
+    #[test]
+    fn genuinely_thin_descriptive_anchors_still_flagged() {
+        assert!(!is_index_or_jump_link("go", "/checkout"));
+        assert!(!is_index_or_jump_link("ok", "/confirm"));
+        assert!(!is_index_or_jump_link("ab", "/about"));
+        assert!(!is_index_or_jump_link("→", "/next"));
+    }
+}
 
 #[cfg(test)]
 mod tests_new_analyzers {

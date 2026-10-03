@@ -1241,7 +1241,13 @@ impl KeywordAnalyzer {
             .filter(|(_, &d)| d >= 1.5)
             .map(|(k, &v)| (k.clone(), v))
             .collect();
-        prominent.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Tiebreak on the term: `density` is a HashMap, so equal densities would
+        // otherwise be ordered by randomized iteration.
+        prominent.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
         prominent
     }
 
@@ -1256,7 +1262,9 @@ impl KeywordAnalyzer {
             }
         }
         let mut result: Vec<((String, String), usize)> = pairs.into_iter().collect();
-        result.sort_by_key(|b| std::cmp::Reverse(b.1));
+        // Tiebreak on the pair itself so equal co-occurrence counts keep a
+        // stable order instead of following HashMap iteration order.
+        result.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         result
     }
 }
@@ -1304,7 +1312,14 @@ impl Analyzer for KeywordAnalyzer {
         let cooccur = Self::cooccurrence(&tokens, 3);
 
         let mut tfidf_sorted: Vec<(&String, &f64)> = tfidf.iter().collect();
-        tfidf_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Tiebreak on the term: `tfidf` is a HashMap, so without a total order
+        // equal-scoring terms came out in a different sequence on every run and
+        // two audits of the same page produced different report text.
+        tfidf_sorted.sort_by(|a, b| {
+            b.1.partial_cmp(a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(b.0))
+        });
         let top_tfidf: Vec<String> = tfidf_sorted
             .iter()
             .take(10)
@@ -1326,7 +1341,12 @@ impl Analyzer for KeywordAnalyzer {
         }
 
         let mut density_sorted: Vec<(&String, &f64)> = density.iter().collect();
-        density_sorted.sort_by(|a, b| b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal));
+        // Tiebreak on the term so equal densities keep a stable order.
+        density_sorted.sort_by(|a, b| {
+            b.1.partial_cmp(a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(b.0))
+        });
         let top_density: Vec<String> = density_sorted
             .iter()
             .take(10)

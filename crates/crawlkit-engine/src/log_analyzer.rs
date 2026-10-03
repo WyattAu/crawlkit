@@ -31,7 +31,10 @@ pub fn analyze_log_entries(entries: &[LogEntry]) -> LogAnalysis {
     }
 
     let mut top_urls: Vec<(String, usize)> = url_counts.into_iter().collect();
-    top_urls.sort_by_key(|entry| std::cmp::Reverse(entry.1));
+    // `url_counts` is a HashMap, so ties on request count would otherwise be
+    // ordered by randomized iteration, making two runs over the same access
+    // log produce a different "top URLs" report. Tiebreak on the URL.
+    top_urls.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     top_urls.truncate(20);
 
     error_urls.sort();

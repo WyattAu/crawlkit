@@ -375,7 +375,11 @@ impl Analyzer for ContentQualityAnalyzer {
             }
 
             let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
-            terms.sort_by_key(|b| std::cmp::Reverse(b.1));
+            // `freq` is a HashMap, so iteration order is randomized per process.
+            // Sorting by count alone therefore left ties in random order, which
+            // made this finding's text differ between runs on identical HTML.
+            // The word itself is the tiebreaker, which makes the output stable.
+            terms.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
             terms.truncate(10);
 
             if !terms.is_empty() {
@@ -640,7 +644,9 @@ impl EntityAnalyzer {
             }
         }
         let mut terms: Vec<(String, usize)> = freq.into_iter().collect();
-        terms.sort_by_key(|b| std::cmp::Reverse(b.1));
+        // Tiebreak on the term: `freq` is a HashMap, so terms with equal
+        // heading counts would otherwise be reported in randomized order.
+        terms.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
         terms.into_iter().take(5).map(|(w, _)| w).collect()
     }
 

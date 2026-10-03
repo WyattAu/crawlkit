@@ -703,7 +703,11 @@ impl Analyzer for CspScriptSrcValidator {
                     recommendation: "Remove unsafe-eval.".to_string(),
                 });
             }
-            if value.contains("*") && !value.contains("'none'") {
+            // A scoped subdomain wildcard (`*.example.com`) is ordinary and
+            // safe; only a bare `*` host expression permits any origin.
+            if !value.contains("'none'")
+                && crate::analyzers::csp_wildcard::directive_allows_any_host(value)
+            {
                 findings.push(Finding {
                     severity: Severity::Critical,
                     category: IssueCategory::Security,
@@ -2588,7 +2592,8 @@ impl Analyzer for CspConnectSrcAnalysisValidator {
         for directive in csp.split(';') {
             let d = directive.trim();
             if d.starts_with("connect-src") {
-                if d.contains("*") {
+                // Scoped subdomain wildcards are not host wildcards.
+                if crate::analyzers::csp_wildcard::directive_allows_any_host(d) {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Security,
@@ -2637,7 +2642,8 @@ impl Analyzer for CspFontSrcAnalysisValidator {
         for directive in csp.split(';') {
             let d = directive.trim();
             if d.starts_with("font-src") {
-                if d.contains("*") {
+                // Scoped subdomain wildcards are not host wildcards.
+                if crate::analyzers::csp_wildcard::directive_allows_any_host(d) {
                     findings.push(Finding {
                         severity: Severity::Info,
                         category: IssueCategory::Security,
@@ -3625,7 +3631,8 @@ impl Analyzer for CspConnectSrcDeepValidator {
         for directive in csp.split(';') {
             let d = directive.trim();
             if d.starts_with("connect-src") {
-                if d.contains("*") {
+                // Scoped subdomain wildcards are not host wildcards.
+                if crate::analyzers::csp_wildcard::directive_allows_any_host(d) {
                     findings.push(Finding {
                         severity: Severity::Warning,
                         category: IssueCategory::Security,
@@ -3676,7 +3683,8 @@ impl Analyzer for CspFontSrcDeepValidator {
         for directive in csp.split(';') {
             let d = directive.trim();
             if d.starts_with("font-src") {
-                if d.contains("*") {
+                // Scoped subdomain wildcards are not host wildcards.
+                if crate::analyzers::csp_wildcard::directive_allows_any_host(d) {
                     findings.push(Finding {
                         severity: Severity::Info,
                         category: IssueCategory::Security,
@@ -4598,6 +4606,72 @@ mod tests {
     fn test_csp_script_src_wildcard() {
         let p = make_page("https://example.com");
         let headers = vec![("Content-Security-Policy".into(), "script-src *".into())];
+        let ctx = AnalysisContext {
+            page: &p,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            user_agent: None,
+            body_size: None,
+            compressed_size: None,
+            content_encoding: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let f = CspScriptSrcValidator::new().analyze(&ctx);
+        assert!(f.iter().any(|x| x.code == "CSPSSRC-V5003"));
+    }
+    /// A scoped subdomain wildcard is not a host wildcard.
+    ///
+    /// Regression: this exact shape is gov.uk's `script-src`, and the previous
+    /// substring test reported it as a Critical wildcard on all 40 pages of an
+    /// audit of a site whose policy is otherwise exemplary.
+    #[test]
+    fn test_csp_script_src_subdomain_wildcard_is_not_a_host_wildcard() {
+        let p = make_page("https://www.gov.uk");
+        let headers = vec![(
+            "Content-Security-Policy".into(),
+            "default-src 'self'; base-uri 'none'; \
+             script-src 'self' www.google-analytics.com ssl.google-analytics.com \
+             www.googletagmanager.com *.analytics.google.com www.gstatic.com \
+             *.ytimg.com www.youtube.com 'nonce-bflPMUNqgc1Ceo1S9YFhYA=='; \
+             object-src 'none'"
+                .into(),
+        )];
+        let ctx = AnalysisContext {
+            page: &p,
+            body: None,
+            status_code: Some(200),
+            headers: &headers,
+            response_time: None,
+            redirect_chain: &[],
+            robots_txt: None,
+            user_agent: None,
+            body_size: None,
+            compressed_size: None,
+            content_encoding: None,
+            server: None,
+            content_type: None,
+            rendered: None,
+        };
+        let f = CspScriptSrcValidator::new().analyze(&ctx);
+        assert!(
+            !f.iter().any(|x| x.code == "CSPSSRC-V5003"),
+            "scoped subdomain wildcards must not be reported as a host wildcard: {f:?}"
+        );
+    }
+    /// A bare `*` alongside other sources is still a host wildcard.
+    #[test]
+    fn test_csp_script_src_bare_wildcard_beside_sources_is_caught() {
+        let p = make_page("https://example.com");
+        let headers = vec![(
+            "Content-Security-Policy".into(),
+            "script-src 'self' 'unsafe-inline' *".into(),
+        )];
         let ctx = AnalysisContext {
             page: &p,
             body: None,

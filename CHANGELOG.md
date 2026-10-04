@@ -100,11 +100,19 @@ verified against live markup rather than inferred.
   lives in `analyzers/cross_origin_advice.rs` rather than fifteen drifting
   strings, and states when the header applies and what it breaks.
 
-- **Wasmtime bumped to 48.0.5, clearing four security advisories.** Including
-  a `poll_oneoff` implementation that circumvents fuel consumption — and fuel is
-  how crawlkit bounds plugin execution. 48.0.5 sits inside the `48` range already
-  declared, so this is a lockfile-only bump. `cargo deny check` now exits 0; it had
-  been failing before this release.
+- **Wasmtime and wasmtime-wasi bumped to 48.0.5, clearing six security advisories.**
+  Including a `poll_oneoff` implementation that circumvents fuel consumption — and
+  fuel is how crawlkit bounds plugin execution. Both advisories that survived the
+  first bump were filed against `wasmtime-wasi` rather than `wasmtime`, so
+  `cargo update -p wasmtime` alone left the vulnerable crate at 48.0.3; all three
+  Wasmtime crates are now aligned. `cargo deny check` exits 0 against a current
+  advisory database; it had been failing before this release.
+
+  The bump also pulled `wat` from 1.254.0 to 1.261.0, which rejects the legacy
+  component-model index syntax. The WAT in the `wasi-preview2` test was updated to
+  the strict form — `(memory (core memory $i "memory"))`,
+  `(realloc (core func $i "realloc"))`. This only failed behind the
+  `wasi-preview2` feature, so a default build could not have caught it.
 
 - **CI was not running six suites that guard the analyzer work.** `ci.yml` names
   its integration targets explicitly, so a new test file is not picked up

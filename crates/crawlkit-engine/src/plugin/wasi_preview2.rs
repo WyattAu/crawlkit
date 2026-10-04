@@ -940,8 +940,8 @@ mod tests {
           (core instance $i (instantiate $m (with "clock" (instance $clock_inst))))
           (func $analyze (export "crawlkit:plugin/analyze") (type $analyze_ty)
             (canon lift (core func $i "analyze")
-              (memory $i "memory")
-              (realloc (func $i "realloc"))))
+              (memory (core memory $i "memory"))
+              (realloc (core func $i "realloc"))))
         )
     "#;
 

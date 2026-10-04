@@ -128,10 +128,25 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
         return findings;
     }
 
-    // First occurrence wins positionally; a later, more severe member promotes
-    // the representative's severity so roll-ups are not understated. Every
-    // member's code is recorded, including those whose finding is suppressed,
-    // so a user filtering on any of the codes still surfaces the defect.
+    // The most severe member represents the family, and *it* is what survives —
+    // code, title, description and severity all come from one finding.
+    //
+    // The previous rule kept the first finding positionally and copied a later,
+    // more severe member's severity onto it. That produced a chimera: a finding
+    // whose surviving code declared `Info` shipped at `warning`, because the
+    // severity came from a sibling that had been discarded. Live output showed
+    // exactly this — `MDESC-PX002` (declared `Info`) reported as `warning`
+    // because its family also contains `META005` (declared `Warning`).
+    //
+    // Keeping severity at the family maximum is the right call on its own: when
+    // several analyzers independently assess one defect and disagree, the most
+    // severe credible assessment should stand. 77 of 202 curated families contain
+    // members that disagree, so this is the common case, not an edge case. What
+    // was wrong was decoupling it from the code that earned it.
+    //
+    // Every member's code is recorded, including those whose finding is
+    // suppressed, so a user filtering on any of the codes still surfaces the
+    // defect.
     let mut representative: HashMap<Key, usize> = HashMap::new();
     let mut aliases: AliasMap = HashMap::new();
     let mut out: Vec<Finding> = Vec::with_capacity(findings.len());
@@ -151,8 +166,12 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
                     out.push(f);
                     continue;
                 }
+                // Replace the whole representative rather than copying severity
+                // across. Strictly-more-severe keeps this order-independent: the
+                // maximum survives regardless of the order members arrive in, and
+                // ties are broken by the caller's (code, url) sort.
                 if severity_rank(f.severity) < severity_rank(out[idx].severity) {
-                    out[idx].severity = f.severity;
+                    out[idx] = f;
                 }
             }
             None => {
@@ -387,5 +406,87 @@ mod tests {
     fn non_duplicate_finding_description_is_not_rewritten() {
         let findings = vec![f("https://e.com/", "X", "Unique defect", Severity::Info)];
         assert_eq!(collapse_duplicates(findings)[0].description, "desc");
+    }
+
+    /// The invariant the previous rule broke: a surviving finding reports the
+    /// severity its *own* code declared.
+    ///
+    /// `MDESC-PX002` declares `Info` and `META005` declares `Warning`; both are
+    /// the "meta description too short" family. Under positional-wins the first
+    /// survived with the second's severity copied onto it, so live output showed
+    /// an `Info` code shipping as `warning`.
+    #[test]
+    fn surviving_finding_keeps_its_own_severity() {
+        let findings = vec![
+            f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info),
+            f("https://e.com/", "META005", "Meta description too short", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(out.len(), 1, "one defect must survive as one finding");
+        // The most severe member represents the family, and it is what survives.
+        assert_eq!(out[0].code, "META005");
+        assert_eq!(out[0].severity, Severity::Warning);
+    }
+
+    /// The same result regardless of the order members arrive in.
+    ///
+    /// `analyze` sorts by `(code, url)` before calling, but this must not depend
+    /// on it: a rule that only holds for one input ordering is a rule that will
+    /// drift the day the sort changes.
+    #[test]
+    fn representative_is_independent_of_input_order() {
+        let a = f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info);
+        let b = f("https://e.com/", "META005", "Meta description too short", Severity::Warning);
+        for findings in [vec![a.clone(), b.clone()], vec![b, a]] {
+            let out = collapse_duplicates(findings);
+            assert_eq!(out.len(), 1);
+            assert_eq!(out[0].code, "META005");
+            assert_eq!(out[0].severity, Severity::Warning);
+        }
+    }
+
+    /// Equal severities keep the first, which the caller's `(code, url)` sort
+    /// makes deterministic.
+    #[test]
+    fn equal_severity_keeps_first_and_is_stable() {
+        let findings = vec![
+            f("https://e.com/", "AAA", "Same defect", Severity::Warning),
+            f("https://e.com/", "BBB", "Same defect", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings.clone());
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].code, "AAA", "ties go to the first in sorted order");
+        let again = collapse_duplicates(findings);
+        assert_eq!(out[0].code, again[0].code);
+    }
+
+    /// Family severity is still the maximum — the fix changed which finding
+    /// represents the family, not how loud the family is.
+    #[test]
+    fn family_severity_remains_the_maximum() {
+        let findings = vec![
+            f("https://e.com/", "CCC", "Same defect", Severity::Info),
+            f("https://e.com/", "DDD", "Same defect", Severity::Error),
+            f("https://e.com/", "EEE", "Same defect", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].severity, Severity::Error);
+    }
+
+    /// The suppressed codes stay reachable, so filtering on any member's code
+    /// still surfaces the defect.
+    #[test]
+    fn suppressed_codes_are_recorded_in_the_description() {
+        let findings = vec![
+            f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info),
+            f("https://e.com/", "META005", "Meta description too short", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert!(
+            out[0].description.contains("MDESC-PX002"),
+            "the discarded member's code must remain visible: {}",
+            out[0].description
+        );
     }
 }

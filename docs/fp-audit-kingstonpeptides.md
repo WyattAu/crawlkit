@@ -549,6 +549,60 @@ with storage.
 * `write_output` wrote `crawl-results.json` before post-crawl persistence ran, so
   the file's totals predated the findings the crawl had just added.
 
+## Round 5 — severity semantics: the representative and the severity were chosen independently
+
+`collapse_duplicates` kept the **first** finding positionally and then copied a
+later, more severe family member's **severity** onto it. Code, title, severity and
+description therefore came from different findings, and the output was a chimera:
+a finding whose surviving code declared `Info` shipped at `warning`, because the
+severity came from a sibling that had been discarded.
+
+Measured on a live 40-page crawl, **2 codes shipped a severity their own source
+never declares**:
+
+| Code | Shipped as | Actually declares | Why |
+|---|---|---|---|
+| `MDESC-PX002` | `warning` | `info` | family also contains `META005` (`warning`) |
+| `IMG004` | `warning` | `info` | family sibling declares `warning` |
+
+This is not a corner case. **77 of 202** curated families contain members that
+disagree on severity, so the decoupling applied to more than a third of them.
+
+### The resolution
+
+Keep severity at the **family maximum**, but make the most severe member the
+finding that survives, so code, title, description and severity all come from one
+analyzer.
+
+Family-max is the right call on its own merits: when several analyzers
+independently assess one defect and disagree, the most severe credible assessment
+should stand. It is also the conservative direction — it never understates. What
+was wrong was decoupling it from the code that earned it, not the max itself.
+
+The alternative — hand-declaring a severity for all 202 families — was rejected.
+It replaces a defensible computed rule with 202 judgements that can each be
+wrong, and would *lower* severity for many families, which is a regression in a
+tool whose value is not understating problems.
+
+The replacement is also order-independent (strictly-more-severe wins), so it does
+not depend on the caller's `(code, url)` sort. Ties fall to the first in sorted
+order, which is deterministic. Suppressed codes remain listed in the description,
+so filtering on any member's code still surfaces the defect.
+
+Verified on the same crawl: **0 code/severity mismatches**, from 2. Six corpus
+expectations named the previous representative and were updated to the code that
+now reports the same defect — confirmed by title, not inferred from the code:
+
+| Fixture | was | now | Same defect |
+|---|---|---|---|
+| `empty_page.html`, `spa_vue.html` | `TITLE-V4001` "Missing title tag" (`error`) | `TITLEMISS-V2001` (`critical`) | yes |
+| `minimal_landing.html`, `spa_react.html` | `AI-CIT001` "Missing canonical URL" (`info`) | `CAN-V3001` (`warning`) | yes |
+| `minimal_landing.html` | `META009` "Missing viewport meta tag" | `MOB001` (`error`) | yes |
+| `spa_react.html` | `A11Y006` "Missing main landmark" (`error`) | `LAND001` (`error`) | yes |
+
+`accessibility_focused.html` asserts `must_not_have` for that fixture, so both the
+old and new codes are listed — dropping the old one would have weakened it.
+
 ## Open findings not addressed
 
 | Item | Why |
@@ -556,7 +610,6 @@ with storage.
 | Cross-page hreflang reciprocity | Needs `hreflang` in `PageData` + migration. Currently `PageData` cannot express it, so the check is absent rather than wrong. |
 | `CORSMISS` for XHR assets | Correctly removed for documents, but the check is legitimate for a JSON/font target type. Gating on content type would restore it. |
 | Plugin distribution | `plugins/index/` ships a flat `artifacts/*.wasm` layout, but `--plugins` expects `<dir>/<name>/crawlkit-plugin.toml`. The five first-party plugins are not directly loadable. |
-| Severity semantics | Still max-severity across a collapsed defect family, not a declared per-family severity. |
 
 ## Reproducing
 

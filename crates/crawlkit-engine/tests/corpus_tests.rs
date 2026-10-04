@@ -33,6 +33,7 @@ use crawlkit_engine::parser::HtmlParser;
 use crawlkit_engine::{AnalysisContext, CrawlConfig};
 use url::Url;
 
+
 /// A single fixture's expectation block from `expected.json`.
 #[derive(Debug, serde::Deserialize)]
 struct Expectation {
@@ -235,3 +236,4 @@ fn dump_corpus_findings() {
         }
     }
 }
+

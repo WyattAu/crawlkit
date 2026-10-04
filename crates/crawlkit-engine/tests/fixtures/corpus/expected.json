@@ -9,6 +9,7 @@
       "A11Y001",
       "A11Y002",
       "A11Y006",
+      "LAND001",
       "A11Y008",
       "SKIPLINK001",
       "IMG001",
@@ -99,7 +100,7 @@
   "empty_page.html": {
     "must_have": [
       "META001",
-      "TITLE-V4001",
+      "TITLEMISS-V2001",
       "A11Y002",
       "A11Y016",
       "AI-CIT005"
@@ -161,8 +162,8 @@
       "META-V3001",
       "A11Y002",
       "THIN002",
-      "AI-CIT001",
-      "META009"
+      "CAN-V3001",
+      "MOB001"
     ],
     "must_not_have": [
       "ROBOTS001",
@@ -276,9 +277,9 @@
     "must_have": [
       "META-V3001",
       "A11Y002",
-      "AI-CIT001",
+      "CAN-V3001",
       "AI-CIT005",
-      "A11Y006"
+      "LAND001"
     ],
     "must_not_have": [
       "META001",
@@ -292,7 +293,7 @@
   "spa_vue.html": {
     "must_have": [
       "META001",
-      "TITLE-V4001",
+      "TITLEMISS-V2001",
       "A11Y002",
       "META-V3001",
       "A11Y016"

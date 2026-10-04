@@ -7,7 +7,149 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Measurements separated from defects.** Readability indices, keyword
+  extraction, entity detection and composite scores were emitted as `info`
+  findings alongside real problems — **2,401 of 4,696 info rows on a 100-page
+  crawl of kingstonpeptides.com**, 39% of every finding reported. A page with
+  three real problems and twenty scores was indistinguishable, in aggregate,
+  from a page with twenty-three problems, so every severity roll-up, "issues per
+  page" average and trend line was dominated by rows nobody can act on.
+
+  The split is by measurement, not severity: a code is a metric when its output
+  is a quantity about the page and no markup change would "fix" it. Advisory
+  content analysis stays a finding (`KWPRO*`, `TITLEKDEN*`, `METAKEY-V5001`,
+  `CQ-V2001` — actionable by rewriting), and so does everything describing wrong
+  markup (`CHARSET002`, `CACHE003`, `COEP-V2001`, `AI-ACC006`, `IMGALT*`).
+
+  `IssueFilter::kind` (`IssueKindFilter::{Defects,Metrics,All}`) defaults to
+  defects only, and a new analyzer is never silently hidden: the default is
+  explicit and unrecognised codes resolve to defects. Classification is derived
+  from the code at insert time, so `Issue` gains no field. Nothing is discarded —
+  measurements are stored with an `is_metric` column, retrievable via
+  `get_page_metrics` / `get_metric_split`, written to `page-metrics.json`, and
+  foldable back into the primary output with `crawlkit crawl
+  --include-metrics`.
+
 ### Fixed
+
+- **Cross-page findings were computed and discarded.**
+  `PostCrawlAnalyzerRegistry` runs 20 cross-page analyzers — orphan pages,
+  keyword cannibalization, link equity distribution, redirect-chain
+  optimization, internal link balance, crawl quality, schema coverage, heading
+  structure, canonical consistency, overall health — and the engine used only
+  `.len()` on the result. Orphan pages and cannibalization are among the
+  highest-value cross-page results, so every crawl silently threw them away.
+  They are now returned on `CrawlOutput` and persisted under the same
+  `(page_id, code)` guard as the other cross-page source.
+
+- **Two cross-page analyzers measured nothing, and one had never fired.**
+  `LinkVelocityAnalyzer` summed a literal `0` per page for its average and
+  counted every page with `filter(|p| true)` for "zero-link pages", so `LINK-V001`
+  always reported *"Average links per page is 0.0"* and `LINK-V002` always
+  reported *"100% of pages have no outgoing links"*.
+  `InternalLinkBalanceAnalyzer` had the same shape with the worse outcome: both
+  totals summed a literal `0`, so `total_external > 0` was never true and
+  `LINK-BAL001` had **never fired on any crawl in the product's history**. A rule
+  that always fires and a rule that never fires look equally like working
+  analyzers from the outside; only the second is invisible in the output.
+
+  Both read `CrawlData::links` now — the populated `(source_url, [target_url])`
+  graph. `PageData::links` looks like the obvious source and is not: it is a
+  write-side field that `row_to_page_data` always returns empty. Only pages
+  present in the graph are counted, because a page absent from it cannot be
+  distinguished from one whose links were never recorded.
+
+  Verified on kingstonpeptides.com, where the `links` table holds 272 rows across
+  10 pages (avg 27.2 links/page) and both analyzers are now correctly silent.
+
+- **Site-wide cross-page findings were attributed to `https://example.com`.**
+  The seed came from `cfg.crawl_config.start_url`, which keeps its `Default`
+  value because callers pass the target to `run_with_callback` rather than
+  through the config. Such findings could never resolve to a stored page even
+  once persisted. `CrawlRun` now carries the seed actually crawled, and
+  cross-page findings resolve through `get_page_equivalent`, which falls back to
+  `url_norm::urls_equivalent` — exact matching dropped every seed-URL finding on
+  a trailing-slash difference.
+
+- **Plugin findings never participated in deduplication.**
+  `AnalyzerRegistry::analyze` deduplicates, and the pipeline appended plugin
+  findings afterwards. With `heading-structure` loaded, every multiple-H1 page
+  was reported twice — built-in `A11Y004` *and* the plugin's own code — and no
+  aggregate merged them. The combined vector is now collapsed.
+
+- **First-party plugins reused built-in codes, one causing a silent false
+  negative.** `heading-structure` shipped `HEAD001`/`HEAD002`/`HEAD003` shifted
+  by one against the registry: a finding labelled `HEAD001` was stored against
+  the family "no headings found".
+  `meta-description-checker` shipped `META002` for *"Meta description too
+  short"* while `META002` lives in the **title** family. `defect_key` resolves by
+  code, so the description finding was keyed as a title defect and merged into
+  the built-in `TITLE001` — a description problem disappearing from the report on
+  any page with both a short title and a short description.
+
+  Codes now say what they mean: `HEADING-MULTIH1`, `HEADING-SKIPLEVEL`,
+  `HEADING-NONE`, `METADESC-MISSING`, `METADESC-SHORT`, `METADESC-LONG`.
+  `HEADING-MULTIH1` and `HEADING-NONE` are registered in their families so they
+  collapse with the built-ins; the description codes deliberately claim no
+  family, which keeps them out of the title families via the title fallback.
+
+- **Dedupe produced a chimera: code and severity came from different findings.**
+  The first finding won positionally and a later, more severe family member's
+  severity was copied onto it, so a finding whose surviving code declared `info`
+  shipped as `warning`. Live output showed `MDESC-PX002` and `IMG004`, both
+  declaring `info`, reported as `warning`. Not an edge case: **77 of 202**
+  curated families contain members that disagree on severity.
+
+  Severity stays at the family maximum — when several analyzers independently
+  assess one defect and disagree, the most severe credible assessment should
+  stand, and it never understates — but the most severe member now survives *as
+  a finding*, so every field comes from one analyzer. Order-independent and
+  deterministic. Mismatches on the same crawl: 2 → 0.
+
+- **Three analyzers that fired on every page are removed.** All three fired on
+  40/40 crawled pages of kingstonpeptides.com:
+
+  - `ELINK001`/`ELINK002` asserted that entities in structured data need
+    outbound *body* links, "to strengthen entity signals" and "to strengthen
+    topical authority". No search engine states that requirement, and the
+    mechanism that does exist — `sameAs` on the entity — is not what the rule
+    checked: it read `ctx.page.links`, i.e. links in the body.
+  - `COLRCL-V2001-UNDERLINE` fired whenever *any* CSS rule paired
+    `text-decoration:none` with a `color:` declaration anywhere in the document
+    — not on links, and not on the link in question. That is the default styling
+    of most navigation. WCAG 1.4.1 asks whether a link has *any* non-colour
+    indicator, which is a property of one element's computed style and needs a
+    rendering engine, not a stylesheet regex. The ratio-math analyzers
+    (`CONTR001/002`, `COLRCL001`) are untouched.
+  - `CANDEP-V2003` flagged a trailing slash on a canonical, a valid URL form,
+    with a recommendation unactionable without knowing the site's chosen form.
+    It also contradicted this product's own model: `analyzers::url_norm`
+    deliberately folds trailing slashes when deciding URL equivalence.
+
+  Registry 775 → 772. A tripwire test scans the analyzer sources for
+  `code: "…"` literals and fails if any of the four returns.
+
+- **Four near-identical heading-skip families merged.** `"heading level
+  skipped"`, `"heading levels skipped"`, `"heading level skip detected"` and
+  `"skipped heading level"` were four families for one defect, differing by
+  singular/plural and word order. `defect_signature` strips version and depth
+  decorations but does not normalize word order, so the same defect reported up
+  to four times under four families. Now one family of 12 codes.
+
+- **Reported counts no longer disagree with storage.** The engine counted
+  cross-page findings it never persisted, and `write_output` wrote
+  `crawl-results.json` before post-crawl persistence ran, so the file's totals
+  predated the findings the crawl had just added.
+
+- **`docs/FINDING_CODES.md` regenerated.** It had been stale since `04d1da04`
+  (2026-10-03): `CORSMISS-V6070` and `CT001` were still documented after being
+  removed from the source, alongside this round's four removals. The
+  `generate_finding_catalog.py --check` gate in
+  `scripts/verify-release-controls.sh` does fail on a stale catalog — verified —
+  so the drift came from a red or ignored CI run rather than a defect in the
+  gate.
 
 - **Wasmtime dependency patched (RUSTSEC-2026-0314/0315/0316)**: the
   workspace moves from Wasmtime 47.0.4 — flagged by `cargo deny` for

@@ -15,8 +15,8 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1150 |
-| `impl Analyzer for` blocks scanned | 737 |
+| Distinct finding codes | 1139 |
+| `impl Analyzer for` blocks scanned | 734 |
 | Codes shared by 2+ analyzers | 6 |
 
 ## Shared codes (recorded ownership)
@@ -137,7 +137,6 @@ consolidate the analyzers).
 | `CANDEEP001` | `CanonicalValidationDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Canonical path mismatch |
 | `CANDEEP002` | `CanonicalValidationDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Canonical differs by parameters |
 | `CANDEEP003` | `CanonicalValidationDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Canonical URL contains fragment |
-| `CANDEP-V2003` | `CanonicalDepthAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Canonical has trailing slash |
 | `CANDEPTH-V5001` | `CanonicalDepthValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Canonical URL too deep |
 | `CANMISS-V2001` | `CanonicalMissingDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing canonical URL (deep-deep) |
 | `CANMISS-V6088` | `CanonicalMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing canonical URL |
@@ -178,7 +177,6 @@ consolidate the analyzers).
 | `COISODEEP002` | `CrossOriginIsolationDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/deep_security_header_analyzers.rs` | Missing Cross-Origin-Opener-Policy |
 | `COISODEEP003` | `CrossOriginIsolationDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/deep_security_header_analyzers.rs` | Partial cross-origin isolation |
 | `COLRCL-V2001-DEEP` | `ColorContrastLinkDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Possible link contrast issue (deep) |
-| `COLRCL-V2001-UNDERLINE` | `ColorContrastLinkAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Links without underline |
 | `COLRCL001` | `ColorContrastLinkAnalyzer` | `crates/crawlkit-engine/src/analyzers/csp_color_contrast_analyzers.rs` | Link color contrast too low |
 | `COLRCT-V2001` | `ColorContrastTextDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Possible light-on-light contrast issue (deep) |
 | `COLRCT-V2003` | `ColorContrastTextAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Hidden text detected |
@@ -222,7 +220,6 @@ consolidate the analyzers).
 | `CORS001-MISCONFIG` | `CorsMisconfigurationAnalyzer` | `crates/crawlkit-engine/src/analyzers/dns_sri_cors_analyzers.rs` | CORS allows all origins with credentials |
 | `CORS002` | `CorsPolicyAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | CORS allows all origins |
 | `CORS002-MISCONFIG` | `CorsMisconfigurationAnalyzer` | `crates/crawlkit-engine/src/analyzers/dns_sri_cors_analyzers.rs` | CORS wildcard on sensitive endpoint |
-| `CORSMISS-V6070` | `CorsMissingHeaderValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | No CORS headers |
 | `CORSWILD-V2001` | `CorsWildcardDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | CORS wildcard with credentials (deep-deep) |
 | `CORSWILD-V6069` | `CorsWildcardValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | CORS allows all origins |
 | `CORSWILD001` | `CorsWildcardDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | CORS wildcard with credentials |
@@ -286,7 +283,6 @@ consolidate the analyzers).
 | `CSPSTYLE-V5002` | `CspStyleSrcValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | CSP missing style-src |
 | `CT-V2001` | `ContentTypeSniffingAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | Missing X-Content-Type-Options header |
 | `CT-V2002` | `ContentTypeSniffingAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | Invalid X-Content-Type-Options value |
-| `CT001` | `CertificateTransparencyAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | No Certificate Transparency enforcement |
 | `CTSNIFF001` | `ContentTypeSniffingAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | Missing X-Content-Type-Options header |
 | `CTSNIFF002` | `ContentTypeSniffingAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | X-Content-Type-Options not set to nosniff |
 | `CVNAME-V6010` | `CivicStructureMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | CivicStructure missing name |
@@ -314,13 +310,10 @@ consolidate the analyzers).
 | `ECOM004` | `EcommerceSignalsAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Review/rating information detected |
 | `ECOM005` | `EcommerceSignalsAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Offer schema detected |
 | `ECOM006` | `EcommerceSignalsAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Price data without Product schema |
-| `ECT001` | `ExpectCTAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | No Expect-CT header |
 | `EDUNAME-V6017` | `EducationalOrganizationMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | EducationalOrganization missing name |
 | `EDUORG001` | `EducationalOrganizationSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/educational_organization_schema.rs` | EducationalOrganization schema missing name |
 | `EDUORG002` | `EducationalOrganizationSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/educational_organization_schema.rs` | EducationalOrganization schema missing address |
 | `EDUORG003` | `EducationalOrganizationSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/educational_organization_schema.rs` | EducationalOrganization schema missing url |
-| `ELINK001` | `EntityLinkingAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Entity lacks outbound link |
-| `ELINK002` | `EntityLinkingAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Multiple same-type entities lack cross-links |
 | `ELOC001` | `EventLocationValidator` | `crates/crawlkit-engine/src/analyzers/schema/event_location.rs` | Event missing location |
 | `ELOC002` | `EventLocationValidator` | `crates/crawlkit-engine/src/analyzers/schema/event_location.rs` | Event location missing name |
 | `ENTITY001` | `EntityAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | People entities detected |
@@ -459,7 +452,6 @@ consolidate the analyzers).
 | `HREFMISS-V2001` | `HreflangMissingDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing hreflang tags (deep-deep) |
 | `HREFMISS-V6092` | `HreflangMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | No hreflang tags |
 | `HREFMISS001` | `HreflangMissingDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing hreflang on multilingual site |
-| `HREFR001` | `HreflangReciprocalValidator` | `crates/crawlkit-engine/src/advanced_canonical.rs` | Hreflang references URL without reciprocal link |
 | `HREFR002` | `HreflangReciprocalValidator` | `crates/crawlkit-engine/src/advanced_canonical.rs` | Duplicate hreflang language codes |
 | `HREFRECIP-V2001` | `HreflangReciprocalDeepDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing reciprocal hreflang (deep-deep-deep) |
 | `HREFRECIP-V5001` | `HreflangReciprocalValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing self-referencing hreflang |
@@ -940,7 +932,7 @@ consolidate the analyzers).
 | `SD003` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Non-standard @context |
 | `SD004` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Missing @type |
 | `SD005` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Unknown @type |
-| `SD006` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Missing required properties |
+| `SD006` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | (no title literal) |
 | `SEC012` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Security posture score |
 | `SECSC001` | `SecurityScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Security header score |
 | `SENAME-V6016` | `SportsEventMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | SportsEvent missing name |
@@ -971,7 +963,6 @@ consolidate the analyzers).
 | `SITEMAPSIZE-V2003` | `SitemapXmlSizeValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Sitemap exceeds URL limit |
 | `SIZE001` | `ResponseSizeAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Response body exceeds 5MB |
 | `SIZE002` | `ResponseSizeAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Response body exceeds 10MB |
-| `SIZE003` | `ResponseSizeAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Missing Content-Length header |
 | `SKIPLINK001` | `SkipLinkAnalyzer` | `crates/crawlkit-engine/src/analyzers/skip_link_analyzers.rs` | No skip navigation link |
 | `SOCIAL001` | `SocialMediaAnalyzer` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | OG image missing dimensions |
 | `SOCIAL002` | `SocialMediaAnalyzer` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | OG image too narrow |
@@ -1179,9 +1170,7 @@ consolidate the analyzers).
 | `XFODEEP001` | `XFrameOptionsDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/deep_security_header_analyzers.rs` | No clickjacking protection |
 | `XFODEEP002` | `XFrameOptionsDeepAnalyzer` | `crates/crawlkit-engine/src/analyzers/deep_security_header_analyzers.rs` | Invalid X-Frame-Options value |
 | `XFOMISS-V6072` | `XFrameOptionsMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/security.rs` | No clickjacking protection |
-| `XPCDP001` | `XPermittedCrossDomainPoliciesAnalyzer` | `crates/crawlkit-engine/src/analyzers/x_header_analyzers.rs` | Missing X-Permitted-Cross-Domain-Policies header |
 | `XPCDP002` | `XPermittedCrossDomainPoliciesAnalyzer` | `crates/crawlkit-engine/src/analyzers/x_header_analyzers.rs` | X-Permitted-Cross-Domain-Policies set to all |
 | `XSS-V2001` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | Missing X-XSS-Protection header |
 | `XSS-V2002` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | X-XSS-Protection explicitly disabled |
-| `XSS001` | `XSSProtectionAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | Missing X-XSS-Protection header |
 | `XSS002` | `XSSProtectionAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | X-XSS-Protection set to mode=block |

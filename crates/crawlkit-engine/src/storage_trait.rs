@@ -1,4 +1,6 @@
-use crate::storage::{CrawlStats, CruxMetrics, Issue, IssueFilter, PageData, StorageError};
+use crate::storage::{
+    CrawlStats, CruxMetrics, Issue, IssueFilter, IssueKindFilter, PageData, StorageError,
+};
 
 /// Metadata about a single crawl, returned by [`StorageBackend::get_crawl_meta`].
 #[derive(Debug, Clone, serde::Serialize)]
@@ -84,6 +86,40 @@ pub trait StorageBackend: Send + Sync {
         tenant_id: &str,
         filters: &IssueFilter,
     ) -> Result<Vec<Issue>, StorageError>;
+
+    /// Page lookup tolerant of URL spelling differences.
+    ///
+    /// Defaults to the exact lookup; the SQLite backend overrides it to fall
+    /// back to a normalized comparison.
+    fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+        self.get_page(crawl_id, url)
+    }
+
+    /// Page measurements for a crawl — the rows [`Self::get_issues`] omits.
+    ///
+    /// Measurements are readability indices, keyword extraction, entity detection
+    /// and composite scores. They are measurements of the page, not problems, and
+    /// on a 100-page crawl they were 39% of all rows. `get_issues` returns defects
+    /// only by default; this is where the rest went.
+    ///
+    /// Derived from `get_issues` rather than reimplemented, so every backend gets
+    /// it by honouring [`IssueFilter::kind`].
+    fn get_page_metrics(&self, crawl_id: &str) -> Result<Vec<Issue>, StorageError> {
+        self.get_issues(
+            crawl_id,
+            &IssueFilter {
+                kind: IssueKindFilter::Metrics,
+                ..IssueFilter::default()
+            },
+        )
+    }
+
+    /// `(defects, measurements)` row counts for a crawl.
+    fn get_metric_split(&self, crawl_id: &str) -> Result<(usize, usize), StorageError> {
+        let defects = self.get_issues(crawl_id, &IssueFilter::default())?;
+        let measurements = self.get_page_metrics(crawl_id)?;
+        Ok((defects.len(), measurements.len()))
+    }
 
     /// Get aggregate statistics for a crawl.
     fn get_stats(&self, crawl_id: &str) -> Result<CrawlStats, StorageError>;

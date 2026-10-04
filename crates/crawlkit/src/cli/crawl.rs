@@ -233,9 +233,15 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         );
     }
 
+    // Before the summary lines: storage is the authoritative source for the
+    // defect/measurement split, and post-crawl persistence has not run until
+    // this call returns. Reporting `result.issues_found` here instead would
+    // undercount by exactly the cross-page findings just persisted.
+    let (defects, measurements) = write_output(&engine, &result, params, &output_dir)?;
+
     pb.finish_with_message(format!(
-        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt, {} duplicate content, {} unchanged, {} modified, {} new",
-        result.pages_crawled, result.pages_stored, result.issues_found, result.skipped_external, result.skipped_robots, result.skipped_duplicate, result.pages_unchanged, result.pages_modified, result.pages_new
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} measurements, {} external skipped, {} blocked by robots.txt, {} duplicate content, {} unchanged, {} modified, {} new",
+        result.pages_crawled, result.pages_stored, defects, measurements, result.skipped_external, result.skipped_robots, result.skipped_duplicate, result.pages_unchanged, result.pages_modified, result.pages_new
     ));
 
     if audit_enabled {
@@ -244,7 +250,7 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
             "cli",
             &format!(
                 "Crawl completed: {} pages crawled, {} stored, {} issues",
-                result.pages_crawled, result.pages_stored, result.issues_found
+                result.pages_crawled, result.pages_stored, defects
             ),
         );
     }
@@ -257,13 +263,13 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         report_monitoring(monitoring, &output_dir)?;
     }
 
-    write_output(&engine, &result, params, &output_dir)?;
 
     tracing::info!(
-        "Crawl complete: {} pages crawled, {} stored, {} issues, {} external skipped, {} blocked by robots.txt. Database: {}",
+        "Crawl complete: {} pages crawled, {} stored, {} issues, {} measurements, {} external skipped, {} blocked by robots.txt. Database: {}",
         result.pages_crawled,
         result.pages_stored,
-        result.issues_found,
+        defects,
+        measurements,
         result.skipped_external,
         result.skipped_robots,
         db_path.display()
@@ -358,22 +364,12 @@ fn write_output(
     result: &crawlkit_engine::crawl_engine::CrawlOutput,
     params: &CrawlParams,
     output_dir: &std::path::Path,
-) -> Result<()> {
+) -> Result<(usize, usize)> {
+    let mut split = (0, 0);
     if params.format == "json" || params.format == "all" {
-        let json_path = output_dir.join("crawl-results.json");
-        let stats = engine.storage().get_stats(&result.crawl_id)?;
-        let sample = serde_json::json!({
-            "crawl_id": result.crawl_id,
-            "target_url": params.url,
-            "max_pages": params.max_pages.unwrap_or(100),
-            "pages_crawled": result.pages_crawled,
-            "pages_stored": result.pages_stored,
-            "total_issues": stats.total_issues,
-            "status": "completed",
-            "seed": params.seed,
-        });
-        std::fs::write(&json_path, serde_json::to_string_pretty(&sample)?)?;
-        tracing::info!("Wrote results to {}", json_path.display());
+        // `crawl-results.json` is written at the end of this block, not here: its
+        // issue totals must reflect post-crawl persistence and the
+        // defect/measurement split, neither of which has happened yet.
 
         let metrics_path = output_dir.join("metrics.json");
         std::fs::write(
@@ -394,7 +390,13 @@ fn write_output(
             post_analysis.stats.sitemap_issues,
         );
 
-        if !post_analysis.findings.is_empty() {
+        // Gated on either source being non-empty, not just this one. The two
+        // cross-page systems are independent: the registry's 20 analyzers and
+        // `run_post_crawl_analysis`'s canonical/sitemap checks share no code
+        // path. Gating on one of them silently discarded the other's results —
+        // a crawl where `run_post_crawl_analysis` found nothing lost all 38
+        // registry findings, and wrote no `post-crawl-findings.json` at all.
+        if !post_analysis.findings.is_empty() || !result.cross_page_findings.is_empty() {
             // Persist cross-page findings alongside the single-page ones.
             //
             // They were previously written only to `post-crawl-findings.json`,
@@ -419,28 +421,41 @@ fn write_output(
             // the code as well does. Persisting both would double-count one
             // defect in every downstream total. Cross-page-only codes
             // (CANON005 and friends) are unaffected.
-            let existing: std::collections::HashSet<(String, String)> = storage
-                .get_issues(&crawl_id, &crawlkit_engine::IssueFilter::default())
+            // `IssueKindFilter::All`, not the defects-only default: this guard asks
+            // "has this (page_id, code) already been recorded", which is a
+            // question about storage, not about what the report should show.
+            // Filtering to defects here would let a cross-page finding whose code
+            // is a metric code be inserted a second time and counted twice.
+            let mut existing: std::collections::HashSet<(String, String)> = storage
+                .get_issues(
+                    &crawl_id,
+                    &crawlkit_engine::IssueFilter {
+                        kind: crawlkit_engine::IssueKindFilter::All,
+                        ..Default::default()
+                    },
+                )
                 .unwrap_or_default()
                 .into_iter()
                 .map(|i| (i.page_id, i.code))
                 .collect();
 
             let mut skipped_duplicates = 0usize;
-            let issues: Vec<crawlkit_engine::Issue> = post_findings
+            let mut issues: Vec<crawlkit_engine::Issue> = post_findings
                 .iter()
                 .filter_map(|f| {
                     // A cross-page finding may reference a URL outside the crawl
                     // (an external orphan, a sitemap URL never fetched). Those
                     // have no page row to attach to, so they stay file-only.
                     let page = storage
-                        .get_page(&crawl_id, &f.page_url)
+                        .get_page_equivalent(&crawl_id, &f.page_url)
                         .ok()
                         .flatten()?;
                     if existing.contains(&(page.id.clone(), f.code.clone())) {
                         skipped_duplicates += 1;
                         return None;
                     }
+                    let key = (page.id.clone(), f.code.clone());
+                    existing.insert(key);
                     Some(crawlkit_engine::Issue {
                         id: uuid::Uuid::new_v4().to_string(),
                         page_id: page.id,
@@ -456,38 +471,131 @@ fn write_output(
                 })
                 .collect();
 
+            // The registry's cross-page findings, which the engine computed and
+            // previously discarded (only `.len()` was read). Twenty analyzers run
+            // here — orphan pages, keyword cannibalization, link equity, redirect
+            // chains, internal link balance, crawl quality, schema coverage,
+            // heading structure, canonical consistency, overall health — and every
+            // one of their results was thrown away at the end of the crawl.
+            //
+            // Same `(page_id, code)` guard as above, and `existing` has just been
+            // updated with what was just accepted, so a code that both systems
+            // emit for the same page is stored once rather than twice.
+            let registry_total = result.cross_page_findings.len();
+            let mut skipped_registry = 0usize;
+            let mut skipped_registry_no_page = 0usize;
+            for f in &result.cross_page_findings {
+                let Some(page) = storage.get_page_equivalent(&crawl_id, &f.url).ok().flatten() else {
+                    skipped_registry_no_page += 1;
+                    continue;
+                };
+                if !existing.insert((page.id.clone(), f.code.clone())) {
+                    skipped_registry += 1;
+                    continue;
+                }
+                issues.push(crawlkit_engine::Issue {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    page_id: page.id,
+                    category: f.category.clone(),
+                    severity: f.severity,
+                    code: f.code.clone(),
+                    title: f.title.clone(),
+                    description: f.description.clone(),
+                    element: None,
+                    recommendation: f.recommendation.clone(),
+                    tenant_id: tenant_id.clone(),
+                });
+            }
+
             if !issues.is_empty() {
                 match storage.insert_issues_batch(&issues) {
                     Ok(()) => tracing::info!(
-                        "Persisted {} of {} post-crawl findings ({} already reported per-page)",
+                        "Persisted {} of {} cross-page findings ({} duplicates, {} duplicates of cross-page codes)",
                         issues.len(),
-                        post_findings.len(),
-                        skipped_duplicates
+                        post_findings.len() + registry_total,
+                        skipped_duplicates,
+                        skipped_registry
                     ),
-                    Err(e) => tracing::warn!("Failed to persist post-crawl findings: {e}"),
+                    Err(e) => tracing::warn!("Failed to persist cross-page findings: {e}"),
                 }
+            }
+            if skipped_registry_no_page > 0 {
+                tracing::info!(
+                    "{} cross-page findings referenced a URL with no stored page and were not persisted",
+                    skipped_registry_no_page
+                );
             }
 
             let post_findings_path = output_dir.join("post-crawl-findings.json");
+            // Both cross-page sources, one file. The registry's findings used to
+            // appear in neither this file nor the database.
             let findings_json: Vec<serde_json::Value> = post_findings
                 .iter()
                 .map(|f| {
                     // Canonical wire shape per docs/schema/findings.schema.json.
                     super::findings::post_crawl_finding_json(f)
                 })
+                .chain(result.cross_page_findings.iter().map(|f| {
+                    super::findings::finding_json(&f.url, f)
+                }))
                 .collect();
             std::fs::write(
                 &post_findings_path,
                 serde_json::to_string_pretty(&findings_json)?,
             )?;
             tracing::info!(
-                "Wrote {} post-crawl findings to {}",
-                post_findings.len(),
+                "Wrote {} cross-page findings to {}",
+                findings_json.len(),
                 post_findings_path.display()
             );
         }
+
+        // Measurements are excluded from `crawl-results.json`, the console
+        // summary and every aggregate (that exclusion is the point of the split:
+        // an issue count has to mean defects only). Writing them here, after
+        // post-crawl persistence, is what keeps them from being lost — they are
+        // still recorded, just under a name that says what they are.
+        //
+        // `crawl-results.json` deliberately stays a summary object; this is the
+        // per-measurement record.
+        let storage = engine.storage();
+        let (defects, measurements) = storage.get_metric_split(&result.crawl_id)?;
+        let page_metrics = storage.get_page_metrics(&result.crawl_id)?;
+        let metrics_path = output_dir.join("page-metrics.json");
+        std::fs::write(
+            &metrics_path,
+            serde_json::to_string_pretty(&page_metrics)?,
+        )?;
+        tracing::info!(
+            "Issues: {} defects. Measurements: {} (excluded from totals; in {})",
+            defects,
+            measurements,
+            metrics_path.display()
+        );
+
+        // `--include-metrics` folds the counts back together for anyone who
+        // wants the pre-split number. It changes reported counts only — the rows
+        // were stored either way, so the flag cannot change what was analyzed.
+        let json_path = output_dir.join("crawl-results.json");
+        let mut summary = serde_json::json!({
+            "crawl_id": result.crawl_id,
+            "target_url": params.url,
+            "max_pages": params.max_pages.unwrap_or(100),
+            "pages_crawled": result.pages_crawled,
+            "pages_stored": result.pages_stored,
+            "total_issues": defects,
+            "status": "completed",
+            "seed": params.seed,
+            "total_measurements": measurements,
+            "measurements_excluded_from_totals": !params.include_metrics,
+        });
+        if params.include_metrics {
+            summary["total_issues"] = serde_json::json!(defects + measurements);
+        }
+        std::fs::write(&json_path, serde_json::to_string_pretty(&summary)?)?;
+        split = (defects, measurements);
     }
-    Ok(())
+    Ok(split)
 }
 
 fn report_monitoring(

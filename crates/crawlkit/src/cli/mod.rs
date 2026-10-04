@@ -250,6 +250,15 @@ pub enum Commands {
         #[arg(long, default_value = "full")]
         analyzer_profile: String,
 
+        /// Keep page measurements (readability indices, keyword extraction,
+        /// entity detection, composite scores) in the issue output.
+        ///
+        /// They are always stored, but excluded from issues, reports and
+        /// aggregates by default: on a 100-page crawl they were 39% of all rows,
+        /// which made every issue count and severity roll-up unreadable.
+        #[arg(long)]
+        include_metrics: bool,
+
         /// Maximum pages this crawl may render with JavaScript. When the
         /// quota is exhausted, remaining pages are analyzed statically and
         /// carry an explicit RENDER001 degradation finding (default:
@@ -674,6 +683,11 @@ pub struct CrawlParams {
     pub llm: bool,
     /// Selected analyzer registry profile.
     pub analyzer_profile: String,
+    /// Emit page measurements alongside issues in the primary output.
+    ///
+    /// Measurements are always stored; this only controls whether they appear
+    /// in `crawl-results.json` and the console summary.
+    pub include_metrics: bool,
     /// Per-crawl render quota (pages). `None` = unbounded.
     pub render_max: Option<u64>,
     /// Per-page render ceiling in seconds. `None` = engine default.

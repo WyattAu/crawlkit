@@ -505,7 +505,8 @@ pub use rum::{
 pub use sitemap::SitemapCache;
 #[cfg(feature = "full")]
 pub use storage::{
-    CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, Severity, StorageError,
+    CacheStats, CrawlStats, Issue, IssueCategory, IssueFilter, IssueKindFilter, Severity,
+    StorageError,
 };
 #[cfg(feature = "full")]
 pub use storage_trait::{new_in_memory_backend, StorageBackend};

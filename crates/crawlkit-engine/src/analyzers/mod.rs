@@ -100,6 +100,7 @@ pub mod social_analyzers;
 pub mod sts_analyzers;
 pub mod url_norm;
 pub mod csp_wildcard;
+pub mod metric_codes;
 pub mod defect_family;
 pub mod dedupe;
 /// Tabindex accessibility analyzer.

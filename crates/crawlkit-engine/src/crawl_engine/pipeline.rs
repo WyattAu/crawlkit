@@ -33,6 +33,12 @@ pub(crate) struct CrawlRun<'a> {
     pub(crate) storage: Arc<dyn StorageBackend>,
     pub(crate) crawl_id: String,
     pub(crate) seed_domain: String,
+    /// The URL the crawl actually started from.
+    ///
+    /// Distinct from `cfg.crawl_config.start_url`, which retains its `Default`
+    /// value (`https://example.com`) because callers pass the target to
+    /// `run_with_callback` instead of through the config.
+    pub(crate) seed_url: String,
     pub(crate) on_page: Option<OnPageCrawled>,
     pub(crate) metrics: Metrics,
     pub(crate) resource_monitor: ResourceMonitor,
@@ -137,7 +143,18 @@ impl CrawlRun<'_> {
         // findings pipeline as analyzer output — a degraded page is visible
         // in results, alerts, and exports, never silently static.
         findings.extend(render_degradations);
-        bump_by(&self.counters.issues_found, findings.len());
+
+        // Counted apart because they are different things. Readability indices,
+        // keyword extraction and composite scores are measurements; folding them
+        // into an issue total is what made per-page severity roll-ups
+        // unreadable. `issues_found` now means defects, which is what the name
+        // always implied.
+        let measurements = findings
+            .iter()
+            .filter(|f| crate::analyzers::metric_codes::is_metric_code(&f.code))
+            .count();
+        bump_by(&self.counters.issues_found, findings.len() - measurements);
+        bump_by(&self.counters.measurements_found, measurements);
 
         let page_id = uuid::Uuid::new_v4().to_string();
         let page_data =

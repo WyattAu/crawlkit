@@ -184,7 +184,7 @@ pub struct Issue {
 ///
 /// All fields are optional. When set, they narrow the query results.
 /// When `None`, that filter dimension is not applied.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct IssueFilter {
     /// Filter by severity.
     pub severity: Option<Severity>,
@@ -194,6 +194,40 @@ pub struct IssueFilter {
     pub page_id: Option<String>,
     /// Filter by issue code prefix.
     pub code_prefix: Option<String>,
+    /// Which rows to return: defects only (the default), measurements only, or
+    /// both.
+    ///
+    /// Measurements — readability indices, keyword extraction, entity detection,
+    /// composite scores — are stored alongside defects but are not problems, and
+    /// on a 100-page crawl they were 39% of all rows. Excluding them by default
+    /// is what makes an issue count mean something.
+    pub kind: IssueKindFilter,
+}
+
+impl Default for IssueFilter {
+    /// Defects only. A caller that wants measurements has to ask, so a newly
+    /// added analyzer is never silently hidden from the report.
+    fn default() -> Self {
+        Self {
+            severity: None,
+            category: None,
+            page_id: None,
+            code_prefix: None,
+            kind: IssueKindFilter::Defects,
+        }
+    }
+}
+
+/// Which measurement/defect rows a query returns.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum IssueKindFilter {
+    /// Rows that describe something to change. The default.
+    #[default]
+    Defects,
+    /// Rows that only measure the page.
+    Metrics,
+    /// Both.
+    All,
 }
 
 /// Aggregate crawl statistics.
@@ -583,6 +617,20 @@ impl Storage {
                     [],
                 )?;
             }
+        }
+
+        // Migrate: mark measurement rows so they can be excluded from issue
+        // reporting without being discarded. Populated from the code on insert,
+        // so `Issue` itself needs no new field and no existing construction site
+        // changes.
+        //
+        // INTEGER (not TEXT) for the same affinity reason as the columns above.
+        let finding_columns: Vec<String> = conn
+            .prepare("PRAGMA table_info(findings)")?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<Result<Vec<_>, _>>()?;
+        if !finding_columns.contains(&"is_metric".to_string()) {
+            conn.execute("ALTER TABLE findings ADD COLUMN is_metric INTEGER", [])?;
         }
 
         Ok(())
@@ -1156,8 +1204,8 @@ impl Storage {
     pub fn insert_issue(&self, issue: &Issue) -> Result<(), StorageError> {
         let conn = self.conn.lock();
         conn.execute(
-            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id, is_metric)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
                 issue.id,
                 issue.page_id,
@@ -1169,6 +1217,7 @@ impl Storage {
                 issue.element,
                 issue.recommendation,
                 issue.tenant_id,
+                Self::metric_flag(&issue.code),
             ],
         )?;
         Ok(())
@@ -1188,6 +1237,11 @@ impl Storage {
         Ok(())
     }
 
+    /// SQLite integer flag for a finding's measurement/defect classification.
+    fn metric_flag(code: &str) -> i64 {
+        i64::from(crate::analyzers::metric_codes::is_metric_code(code))
+    }
+
     /// Insert a batch of issues for performance.
     /// Wraps all inserts in a single SQLite transaction for O(n) vs O(n*fsync).
     pub fn insert_issues(&self, issues: &[Issue]) -> Result<(), StorageError> {
@@ -1197,8 +1251,8 @@ impl Storage {
         let conn = self.conn.lock();
         let tx = conn.unchecked_transaction()?;
         let mut stmt = tx.prepare(
-            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            "INSERT INTO findings (id, page_id, category, severity, code, title, description, element, recommendation, tenant_id, is_metric)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         )?;
         for issue in issues {
             stmt.execute(params![
@@ -1212,6 +1266,7 @@ impl Storage {
                 issue.element,
                 issue.recommendation,
                 issue.tenant_id,
+                Self::metric_flag(&issue.code),
             ])?;
         }
         drop(stmt);
@@ -1251,6 +1306,41 @@ impl Storage {
     ///
     /// Returns `None` if no page matches the given URL within the crawl.
     /// Checks the LRU cache first for recently accessed pages.
+    /// Page lookup that tolerates URL spelling differences.
+    ///
+    /// Falls back to `get_page` (exact, indexed) and then to a scan comparing
+    /// with [`crate::analyzers::url_norm::urls_equivalent`].
+    ///
+    /// Cross-page analyzers attribute site-wide findings to the seed URL as the
+    /// caller typed it (`https://example.org`), while storage holds the
+    /// normalized form (`https://example.org/`). An exact lookup therefore missed
+    /// every such finding and it was dropped on the floor — the trailing-slash
+    /// class of defect that `url_norm` exists to handle, reappearing on the
+    /// persistence path.
+    ///
+    /// The fallback is a scan, so it runs only after the indexed lookup misses.
+    pub fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+        if let Some(page) = self.get_page(crawl_id, url)? {
+            return Ok(Some(page));
+        }
+        // Scoped so the connection mutex is released before the recursive
+        // `get_page` below, which locks it again.
+        let matched = {
+            let conn = self.conn.lock();
+            let mut stmt = conn.prepare("SELECT url FROM pages WHERE crawl_id = ?1")?;
+            let candidates = stmt
+                .query_map(params![crawl_id], |row| row.get::<_, String>(0))?
+                .collect::<Result<Vec<_>, _>>()?;
+            candidates
+                .into_iter()
+                .find(|c| crate::analyzers::url_norm::urls_equivalent(c, url))
+        };
+        match matched {
+            Some(m) => self.get_page(crawl_id, &m),
+            None => Ok(None),
+        }
+    }
+
     pub fn get_page(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
         {
             let mut cache = self.page_cache.lock();
@@ -1428,6 +1518,12 @@ impl Storage {
             param_values.push(Box::new(tid.to_string()));
         }
 
+        match filters.kind {
+            IssueKindFilter::Defects => query.push_str(" AND COALESCE(f.is_metric, 0) = 0"),
+            IssueKindFilter::Metrics => query.push_str(" AND COALESCE(f.is_metric, 0) = 1"),
+            IssueKindFilter::All => {}
+        }
+
         if let Some(ref severity) = filters.severity {
             query.push_str(&format!(" AND f.severity = ?{}", param_values.len() + 1));
             param_values.push(Box::new(severity.as_str().to_string()));
@@ -1475,6 +1571,45 @@ impl Storage {
         let conn = self.conn.lock();
         let (query, param_values) = Self::build_issues_query(crawl_id, None, filters);
         Self::execute_issues_query(&conn, &query, &param_values)
+    }
+
+    /// Measurements recorded for this crawl, which [`Self::get_issues`] omits.
+    ///
+    /// Nothing is lost by the default split: every measurement is still stored,
+    /// just under a different query. Callers that want the combined view should
+    /// use [`IssueFilter::kind`] = [`IssueKindFilter::All`].
+    ///
+    /// Counted in SQL rather than by [`StorageBackend::get_page_metrics`], which
+    /// would fetch every row to count them.
+    pub fn get_page_metrics(&self, crawl_id: &str) -> Result<Vec<Issue>, StorageError> {
+        let conn = self.conn.lock();
+        let (query, param_values) = Self::build_issues_query(
+            crawl_id,
+            None,
+            &IssueFilter {
+                kind: IssueKindFilter::Metrics,
+                ..IssueFilter::default()
+            },
+        );
+        Self::execute_issues_query(&conn, &query, &param_values)
+    }
+
+    /// `(defects, measurements)` row counts for a crawl.
+    pub fn get_metric_split(&self, crawl_id: &str) -> Result<(usize, usize), StorageError> {
+        let conn = self.conn.lock();
+        let mut stmt = conn.prepare(
+            "SELECT
+                COALESCE(SUM(CASE WHEN COALESCE(f.is_metric, 0) = 0 THEN 1 ELSE 0 END), 0),
+                COALESCE(SUM(CASE WHEN COALESCE(f.is_metric, 0) = 1 THEN 1 ELSE 0 END), 0)
+             FROM findings f JOIN pages p ON f.page_id = p.id
+             WHERE p.crawl_id = ?1",
+        )?;
+        stmt.query_row(params![crawl_id], |row| {
+            let defects: i64 = row.get(0)?;
+            let metrics: i64 = row.get(1)?;
+            Ok((defects as usize, metrics as usize))
+        })
+        .map_err(StorageError::from)
     }
 
     /// Get pages for a specific tenant.
@@ -1532,7 +1667,7 @@ impl Storage {
 
         let total_issues: usize = conn
             .query_row(
-                "SELECT COALESCE(COUNT(*), 0) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1",
+                "SELECT COALESCE(COUNT(*), 0) FROM findings f JOIN pages p ON f.page_id = p.id\n                 WHERE p.crawl_id = ?1 AND COALESCE(f.is_metric, 0) = 0",
                 params![crawl_id],
                 |row| row.get::<_, i64>(0),
             )?
@@ -1541,7 +1676,7 @@ impl Storage {
         let mut issues_by_severity = std::collections::HashMap::new();
         {
             let mut stmt = conn.prepare(
-                "SELECT f.severity, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1 GROUP BY f.severity",
+                "SELECT f.severity, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id\n                 WHERE p.crawl_id = ?1 AND COALESCE(f.is_metric, 0) = 0 GROUP BY f.severity",
             )?;
             let rows = stmt.query_map(params![crawl_id], |row| {
                 let sev: String = row.get(0)?;
@@ -1557,7 +1692,7 @@ impl Storage {
         let mut issues_by_category = std::collections::HashMap::new();
         {
             let mut stmt = conn.prepare(
-                "SELECT f.category, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id WHERE p.crawl_id = ?1 GROUP BY f.category",
+                "SELECT f.category, COUNT(*) FROM findings f JOIN pages p ON f.page_id = p.id\n                 WHERE p.crawl_id = ?1 AND COALESCE(f.is_metric, 0) = 0 GROUP BY f.category",
             )?;
             let rows = stmt.query_map(params![crawl_id], |row| {
                 let cat: String = row.get(0)?;
@@ -2212,6 +2347,10 @@ impl crate::storage_trait::StorageBackend for Storage {
         self.insert_pages(crawl_id, pages)
     }
 
+    fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+        self.get_page_equivalent(crawl_id, url)
+    }
+
     fn get_page(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
         self.get_page(crawl_id, url)
     }
@@ -2350,7 +2489,7 @@ impl crate::storage_trait::StorageBackend for Storage {
             "SELECT f.severity, f.code, f.title, COUNT(DISTINCT f.page_id) as affected_pages
              FROM findings f
              JOIN pages p ON f.page_id = p.id
-             WHERE p.crawl_id = ?1
+             WHERE p.crawl_id = ?1 AND COALESCE(f.is_metric, 0) = 0
              GROUP BY f.severity, f.code, f.title
              ORDER BY
                CASE f.severity WHEN 'critical' THEN 0 WHEN 'error' THEN 1 WHEN 'warning' THEN 2 ELSE 3 END,
@@ -2402,7 +2541,7 @@ impl crate::storage_trait::StorageBackend for Storage {
                     MIN(f.id) as first_id
              FROM findings f
              JOIN pages p ON f.page_id = p.id
-             WHERE p.crawl_id = ?1
+             WHERE p.crawl_id = ?1 AND COALESCE(f.is_metric, 0) = 0
              GROUP BY f.code, f.title, f.description, f.recommendation, f.severity",
         )?;
         struct GroupRow {

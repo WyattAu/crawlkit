@@ -110,6 +110,7 @@ async fn main() -> Result<()> {
             alert_threshold,
             llm,
             analyzer_profile,
+            include_metrics,
             render_max,
             render_timeout,
         } => {
@@ -161,6 +162,7 @@ async fn main() -> Result<()> {
                 } else {
                     analyzer_profile
                 },
+                include_metrics,
                 render_max: render_max.or_else(|| config.crawl.as_ref().and_then(|c| c.render_max)),
                 render_timeout: render_timeout
                     .or_else(|| config.crawl.as_ref().and_then(|c| c.render_timeout_secs)),

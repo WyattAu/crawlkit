@@ -149,7 +149,7 @@ http = { workspace = true, optional = true }
 http-body = { workspace = true, optional = true }
 http-body-util = { workspace = true, optional = true }
 hyper = { workspace = true, optional = true }
-quick-xml = { version = "0.41", optional = true }
+quick-xml = { version = "0.42", optional = true }
 rayon = { version = "1", optional = true }
 libloading = { version = "0.8", optional = true }
 redis = { workspace = true, optional = true }

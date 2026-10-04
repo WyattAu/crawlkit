@@ -305,7 +305,7 @@ impl Analyzer for CrossOriginIsolationDeepAnalyzer {
             {
                 // Full cross-origin isolation achieved
             } else {
-                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP003".to_string(), title: "Partial cross-origin isolation".to_string(), description: format!("COEP={coep_val}, COOP={coop_val}. Full isolation requires COEP=require-corp and COOP=same-origin."), url: url.clone(), recommendation: "Set COEP=require-corp and COOP=same-origin for full cross-origin isolation.".to_string() });
+                findings.push(Finding { severity: Severity::Info, category: IssueCategory::Security, code: "COISODEEP003".to_string(), title: "Partial cross-origin isolation".to_string(), description: format!("COEP={coep_val}, COOP={coop_val}. Full isolation requires COEP=require-corp and COOP=same-origin."), url: url.clone(), recommendation: super::cross_origin_advice::isolation_pair_advice().to_string() });
             }
         }
 

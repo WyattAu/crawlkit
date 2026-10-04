@@ -320,7 +320,7 @@ impl Analyzer for CrossOriginIsolationAnalyzerV2 {
                 title: "Missing Cross-Origin-Embedder-Policy header".to_string(),
                 description: "No Cross-Origin-Embedder-Policy header was found. COEP prevents resources from loading cross-origin without explicit permission.".into(),
                 url: url.clone(),
-                recommendation: "Set Cross-Origin-Embedder-Policy to require-corp for stricter cross-origin isolation.".into(),
+                recommendation: crate::analyzers::cross_origin_advice::coep_advice().into(),
             });
         }
         findings
@@ -361,7 +361,7 @@ impl Analyzer for CrossOriginOpenerPolicyAnalyzerV2 {
                 title: "Missing Cross-Origin-Opener-Policy header".to_string(),
                 description: "No Cross-Origin-Opener-Policy header was found. COOP isolates your browsing context from cross-origin popups.".into(),
                 url: url.clone(),
-                recommendation: "Set Cross-Origin-Opener-Policy to same-origin for stricter isolation.".into(),
+                recommendation: crate::analyzers::cross_origin_advice::coop_advice().into(),
             });
         }
         findings

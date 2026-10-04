@@ -34,20 +34,46 @@ deliberately minimal page.
 | `python_org.html` | `https://www.python.org/` | Small nonprofit marketing site. |
 | `example_org.html` | `https://example.com/` | Deliberately minimal: one paragraph, one link. Any finding here is worth a look. |
 
+## What each capture consists of
+
+Three files per site, because a body alone produces a misleading corpus:
+
+| File | Fed to the harness as |
+|---|---|
+| `<name>.html` | `AnalysisContext::body` |
+| `<name>.headers.json` | `headers`, `server`, `content_type`, `content_encoding`, `status_code` |
+| `<name>.robots.txt` | `robots_txt` |
+
+**Headers are not optional.** Roughly twenty security-header analyzers read
+`ctx.headers`. The first version of this corpus passed `headers: &[]`, and the
+result was that all twenty fired on all ten captures — `SEC001` "Missing CSP" on
+gov.uk, which sends a strict CSP. That buried the HTML findings the corpus exists
+to test *and* would have made a header-analyzer regression invisible, because the
+rules already looked like they always fire.
+
+**robots.txt is not optional either**, for the same reason: passing `None` made
+`AI-ACC009` "No robots.txt found" fire on all ten captures, every one of which
+serves a perfectly good `robots.txt`.
+
 ## Refreshing a capture
 
 ```bash
-cd crates/crawlkit-engine/tests/fixtures/realworld
-curl -sS -L --compressed --max-time 25 \
-  -A "crawlkit-fixture-capture/6.0 (audit corpus)" \
-  -o <name>.html <url>
+scripts/capture-realworld-fixture.sh <name> <url>
 ```
 
-`--compressed` matters. `https://www.python.org/` serves `content-encoding: br`
-with no `Content-Length`, so a plain `curl` writes the **compressed bytes** and
-the fixture is unusable — it looks like a valid 11 KB file and parses as
+The script captures all three files from the same request, so body and headers
+cannot drift apart. Use it rather than a bare `curl`: it is the thing that gets
+the two mistakes below right.
+
+`--compressed` is not optional. `https://www.python.org/` serves
+`content-encoding: br` with no `Content-Length`, so a plain `curl` writes the
+**compressed bytes** — the result looks like a valid 11 KB file and parses as
 nothing. This is the same signal crawlkit's own `compression` module has to
 negotiate explicitly for the same reason.
+
+The script also warns above a 150 KB body budget. BBC News (934 KB), Wikipedia
+(253 KB), Stripe (678 KB) and GitHub (325 KB) were all dropped for exceeding it;
+the suite reads every fixture on every run.
 
 After refreshing, regenerate nothing by hand: `realworld_tests.rs` will fail
 with the exact expectation that moved, and the diff is the record of what

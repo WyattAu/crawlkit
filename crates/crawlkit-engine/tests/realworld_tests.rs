@@ -73,6 +73,28 @@ fn fixture_paths() -> Vec<PathBuf> {
     paths
 }
 
+/// The response captured alongside a fixture's body.
+///
+/// Roughly twenty security-header analyzers read `ctx.headers` and `ctx.server`.
+/// A capture without them makes every one of those rules fire on every fixture,
+/// which buries the HTML findings the corpus exists to test *and* makes a
+/// header-analyzer regression invisible -- the rules would look like they always
+/// fire either way. See `scripts/capture-realworld-fixture.sh`.
+#[derive(Debug, serde::Deserialize)]
+struct CapturedResponse {
+    #[allow(dead_code)]
+    url: String,
+    status: Option<u16>,
+    headers: BTreeMap<String, String>,
+}
+
+fn load_response(name: &str) -> CapturedResponse {
+    let path = realworld_dir().join(name.replace(".html", ".headers.json"));
+    let raw = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("{} must exist: {e}", path.display()));
+    serde_json::from_str(&raw).unwrap_or_else(|e| panic!("{} must parse: {e}", path.display()))
+}
+
 fn analyze(path: &Path) -> Vec<crawlkit_engine::Finding> {
     let name = path.file_name().unwrap().to_str().unwrap();
     let html = std::fs::read_to_string(path)
@@ -85,22 +107,47 @@ fn analyze(path: &Path) -> Vec<crawlkit_engine::Finding> {
         "{name} does not look like HTML — was it captured with --compressed?"
     );
 
+    // Absent where the origin serves none (example.com does not).
+    let robots_path = realworld_dir().join(name.replace(".html", ".robots.txt"));
+    let robots: Option<String> = std::fs::read_to_string(&robots_path).ok();
+
+    let response = load_response(name);
+    assert!(
+        response.url == source_url(name),
+        "{name}: recorded response URL {} does not match the provenance entry {}",
+        response.url,
+        source_url(name)
+    );
+
     let url = Url::parse(source_url(name)).expect("fixture source URL must parse");
     let page = HtmlParser::parse(&html, &url);
+    // `AnalysisContext::headers` is `&[(String, String)]`, so the captured map
+    // is cloned straight in rather than borrowed.
+    let headers: Vec<(String, String)> = response
+        .headers
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     let ctx = AnalysisContext {
         page: &page,
         body: Some(&html),
-        status_code: Some(200),
-        headers: &[],
+        status_code: response.status,
+        headers: &headers,
         response_time: Some(Duration::from_millis(120)),
         redirect_chain: &[],
-        robots_txt: None,
+        // Captured alongside the body. Passing `None` made "No robots.txt found"
+        // fire on all ten captures, every one of which serves a perfectly good
+        // robots.txt -- a harness artifact that looked like a product finding.
+        robots_txt: robots.as_deref(),
         user_agent: None,
         body_size: Some(html.len()),
-        compressed_size: Some(html.len() / 3),
-        content_encoding: None,
-        server: Some("nginx/1.24.0"),
-        content_type: Some("text/html; charset=utf-8"),
+        compressed_size: response
+            .headers
+            .get("content-length")
+            .and_then(|v| v.parse::<usize>().ok()),
+        content_encoding: response.headers.get("content-encoding").map(String::as_str),
+        server: response.headers.get("server").map(String::as_str),
+        content_type: response.headers.get("content-type").map(String::as_str),
         rendered: None,
     };
     let registry = AnalyzerRegistry::new(&CrawlConfig::default());

@@ -647,9 +647,7 @@ impl Analyzer for CrossOriginIsolationAnalyzer {
                               mitigation (Spectre)."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Set Cross-Origin-Embedder-Policy: require-corp to enable \
-                                 cross-origin isolation."
-                    .into(),
+                recommendation: crate::analyzers::cross_origin_advice::coep_advice().into(),
             });
         }
 
@@ -664,9 +662,7 @@ impl Analyzer for CrossOriginIsolationAnalyzer {
                               cross-origin window references that could be exploited."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Set Cross-Origin-Opener-Policy: same-origin to isolate your \
-                                 browsing context."
-                    .into(),
+                recommendation: crate::analyzers::cross_origin_advice::coop_advice().into(),
             });
         }
 

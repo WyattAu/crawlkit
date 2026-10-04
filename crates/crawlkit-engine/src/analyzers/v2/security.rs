@@ -634,7 +634,7 @@ impl Analyzer for CrossOriginIsolationDeepAnalyzerV2 {
                 description: "COEP prevents loading cross-origin resources without CORS."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Embedder-Policy: require-corp.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coep_advice().to_string(),
             });
         }
         if coop.is_none() {
@@ -645,7 +645,7 @@ impl Analyzer for CrossOriginIsolationDeepAnalyzerV2 {
                 title: "Missing COOP".to_string(),
                 description: "COOP controls cross-origin document references.".to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Opener-Policy: same-origin.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coop_advice().to_string(),
             });
         }
         findings
@@ -1318,7 +1318,7 @@ impl Analyzer for CoepValidator {
                 title: "Missing Cross-Origin-Embedder-Policy".to_string(),
                 description: "COEP prevents loading cross-origin resources.".to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Embedder-Policy: require-corp.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coep_advice().to_string(),
             });
         }
         findings
@@ -1355,7 +1355,7 @@ impl Analyzer for CoopValidator {
                 title: "Missing Cross-Origin-Opener-Policy".to_string(),
                 description: "COOP controls cross-origin references.".to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Opener-Policy: same-origin.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coop_advice().to_string(),
             });
         }
         findings
@@ -2284,7 +2284,8 @@ impl Analyzer for CoepRequireCorpValidator {
                     title: "COEP set to unsafe-none".to_string(),
                     description: "COEP unsafe-none provides no isolation.".to_string(),
                     url: url.clone(),
-                    recommendation: "Set COEP to require-corp.".to_string(),
+                    recommendation: crate::analyzers::cross_origin_advice::coep_advice()
+                        .to_string(),
                 });
             }
         }
@@ -2324,7 +2325,8 @@ impl Analyzer for CoopSameOriginValidator {
                     title: "COOP set to unsafe-none".to_string(),
                     description: "COOP unsafe-none provides no isolation.".to_string(),
                     url: url.clone(),
-                    recommendation: "Set COOP to same-origin.".to_string(),
+                    recommendation: crate::analyzers::cross_origin_advice::coop_advice()
+                        .to_string(),
                 });
             }
         }
@@ -4406,7 +4408,7 @@ impl Analyzer for CrossOriginIsolationDeepDeepValidator {
                 title: "Missing Cross-Origin-Embedder-Policy (deep-deep)".to_string(),
                 description: "No COEP header found in deep analysis.".to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Embedder-Policy: require-corp.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coep_advice().to_string(),
             });
         }
         if !has_coop {
@@ -4417,7 +4419,7 @@ impl Analyzer for CrossOriginIsolationDeepDeepValidator {
                 title: "Missing Cross-Origin-Opener-Policy (deep-deep)".to_string(),
                 description: "No COOP header found in deep analysis.".to_string(),
                 url: url.clone(),
-                recommendation: "Add Cross-Origin-Opener-Policy: same-origin.".to_string(),
+                recommendation: crate::analyzers::cross_origin_advice::coop_advice().to_string(),
             });
         }
         findings

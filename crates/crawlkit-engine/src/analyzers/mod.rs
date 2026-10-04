@@ -25,6 +25,7 @@ pub mod basic_accessibility_analyzers;
 pub mod content_analyzers;
 /// Cookie analyzers: Set-Cookie flag checks (extracted from security_analyzers).
 pub mod cookies;
+pub mod cross_origin_advice;
 /// CSP directive validator and color contrast analyzers.
 pub mod csp_color_contrast_analyzers;
 pub mod csp_wildcard;

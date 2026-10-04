@@ -194,10 +194,7 @@ impl Analyzer for CrossOriginResourcePolicyAnalyzer {
                               against Spectre-like side-channel attacks."
                     .to_string(),
                 url: url.to_string(),
-                recommendation: "Set Cross-Origin-Resource-Policy: same-origin if the resource \
-                                 should only be used by the same origin, or cross-origin for \
-                                 resources that need cross-origin access."
-                    .to_string(),
+                recommendation: super::cross_origin_advice::corp_advice().to_string(),
             });
         }
 

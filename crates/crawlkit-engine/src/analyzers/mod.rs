@@ -386,6 +386,13 @@ pub struct SslCertificateInfo {
 /// Passed to each [`Analyzer`] to provide all the data needed for analysis.
 /// The context borrows the parsed page and response metadata to avoid
 /// unnecessary cloning.
+///
+/// `#[non_exhaustive]` because [`AnalysisContext::rendered`] carries a
+/// `RenderedPage` under `full` and a `()` without it. Cargo unifies features
+/// graph-wide, so a host that enabled `full` anywhere in its graph would
+/// otherwise fail to build a struct literal for this type. Read the field
+/// behind an accessor or match on the two shapes instead.
+#[non_exhaustive]
 pub struct AnalysisContext<'a> {
     /// The parsed page content.
     pub page: &'a ParsedPage,

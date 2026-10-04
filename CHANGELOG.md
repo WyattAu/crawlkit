@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`crawlkit-engine`: public API marked `#[non_exhaustive]` where a feature
+  gates part of it.** `CrawlError`, `StorageError`, `PluginInstance`, and
+  `AnalysisContext` each gained `#[non_exhaustive]`, because their variants and
+  fields are conditionally compiled (`full`, `postgres`, `wasi-preview2`) and
+  Cargo unifies features **graph-wide**. A downstream crate that enabled any of
+  these features — including transitively, through a crate with nothing to do
+  with crawling — would find an exhaustive `match` or struct literal broken by
+  an arm or field it never asked for. The affected sites are `CrawlError`
+  (`RequestFailed` carries `reqwest::Error` under `full` and `String` without
+  it; `Storage` is absent without `full`), `StorageError` (two `Pg*` variants),
+  `PluginInstance` (`Wasi`), and `AnalysisContext::rendered` (`RenderedPage` vs
+  `()`).
+
+  Migration: add a wildcard arm / `_ =>` fallback, or match on
+  `Display`/`source()` output. No internal call site needed changes.
+
+  In `IsRetryable::is_retryable`, the two `cfg`-gated `RequestFailed` arms were
+  collapsed into one unconditional arm with a `cfg`-gated body, so the match
+  stays total regardless of which features are unified in.
+
 ## [6.0.0-alpha.5]
 
 **Released:** 2026-10-04 · accuracy pass over seven audit rounds against

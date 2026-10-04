@@ -743,6 +743,12 @@ impl Drop for EpochWatchdog {
 ///
 /// This enum provides a uniform interface for the plugin registry and
 /// runtime without requiring dynamic dispatch.
+///
+/// `#[non_exhaustive]` because [`PluginInstance::Wasi`] exists only under the
+/// `wasi-preview2` feature. Cargo unifies features graph-wide, so a host that
+/// enabled `wasi-preview2` anywhere in its graph would otherwise find an
+/// exhaustive `match` broken by a variant it never requested.
+#[non_exhaustive]
 pub enum PluginInstance {
     /// Core WASM ABI plugin (legacy, default).
     Wasm(WasmPlugin),

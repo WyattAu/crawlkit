@@ -611,7 +611,18 @@ mod opt_duration_ms {
 /// let err = CrawlError::TooManyRedirects(20);
 /// assert!(err.to_string().contains("20"));
 /// ```
+///
+/// # Matching
+///
+/// This enum is `#[non_exhaustive]`. Two of its variants exist only under
+/// `full`: [`CrawlError::RequestFailed`] carries a `reqwest::Error` rather than
+/// a `String` there, and [`CrawlError::Storage`] is absent without it. Cargo
+/// unifies features graph-wide, so a host that enabled `full` *anywhere* in
+/// its dependency graph would otherwise find an exhaustive `match` broken by
+/// variants it never requested. Match with a `_` arm, or discriminate on the
+/// `Display` / `source()` output rather than the variant.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum CrawlError {
     /// The URL could not be parsed.
     #[error("invalid URL: {0}")]
@@ -658,10 +669,20 @@ pub enum CrawlError {
 impl loop_retry::IsRetryable for CrawlError {
     fn is_retryable(&self) -> bool {
         match self {
-            #[cfg(feature = "full")]
-            Self::RequestFailed(e) => e.is_timeout() || e.is_connect(),
-            #[cfg(not(feature = "full"))]
-            Self::RequestFailed(_) => false,
+            // Unconditional: `RequestFailed` exists under both feature states,
+            // only its payload type differs. One arm with a `cfg`-gated body
+            // keeps the match total without a gated arm that could vanish.
+            Self::RequestFailed(e) => {
+                #[cfg(feature = "full")]
+                {
+                    e.is_timeout() || e.is_connect()
+                }
+                #[cfg(not(feature = "full"))]
+                {
+                    let _ = e;
+                    false
+                }
+            }
             Self::MaxRetriesExceeded(_) => false,
             _ => false,
         }

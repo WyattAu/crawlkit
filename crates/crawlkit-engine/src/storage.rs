@@ -12,7 +12,13 @@ use url::Url;
 ///
 /// Wraps SQLite database errors and URL parsing errors that can occur
 /// during crawl data persistence.
+///
+/// `#[non_exhaustive]` because the two `Pg*` variants exist only under the
+/// `postgres` feature. Cargo unifies features graph-wide, so a host that
+/// enabled `postgres` anywhere in its graph would otherwise find an exhaustive
+/// `match` broken by variants it never requested.
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum StorageError {
     /// SQLite database error.
     #[error("database error: {0}")]

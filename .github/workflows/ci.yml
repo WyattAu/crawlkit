@@ -102,7 +102,13 @@ jobs:
         with:
           key: integration
       - name: Integration tests (excluding playwright)
-        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests --test ssrf_boundary_tests --test storage_contract_tests --test queue_contract_tests --test analyzer_registry_contract_tests
+        # Every target below is listed explicitly, so a newly added test file is
+        # NOT picked up automatically. `corpus_tests`, `determinism_of_text` and
+        # `non_html_resources` had never been listed, which meant the fixtures
+        # guarding the false-positive fixes never ran in CI at all. When adding a
+        # suite, prefer plain `cargo test --workspace --tests` unless the target
+        # needs a feature flag, a browser, or a service.
+        run: cargo test --workspace --test integration_tests --test backlink_integration_tests --test rum_integration_tests --test parallel_pipeline_tests --test property_tests --test wasm_abi_tests --test plugin_index_tests --test router_tests --test ssrf_boundary_tests --test storage_contract_tests --test queue_contract_tests --test analyzer_registry_contract_tests --test realworld_tests --test corpus_tests --test determinism_of_text --test determinism_tests --test non_html_resources --test tenant_isolation_tests --test render_budget_tests
 
   test-services:
     name: Service-backed Tests (PostgreSQL + Redis)

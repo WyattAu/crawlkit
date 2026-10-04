@@ -112,25 +112,76 @@ impl Analyzer for AriaLandmarksAnalyzerV2 {
             });
             return findings;
         }
-        for &role in &["banner", "navigation", "main", "contentinfo"] {
-            if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == role) {
-                findings.push(Finding {
-                    severity: Severity::Warning,
-                    category: IssueCategory::Accessibility,
-                    code: format!(
-                        "ARIALAND-V200{}",
-                        ["banner", "navigation", "main", "contentinfo"]
-                            .iter()
-                            .position(|&r| r == role)
-                            .unwrap_or(0)
-                            + 1
-                    ),
-                    title: format!("Missing {role} landmark"),
-                    description: format!("No ARIA landmark with role '{role}' found."),
-                    url: url.clone(),
-                    recommendation: format!("Add a <div role=\"{role}\"> or HTML5 element."),
-                });
-            }
+        // Each role gets its own literal code.
+        //
+        // `format!("ARIALAND-V200{}", position + 1)` over
+        // `["banner", "navigation", "main", "contentinfo"]` mapped
+        // banner->V2001, navigation->V2002, main->V2003, contentinfo->V2004 --
+        // but `ARIALAND-V2001`, `V2002` and `V2003` are *already* emitted as
+        // literals by the deep landmark analyzers, where they mean "No ARIA
+        // landmarks found (deep)", "Missing main landmark (deep)" and "Missing
+        // navigation landmark (deep)". Each of those codes therefore denoted two
+        // different defects depending on which analyzer produced it.
+        //
+        // The defect registry keys on code, so a page missing only a
+        // `<header role="banner">` was keyed as "no aria landmarks found" and
+        // collapsed into a finding describing something else entirely.
+        //
+        // These four are written out longhand rather than looped or macro-generated
+        // because `scripts/generate_finding_catalog.py` matches
+        // `code:\s*"LITERAL"` against the source text. A code computed at runtime
+        // is invisible to the published catalog, to `grep`, and to review.
+
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "banner") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND-ROLE-BANNER".to_string(),
+                title: "Missing banner landmark".to_string(),
+                description: "No ARIA landmark with role 'banner' found.".to_string(),
+                url: url.clone(),
+                recommendation: "Add a <div role=\"banner\"> or the <header> element."
+                    .to_string(),
+            });
+        }
+
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "navigation") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND-ROLE-NAVIGATION".to_string(),
+                title: "Missing navigation landmark".to_string(),
+                description: "No ARIA landmark with role 'navigation' found.".to_string(),
+                url: url.clone(),
+                recommendation: "Add a <div role=\"navigation\"> or the <nav> element."
+                    .to_string(),
+            });
+        }
+
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "main") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND-ROLE-MAIN".to_string(),
+                title: "Missing main landmark".to_string(),
+                description: "No ARIA landmark with role 'main' found.".to_string(),
+                url: url.clone(),
+                recommendation: "Add a <div role=\"main\"> or the <main> element."
+                    .to_string(),
+            });
+        }
+
+        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "contentinfo") {
+            findings.push(Finding {
+                severity: Severity::Warning,
+                category: IssueCategory::Accessibility,
+                code: "ARIALAND-ROLE-CONTENTINFO".to_string(),
+                title: "Missing contentinfo landmark".to_string(),
+                description: "No ARIA landmark with role 'contentinfo' found.".to_string(),
+                url: url.clone(),
+                recommendation: "Add a <div role=\"contentinfo\"> or the <footer> element."
+                    .to_string(),
+            });
         }
         let main_count = ctx
             .page

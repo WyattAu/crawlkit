@@ -672,6 +672,91 @@ cargo run --bin crawlkit -- plugin publish plugins/heading-structure
 cargo run --bin crawlkit -- plugin publish plugins/meta-description-checker
 ```
 
+## Round 7 — an offline real-world corpus, and the two defects it found immediately
+
+`docs/CRAWL_VALIDATION_PLAN.md` called for a 10-site crawl plus 30 hand-audited
+findings per site. That needs a human with network access and cannot run in CI,
+which left the largest remaining gap unguarded.
+
+### `tests/fixtures/realworld/` — 10 captured live pages
+
+Every false-positive class in rounds 1–6 was found on real markup. A harness built
+only from synthetic HTML would not have caught any of them. Ten captures, chosen
+for structural variety: `gov.uk`, `nhs.uk`, kingstonpeptides.com, mozilla blog,
+arXiv, rust-lang docs, xkcd, python.org, example.com, and one bare article page.
+512 KB total, captured rather than fetched so the suite is fully offline and a
+failure can only mean crawlkit regressed.
+
+One capture note worth recording: `python.org` serves `content-encoding: br` with
+no `Content-Length`, so a plain `curl` writes the *compressed* bytes and the
+fixture looks like a valid 11 KB file while parsing as nothing. `--compressed` is
+required. Same signal crawlkit's own `compression` module has to negotiate
+explicitly.
+
+`realworld_tests.rs` asserts, in increasing strictness:
+
+1. **Deny-lists** — codes whose analyzer was removed must appear neither in source
+   nor in output; codes still emitted but outranked by a more severe sibling must
+   never *survive* dedupe.
+2. **Per-page expectations** — each entry hand-checked against the raw capture.
+3. **Structural invariants** — one finding per defect per page, no finding
+   contradicting its own code's severity, canonical ordering, non-empty output.
+4. **Determinism** — two runs byte-identical.
+
+Verified the suite is not vacuous: reverting the `img_alt` fix makes
+`verified_true_negatives` fail, and reverting `collapse_duplicates` to
+positional-wins makes three `dedupe::tests` fail.
+
+### Defect 18 — `A11Y-LINK-V2001` ignored the accessible name of an image
+
+xkcd.com's only text-free link is
+`<a href="/"><img src="/s/0b7742.png" alt="xkcd.com logo"></a>`. The link has an
+accessible name via the image's `alt`, and it was reported as
+*"Links with empty text"* at **Error**.
+
+The analyzer checked `text` and `aria_label` and not `img_alt`, while **its own
+recommendation said to add "an img with alt text inside each link"** — recommending
+the exact markup it then flagged. Four sibling analyzers already consulted
+`img_alt`; this one was missed.
+
+The fix uses the siblings' non-empty test, so `alt=""` (which marks an image
+decorative and leaves the link nameless) does not suppress the finding.
+
+### Defect 19 — one landmark code meant two different defects
+
+`AriaLandmarksAnalyzerV2` built its codes as
+`format!("ARIALAND-V200{}", position + 1)` over
+`["banner", "navigation", "main", "contentinfo"]`, mapping banner→`V2001`,
+navigation→`V2002`, main→`V2003`. But `ARIALAND-V2001`, `V2002` and `V2003` are
+**already emitted as literals** by the deep landmark analyzers, where they mean
+*"No ARIA landmarks found (deep)"*, *"Missing main landmark (deep)"* and
+*"Missing navigation landmark (deep)"*.
+
+`defect_key` resolves on **code**, so each of those codes denoted two different
+defects depending on its author. A page missing only a `<header role="banner">`
+was keyed as *"no aria landmarks found"* and collapsed into a finding describing
+something else entirely.
+
+Codes now name their role: `ARIALAND-ROLE-BANNER` / `-MAIN` / `-NAVIGATION` /
+`-CONTENTINFO`, written as longhand literals so the finding-catalog scanner (which
+matches `code:\s*"LITERAL"`) and `grep` can both see them. A macro was tried first
+and is invisible to a static scanner.
+
+Verified on kingstonpeptides.com: `ARIALAND-ROLE-BANNER` and
+`ARIALAND-ROLE-CONTENTINFO` each fire once, on
+`/blog/bpc-157-vs-tb500-comparison` — a bare 18 KB article page that genuinely
+contains no `<header>` and no `<footer>`. Both are true positives. gov.uk has all
+four and reports none.
+
+### CI was not running the suites that guard this work
+
+`ci.yml` names its integration test targets explicitly, so a new test file is not
+picked up automatically. `corpus_tests`, `determinism_of_text`,
+`determinism_tests`, `non_html_resources`, `tenant_isolation_tests` and
+`render_budget_tests` had **never** been listed — 39 tests guarding exactly the
+regressions these rounds fixed, running only on a developer's machine. Added, with
+a comment on the step explaining why the list is explicit.
+
 ## Open findings not addressed
 
 | Item | Why |

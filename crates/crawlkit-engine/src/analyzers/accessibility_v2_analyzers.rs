@@ -74,7 +74,21 @@ impl Analyzer for LinkAccessibilityAnalyzerV2 {
             .links
             .iter()
             .filter(|l| {
-                l.text.trim().is_empty() && l.aria_label.as_deref().unwrap_or("").is_empty()
+                l.text.trim().is_empty()
+                    && l.aria_label.as_deref().unwrap_or("").trim().is_empty()
+                    // A link wrapping an image inherits that image's `alt` as its
+                    // accessible name, so it is not empty. This check ignored
+                    // `img_alt` while its own recommendation said to add "an img
+                    // with alt text inside each link" — recommending the very
+                    // markup it then flagged. Verified against xkcd.com, whose
+                    // sole such link is `<a href="/"><img alt="xkcd.com logo"></a>`
+                    // and was reported at Error.
+                    //
+                    // Uses the same non-empty test as `link_accessibility_analyzers`
+                    // and `accessibility_aggregator_analyzers`; `alt=""` does not
+                    // rescue a link, since an empty alt means the image is
+                    // decorative and the link still has no name.
+                    && !l.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty())
             })
             .map(|l| l.href.as_str())
             .collect();

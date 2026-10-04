@@ -15,7 +15,7 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1139 |
+| Distinct finding codes | 1143 |
 | `impl Analyzer for` blocks scanned | 734 |
 | Codes shared by 2+ analyzers | 6 |
 
@@ -69,6 +69,10 @@ consolidate the analyzers).
 | `ARIA001` | `AriaRolesAnalyzer` | `crates/crawlkit-engine/src/analyzers/aria_analyzers.rs` | ARIA roles without accessible names |
 | `ARIA002` | `AriaRolesAnalyzer` | `crates/crawlkit-engine/src/analyzers/aria_analyzers.rs` | ARIA roles may need accessible names on non-semantic elements |
 | `ARIALABEL001` | `AriaLabelAnalyzer` | `crates/crawlkit-engine/src/analyzers/aria_label_analyzers.rs` | ARIA roles without labels |
+| `ARIALAND-ROLE-BANNER` | `AriaLandmarksAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing banner landmark |
+| `ARIALAND-ROLE-CONTENTINFO` | `AriaLandmarksAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing contentinfo landmark |
+| `ARIALAND-ROLE-MAIN` | `AriaLandmarksAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing main landmark |
+| `ARIALAND-ROLE-NAVIGATION` | `AriaLandmarksAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing navigation landmark |
 | `ARIALAND-V2001` | `AriaLandmarksDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No ARIA landmarks found (deep) |
 | `ARIALAND-V2002` | `AriaLandmarksDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing main landmark (deep) |
 | `ARIALAND-V2003` | `AriaLandmarksDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing navigation landmark (deep) |

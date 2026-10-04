@@ -3631,3 +3631,87 @@ fn test_iseo_no_locale_no_hreflang() {
     let findings = InternationalSeoAnalyzer::new().analyze(&ctx);
     assert!(!findings.iter().any(|f| f.code == "ISEO004"));
 }
+
+#[cfg(test)]
+mod empty_link_text_via_image_alt {
+    use super::*;
+    use crate::parser::ExtractedLink;
+
+    fn link(href: &str, text: &str, aria: Option<&str>, alt: Option<&str>) -> ExtractedLink {
+        ExtractedLink {
+            href: href.to_string(),
+            text: text.to_string(),
+            rel: vec![],
+            is_external: false,
+            aria_label: aria.map(str::to_string),
+            img_alt: alt.map(str::to_string),
+        }
+    }
+
+    /// A link wrapping an image inherits that image's `alt` as its accessible
+    /// name.
+    ///
+    /// `A11Y-LINK-V2001` checked only `text` and `aria_label`, so it reported
+    /// `<a href="/"><img alt="xkcd.com logo"></a>` as a link with empty text at
+    /// **Error** — while its own recommendation told the author to add "an img
+    /// with alt text inside each link". Verified against a capture of xkcd.com,
+    /// whose only such link is exactly that.
+    #[test]
+    fn image_alt_gives_the_link_an_accessible_name() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![link("/", "", None, Some("xkcd.com logo"))];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAccessibilityAnalyzerV2::new().analyze(&ctx);
+        assert!(
+            !findings.iter().any(|f| f.code == "A11Y-LINK-V2001"),
+            "a link whose only content is an image with alt text is not empty: {findings:?}"
+        );
+    }
+
+    /// The genuine defect still fires: an image with no `alt` at all.
+    #[test]
+    fn image_without_alt_still_reports() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![link("/", "", None, None)];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAccessibilityAnalyzerV2::new().analyze(&ctx);
+        assert!(
+            findings.iter().any(|f| f.code == "A11Y-LINK-V2001"),
+            "a link with no text, no aria-label and no alt has no accessible name"
+        );
+    }
+
+    /// `alt=""` marks the image decorative, so the link still has no name. The
+    /// sibling analyzers use a bare `img_alt.is_none()` and would miss this; the
+    /// fix here must not inherit that leniency.
+    #[test]
+    fn empty_alt_does_not_rescue_the_link() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![link("/", "", None, Some("   "))];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAccessibilityAnalyzerV2::new().analyze(&ctx);
+        assert!(
+            findings.iter().any(|f| f.code == "A11Y-LINK-V2001"),
+            "an empty or whitespace alt leaves the link nameless"
+        );
+    }
+
+    /// The original triggers are unchanged.
+    #[test]
+    fn no_text_and_no_aria_label_still_reports() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![link("/x", "", None, None), link("/y", "  ", None, None)];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAccessibilityAnalyzerV2::new().analyze(&ctx);
+        assert!(findings.iter().any(|f| f.code == "A11Y-LINK-V2001"));
+    }
+
+    #[test]
+    fn aria_label_still_counts_as_a_name() {
+        let mut page = make_page("https://example.com");
+        page.links = vec![link("/x", "", Some("Home"), None)];
+        let ctx = make_ctx(&page, Some(200));
+        let findings = LinkAccessibilityAnalyzerV2::new().analyze(&ctx);
+        assert!(!findings.iter().any(|f| f.code == "A11Y-LINK-V2001"));
+    }
+}

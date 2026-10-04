@@ -32,6 +32,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   foldable back into the primary output with `crawlkit crawl
   --include-metrics`.
 
+- **Offline real-world validation corpus.** `tests/fixtures/realworld/` holds ten
+  captured live pages — gov.uk, nhs.uk, kingstonpeptides.com, the Mozilla blog,
+  arXiv, rust-lang docs, xkcd, python.org, example.com, and a bare article page —
+  chosen for structural variety. Every false-positive class found so far came from
+  real markup; a harness built only from synthetic HTML would not have caught any
+  of them.
+
+  `realworld_tests.rs` runs entirely offline and asserts a deny-list of
+  never-correct codes, hand-checked per-page expectations, structural invariants
+  (one finding per defect per page, no finding contradicting its own code's
+  severity, canonical ordering), and determinism. Verified non-vacuous: reverting
+  either fix it guards makes it fail.
+
+  This replaces the manual 10-site plan in `docs/CRAWL_VALIDATION_PLAN.md`, which
+  needed network access and could not run in CI.
+
+### Fixed
+
+- **`A11Y-LINK-V2001` ignored the accessible name of an image.** xkcd.com's only
+  text-free link is `<a href="/"><img alt="xkcd.com logo"></a>`, which has an
+  accessible name via the image's `alt`; it was reported as *"Links with empty
+  text"* at **Error**. The analyzer checked `text` and `aria_label` but not
+  `img_alt`, while its own recommendation told the author to add *"an img with alt
+  text inside each link"* — recommending the markup it then flagged. Four sibling
+  analyzers already consulted `img_alt`; this one was missed. The fix uses their
+  non-empty test, so `alt=""` (a decorative image, leaving the link nameless) does
+  not suppress the finding.
+
+- **One landmark code meant two different defects.**
+  `AriaLandmarksAnalyzerV2` numbered its codes from an array position —
+  banner→`ARIALAND-V2001`, navigation→`V2002`, main→`V2003` — but those three
+  codes are already emitted as literals by the deep landmark analyzers, where they
+  mean *"No ARIA landmarks found (deep)"*, *"Missing main landmark (deep)"* and
+  *"Missing navigation landmark (deep)"*.
+
+  `defect_key` resolves on code, so each code denoted two different defects
+  depending on its author, and a page missing only a `<header role="banner">` was
+  keyed as *"no aria landmarks found"* and collapsed into a finding describing
+  something else. Codes now name their role — `ARIALAND-ROLE-BANNER`, `-MAIN`,
+  `-NAVIGATION`, `-CONTENTINFO` — and are written as longhand literals so the
+  finding-catalog scanner and `grep` can both attribute them.
+
+- **CI was not running six suites that guard the analyzer work.** `ci.yml` names
+  its integration targets explicitly, so a new test file is not picked up
+  automatically. `corpus_tests`, `determinism_of_text`, `determinism_tests`,
+  `non_html_resources`, `tenant_isolation_tests` and `render_budget_tests` had
+  never been listed — 39 tests guarding exactly the regressions the audit rounds
+  were about, running only locally. Added.
+
 ### Fixed
 
 - **Cross-page findings were computed and discarded.**

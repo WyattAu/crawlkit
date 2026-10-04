@@ -603,13 +603,82 @@ now reports the same defect — confirmed by title, not inferred from the code:
 `accessibility_focused.html` asserts `must_not_have` for that fixture, so both the
 old and new codes are listed — dropping the old one would have weakened it.
 
+## Round 6 — first-party plugins reused built-in codes, one causing a false negative
+
+Chasing the `plugins/index` item from round 3 turned up something worse.
+
+### The `plugins/index` "layout mismatch" was a misdiagnosis
+
+Round 3 recorded: *"`plugins/index/` ships a flat `artifacts/*.wasm` layout, but
+`--plugins` expects `<dir>/<name>/crawlkit-plugin.toml`. The five first-party
+plugins are not directly loadable."*
+
+That is not a defect. `plugins/index/` is a **marketplace index** — a catalogue
+plus signed artifacts — consumed by `crawlkit plugin install`, which produces the
+`<name>/crawlkit-plugin.toml` layout `--plugins` loads. Verified end to end: all
+five install, verify hash and signature, and load during a crawl.
+
+### Both first-party plugins emitted codes already owned by other defects
+
+| Plugin code | Plugin title | Registry family for that code | |
+|---|---|---|---|
+| `HEAD001` | Multiple H1 headings | no headings found | ✗ |
+| `HEAD002` | Heading level skipped | missing h1 heading | ✗ |
+| `HEAD003` | No headings found | multiple h1 headings | ✗ |
+| `META002` | Meta description too short | **title** too short | ✗ |
+| `META003` | Meta description too long | **title** too long | ✗ |
+
+`defect_key` resolves by **code**, so a plugin's code overrides its title. The
+meta-description case is a **silent false negative**: a "Meta description too
+short" finding was keyed into the *title* family and merged into the built-in
+`TITLE001`, so on any page with both a short title and a short description the
+description problem disappeared from the report.
+
+Confirmed on live data — with the plugin loaded, `META002` is stored titled "Meta
+description too short"; without it, no such finding exists at all.
+
+Codes now say what they mean: `HEADING-MULTIH1`, `HEADING-SKIPLEVEL`,
+`HEADING-NONE`, `METADESC-MISSING`, `METADESC-SHORT`, `METADESC-LONG`.
+
+### Plugin findings never participated in deduplication
+
+`AnalyzerRegistry::analyze` deduplicates; the pipeline appended plugin findings
+afterwards. With `heading-structure` loaded, every multiple-H1 page was reported
+twice — built-in `A11Y004` *and* the plugin's code — and no aggregate merged
+them. The combined vector is now collapsed.
+
+### Four near-identical heading-skip families
+
+`"heading level skipped"`, `"heading levels skipped"`, `"heading level skip
+detected"` and `"skipped heading level"` were four families for one defect,
+differing by singular/plural and word order. `defect_signature` strips version
+and depth decorations but does not normalize word order, so the same defect
+reported up to four times under four families. Merged into one family of 12
+codes.
+
+### Outstanding: the shipped artifacts are stale
+
+`plugins/index/artifacts/*.wasm` still contain the old codes (verified with
+`strings`). They hash-match the index, so the index is self-consistent, but the
+content is wrong until re-signed. Re-signing needs the private key for
+`signed_by = 12a7a8db5aabb20b`, which is not available in the audit environment.
+
+Until re-signed, `crawlkit plugin install meta-description-checker` reintroduces
+the false negative above. Commands, once the key is available:
+
+```bash
+export CRAWLKIT_SIGNING_KEY=<hex seed for 12a7a8db5aabb20b>
+cargo run --bin crawlkit -- plugin publish plugins/heading-structure
+cargo run --bin crawlkit -- plugin publish plugins/meta-description-checker
+```
+
 ## Open findings not addressed
 
 | Item | Why |
 |---|---|
 | Cross-page hreflang reciprocity | Needs `hreflang` in `PageData` + migration. Currently `PageData` cannot express it, so the check is absent rather than wrong. |
 | `CORSMISS` for XHR assets | Correctly removed for documents, but the check is legitimate for a JSON/font target type. Gating on content type would restore it. |
-| Plugin distribution | `plugins/index/` ships a flat `artifacts/*.wasm` layout, but `--plugins` expects `<dir>/<name>/crawlkit-plugin.toml`. The five first-party plugins are not directly loadable. |
+| Re-signing the two fixed plugins | Blocked on the private key for `12a7a8db5aabb20b`. Not self-executable here. |
 
 ## Reproducing
 

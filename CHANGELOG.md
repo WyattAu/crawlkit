@@ -84,6 +84,28 @@ verified against live markup rather than inferred.
   `-NAVIGATION`, `-CONTENTINFO` — and are written as longhand literals so the
   finding-catalog scanner and `grep` can both attribute them.
 
+- **The cross-origin isolation advice was actively destructive.** The COOP/COEP/CORP
+  family emitted unconditional imperative advice from fifteen call sites — *"Add
+  Cross-Origin-Opener-Policy: same-origin"*, *"Add Cross-Origin-Embedder-Policy:
+  require-corp"*. Following it on an ordinary site breaks the site: `COOP:
+  same-origin` severs `window.opener`, breaking OAuth and payment popups, and
+  `COEP: require-corp` refuses to load any cross-origin subresource that does not
+  itself send CORP — most analytics, embedded video, and CDN fonts and scripts.
+  Google's web.dev guidance explicitly advises against both for sites that do not
+  need cross-origin isolation.
+
+  The findings stay: 19 of the 20 codes in the family are already `Info`, they
+  describe a real property of the response, and a site using `SharedArrayBuffer`
+  has a genuine reason to set these. What was wrong was the framing. Advice now
+  lives in `analyzers/cross_origin_advice.rs` rather than fifteen drifting
+  strings, and states when the header applies and what it breaks.
+
+- **Wasmtime bumped to 48.0.5, clearing four security advisories.** Including
+  a `poll_oneoff` implementation that circumvents fuel consumption — and fuel is
+  how crawlkit bounds plugin execution. 48.0.5 sits inside the `48` range already
+  declared, so this is a lockfile-only bump. `cargo deny check` now exits 0; it had
+  been failing before this release.
+
 - **CI was not running six suites that guard the analyzer work.** `ci.yml` names
   its integration targets explicitly, so a new test file is not picked up
   automatically. `corpus_tests`, `determinism_of_text`, `determinism_tests`,

@@ -757,6 +757,57 @@ picked up automatically. `corpus_tests`, `determinism_of_text`,
 regressions these rounds fixed, running only on a developer's machine. Added, with
 a comment on the step explaining why the list is explicit.
 
+## Round 8 — the corpus was measuring the harness, not the product
+
+### Headers and robots.txt were missing, which made 20 rules look broken
+
+The real-world corpus initially passed `headers: &[]` and `robots_txt: None`.
+Roughly twenty security-header analyzers read `ctx.headers`, so **all twenty fired
+on all ten captures** — including `SEC001` "Missing CSP" on gov.uk, which sends a
+strict CSP, and `AI-ACC009` "No robots.txt found" on ten sites that all serve a
+perfectly good `robots.txt`.
+
+That is not cosmetic. It buried the HTML findings the corpus exists to test, and
+it would have made a header-analyzer regression *invisible*: the rules already
+looked like they fire unconditionally, so a genuine regression would have changed
+nothing observable.
+
+Captures are now three files per site — body, headers, robots.txt — taken from one
+request by `scripts/capture-realworld-fixture.sh`. Feeding the real values took the
+set of codes firing on all ten captures from **twenty down to three**, and both
+harness artifacts disappeared on their own.
+
+### Defect 20 — the cross-origin isolation advice broke sites
+
+A census over the ten captures, once headers were real, left exactly three codes
+firing everywhere: `COEP-V2001`, `COISO-V2002` and `CORP001`. Reading their
+recommendations showed why that was acceptable to leave alone and what was not.
+
+Nineteen of the twenty codes in the COOP/COEP/CORP family are `Info`, and the
+descriptions are factually accurate. The **advice** was the problem. Fifteen call
+sites emitted unconditional imperatives:
+
+* `COOP: same-origin` severs `window.opener`, which breaks OAuth and payment
+  popups that hand a result back to their opener.
+* `COEP: require-corp` refuses to load any cross-origin subresource that does not
+  itself send `Cross-Origin-Resource-Policy` — most analytics, embedded video, and
+  CDN-hosted fonts and scripts, none of which do.
+* The two are a package: enabling either generally requires the other.
+
+Google's web.dev guidance explicitly advises **against** COOP and COEP for sites
+that do not need cross-origin isolation, and Search Central's security-header
+guidance does not list them at all. A user following this advice on a typical site
+breaks third-party integrations for no ranking or security benefit.
+
+The findings stay — they are informational and describe a real property of the
+response. The advice now states when the header applies and what it breaks, in
+one module rather than fifteen strings that could drift apart. Three tests guard
+it, including one asserting the destructive consequences are *named*: the failure
+mode here is a plausible-sounding sentence, not a crash.
+
+`COEPU-V6076` is the family's lone `Warning` where its five siblings are `Info`.
+Noted, not bundled into a wording change.
+
 ## Open findings not addressed
 
 | Item | Why |

@@ -27,8 +27,11 @@ pub mod content_analyzers;
 pub mod cookies;
 /// CSP directive validator and color contrast analyzers.
 pub mod csp_color_contrast_analyzers;
+pub mod csp_wildcard;
+pub mod dedupe;
 /// Deep security-header analyzers extracted from the security monolith.
 pub mod deep_security_header_analyzers;
+pub mod defect_family;
 /// DNS rebinding, Subresource Integrity, and CORS security analyzers.
 pub mod dns_sri_cors_analyzers;
 /// Focus-management accessibility analyzers.
@@ -62,6 +65,7 @@ pub mod language_accessibility_analyzers;
 pub mod link_accessibility_analyzers;
 /// Media and e-commerce analyzers for images, products, and shopping signals.
 pub mod media_analyzers;
+pub mod metric_codes;
 /// Mixed-content and HSTS preload-readiness analyzers extracted from the security monolith.
 pub mod mixed_content_analyzers;
 /// Mixed-content form, script, and image validators.
@@ -98,17 +102,13 @@ pub mod social_analyzers;
 /// Strict-Transport-Security / COOP / COEP / Feature-Policy / Expect-CT / CT
 /// analyzers (extracted from security_analyzers).
 pub mod sts_analyzers;
-pub mod url_norm;
-pub mod csp_wildcard;
-pub mod metric_codes;
-pub mod defect_family;
-pub mod dedupe;
 /// Tabindex accessibility analyzer.
 pub mod tabindex_analyzers;
 /// Table accessibility analyzers.
 pub mod table_analyzers;
 /// Table caption accessibility analyzer.
 pub mod table_caption_analyzers;
+pub mod url_norm;
 pub mod v2;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
 /// Cross-Origin-Resource-Policy (extracted from security_analyzers).
@@ -141,7 +141,8 @@ pub use content_analyzers::{
     ContentFreshnessScorer, ContentFreshnessSignalAnalyzer, ContentLanguageValidator,
     ContentQualityAnalyzer, ContentReadabilityScorer, ContentStructureAnalyzer,
     ContentThinAnalyzer, ContentTopicCoverageAnalyzer, CourseNameValidator,
-    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer, ExternalLinkQualityAnalyzer, HeadingCoverageAnalyzer, HreflangNetworkValidator,
+    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer,
+    ExternalLinkQualityAnalyzer, HeadingCoverageAnalyzer, HreflangNetworkValidator,
     InternalLinkDepthAnalyzerV2, JobPostingTitleValidator, JsonLdContextValidator,
     JsonLdTypeValidator, JsonLdValidator, KeywordDensityAnalyzer, KeywordProminenceAnalyzer,
     MetaDescriptionLengthAnalyzer, MetaRobotsValidationAnalyzer, MetaRobotsValidator,
@@ -443,7 +444,12 @@ pub fn is_auditable_as_document(content_type: Option<&str>) -> bool {
     let Some(ct) = content_type else {
         return true;
     };
-    let media = ct.split(';').next().unwrap_or("").trim().to_ascii_lowercase();
+    let media = ct
+        .split(';')
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_ascii_lowercase();
     media.is_empty()
         || media == "text/html"
         || media == "application/xhtml+xml"

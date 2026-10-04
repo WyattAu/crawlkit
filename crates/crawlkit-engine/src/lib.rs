@@ -117,6 +117,13 @@ pub mod circuit_breaker;
 /// changes, and Core Web Vitals regressions between crawls.
 #[cfg(feature = "full")]
 pub mod compare;
+/// Transfer-encoding negotiation and decoding.
+///
+/// crawlkit advertises the same `Accept-Encoding` a browser does and decodes
+/// responses itself, so that `Content-Encoding` remains observable to
+/// analyzers instead of being stripped during decode.
+#[cfg(feature = "full")]
+pub mod compression;
 /// Content gap analysis for identifying missing topics and keywords.
 ///
 /// Compares crawled content against target keywords to find
@@ -229,13 +236,10 @@ pub mod query_tracker;
 /// position history storage, and trend analysis.
 #[cfg(feature = "full")]
 pub mod rank;
-/// Transfer-encoding negotiation and decoding.
-///
-/// crawlkit advertises the same `Accept-Encoding` a browser does and decodes
-/// responses itself, so that `Content-Encoding` remains observable to
-/// analyzers instead of being stripped during decode.
+/// Render budgets (6.0.0-alpha.2): per-crawl and per-page ceilings on
+/// Playwright rendering with explicit degradation.
 #[cfg(feature = "full")]
-pub mod compression;
+pub mod render_budget;
 /// robots.txt group selection scoped to the auditing crawler.
 ///
 /// A crawler matches exactly one group in robots.txt — the most specific
@@ -243,10 +247,6 @@ pub mod compression;
 /// addressed to some *other* crawler (training bots, for example) say nothing
 /// about whether this crawl may fetch the page.
 pub mod robots_group;
-/// Render budgets (6.0.0-alpha.2): per-crawl and per-page ceilings on
-/// Playwright rendering with explicit degradation.
-#[cfg(feature = "full")]
-pub mod render_budget;
 /// SSRF (Server-Side Request Forgery) validation for URLs.
 ///
 /// Shared validation used by both the plugin network guard and the API

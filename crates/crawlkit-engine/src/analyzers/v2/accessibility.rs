@@ -132,7 +132,12 @@ impl Analyzer for AriaLandmarksAnalyzerV2 {
         // `code:\s*"LITERAL"` against the source text. A code computed at runtime
         // is invisible to the published catalog, to `grep`, and to review.
 
-        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "banner") {
+        if !ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l.to_lowercase() == "banner")
+        {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
@@ -140,12 +145,16 @@ impl Analyzer for AriaLandmarksAnalyzerV2 {
                 title: "Missing banner landmark".to_string(),
                 description: "No ARIA landmark with role 'banner' found.".to_string(),
                 url: url.clone(),
-                recommendation: "Add a <div role=\"banner\"> or the <header> element."
-                    .to_string(),
+                recommendation: "Add a <div role=\"banner\"> or the <header> element.".to_string(),
             });
         }
 
-        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "navigation") {
+        if !ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l.to_lowercase() == "navigation")
+        {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
@@ -153,12 +162,16 @@ impl Analyzer for AriaLandmarksAnalyzerV2 {
                 title: "Missing navigation landmark".to_string(),
                 description: "No ARIA landmark with role 'navigation' found.".to_string(),
                 url: url.clone(),
-                recommendation: "Add a <div role=\"navigation\"> or the <nav> element."
-                    .to_string(),
+                recommendation: "Add a <div role=\"navigation\"> or the <nav> element.".to_string(),
             });
         }
 
-        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "main") {
+        if !ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l.to_lowercase() == "main")
+        {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,
@@ -166,12 +179,16 @@ impl Analyzer for AriaLandmarksAnalyzerV2 {
                 title: "Missing main landmark".to_string(),
                 description: "No ARIA landmark with role 'main' found.".to_string(),
                 url: url.clone(),
-                recommendation: "Add a <div role=\"main\"> or the <main> element."
-                    .to_string(),
+                recommendation: "Add a <div role=\"main\"> or the <main> element.".to_string(),
             });
         }
 
-        if !ctx.page.landmarks.iter().any(|l| l.to_lowercase() == "contentinfo") {
+        if !ctx
+            .page
+            .landmarks
+            .iter()
+            .any(|l| l.to_lowercase() == "contentinfo")
+        {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,

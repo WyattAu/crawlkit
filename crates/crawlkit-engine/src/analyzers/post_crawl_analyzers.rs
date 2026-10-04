@@ -1848,7 +1848,10 @@ mod tests {
     #[test]
     fn no_link_graph_means_no_claims() {
         let data = CrawlData {
-            pages: vec![test_page("https://example.com/a"), test_page("https://example.com/b")],
+            pages: vec![
+                test_page("https://example.com/a"),
+                test_page("https://example.com/b"),
+            ],
             links: vec![],
             issues: vec![],
             seed_url: "https://example.com".to_string(),
@@ -1865,7 +1868,10 @@ mod tests {
                 .map(|f| f.code)
                 .collect::<Vec<_>>(),
         ] {
-            assert!(codes.is_empty(), "missing link data must not produce findings, got {codes:?}");
+            assert!(
+                codes.is_empty(),
+                "missing link data must not produce findings, got {codes:?}"
+            );
         }
     }
 

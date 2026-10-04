@@ -414,12 +414,7 @@ impl Analyzer for ImageAltTextDeepAnalyzer {
         // to mark an image decorative, so the image is correctly hidden from
         // assistive technology. Counting it as "missing" flagged every page
         // using decorative imagery (logos, spacers, icons) as broken.
-        let missing_alt: usize = ctx
-            .page
-            .images
-            .iter()
-            .filter(|img| !img.has_alt)
-            .count();
+        let missing_alt: usize = ctx.page.images.iter().filter(|img| !img.has_alt).count();
         if missing_alt > 0 {
             findings.push(Finding {
                 severity: Severity::Warning,

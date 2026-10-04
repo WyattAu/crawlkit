@@ -34,9 +34,7 @@ pub fn is_bare_host_wildcard(expression: &str) -> bool {
         return false; // keyword source such as 'self', 'none', 'unsafe-inline'
     }
     // `*:` and `*://` are the scheme-agnostic spelling of `*`.
-    let host = token
-        .rsplit_once("://")
-        .map_or(token, |(_, rest)| rest);
+    let host = token.rsplit_once("://").map_or(token, |(_, rest)| rest);
     let host = host.rsplit_once(':').map_or(host, |(h, _)| h);
     host == "*"
 }
@@ -47,9 +45,7 @@ pub fn is_bare_host_wildcard(expression: &str) -> bool {
 /// `" 'self' *.youtube.com"` for `script-src 'self' *.youtube.com`.
 #[must_use]
 pub fn directive_allows_any_host(directive: &str) -> bool {
-    directive
-        .split_whitespace()
-        .any(is_bare_host_wildcard)
+    directive.split_whitespace().any(is_bare_host_wildcard)
 }
 
 #[cfg(test)]

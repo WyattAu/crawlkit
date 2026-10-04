@@ -1033,8 +1033,8 @@ impl HttpClient {
             });
 
         let content_encoding = header_value(&headers, "content-encoding");
-        let transfer_size = header_value(&headers, "content-length")
-            .and_then(|v| v.trim().parse::<usize>().ok());
+        let transfer_size =
+            header_value(&headers, "content-length").and_then(|v| v.trim().parse::<usize>().ok());
 
         Ok(FetchStreamReader {
             final_url,

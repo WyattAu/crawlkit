@@ -102,9 +102,19 @@ mod tests {
     fn defects_are_not_metrics() {
         // Markup problems must never be reclassified as measurements.
         for code in [
-            "CHARSET002", "CACHE002", "CACHE003", "COEP-V2001", "CORP001",
-            "PERMPDEEP002", "AI-ACC006", "XSS002", "SITEMAPMISS001", "NAP001",
-            "IMGALTDEEP001", "CONTR001", "COLRCL001",
+            "CHARSET002",
+            "CACHE002",
+            "CACHE003",
+            "COEP-V2001",
+            "CORP001",
+            "PERMPDEEP002",
+            "AI-ACC006",
+            "XSS002",
+            "SITEMAPMISS001",
+            "NAP001",
+            "IMGALTDEEP001",
+            "CONTR001",
+            "COLRCL001",
         ] {
             assert!(!is_metric_code(code), "{code} is a defect, not a metric");
         }
@@ -163,9 +173,18 @@ mod tests {
     fn advisory_content_analysis_stays_a_finding() {
         // Actionable advice, even though numbers are involved.
         for code in [
-            "KWPRO001", "KWPRO002", "TITLEKDEN-V2001", "TITLEKDEN-V6082",
-            "METAKEY-V5001", "TITLEKWP-V5001", "CQ-V2001", "CREAD001",
-            "CREAD002", "WC004", "EXT-AUTH001", "EXTAUTHDP001",
+            "KWPRO001",
+            "KWPRO002",
+            "TITLEKDEN-V2001",
+            "TITLEKDEN-V6082",
+            "METAKEY-V5001",
+            "TITLEKWP-V5001",
+            "CQ-V2001",
+            "CREAD001",
+            "CREAD002",
+            "WC004",
+            "EXT-AUTH001",
+            "EXTAUTHDP001",
         ] {
             assert!(
                 !is_metric_code(code),

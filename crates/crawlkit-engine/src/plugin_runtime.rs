@@ -216,7 +216,11 @@ mod dedupe_tests {
     fn description_and_title_defects_do_not_collapse_into_one() {
         let findings = vec![
             f("TITLE001", "Title too short", Severity::Warning),
-            f("METADESC-SHORT", "Meta description too short", Severity::Warning),
+            f(
+                "METADESC-SHORT",
+                "Meta description too short",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(
@@ -265,7 +269,11 @@ mod dedupe_tests {
     fn unrelated_plugin_finding_survives() {
         let findings = vec![
             f("A11Y004", "Multiple H1 headings", Severity::Error),
-            f("MYP001", "Widget alignment is off by 3px", Severity::Warning),
+            f(
+                "MYP001",
+                "Widget alignment is off by 3px",
+                Severity::Warning,
+            ),
         ];
         assert_eq!(collapse_duplicates(findings).len(), 2);
     }

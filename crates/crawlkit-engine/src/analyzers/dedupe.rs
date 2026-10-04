@@ -193,7 +193,11 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
     for f in &mut out {
         let key = defect_key_of(f);
         if let Some(codes) = aliases.get(&key) {
-            let others: Vec<&str> = codes.iter().filter(|c| **c != f.code).map(String::as_str).collect();
+            let others: Vec<&str> = codes
+                .iter()
+                .filter(|c| **c != f.code)
+                .map(String::as_str)
+                .collect();
             if !others.is_empty() {
                 f.description = format!(
                     "{} (also reported by: {})",
@@ -261,9 +265,24 @@ mod tests {
     #[test]
     fn collapses_the_real_csp_cluster() {
         let findings = vec![
-            f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPSS-V2002", "CSP script-src allows unsafe-inline (deep)", Severity::Warning),
-            f("https://e.com/", "CSPSSRC-V5001", "CSP script-src allows unsafe-inline", Severity::Warning),
+            f(
+                "https://e.com/",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSPSS-V2002",
+                "CSP script-src allows unsafe-inline (deep)",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSPSSRC-V5001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(out.len(), 1, "three identical reports must collapse to one");
@@ -273,8 +292,18 @@ mod tests {
     #[test]
     fn script_src_and_style_src_never_merge_despite_similar_titles() {
         let findings = vec![
-            f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPSTY-V2002", "CSP style-src allows unsafe-inline", Severity::Warning),
+            f(
+                "https://e.com/",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSPSTY-V2002",
+                "CSP style-src allows unsafe-inline",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(
@@ -318,8 +347,18 @@ mod tests {
         // (and aliased ARTHL-V2001) purely because one title says "schema" and
         // the other does not.
         let findings = vec![
-            f("https://e.com/", "ART001", "Article schema missing headline", Severity::Error),
-            f("https://e.com/", "ART-HL001", "Article missing headline", Severity::Error),
+            f(
+                "https://e.com/",
+                "ART001",
+                "Article schema missing headline",
+                Severity::Error,
+            ),
+            f(
+                "https://e.com/",
+                "ART-HL001",
+                "Article missing headline",
+                Severity::Error,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(out.len(), 1, "one missing headline must report once");
@@ -340,8 +379,18 @@ mod tests {
     #[test]
     fn distinct_pages_are_not_collapsed_together() {
         let findings = vec![
-            f("https://e.com/a", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/b", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
+            f(
+                "https://e.com/a",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/b",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
         ];
         assert_eq!(collapse_duplicates(findings).len(), 2);
     }
@@ -349,8 +398,18 @@ mod tests {
     #[test]
     fn distinct_defects_on_one_page_survive() {
         let findings = vec![
-            f("https://e.com/", "CSPSS-V2002", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPSTY-V2002", "CSP style-src allows unsafe-inline", Severity::Warning),
+            f(
+                "https://e.com/",
+                "CSPSS-V2002",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSPSTY-V2002",
+                "CSP style-src allows unsafe-inline",
+                Severity::Warning,
+            ),
         ];
         assert_eq!(collapse_duplicates(findings).len(), 2);
     }
@@ -358,8 +417,18 @@ mod tests {
     #[test]
     fn most_severe_member_wins() {
         let findings = vec![
-            f("https://e.com/", "A", "Missing H1 heading (deep)", Severity::Info),
-            f("https://e.com/", "B", "Missing H1 heading", Severity::Critical),
+            f(
+                "https://e.com/",
+                "A",
+                "Missing H1 heading (deep)",
+                Severity::Info,
+            ),
+            f(
+                "https://e.com/",
+                "B",
+                "Missing H1 heading",
+                Severity::Critical,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(out.len(), 1);
@@ -369,9 +438,24 @@ mod tests {
     #[test]
     fn aliases_list_every_suppressed_code_exactly_once() {
         let findings = vec![
-            f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPSSRC-V5001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
+            f(
+                "https://e.com/",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSPSSRC-V5001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "CSP001",
+                "CSP script-src allows unsafe-inline",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         // Two `CSP001` reports are kept (same code = two separate occurrences),
@@ -392,8 +476,18 @@ mod tests {
         // Per-element analyzers emit one finding per offending element under a
         // single code. Collapsing those would silently hide real defects.
         let findings = vec![
-            f("https://e.com/", "ANCHGEN001", "Link with generic anchor text", Severity::Warning),
-            f("https://e.com/", "ANCHGEN001", "Link with generic anchor text", Severity::Warning),
+            f(
+                "https://e.com/",
+                "ANCHGEN001",
+                "Link with generic anchor text",
+                Severity::Warning,
+            ),
+            f(
+                "https://e.com/",
+                "ANCHGEN001",
+                "Link with generic anchor text",
+                Severity::Warning,
+            ),
         ];
         assert_eq!(collapse_duplicates(findings).len(), 2);
     }
@@ -421,8 +515,18 @@ mod tests {
     #[test]
     fn surviving_finding_keeps_its_own_severity() {
         let findings = vec![
-            f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info),
-            f("https://e.com/", "META005", "Meta description too short", Severity::Warning),
+            f(
+                "https://e.com/",
+                "MDESC-PX002",
+                "Meta description too short",
+                Severity::Info,
+            ),
+            f(
+                "https://e.com/",
+                "META005",
+                "Meta description too short",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert_eq!(out.len(), 1, "one defect must survive as one finding");
@@ -438,8 +542,18 @@ mod tests {
     /// drift the day the sort changes.
     #[test]
     fn representative_is_independent_of_input_order() {
-        let a = f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info);
-        let b = f("https://e.com/", "META005", "Meta description too short", Severity::Warning);
+        let a = f(
+            "https://e.com/",
+            "MDESC-PX002",
+            "Meta description too short",
+            Severity::Info,
+        );
+        let b = f(
+            "https://e.com/",
+            "META005",
+            "Meta description too short",
+            Severity::Warning,
+        );
         for findings in [vec![a.clone(), b.clone()], vec![b, a]] {
             let out = collapse_duplicates(findings);
             assert_eq!(out.len(), 1);
@@ -482,8 +596,18 @@ mod tests {
     #[test]
     fn suppressed_codes_are_recorded_in_the_description() {
         let findings = vec![
-            f("https://e.com/", "MDESC-PX002", "Meta description too short", Severity::Info),
-            f("https://e.com/", "META005", "Meta description too short", Severity::Warning),
+            f(
+                "https://e.com/",
+                "MDESC-PX002",
+                "Meta description too short",
+                Severity::Info,
+            ),
+            f(
+                "https://e.com/",
+                "META005",
+                "Meta description too short",
+                Severity::Warning,
+            ),
         ];
         let out = collapse_duplicates(findings);
         assert!(

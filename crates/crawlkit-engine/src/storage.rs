@@ -1319,7 +1319,11 @@ impl Storage {
     /// persistence path.
     ///
     /// The fallback is a scan, so it runs only after the indexed lookup misses.
-    pub fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+    pub fn get_page_equivalent(
+        &self,
+        crawl_id: &str,
+        url: &str,
+    ) -> Result<Option<PageData>, StorageError> {
         if let Some(page) = self.get_page(crawl_id, url)? {
             return Ok(Some(page));
         }
@@ -2347,7 +2351,11 @@ impl crate::storage_trait::StorageBackend for Storage {
         self.insert_pages(crawl_id, pages)
     }
 
-    fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+    fn get_page_equivalent(
+        &self,
+        crawl_id: &str,
+        url: &str,
+    ) -> Result<Option<PageData>, StorageError> {
         self.get_page_equivalent(crawl_id, url)
     }
 

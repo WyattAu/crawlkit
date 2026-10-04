@@ -28,8 +28,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crawlkit_engine::analyzers::{dedupe::defect_signature, AnalyzerRegistry};
 use crawlkit_engine::analyzers::defect_family::defect_key;
+use crawlkit_engine::analyzers::{dedupe::defect_signature, AnalyzerRegistry};
 use crawlkit_engine::parser::HtmlParser;
 use crawlkit_engine::{AnalysisContext, CrawlConfig};
 use url::Url;
@@ -78,7 +78,9 @@ fn analyze(path: &Path) -> Vec<crawlkit_engine::Finding> {
     let html = std::fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("{name} must be readable UTF-8: {e}"));
     assert!(
-        html.trim_start().to_ascii_lowercase().starts_with("<!doctype")
+        html.trim_start()
+            .to_ascii_lowercase()
+            .starts_with("<!doctype")
             || html.to_ascii_lowercase().contains("<html"),
         "{name} does not look like HTML — was it captured with --compressed?"
     );
@@ -106,7 +108,9 @@ fn analyze(path: &Path) -> Vec<crawlkit_engine::Finding> {
 }
 
 /// `(fixture, code, severity, title) -> count`, for readable diffs.
-fn finding_index(findings: &[crawlkit_engine::Finding]) -> BTreeMap<(String, String, String, String), usize> {
+fn finding_index(
+    findings: &[crawlkit_engine::Finding],
+) -> BTreeMap<(String, String, String, String), usize> {
     let mut m = BTreeMap::new();
     for f in findings {
         *m.entry((
@@ -654,4 +658,3 @@ fn fixture_and_expectation_tables_agree() {
         );
     }
 }
-

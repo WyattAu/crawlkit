@@ -1872,7 +1872,10 @@ impl Analyzer for ImageAspectRatioValidator {
                     category: IssueCategory::Images,
                     code: "IMGAR001".to_string(),
                     title: "Unusual image aspect ratio".to_string(),
-                    description: format!("Image {} has unusual aspect ratio {ratio:.2}:1.", img.src),
+                    description: format!(
+                        "Image {} has unusual aspect ratio {ratio:.2}:1.",
+                        img.src
+                    ),
                     url: url.clone(),
                     recommendation: "Check if the image dimensions are correct.".to_string(),
                 });

@@ -5312,11 +5312,11 @@ mod meta_desc_length_tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         // Title separators are a conventional, non-defective pattern: SERP
-    // truncation is driven by pixel width, not by separator characters.
-    assert!(
-        !findings.iter().any(|f| f.code == "TITLE003"),
-        "separator in a title is not a defect: {findings:?}"
-    );
+        // truncation is driven by pixel width, not by separator characters.
+        assert!(
+            !findings.iter().any(|f| f.code == "TITLE003"),
+            "separator in a title is not a defect: {findings:?}"
+        );
     }
 
     #[test]
@@ -5326,11 +5326,11 @@ mod meta_desc_length_tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         // Title separators are a conventional, non-defective pattern: SERP
-    // truncation is driven by pixel width, not by separator characters.
-    assert!(
-        !findings.iter().any(|f| f.code == "TITLE003"),
-        "separator in a title is not a defect: {findings:?}"
-    );
+        // truncation is driven by pixel width, not by separator characters.
+        assert!(
+            !findings.iter().any(|f| f.code == "TITLE003"),
+            "separator in a title is not a defect: {findings:?}"
+        );
     }
 
     #[test]
@@ -5340,11 +5340,11 @@ mod meta_desc_length_tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         // Title separators are a conventional, non-defective pattern: SERP
-    // truncation is driven by pixel width, not by separator characters.
-    assert!(
-        !findings.iter().any(|f| f.code == "TITLE003"),
-        "separator in a title is not a defect: {findings:?}"
-    );
+        // truncation is driven by pixel width, not by separator characters.
+        assert!(
+            !findings.iter().any(|f| f.code == "TITLE003"),
+            "separator in a title is not a defect: {findings:?}"
+        );
     }
 
     #[test]
@@ -5877,11 +5877,11 @@ mod title_extra_tests {
         let ctx = make_ctx(&page, Some(200));
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         // Title separators are a conventional, non-defective pattern: SERP
-    // truncation is driven by pixel width, not by separator characters.
-    assert!(
-        !findings.iter().any(|f| f.code == "TITLE003"),
-        "separator in a title is not a defect: {findings:?}"
-    );
+        // truncation is driven by pixel width, not by separator characters.
+        assert!(
+            !findings.iter().any(|f| f.code == "TITLE003"),
+            "separator in a title is not a defect: {findings:?}"
+        );
     }
 
     #[test]
@@ -5901,11 +5901,11 @@ mod title_extra_tests {
         let findings = TitleLengthAnalyzer::new().analyze(&ctx);
         assert!(findings.iter().any(|f| f.code == "TITLE001"));
         // Title separators are a conventional, non-defective pattern: SERP
-    // truncation is driven by pixel width, not by separator characters.
-    assert!(
-        !findings.iter().any(|f| f.code == "TITLE003"),
-        "separator in a title is not a defect: {findings:?}"
-    );
+        // truncation is driven by pixel width, not by separator characters.
+        assert!(
+            !findings.iter().any(|f| f.code == "TITLE003"),
+            "separator in a title is not a defect: {findings:?}"
+        );
     }
 }
 
@@ -7384,7 +7384,10 @@ mod new_content_analyzer_tests {
 #[must_use]
 pub fn is_schema_org_context(context: &str) -> bool {
     let trimmed = context.trim().trim_end_matches('/');
-    matches!(trimmed, "schema.org" | "http://schema.org" | "https://schema.org")
+    matches!(
+        trimmed,
+        "schema.org" | "http://schema.org" | "https://schema.org"
+    )
 }
 
 pub struct JsonLdContextValidator;

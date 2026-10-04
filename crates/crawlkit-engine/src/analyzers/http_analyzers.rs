@@ -1313,9 +1313,7 @@ impl Analyzer for CompressionAnalyzer {
         // compressed. `ctx.content_encoding` carries the value captured before
         // decoding; fall back to the header for callers that construct a context
         // by hand with an already-decoded body plus its headers.
-        let has_compression = ctx
-            .content_encoding
-            .is_some_and(|v| !v.trim().is_empty())
+        let has_compression = ctx.content_encoding.is_some_and(|v| !v.trim().is_empty())
             || Self::get_header(ctx.headers, "Content-Encoding").is_some();
 
         // COMP001: Response not compressed when >1KB

@@ -83,7 +83,10 @@ pub fn disallowed_for_user_agent(robots_txt: &str, user_agent: &str, important_p
             "user-agent" => {
                 // Consecutive User-agent lines share one rule block.
                 if in_rules {
-                    groups.push((std::mem::take(&mut current_agents), std::mem::take(&mut current_rules)));
+                    groups.push((
+                        std::mem::take(&mut current_agents),
+                        std::mem::take(&mut current_rules),
+                    ));
                     in_rules = false;
                 }
                 current_agents.push(value.to_ascii_lowercase());
@@ -223,7 +226,11 @@ Disallow: /
 
     #[test]
     fn targeted_disallow_still_detected_for_star_agent() {
-        assert!(disallowed_for_user_agent(KP_ROBOTS, "crawlkit/6.0.0", "/admin"));
+        assert!(disallowed_for_user_agent(
+            KP_ROBOTS,
+            "crawlkit/6.0.0",
+            "/admin"
+        ));
         assert!(disallowed_for_user_agent(
             KP_ROBOTS,
             "crawlkit/6.0.0",
@@ -251,7 +258,11 @@ Disallow: /
     #[test]
     fn allow_overrides_shorter_disallow() {
         let robots = "User-agent: *\nDisallow: /private\nAllow: /private/public\n";
-        assert!(disallowed_for_user_agent(robots, "crawlkit", "/private/secret"));
+        assert!(disallowed_for_user_agent(
+            robots,
+            "crawlkit",
+            "/private/secret"
+        ));
         assert!(!disallowed_for_user_agent(
             robots,
             "crawlkit",
@@ -275,7 +286,11 @@ Disallow: /
     #[test]
     fn missing_or_empty_file_never_blocks() {
         assert!(!disallowed_for_user_agent("", "crawlkit", "/"));
-        assert!(!disallowed_for_user_agent("# nothing here\n", "crawlkit", "/"));
+        assert!(!disallowed_for_user_agent(
+            "# nothing here\n",
+            "crawlkit",
+            "/"
+        ));
     }
 
     #[test]

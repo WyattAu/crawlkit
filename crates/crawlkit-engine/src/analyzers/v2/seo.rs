@@ -17,7 +17,9 @@
     clippy::redundant_clone,
     clippy::useless_conversion
 )]
-use crate::analyzers::{robots_txt_star_blanket_disallows_all, url_norm, AnalysisContext, Analyzer, Finding};
+use crate::analyzers::{
+    robots_txt_star_blanket_disallows_all, url_norm, AnalysisContext, Analyzer, Finding,
+};
 use crate::types::{IssueCategory, Severity};
 
 /// Counts real `<link rel="canonical">` elements in an HTML document.
@@ -812,7 +814,9 @@ impl Analyzer for HreflangSelfReferenceValidatorV2 {
         if tags.is_empty() {
             return findings;
         }
-        let has_self = tags.iter().any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
+        let has_self = tags
+            .iter()
+            .any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
         if !has_self {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -1630,7 +1634,9 @@ impl Analyzer for HreflangReciprocalValidatorV5 {
         if tags.is_empty() {
             return findings;
         }
-        let has_self = tags.iter().any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
+        let has_self = tags
+            .iter()
+            .any(|t| url_norm::urls_equivalent(t.url.as_str(), url));
         if !has_self {
             findings.push(Finding {
                 severity: Severity::Warning,

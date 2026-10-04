@@ -160,7 +160,10 @@ mod tests {
 
     #[test]
     fn parse_known_encodings() {
-        assert_eq!(TransferEncoding::parse(Some("gzip")), TransferEncoding::Gzip);
+        assert_eq!(
+            TransferEncoding::parse(Some("gzip")),
+            TransferEncoding::Gzip
+        );
         assert_eq!(
             TransferEncoding::parse(Some("BR")),
             TransferEncoding::Brotli

@@ -372,13 +372,15 @@ impl CrawlRun<'_> {
         //
         // The response is still stored and linked — it is a real resource in
         // the crawl graph — it is simply not audited as a document.
-        let is_html_document =
-            crate::analyzers::is_auditable_as_document(ctx.content_type);
+        let is_html_document = crate::analyzers::is_auditable_as_document(ctx.content_type);
 
         let mut findings = if is_html_document {
             self.analyzer_registry.analyze(&ctx)
         } else {
-            vec![crate::analyzers::non_html_finding(&ctx.page.url, ctx.content_type)]
+            vec![crate::analyzers::non_html_finding(
+                &ctx.page.url,
+                ctx.content_type,
+            )]
         };
 
         // Crawl plugins run after the built-ins, with the B4 structured

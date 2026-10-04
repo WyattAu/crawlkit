@@ -92,7 +92,10 @@ mod tests {
             "https://kingstonpeptides.com/en/",
             "https://kingstonpeptides.com/en"
         ));
-        assert!(urls_equivalent("https://example.com/", "https://example.com"));
+        assert!(urls_equivalent(
+            "https://example.com/",
+            "https://example.com"
+        ));
     }
 
     #[test]
@@ -101,8 +104,14 @@ mod tests {
             "https://example.com/page#section",
             "https://example.com/page"
         ));
-        assert!(urls_equivalent("https://EXAMPLE.com/page", "https://example.com/page"));
-        assert!(urls_equivalent("https://example.com:443/page", "https://example.com/page"));
+        assert!(urls_equivalent(
+            "https://EXAMPLE.com/page",
+            "https://example.com/page"
+        ));
+        assert!(urls_equivalent(
+            "https://example.com:443/page",
+            "https://example.com/page"
+        ));
     }
 
     #[test]

@@ -91,7 +91,11 @@ pub trait StorageBackend: Send + Sync {
     ///
     /// Defaults to the exact lookup; the SQLite backend overrides it to fall
     /// back to a normalized comparison.
-    fn get_page_equivalent(&self, crawl_id: &str, url: &str) -> Result<Option<PageData>, StorageError> {
+    fn get_page_equivalent(
+        &self,
+        crawl_id: &str,
+        url: &str,
+    ) -> Result<Option<PageData>, StorageError> {
         self.get_page(crawl_id, url)
     }
 

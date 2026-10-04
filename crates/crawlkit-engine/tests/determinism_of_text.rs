@@ -15,7 +15,7 @@
 
 use std::time::Duration;
 
-use crawlkit_engine::analyzers::{AnalyzerRegistry, AnalysisContext, Analyzer};
+use crawlkit_engine::analyzers::{AnalysisContext, Analyzer, AnalyzerRegistry};
 use crawlkit_engine::parser::{Heading, HtmlParser};
 use url::Url;
 
@@ -94,7 +94,8 @@ fn heading_keyword_summary_is_stable_across_runs() {
     let first = &texts[0];
     let divergent = texts.iter().filter(|t| *t != first).count();
     assert_eq!(
-        divergent, 0,
+        divergent,
+        0,
         "CQ002 text changed across {} of 64 runs:\n  {first}\n  {}",
         divergent,
         texts.iter().find(|t| *t != first).unwrap()
@@ -123,7 +124,8 @@ fn detected_topics_are_stable_across_runs() {
     );
     let divergent = texts.iter().filter(|t| *t != first).count();
     assert_eq!(
-        divergent, 0,
+        divergent,
+        0,
         "ENTITY004 topics changed across {} of 64 runs:\n  {first}\n  {}",
         divergent,
         texts.iter().find(|t| *t != first).unwrap()
@@ -152,7 +154,8 @@ fn keyword_analyzer_summaries_are_stable_across_runs() {
         }
         let divergent = texts.iter().filter(|t| *t != first).count();
         assert_eq!(
-            divergent, 0,
+            divergent,
+            0,
             "{code} text changed across {} of 64 runs:\n  {first}\n  {}",
             divergent,
             texts.iter().find(|t| *t != first).unwrap()
@@ -264,7 +267,8 @@ fn fixture_headings_are_fully_tied() {
         .flat_map(|h: &Heading| h.text.split_whitespace())
         .map(|w| w.to_lowercase())
         .fold(std::collections::HashMap::new(), |mut acc, w| {
-            *acc.entry(Box::leak(w.into_boxed_str()) as &str).or_default() += 1;
+            *acc.entry(Box::leak(w.into_boxed_str()) as &str)
+                .or_default() += 1;
             acc
         });
     assert!(

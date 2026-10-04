@@ -161,7 +161,8 @@ fn full_registry_has_no_duplicate_anchorgen_codes() {
         .filter(|f| f.code.starts_with("ANCHGEN-V2001"))
         .count();
     assert_eq!(
-        aggregate, 1,
+        aggregate,
+        1,
         "the aggregate generic-anchor family must report once per page, got {aggregate}: {:?}",
         findings
             .iter()

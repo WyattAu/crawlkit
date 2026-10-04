@@ -68,7 +68,10 @@ fn plain_text_produces_no_document_findings() {
 
 #[test]
 fn html_still_gets_the_full_audit() {
-    let codes = codes_for(Some("text/html; charset=utf-8"), "<html><head></head><body></body></html>");
+    let codes = codes_for(
+        Some("text/html; charset=utf-8"),
+        "<html><head></head><body></body></html>",
+    );
     assert!(
         !codes.contains(&"MIMETYPE001".to_string()),
         "HTML must be audited, not skipped: {codes:?}"
@@ -102,7 +105,12 @@ fn xml_and_json_are_not_documents() {
 fn xml_content_types_remain_auditable() {
     // sitemap.xml and friends are XML but are still crawled as documents;
     // the gate keeps them analysable so sitemap checks can run.
-    for ct in ["application/xml", "text/xml", "application/atom+xml", "application/rss+xml"] {
+    for ct in [
+        "application/xml",
+        "text/xml",
+        "application/atom+xml",
+        "application/rss+xml",
+    ] {
         assert!(
             is_auditable_as_document(Some(ct)),
             "{ct} should stay document-shaped"
@@ -122,8 +130,12 @@ fn missing_content_type_is_treated_as_html() {
 #[test]
 fn media_type_parameters_do_not_confuse_the_gate() {
     assert!(is_auditable_as_document(Some("text/html; charset=utf-8")));
-    assert!(is_auditable_as_document(Some("application/xml; charset=utf-8")));
+    assert!(is_auditable_as_document(Some(
+        "application/xml; charset=utf-8"
+    )));
     // Parameters must not mask the media type.
     assert!(!is_auditable_as_document(Some("text/plain; charset=utf-8")));
-    assert!(!is_auditable_as_document(Some("application/json; charset=utf-8")));
+    assert!(!is_auditable_as_document(Some(
+        "application/json; charset=utf-8"
+    )));
 }

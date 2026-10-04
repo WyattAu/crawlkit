@@ -745,7 +745,6 @@ pub fn is_index_or_jump_link(text: &str, href: &str) -> bool {
     href.trim_start().starts_with('#')
 }
 
-
 impl LinkAnalyzer {
     pub fn new() -> Self {
         Self {

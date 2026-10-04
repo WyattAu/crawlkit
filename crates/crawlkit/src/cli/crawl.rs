@@ -263,7 +263,6 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         report_monitoring(monitoring, &output_dir)?;
     }
 
-
     tracing::info!(
         "Crawl complete: {} pages crawled, {} stored, {} issues, {} measurements, {} external skipped, {} blocked by robots.txt. Database: {}",
         result.pages_crawled,
@@ -485,7 +484,11 @@ fn write_output(
             let mut skipped_registry = 0usize;
             let mut skipped_registry_no_page = 0usize;
             for f in &result.cross_page_findings {
-                let Some(page) = storage.get_page_equivalent(&crawl_id, &f.url).ok().flatten() else {
+                let Some(page) = storage
+                    .get_page_equivalent(&crawl_id, &f.url)
+                    .ok()
+                    .flatten()
+                else {
                     skipped_registry_no_page += 1;
                     continue;
                 };
@@ -535,9 +538,12 @@ fn write_output(
                     // Canonical wire shape per docs/schema/findings.schema.json.
                     super::findings::post_crawl_finding_json(f)
                 })
-                .chain(result.cross_page_findings.iter().map(|f| {
-                    super::findings::finding_json(&f.url, f)
-                }))
+                .chain(
+                    result
+                        .cross_page_findings
+                        .iter()
+                        .map(|f| super::findings::finding_json(&f.url, f)),
+                )
                 .collect();
             std::fs::write(
                 &post_findings_path,
@@ -562,10 +568,7 @@ fn write_output(
         let (defects, measurements) = storage.get_metric_split(&result.crawl_id)?;
         let page_metrics = storage.get_page_metrics(&result.crawl_id)?;
         let metrics_path = output_dir.join("page-metrics.json");
-        std::fs::write(
-            &metrics_path,
-            serde_json::to_string_pretty(&page_metrics)?,
-        )?;
+        std::fs::write(&metrics_path, serde_json::to_string_pretty(&page_metrics)?)?;
         tracing::info!(
             "Issues: {} defects. Measurements: {} (excluded from totals; in {})",
             defects,

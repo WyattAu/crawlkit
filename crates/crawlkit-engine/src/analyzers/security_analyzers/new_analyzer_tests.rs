@@ -420,7 +420,10 @@ fn test_expect_ct_no_header() {
     // `Expect-CT` is deprecated and ignored by every current browser; its
     // absence is not a site defect.
     let findings = ExpectCTAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
+    assert!(
+        findings.is_empty(),
+        "expected no findings, got {findings:?}"
+    );
 }
 
 #[test]
@@ -472,7 +475,10 @@ fn test_expect_ct_info_severity() {
     let ctx = make_ctx(&page, Some(200), &[], None);
     // Deprecated header: the analyzer reports nothing at all now.
     let findings = ExpectCTAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
+    assert!(
+        findings.is_empty(),
+        "expected no findings, got {findings:?}"
+    );
 }
 
 #[test]
@@ -498,7 +504,10 @@ fn test_ct_no_header() {
     let ctx = make_ctx(&page, Some(200), &[], None);
     // CT enforcement is a CA responsibility; the header is deprecated.
     let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
+    assert!(
+        findings.is_empty(),
+        "expected no findings, got {findings:?}"
+    );
 }
 
 #[test]
@@ -564,7 +573,10 @@ fn test_ct_info_severity() {
     let ctx = make_ctx(&page, Some(200), &[], None);
     // Deprecated header: the analyzer reports nothing at all now.
     let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
+    assert!(
+        findings.is_empty(),
+        "expected no findings, got {findings:?}"
+    );
 }
 
 #[test]
@@ -575,7 +587,10 @@ fn test_ct_header_without_enforce() {
     // Expect-CT is deprecated and ignored by every current browser, so neither
     // its presence nor its absence is a reportable site defect.
     let findings = CertificateTransparencyAnalyzer::new().analyze(&ctx);
-    assert!(findings.is_empty(), "expected no findings, got {findings:?}");
+    assert!(
+        findings.is_empty(),
+        "expected no findings, got {findings:?}"
+    );
 }
 
 #[test]

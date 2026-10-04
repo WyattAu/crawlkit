@@ -86,9 +86,9 @@ pub async fn run(
         rendered: None,
     };
     // Same document gate as the crawl pipeline: HTML analyzers do not apply to
-// `/llms.txt`, JSON feeds, stylesheets and the rest. `inspect` previously
-// reported 64 findings for a plain-text file, including a Critical "missing
-// title tag", because it ran the registry unconditionally.
+    // `/llms.txt`, JSON feeds, stylesheets and the rest. `inspect` previously
+    // reported 64 findings for a plain-text file, including a Critical "missing
+    // title tag", because it ran the registry unconditionally.
     let findings = if crawlkit_engine::analyzers::is_auditable_as_document(content_type) {
         registry.analyze(&ctx)
     } else {

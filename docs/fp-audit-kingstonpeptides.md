@@ -335,7 +335,67 @@ also verified to *fail* without its fix.
 | `COLRCL-V2001-UNDERLINE` | ~1/page | "Links without underline" fires on nearly every link; WCAG 1.4.1 admits other means. Pure noise. |
 | `CANDEP-V2003` "canonical has trailing slash" | 1/page | Unactionable: there is no way to know a "preferred" slash format. |
 | Informational metric findings | ~60% of volume | Readability indices, TF-IDF, sentiment, scores. Metrics, not defects — but they dominate raw counts. |
-| `METAKEY`/`OPDESC`-style near-synonym codes | 3 codes/1 defect | Titles differ by synonyms ("No" vs "Missing"), which signature normalization cannot safely unify. Needs analyzer consolidation, not heuristics. |
+
+---
+
+## Round 3 — the defect-family registry
+
+Deduplication by normalized title cannot see defects whose analyzers word the
+message differently. A static scan of the analyzer sources (1,365
+`code`/`title` pairs extracted from source, rather than from a crawl that only
+exercises the analyzers its pages happen to trigger) found **195 such groups**.
+
+Fuzzy clustering was measured first and **rejected**: at 60% token overlap it
+proposed 46 clusters, several of which are different defects that must not be
+merged — location vs organization entities, description-too-long vs
+title-too-long, fairly vs very difficult readability, script-SRI vs
+stylesheet-SRI, and the two opposite directions of the title/description
+keyword comparison.
+
+So the grouping is explicit. `analyzers::CANONICAL_TITLES` holds **201
+families over 300+ codes**, built by union-find over:
+
+1. codes whose normalized titles are *identical* — safe by construction;
+2. reviewed synonym families.
+
+Every component was then inspected for transitive over-merges. Five were found
+and rejected by correcting the synonym table:
+
+| Rejected merge | Why it is wrong |
+|---|---|
+| `TABACC-V2001` into table *captions* | That family is about missing table **headers** |
+| `SITEMAPMISS001` into "no robots.txt" | Missing *sitemap* ≠ missing *robots.txt* |
+| `LAZYIMG001` into image dimensions | It is a compound lazy-loading finding |
+| `ARIALAND-V2006` into banner landmark | "No ARIA landmarks found" is broader |
+| `XFOMISS-V6072` into X-Frame-Options | "No clickjacking protection" is an aggregate check |
+
+### A bug the audit caught in the audit
+
+Keys first canonicalized to a *family id*. That broke for codes whose title is
+built at runtime: `SD006` produces `"Article missing headline"` dynamically, so
+the static scan cannot place it in a family, and it fell back to a title key
+while its static sibling `ART-HL001` resolved to a family id. The two stopped
+merging and **gov.uk's error tier doubled from 40 to 80**.
+
+Keys now canonicalize through the **title**, so the family mechanism and the
+title mechanism cannot disagree. Regression test added and exercised through
+the real registry.
+
+### Results
+
+| | Findings | Codes | Cross-code dupes |
+|---|---:|---:|---:|
+| corpus (20 fixtures) | 2,597 → **1,495** (−42%) | — | — |
+| gov.uk (40pp) | 2,785 → **2,688** | 97 → 94 | **0** |
+| kingstonpeptides (100pp) | 6,226 → **6,207** | 127 → 127 | **0** |
+
+Losslessness proven by A/B on the corpus: **distinct defect keys 1,483 with
+dedupe disabled and 1,483 enabled.**
+
+Two existing dedupe tests were corrected rather than deleted — they paired
+`CSPDIR002` (which reports `style-src`) with a `script-src` title, an artifact
+of the old title-only keying that describes no real page. A new test now asserts
+that `script-src` and `style-src` never merge.
 
 ---
 

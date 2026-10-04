@@ -32,7 +32,7 @@ if_not_else = "warn"
 wasi = ["dep:wasmtime", "dep:wasmtime-wasi"]
 
 [dependencies]
-crawlkit-types = { path = "../crawlkit-types" }
+crawlkit-types = { version = "6.0.0-alpha.5", path = "../crawlkit-types" }
 serde.workspace = true
 serde_json.workspace = true
 # Optional: component-model host bindings for the `wasi-*` examples

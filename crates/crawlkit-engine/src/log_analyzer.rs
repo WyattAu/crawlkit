@@ -147,11 +147,17 @@ mod tests {
     /// crawlkit's own token contains no `bot`/`crawler`/`spider` substring, so
     /// without an explicit case an audit's own requests were tallied as human
     /// visitors.
+    ///
+    /// Several historical versions are checked because log files outlive releases:
+    /// matching only the current version would reclassify every older crawlkit
+    /// request as a human visitor.
     #[test]
     fn test_classify_crawlkit_is_a_bot() {
-        assert_eq!(classify_user_agent("crawlkit/6.0.0-alpha.4"), "Crawlkit");
+        for version in ["6.0.0-alpha.4", "6.0.0-alpha.5", "6.0.0", "5.3.0"] {
+            assert_eq!(classify_user_agent(&format!("crawlkit/{version}")), "Crawlkit");
+        }
         assert_eq!(
-            classify_user_agent("crawlkit/6.0.0-alpha.4 (SEO audit; +https://github.com/WyattAu/crawlkit)"),
+            classify_user_agent("crawlkit/6.0.0-alpha.5 (SEO audit; +https://github.com/WyattAu/crawlkit)"),
             "Crawlkit"
         );
     }

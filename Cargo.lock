@@ -1122,7 +1122,7 @@ checksum = "1f739117ccbeec70314433f304ced82abe89e75ff32ab676c2d7da661358af1e"
 
 [[package]]
 name = "crawlkit"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1159,7 +1159,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-api"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1209,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-budget-check"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "percentile-kit",
  "serde_json",
@@ -1221,7 +1221,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-engine"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "aes-gcm",
  "arrow",
@@ -1284,7 +1284,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-plugin-sdk"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "crawlkit-types",
  "serde",
@@ -1296,7 +1296,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-scanner"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "async-trait",
  "axum",
@@ -1323,7 +1323,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-types"
-version = "6.0.0-alpha.4"
+version = "6.0.0-alpha.5"
 dependencies = [
  "serde",
  "serde_json",

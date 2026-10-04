@@ -100,7 +100,7 @@ observability = ["opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk"]
 
 [dependencies]
 # Always available
-crawlkit-types = { path = "../crawlkit-types" }
+crawlkit-types = { version = "6.0.0-alpha.5", path = "../crawlkit-types" }
 # Transfer-encoding negotiation. reqwest's own `gzip`/`brotli`/`deflate`
 # features strip `Content-Encoding` while decoding, which makes a compressed
 # response indistinguishable from an uncompressed one; crawlkit decodes

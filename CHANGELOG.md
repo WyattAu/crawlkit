@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0-alpha.5]
+
+**Released:** 2026-10-04 · accuracy pass over seven audit rounds against
+kingstonpeptides.com and gov.uk.
+
+Headline numbers on a 40-page crawl of kingstonpeptides.com: 1,493 defect
+findings, with 957 page measurements reported on a separate channel instead of
+folded into severity roll-ups. Nineteen distinct defect classes fixed, each
+verified against live markup rather than inferred.
+
 ### Added
 
 - **Measurements separated from defects.** Readability indices, keyword

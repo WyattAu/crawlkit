@@ -23,8 +23,8 @@ name = "crawlkit-scanner"
 path = "src/main.rs"
 
 [dependencies]
-crawlkit-engine = { path = "../crawlkit-engine" }
-crawlkit-types = { path = "../crawlkit-types" }
+crawlkit-engine = { version = "6.0.0-alpha.5", path = "../crawlkit-engine" }
+crawlkit-types = { version = "6.0.0-alpha.5", path = "../crawlkit-types" }
 axum = { version = "0.8", features = ["macros"] }
 tokio.workspace = true
 tower = { version = "0.5", features = ["util"] }

@@ -93,7 +93,7 @@ path = "examples/tenant_crawl.rs"
 required-features = ["full"]
 
 [dependencies]
-crawlkit-engine = { path = "../crawlkit-engine", default-features = false }
+crawlkit-engine = { version = "6.0.0-alpha.5", path = "../crawlkit-engine", default-features = false }
 tokio.workspace = true
 clap = { workspace = true, features = ["env"] }
 tracing.workspace = true

@@ -1,0 +1,17 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "age": "587",
+    "allow": "GET, HEAD",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cf-cache-status": "HIT",
+    "cf-ray": "a455855d6b85f491-MAN",
+    "content-encoding": "br",
+    "content-type": "text/html; charset=utf-8",
+    "date": "Sun, 04 Oct 2026 16:21:40 GMT",
+    "last-modified": "Fri, 02 Oct 2026 16:11:02 GMT",
+    "server": "cloudflare"
+  },
+  "status": 200,
+  "url": "https://example.com/"
+}

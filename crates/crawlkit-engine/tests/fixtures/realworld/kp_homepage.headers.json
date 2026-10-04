@@ -1,0 +1,22 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cache-control": "no-store, must-revalidate",
+    "cf-ray": "a4558550cd65f581-MAN",
+    "content-encoding": "zstd",
+    "content-security-policy": "default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://analytics.ahrefs.com https://static.cloudflareinsights.com https://googleads.g.doubleclick.net https://www.googleadservices.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; font-src 'self' data:; connect-src 'self' https://kp-api-f0zd.onrender.com wss://kp-api-f0zd.onrender.com https://www.google-analytics.com https://region1.google-analytics.com https://analytics.ahrefs.com https://googleads.g.doubleclick.net https://www.google.com https://www.google.co.uk https://www.googleadservices.com https://ad.doubleclick.net https://cloudflareinsights.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
+    "content-type": "text/html",
+    "date": "Sun, 04 Oct 2026 16:21:38 GMT",
+    "nel": "{\"report_to\":\"cf-nel\",\"success_fraction\":0.0,\"max_age\":604800}",
+    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "referrer-policy": "strict-origin-when-cross-origin",
+    "report-to": "{\"group\":\"cf-nel\",\"max_age\":604800,\"endpoints\":[{\"url\":\"https://a.nel.cloudflare.com/report/v4?s=Cs43eWiyWnjxGYIW7WGAvWP88hmgr2f3av4AIclz%2Fl%2FN4MPsyeHFnkU92c653B%2BGrng0W0jXhgfhJ0%2BpZsQr9zPZPIZGVFd%2FzeJlGeFZJWHgSPzD3AIB9WVvAl83W4tPiumd1erGmw%3D%3D\"}]}",
+    "server": "cloudflare",
+    "strict-transport-security": "max-age=31536000; includeSubDomains; preload",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "DENY"
+  },
+  "status": 200,
+  "url": "https://kingstonpeptides.com/"
+}

@@ -1,0 +1,24 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "accept-ranges": "bytes",
+    "age": "144",
+    "cache-control": "max-age=300",
+    "connection": "keep-alive",
+    "content-encoding": "br",
+    "content-length": "2686",
+    "content-type": "text/html; charset=UTF-8",
+    "date": "Sun, 04 Oct 2026 16:21:39 GMT",
+    "etag": "\"6ac0457c-1dd2\"",
+    "expires": "Sun, 04 Oct 2026 15:38:53 GMT",
+    "server": "nginx",
+    "vary": "Accept-Encoding",
+    "via": "1.1 varnish",
+    "x-cache": "HIT",
+    "x-cache-hits": "0",
+    "x-served-by": "cache-lhr-egwu1540050-LHR",
+    "x-timer": "S1791130899.442189,VS0,VE0"
+  },
+  "status": 200,
+  "url": "https://xkcd.com/353/"
+}

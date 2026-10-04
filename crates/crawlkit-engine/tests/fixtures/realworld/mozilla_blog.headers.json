@@ -1,0 +1,27 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "cache-control": "max-age=600, must-revalidate",
+    "cf-cache-status": "DYNAMIC",
+    "cf-ray": "a4558552ed456306-MAN",
+    "content-encoding": "br",
+    "content-security-policy": "upgrade-insecure-requests",
+    "content-type": "text/html; charset=UTF-8",
+    "date": "Sun, 04 Oct 2026 16:21:38 GMT",
+    "link": "<https://blog.mozilla.org/en/wp-json/>; rel=\"https://api.w.org/\"",
+    "server": "cloudflare",
+    "set-cookie": "__cf_bm=5IecIg2f7bV5zLn9Lq0wd_uSt3peo.5ycchKakOTwt8-1791130898.3857667-1.0.1.1-E21KIt1blpsgWyCIsYzvKABwfmK5eTp9w4oEPCc3GeQfYTZ4F210pIcroKc6TldqsvzjZCC0LANhSbyB0n2boBWfNpbaKctJxrxTVFIt8H_oD1MEs9kTsOW1cKthEHRY; HttpOnly; SameSite=None; Secure; Path=/; Domain=blog.mozilla.org; Expires=Sun, 04 Oct 2026 16:51:38 GMT",
+    "strict-transport-security": "max-age=31536000",
+    "vary": "Accept-Encoding",
+    "x-cache": "HIT: 70",
+    "x-cache-group": "normal",
+    "x-cacheable": "SHORT",
+    "x-content-type-options": "nosniff",
+    "x-frame-options": "SAMEORIGIN",
+    "x-powered-by": "WP Engine",
+    "x-xss-protection": "1; mode=block"
+  },
+  "status": 200,
+  "url": "https://blog.mozilla.org/en/"
+}

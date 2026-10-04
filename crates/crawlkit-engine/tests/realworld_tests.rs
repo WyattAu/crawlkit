@@ -669,6 +669,47 @@ fn distinct_missing_landmarks_are_reported_separately() {
     // landmarks are not collapsed into one another.
 }
 
+/// Every capture's sidecar files must be committed, not just present locally.
+///
+/// The first version of this corpus passed `headers: &[]`, then the sidecars were
+/// added — and `.gitignore` has a blanket `*.json` rule for generated reports,
+/// which silently excluded all ten `*.headers.json` files. The suite passed
+/// locally and failed in CI, because `load_response` could not find a file that
+/// git had never been told about.
+///
+/// A test cannot see its own git index, so the guard is a committed manifest: the
+/// file lists the sidecars, and if a capture is added without one, the next
+/// person to run this on a clean checkout finds out here rather than in CI.
+#[test]
+fn every_capture_has_its_sidecars() {
+    let dir = realworld_dir();
+    let mut missing: Vec<String> = Vec::new();
+    for path in fixture_paths() {
+        let name = path.file_name().unwrap().to_str().unwrap();
+        for suffix in [".headers.json", ".robots.txt"] {
+            let sidecar = dir.join(name.replace(".html", suffix));
+            // robots.txt is genuinely absent for example.com, which serves none.
+            // Everything else must be present, because the harness asserts on it.
+            if suffix == ".robots.txt" && name == "example_org.html" {
+                assert!(
+                    !sidecar.exists(),
+                    "example.com serves no robots.txt; a capture of one means the \
+                     fixture set and this exemption have drifted apart"
+                );
+                continue;
+            }
+            if !sidecar.exists() {
+                missing.push(sidecar.display().to_string());
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "captures missing their sidecars (are they committed?):\n  {}",
+        missing.join("\n  ")
+    );
+}
+
 /// Every fixture referenced by the expectation tables must exist, and every
 /// capture must be reachable through `source_url`.
 #[test]

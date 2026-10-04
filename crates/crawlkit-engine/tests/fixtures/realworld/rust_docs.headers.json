@@ -1,0 +1,22 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "age": "10253",
+    "alt-svc": "h3=\":443\"; ma=86400",
+    "content-encoding": "gzip",
+    "content-type": "text/html",
+    "date": "Sun, 04 Oct 2026 13:30:47 GMT",
+    "etag": "W/\"798422ee2d631a85ef9e06a2fb44fa80\"",
+    "last-modified": "Thu, 01 Oct 2026 12:30:55 GMT",
+    "server": "AmazonS3",
+    "vary": "Accept-Encoding",
+    "via": "1.1 ac98852bd64e3f16f598c6a3bb7d72d4.cloudfront.net (CloudFront)",
+    "x-amz-cf-id": "6R67qOXxswvFs2sqFbEPSuln48jgQgLvHvTIpCWOtw5US09VbSzp_Q==",
+    "x-amz-cf-pop": "MAN51-P5",
+    "x-amz-storage-class": "INTELLIGENT_TIERING",
+    "x-amz-version-id": "c9RQzKFYiHBts2xzmroCYhBN8T_rR2sc",
+    "x-cache": "Hit from cloudfront"
+  },
+  "status": 200,
+  "url": "https://doc.rust-lang.org/std/"
+}

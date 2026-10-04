@@ -1,0 +1,23 @@
+{
+  "captured_by": "scripts/capture-realworld-fixture.sh",
+  "headers": {
+    "accept-ranges": "bytes",
+    "age": "3424",
+    "content-encoding": "gzip",
+    "content-length": "11611",
+    "content-security-policy-report-only": "font-src 'self' data:; form-action 'self'; img-src 'self' data: https://media.ethicalads.io; style-src 'self' 'unsafe-inline' https://ajax.googleapis.com; default-src 'self'; object-src 'none'; connect-src 'self' https://console.python.org https://analytics.python.org https://server.ethicalads.io https://2p66nmmycsj3.statuspage.io; script-src 'self' 'nonce-kq31PBn9LB2RrNG1lKJlDQ==' https://analytics.python.org https://media.ethicalads.io https://ajax.googleapis.com; frame-ancestors 'self'; base-uri 'self'; report-uri https://o20004.ingest.us.sentry.io/api/39935/security/?sentry_key=95f826ce8a6d47e9ab5dbb055c24eb74",
+    "content-type": "text/html; charset=utf-8",
+    "date": "Sun, 04 Oct 2026 16:21:39 GMT",
+    "server": "nginx",
+    "strict-transport-security": "max-age=63072000; includeSubDomains; preload",
+    "vary": "Cookie",
+    "via": "1.1 varnish, 1.1 varnish, 1.1 varnish",
+    "x-cache": "MISS, HIT, HIT",
+    "x-cache-hits": "0, 213, 2",
+    "x-frame-options": "SAMEORIGIN",
+    "x-served-by": "cache-iad-kcgs7200020-IAD, cache-iad-kcgs7200020-IAD, cache-iad-kcgs7270046-IAD, cache-lhr-egwu1540029-LHR",
+    "x-timer": "S1791130900.742429,VS0,VE0"
+  },
+  "status": 200,
+  "url": "https://www.python.org/"
+}

@@ -49,6 +49,17 @@
 /// title, then compares keys — so both exact-title siblings and these reviewed
 /// synonym families converge without either mechanism being able to disagree.
 pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
+    // Cross-page duplicate-title reporting. `CrossPageDuplicateContentDetector`
+    // and `KeywordCannibalizationAnalyzer` both report duplicate titles under
+    // their own codes, so every set of title collisions produced two rows per
+    // page. They reached `dedupe.rs` only once post-crawl registry findings
+    // became persistable.
+    //
+    // `DUP-CROSS002` (duplicate descriptions) and `CANNIB001` (cannibalization)
+    // stay separate: they describe different defects and collapsing them would
+    // hide the distinction between "the same description twice" and "these pages
+    // compete for one query".
+    ("duplicate titles across pages", &["DUP-CROSS001", "KEY-CANNIB001"]),
     ("meta description too short", &["MDESC-PX002", "META005", "METADEEP-V2001", "METADEEP001", "METADESC001", "METADESSSHORT-V2001", "METADESSSHORT-V6086", "METADESSSHORT001", "METALEN-V2002", "METAQLT-V2001"]),
     ("missing hreflang x-default", &["HREF-V3001", "HREF-V4001", "HREF001", "HREFNET002", "HREFRECIP001", "HREFXD-V2001", "HREFXD-V5001", "HREFXD-V6094", "HREFXD001", "ISEO002"]),
     ("multiple h1 headings", &["A11Y004", "CDEPTH003", "H1MULTI-V6108", "HEAD003", "HEADH1-V5002", "HEADSC003", "HHIER-V2003-DEEP-DEEP", "HHIER-V2003-DEEP-DEEP-DEEP", "HHIERDEEP003"]),

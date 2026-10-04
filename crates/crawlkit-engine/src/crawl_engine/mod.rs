@@ -275,8 +275,26 @@ pub struct CrawlOutput {
     pub pages_crawled: usize,
     /// Number of pages stored in the database.
     pub pages_stored: usize,
-    /// Total analysis findings (issues) across all pages.
+    /// Defects across all pages. Measurements are counted separately in
+    /// [`Self::measurements_found`] and are not included.
     pub issues_found: usize,
+    /// Page measurements across all pages: readability indices, keyword
+    /// extraction, entity detection, composite scores.
+    ///
+    /// Stored, retrievable, and excluded from every issue total.
+    pub measurements_found: usize,
+    /// Cross-page findings from the post-crawl analyzer registry.
+    ///
+    /// These were previously computed and discarded: the registry ran 20
+    /// cross-page analyzers (orphan pages, keyword cannibalization, link equity,
+    /// redirect chains, internal link balance, crawl quality, schema coverage,
+    /// heading structure, canonical consistency, overall health) and used only
+    /// `.len()` on the result. Orphan pages and cannibalization are among the
+    /// highest-value cross-page results, so a crawl silently discarded them.
+    ///
+    /// Returned rather than persisted here because a `Finding` is keyed by URL,
+    /// and only the caller knows the crawl's storage handle and tenant.
+    pub cross_page_findings: Vec<crate::Finding>,
     /// Pages skipped because they were external and not allowed.
     pub skipped_external: usize,
     /// Pages skipped due to robots.txt disallow.
@@ -537,6 +555,7 @@ impl CrawlEngine {
             cfg,
             storage: Arc::clone(&self.storage),
             crawl_id: crawl_id.clone(),
+            seed_url: start_url.to_string(),
             seed_domain: seed_domain.clone(),
             on_page,
             metrics,
@@ -933,12 +952,12 @@ impl CrawlEngine {
             .post_crawl_analyzers
             .iter()
             .any(|a| a.requires_issues());
-        let (post_crawl_issues, crawl_data_for_insights, issue_aggregates) =
+        let (post_crawl_issues, cross_page_findings, crawl_data_for_insights, issue_aggregates) =
             if self.config.post_crawl_analyzers.is_empty() {
-                (0, None, None)
+                (0, Vec::new(), None, None)
             } else {
                 let crawl_id_clone = crawl_id.clone();
-                let seed_url = run.cfg.crawl_config.start_url.to_string();
+                let seed_url = run.seed_url.clone();
                 let storage_for_analysis = Arc::clone(&self.storage);
                 let crawl_data = tokio::task::spawn_blocking(move || {
                     let pages = storage_for_analysis
@@ -972,7 +991,14 @@ impl CrawlEngine {
                         seed_url: String::new(),
                     }
                 });
-                let findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
+                let mut findings = self.config.post_crawl_analyzers.analyze_crawl(&crawl_data);
+                // Same collapse the per-page registry applies. Cross-page
+                // analyzers reach the same conclusions under different codes too
+                // (`CrossPageDuplicateContentDetector` and
+                // `KeywordCannibalizationAnalyzer` both report duplicate
+                // titles), and without this every title collision is stored twice.
+                findings = crate::analyzers::dedupe::collapse_duplicates(findings);
+                findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
                 let count = findings.len();
                 let aggregates = if needs_issue_readback {
                     None
@@ -1005,7 +1031,7 @@ impl CrawlEngine {
                         }
                     }
                 };
-                (count, Some(crawl_data), aggregates)
+                (count, findings, Some(crawl_data), aggregates)
             };
 
         // Generate prioritized insights from findings.
@@ -1037,11 +1063,12 @@ impl CrawlEngine {
         let snapshot = run.metrics.snapshot();
 
         tracing::info!(
-            "Crawl complete: {} pages crawled, {} stored, {} issues ({} post-crawl), {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
+            "Crawl complete: {} pages crawled, {} stored, {} issues ({} more from cross-page analysis), {} measurements, {} external skipped, {} robots blocked, {} duplicates, {} unchanged, {} modified, {} new",
             stats.pages_crawled,
             stats.pages_stored,
-            stats.issues_found + post_crawl_issues,
+            stats.issues_found,
             post_crawl_issues,
+            stats.measurements_found,
             stats.skipped_external,
             stats.skipped_robots,
             stats.skipped_duplicate,
@@ -1104,7 +1131,13 @@ impl CrawlEngine {
             crawl_id,
             pages_crawled: stats.pages_crawled,
             pages_stored: stats.pages_stored,
-            issues_found: stats.issues_found + post_crawl_issues,
+            // Deliberately excludes `post_crawl_issues`. That pass is count-only:
+            // it feeds insights, and the CLI runs post-crawl analysis a second
+            // time to persist. Adding it here reported rows that no query would
+            // ever return, so the summary and `crawlkit report` disagreed.
+            issues_found: stats.issues_found,
+            measurements_found: stats.measurements_found,
+            cross_page_findings,
             skipped_external: stats.skipped_external,
             skipped_robots: stats.skipped_robots,
             skipped_duplicate: stats.skipped_duplicate,
@@ -1384,6 +1417,8 @@ mod tests {
             pages_crawled: 10,
             pages_stored: 8,
             issues_found: 5,
+            measurements_found: 12,
+            cross_page_findings: Vec::new(),
             skipped_external: 2,
             skipped_robots: 1,
             skipped_duplicate: 3,

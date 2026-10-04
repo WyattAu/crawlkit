@@ -8,6 +8,8 @@
 
 use std::collections::{HashMap, HashSet};
 
+use url::Url;
+
 use crate::storage::{Issue, PageData};
 use crate::types::{IssueCategory, Severity};
 use crate::Finding;
@@ -967,11 +969,38 @@ impl PostCrawlAnalyzer for LinkVelocityAnalyzer {
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 {
+        if total == 0 || data.links.is_empty() {
             return findings;
         }
 
-        let avg_links: f64 = data.pages.iter().map(|p| (0) as f64).sum::<f64>() / total as f64;
+        // Both figures below used to be constants rather than measurements:
+        // `avg_links` summed a literal `0` per page, and `zero_link_pages`
+        // counted every page with `filter(|p| true)`. LINK-V001 therefore always
+        // reported "Average links per page is 0.0" and LINK-V002 always reported
+        // "100% of pages have no outgoing links", on a site where every page has
+        // links.
+        //
+        // `PageData::links` looks like the obvious source and is not: it is a
+        // write-side convenience field that `row_to_page_data` always returns as
+        // empty, so reading it yields the same zeros. `CrawlData::links` — the
+        // `(source_url, [target_url])` graph read from the `links` table — is the
+        // populated one.
+        //
+        // Only pages present in that graph are counted. A page absent from it
+        // cannot be distinguished from a page whose links were never recorded, so
+        // treating absence as "no outgoing links" would reproduce the original
+        // false positive whenever link storage came up empty.
+        let graph: HashMap<&str, usize> = data
+            .links
+            .iter()
+            .map(|(src, targets)| (src.as_str(), targets.len()))
+            .collect();
+        let measured = graph.len();
+        if measured == 0 {
+            return findings;
+        }
+        let total_links: usize = graph.values().sum();
+        let avg_links = total_links as f64 / measured as f64;
         if avg_links < 2.0 {
             findings.push(Finding {
                 severity: Severity::Warning,
@@ -984,25 +1013,16 @@ impl PostCrawlAnalyzer for LinkVelocityAnalyzer {
             });
         }
 
-        let zero_link_pages = data.pages.iter().filter(|p| true).count();
-        if zero_link_pages as f64 / total as f64 > 0.5 {
-            findings.push(Finding {
-                severity: Severity::Warning,
-                category: IssueCategory::Seo,
-                code: "LINK-V002".to_string(),
-                title: "High percentage of zero-link pages".to_string(),
-                description: format!(
-                    "{}/{} pages ({:.0}%) have no outgoing links.",
-                    zero_link_pages,
-                    total,
-                    zero_link_pages as f64 / total as f64 * 100.0
-                ),
-                url: data.seed_url.clone(),
-                recommendation:
-                    "Add navigation links and contextual links to reduce dead-end pages."
-                        .to_string(),
-            });
-        }
+        // LINK-V002 ("High percentage of zero-link pages") was removed here. It
+        // and `InternalLinkBalanceAnalyzer`'s LINK-BAL002 tested the same
+        // condition — pages with no outbound links — and emitted the same
+        // description text, differing only in code and threshold (>50% vs >30%).
+        // One condition, two codes, two rows per dead-end page in every
+        // aggregate. LINK-BAL002 survives as the single reporting rule because
+        // "dead end" is the correct term for a page with no outbound links.
+        // Its threshold stays at 30%; lowering it is a policy question, not a
+        // correctness one, and changing it here would alter reported counts for
+        // reasons unrelated to the duplication.
         findings
     }
 }
@@ -1147,12 +1167,38 @@ impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
     fn analyze_crawl(&self, data: &CrawlData) -> Vec<Finding> {
         let mut findings = Vec::new();
         let total = data.pages.len();
-        if total == 0 {
+        if total == 0 || data.links.is_empty() {
             return findings;
         }
 
-        let total_internal: usize = data.pages.iter().map(|p| 0).sum();
-        let total_external: usize = data.pages.iter().map(|p| 0).sum();
+        // Real internal/external split from `CrawlData::links` against the
+        // crawl's own host. `PageData::links` is always empty on read
+        // (`row_to_page_data` returns `Vec::new()`), so it cannot be used here.
+        //
+        // Both totals previously summed a literal `0`, so `total_external > 0` was
+        // never true and LINK-BAL001 was dead code — it had never fired on any
+        // crawl. That is the more serious half of this bug: a rule that always
+        // fires and a rule that never fires both look like a working analyzer
+        // from the outside, and only the second one is invisible in the output.
+        let seed_host = Url::parse(&data.seed_url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_ascii_lowercase));
+        let mut total_internal: usize = 0;
+        let mut total_external: usize = 0;
+        for (_src, targets) in &data.links {
+            for target in targets {
+                let same_host = Url::parse(target)
+                    .ok()
+                    .and_then(|u| u.host_str().map(str::to_ascii_lowercase))
+                    .zip(seed_host.as_deref())
+                    .is_some_and(|(a, b)| a == b);
+                if same_host {
+                    total_internal += 1;
+                } else {
+                    total_external += 1;
+                }
+            }
+        }
         if total_external > 0 {
             let ratio = total_internal as f64 / total_external as f64;
             if ratio < 0.1 {
@@ -1168,8 +1214,18 @@ impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
             }
         }
 
-        let dead_ends = data.pages.iter().filter(|p| true).count();
-        if dead_ends as f64 / total as f64 > 0.3 {
+        // Counted over pages present in the link graph only. A page absent from
+        // it is indistinguishable from one whose links were never recorded, and
+        // counting those as dead ends would report 100% on any crawl where link
+        // storage came up empty.
+        let graph: HashMap<&str, usize> = data
+            .links
+            .iter()
+            .map(|(src, targets)| (src.as_str(), targets.len()))
+            .collect();
+        let measured = graph.len();
+        let dead_ends = graph.values().filter(|n| **n == 0).count();
+        if measured > 0 && dead_ends as f64 / measured as f64 > 0.3 {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Seo,
@@ -1178,8 +1234,8 @@ impl PostCrawlAnalyzer for InternalLinkBalanceAnalyzer {
                 description: format!(
                     "{}/{} pages ({:.0}%) have no outgoing links.",
                     dead_ends,
-                    total,
-                    dead_ends as f64 / total as f64 * 100.0
+                    measured,
+                    dead_ends as f64 / measured as f64 * 100.0
                 ),
                 url: data.seed_url.clone(),
                 recommendation: "Add navigation and contextual links to dead-end pages."
@@ -1715,6 +1771,178 @@ mod tests {
             }
             findings
         }
+    }
+
+    /// Crawl data where each listed source page has `count` targets, all on
+    /// `target_host`.
+    fn graph_data(seed: &str, sources: &[(&str, usize)], target_host: &str) -> CrawlData {
+        let links = sources
+            .iter()
+            .map(|(src, n)| {
+                (
+                    (*src).to_string(),
+                    (0..*n)
+                        .map(|i| format!("https://{target_host}/t{i}"))
+                        .collect::<Vec<_>>(),
+                )
+            })
+            .collect::<Vec<_>>();
+        let pages = sources
+            .iter()
+            .map(|(src, _)| test_page(src))
+            .collect::<Vec<_>>();
+        CrawlData {
+            pages,
+            links,
+            issues: vec![],
+            seed_url: seed.to_string(),
+        }
+    }
+
+    /// Regression: `LinkVelocityAnalyzer` measured nothing.
+    ///
+    /// `avg_links` summed a literal `0` per page and `zero_link_pages` counted
+    /// every page via `filter(|p| true)`, so on a site where every page had ten
+    /// links it reported "Average links per page is 0.0" and "100% of pages have
+    /// no outgoing links" — LINK-V001 and LINK-V002 fired on every crawl of every
+    /// site, unconditionally. Verified live against kingstonpeptides.com.
+    #[test]
+    fn link_velocity_reads_real_link_counts() {
+        let data = graph_data(
+            "https://example.com",
+            &[("https://example.com/a", 10), ("https://example.com/b", 10)],
+            "example.com",
+        );
+        let codes: Vec<String> = LinkVelocityAnalyzer
+            .analyze_crawl(&data)
+            .into_iter()
+            .map(|f| f.code)
+            .collect();
+        assert!(
+            codes.is_empty(),
+            "well-linked pages must not trip link-velocity rules, got {codes:?}"
+        );
+    }
+
+    /// The measurement itself, asserted directly: LINK-V001's description quotes
+    /// the average, so a wrong average is visible in the text.
+    #[test]
+    fn link_velocity_reports_the_true_average_when_links_are_sparse() {
+        let data = graph_data(
+            "https://example.com",
+            &[("https://example.com/a", 1), ("https://example.com/b", 1)],
+            "example.com",
+        );
+        let findings = LinkVelocityAnalyzer.analyze_crawl(&data);
+        let v001 = findings.iter().find(|f| f.code == "LINK-V001");
+        assert!(
+            v001.is_some_and(|f| f.description.contains("1.0")),
+            "expected an average of 1.0, got {:?}",
+            v001.map(|f| &f.description)
+        );
+    }
+
+    /// No link graph at all means the data is missing, not that every page is a
+    /// dead end. Claiming otherwise would reproduce the original false positive
+    /// whenever link storage came up empty.
+    #[test]
+    fn no_link_graph_means_no_claims() {
+        let data = CrawlData {
+            pages: vec![test_page("https://example.com/a"), test_page("https://example.com/b")],
+            links: vec![],
+            issues: vec![],
+            seed_url: "https://example.com".to_string(),
+        };
+        for codes in [
+            LinkVelocityAnalyzer
+                .analyze_crawl(&data)
+                .into_iter()
+                .map(|f| f.code)
+                .collect::<Vec<_>>(),
+            InternalLinkBalanceAnalyzer
+                .analyze_crawl(&data)
+                .into_iter()
+                .map(|f| f.code)
+                .collect::<Vec<_>>(),
+        ] {
+            assert!(codes.is_empty(), "missing link data must not produce findings, got {codes:?}");
+        }
+    }
+
+    /// Regression: `InternalLinkBalanceAnalyzer` reported a constant.
+    ///
+    /// `total_internal` and `total_external` both summed a literal `0`, so
+    /// `total_external > 0` was never true and LINK-BAL001 had never fired on any
+    /// crawl in the product's history — a silently dead rule. `dead_ends` counted
+    /// every page via `filter(|p| true)`, so LINK-BAL002 fired at 100% always.
+    #[test]
+    fn internal_link_balance_separates_internal_from_external() {
+        // 10 internal targets, 1 external per page: ratio 10.0, well above 0.1.
+        let data = graph_data(
+            "https://example.com",
+            &[("https://example.com/a", 11), ("https://example.com/b", 11)],
+            "example.com",
+        );
+        // Replace the last target on each page with an external one.
+        let mut data = data;
+        for (_, targets) in &mut data.links {
+            let n = targets.len();
+            targets[n - 1] = "https://other.test/x".to_string();
+        }
+        let codes: Vec<String> = InternalLinkBalanceAnalyzer
+            .analyze_crawl(&data)
+            .into_iter()
+            .map(|f| f.code)
+            .collect();
+        assert!(
+            codes.is_empty(),
+            "a 10:1 internal/external ratio is balanced, got {codes:?}"
+        );
+    }
+
+    #[test]
+    fn internal_link_balance_flags_a_genuinely_external_heavy_site() {
+        let data = graph_data(
+            "https://example.com",
+            &[("https://example.com/a", 20)],
+            "other.test",
+        );
+        let codes: Vec<String> = InternalLinkBalanceAnalyzer
+            .analyze_crawl(&data)
+            .into_iter()
+            .map(|f| f.code)
+            .collect();
+        assert!(
+            codes.contains(&"LINK-BAL001".to_string()),
+            "zero internal links against 20 external is imbalanced, got {codes:?}"
+        );
+    }
+
+    /// A page with targets is not a dead end. LINK-BAL002 counted all pages via
+    /// `filter(|p| true)` and reported 100% on every crawl.
+    #[test]
+    fn dead_end_pages_are_reported_by_exactly_one_code() {
+        let data = graph_data(
+            "https://example.com",
+            &[("https://example.com/a", 0), ("https://example.com/b", 0)],
+            "example.com",
+        );
+        let mut all: Vec<String> = LinkVelocityAnalyzer
+            .analyze_crawl(&data)
+            .into_iter()
+            .chain(InternalLinkBalanceAnalyzer.analyze_crawl(&data))
+            .map(|f| f.code)
+            .collect();
+        all.sort();
+        assert!(
+            !all.contains(&"LINK-V002".to_string()),
+            "LINK-V002 duplicated LINK-BAL002 and was removed"
+        );
+        assert_eq!(
+            all.iter().filter(|c| *c == "LINK-BAL002").count(),
+            1,
+            "dead-end pages must be reported once, got {all:?}"
+        );
     }
 
     fn test_page(url: &str) -> PageData {

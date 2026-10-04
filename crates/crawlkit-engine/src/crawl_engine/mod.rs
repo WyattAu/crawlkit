@@ -1475,8 +1475,10 @@ mod tests {
         config.feature_flags.set(crate::FLAG_WASM_ANALYZERS, false);
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
-        // With AI and WASM disabled, only base analyzers remain
-        assert_eq!(registry.len(), 768);
+        // With AI and WASM disabled, only base analyzers remain (768 = 772 - 4
+        // feature-flagged; see `test_registry_default` for the three noise
+        // analyzers removed from the base registry).
+        assert_eq!(registry.len(), 765);
     }
 
     struct MockJsRenderer {

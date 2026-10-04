@@ -104,9 +104,58 @@ mod tests {
         for code in [
             "CHARSET002", "CACHE002", "CACHE003", "COEP-V2001", "CORP001",
             "PERMPDEEP002", "AI-ACC006", "XSS002", "SITEMAPMISS001", "NAP001",
-            "IMGALTDEEP001", "ELINK001", "COLRCL-V2001-UNDERLINE",
+            "IMGALTDEEP001", "CONTR001", "COLRCL001",
         ] {
             assert!(!is_metric_code(code), "{code} is a defect, not a metric");
+        }
+    }
+
+    /// Codes whose analyzers were removed, with the reason each went.
+    ///
+    /// Kept as a single list so [`removed_codes_do_not_reappear`] can check all
+    /// of them at once.
+    const REMOVED_CODES: &[(&str, &str)] = &[
+        (
+            "ELINK001",
+            "no engine requires an outbound body link from a schema entity",
+        ),
+        (
+            "ELINK002",
+            "same fabricated 'topical authority' requirement as ELINK001",
+        ),
+        (
+            "COLRCL-V2001-UNDERLINE",
+            "fired on any stylesheet pairing text-decoration:none with a color",
+        ),
+        (
+            "CANDEP-V2003",
+            "a trailing slash is a valid URL form, and url_norm folds it anyway",
+        ),
+    ];
+
+    /// Tripwire: none of the removed codes may be emitted anywhere again.
+    ///
+    /// Scans the analyzer sources for `code: "..."` literals rather than
+    /// checking `is_metric_code`, which answers `false` for these codes whether
+    /// or not they exist and so would pass vacuously.
+    #[test]
+    fn removed_codes_do_not_reappear() {
+        // Covers the whole analyzer tree. `content_analyzers.rs` is the largest
+        // single file; the rest are small enough to list.
+        let sources: Vec<&str> = vec![
+            include_str!("content_analyzers.rs"),
+            include_str!("mod.rs"),
+            include_str!("v2/accessibility.rs"),
+            include_str!("v2/seo.rs"),
+            include_str!("post_crawl_analyzers.rs"),
+        ];
+        for (code, reason) in REMOVED_CODES {
+            for src in &sources {
+                assert!(
+                    !src.contains(&format!("code: \"{code}\"")),
+                    "{code} was removed ({reason}) but is emitted again in the analyzer tree"
+                );
+            }
         }
     }
 

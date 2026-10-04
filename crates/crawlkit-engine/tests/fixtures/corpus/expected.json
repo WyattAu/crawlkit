@@ -242,9 +242,13 @@
       "LBPI-V2001",
       "OLOGO001",
       "VIDTHUMB-V5001",
-      "ELINK001"
+      "RDFA001"
     ],
     "must_not_have": [
+      "ELINK001",
+      "ELINK002",
+      "COLRCL-V2001-UNDERLINE",
+      "CANDEP-V2003",
       "SD001",
       "THIN002",
       "METADESCMISS001",

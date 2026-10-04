@@ -895,44 +895,6 @@ impl Analyzer for OpenSearchDescriptionValidatorV2 {
     }
 }
 
-pub struct CanonicalDepthAnalyzerV2;
-impl Default for CanonicalDepthAnalyzerV2 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-impl CanonicalDepthAnalyzerV2 {
-    pub fn new() -> Self {
-        Self
-    }
-}
-impl Analyzer for CanonicalDepthAnalyzerV2 {
-    fn name(&self) -> &str {
-        "canonical-depth-v2"
-    }
-    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-        if let Some(canonical) = &ctx.page.meta.canonical {
-            if canonical.as_str().ends_with('/')
-                && canonical.as_str() != "/"
-                && !canonical.as_str().contains("index")
-            {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Seo,
-                    code: "CANDEP-V2003".to_string(),
-                    title: "Canonical has trailing slash".to_string(),
-                    description: "Trailing slashes should match preferred format.".to_string(),
-                    url: url.clone(),
-                    recommendation: "Ensure canonical URL format is consistent.".to_string(),
-                });
-            }
-        }
-        findings
-    }
-}
-
 pub struct MetaDescriptionLengthAnalyzerV3;
 impl Default for MetaDescriptionLengthAnalyzerV3 {
     fn default() -> Self {
@@ -5006,12 +4968,6 @@ mod tests {
     #[test]
     fn test_opensearch_v2() {
         assert!(OpenSearchDescriptionValidatorV2::new()
-            .analyze(&make_ctx(&make_page("https://example.com"), None))
-            .is_empty());
-    }
-    #[test]
-    fn test_canonical_depth_v2() {
-        assert!(CanonicalDepthAnalyzerV2::new()
             .analyze(&make_ctx(&make_page("https://example.com"), None))
             .is_empty());
     }

@@ -454,15 +454,109 @@ test proving `cloudflare/1.2.3` is still caught.
 
 ---
 
+## Round 4 — the measurement/metric split, and cross-page findings that were never stored
+
+### Measurements were 39% of all findings
+
+Readability indices, keyword extraction, entity detection and composite scores
+were emitted as `info` findings alongside real problems. On a 100-page crawl that
+was **2,401 of 4,696 info findings — 39% of every finding crawlkit reported**.
+
+The cost is not the row count. A page with three real problems and twenty scores
+is indistinguishable, in aggregate, from a page with twenty-three problems, so
+every severity roll-up, "issues per page" average and trend line was dominated by
+rows nobody can act on.
+
+The split is by measurement, not by severity: a code is a metric when its output
+is a quantity about the page and no markup change would "fix" it. Advisory content
+analysis stayed a finding (`KWPRO*`, `TITLEKDEN*`, `CQ-V2001` — all actionable by
+rewriting), and so did everything describing wrong markup (`CHARSET002`,
+`CACHE003`, `COEP-V2001`, `AI-ACC006`, `IMGALT*`).
+
+Nothing was discarded. Measurements are stored with an `is_metric` column,
+retrievable via `get_page_metrics`, and written to `page-metrics.json`.
+
+| | before | after |
+|---|---|---|
+| 40-page crawl, defect findings | 1,599 | 1,454 |
+| 40-page crawl, measurements | — | 962 |
+
+### Three noise analyzers, removed
+
+All three fired on **100% of crawled pages** (40/40). Each is removed outright
+rather than suppressed, with the rationale recorded at its registration site.
+
+| Code(s) | Volume | Why removed |
+|---|---|---|
+| `ELINK001` | 40 | Asserted that a schema entity needs an outbound *body* link "to strengthen entity signals". No engine states that requirement, and the mechanism that does exist — `sameAs` on the entity — is not what the rule checked: it read `ctx.page.links`. |
+| `ELINK002` | 0 here | Same fabricated "topical authority" requirement as `ELINK001`. Removed with its analyzer. |
+| `COLRCL-V2001-UNDERLINE` | 40 | Fired whenever *any* CSS rule paired `text-decoration:none` with a `color:` declaration anywhere in the document — not on links, not on the link in question. That is the default styling of most navigation. WCAG 1.4.1 asks whether a link has *any* non-colour indicator, which is a property of one element's computed style and needs a rendering engine, not a stylesheet regex. |
+| `CANDEP-V2003` | 40 | A trailing slash on a canonical is a valid URL form, and the recommendation was unactionable without knowing the site's chosen form. It also contradicted this product's own model: `analyzers::url_norm` deliberately folds trailing slashes when deciding URL equivalence. |
+
+Registry size 775 → 772. A tripwire test (`removed_codes_do_not_reappear`)
+scans the analyzer sources for `code: "…"` literals and fails if any of the four
+returns; it was verified to fail on a deliberately reintroduced code.
+
+The remaining contrast analyzers are untouched and remain canonical:
+`ColorContrastAnalyzer` (`CONTR001/002`) and `ColorContrastLinkAnalyzer`
+(`COLRCL001`) compute real WCAG ratios.
+
+### 20 cross-page analyzers ran, and every finding was discarded
+
+`PostCrawlAnalyzerRegistry` runs orphan-page detection, keyword cannibalization,
+link equity distribution, redirect-chain optimization, internal link balance,
+crawl quality, schema coverage, heading structure, canonical consistency and an
+overall health score. The engine used only `.len()` on the result and dropped the
+vector. Orphan pages and cannibalization are among the highest-value cross-page
+results, so each crawl silently threw them away.
+
+Four defects surfaced while fixing that, all verified against live HTML:
+
+1. **`LinkVelocityAnalyzer` measured nothing.** `avg_links` summed a literal `0`
+   per page and `zero_link_pages` counted every page via `filter(|p| true)`, so
+   `LINK-V001` always reported *"Average links per page is 0.0"* and `LINK-V002`
+   always reported *"100% of pages have no outgoing links"*.
+2. **`InternalLinkBalanceAnalyzer` had the same shape, and the worse variant.**
+   Both totals summed a literal `0`, so `total_external > 0` was never true and
+   `LINK-BAL001` had **never fired on any crawl in the product's history** — a
+   silently dead rule. A rule that always fires and a rule that never fires look
+   equally like working analyzers from the outside; only the second is invisible
+   in the output.
+3. **Site-wide findings were attributed to `https://example.com`.** The seed came
+   from `cfg.crawl_config.start_url`, which keeps its `Default` value because
+   callers pass the target to `run_with_callback` rather than through the config.
+4. **`LINK-V002` and `LINK-BAL002` tested the same condition** with identical
+   description text, differing only in code and threshold. `LINK-BAL002` survives.
+
+The natural data source, `PageData::links`, is always empty on read —
+`row_to_page_data` returns `Vec::new()` because links live in a separate table.
+The original hardcoded `0` was matching that emptiness rather than being
+arbitrary. Both analyzers now read `CrawlData::links`, the populated
+`(source_url, [target_url])` graph, and count only pages present in it: a page
+absent from the graph cannot be distinguished from one whose links were never
+recorded.
+
+Verified on kingstonpeptides.com: the `links` table holds 272 rows across 10 pages
+(avg 27.2 links/page), and both analyzers are now correctly silent. Cross-page
+codes persist (`SITEMAP006`, `CANON005`, `DUP-CROSS001`, `DUP-CROSS002`,
+`CANNIB001`), zero duplicate `(page_id, code)` pairs, and console counts agree
+with storage.
+
+### Two count-drift defects the split exposed
+
+* The engine counted cross-page findings it never persisted, so the console
+  summary and `crawlkit report` disagreed by exactly that many.
+* `write_output` wrote `crawl-results.json` before post-crawl persistence ran, so
+  the file's totals predated the findings the crawl had just added.
+
 ## Open findings not addressed
 
 | Item | Why |
 |---|---|
 | Cross-page hreflang reciprocity | Needs `hreflang` in `PageData` + migration. Currently `PageData` cannot express it, so the check is absent rather than wrong. |
-| `ELINK001` "entity needs a Wikipedia link" (60) | Now correctly deduplicated to 1/page, but the *rule* is questionable: most commercial brands have no Wikipedia article, so the recommendation is rarely actionable. `info` severity. Worth redesigning. |
-| `COLRCL-V2001-UNDERLINE` (59) | "Links without underline" fires on essentially every link. WCAG 1.4.1 can be met by other means. Pure noise at current volume. |
 | `CORSMISS` for XHR assets | Correctly removed for documents, but the check is legitimate for a JSON/font target type. Gating on content type would restore it. |
 | Plugin distribution | `plugins/index/` ships a flat `artifacts/*.wasm` layout, but `--plugins` expects `<dir>/<name>/crawlkit-plugin.toml`. The five first-party plugins are not directly loadable. |
+| Severity semantics | Still max-severity across a collapsed defect family, not a declared per-family severity. |
 
 ## Reproducing
 

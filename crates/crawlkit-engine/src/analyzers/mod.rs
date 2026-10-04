@@ -141,8 +141,7 @@ pub use content_analyzers::{
     ContentFreshnessScorer, ContentFreshnessSignalAnalyzer, ContentLanguageValidator,
     ContentQualityAnalyzer, ContentReadabilityScorer, ContentStructureAnalyzer,
     ContentThinAnalyzer, ContentTopicCoverageAnalyzer, CourseNameValidator,
-    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer, EntityLinkingAnalyzer,
-    ExternalLinkQualityAnalyzer, HeadingCoverageAnalyzer, HreflangNetworkValidator,
+    DuplicateContentDetector, EnhancedReadabilityAnalyzer, EntityAnalyzer, ExternalLinkQualityAnalyzer, HeadingCoverageAnalyzer, HreflangNetworkValidator,
     InternalLinkDepthAnalyzerV2, JobPostingTitleValidator, JsonLdContextValidator,
     JsonLdTypeValidator, JsonLdValidator, KeywordDensityAnalyzer, KeywordProminenceAnalyzer,
     MetaDescriptionLengthAnalyzer, MetaRobotsValidationAnalyzer, MetaRobotsValidator,
@@ -779,7 +778,15 @@ impl AnalyzerRegistry {
             // RDFa, Microdata, Entity linking, Shipping, Availability, and Coupon validators
             Box::new(RdfaValidator::new()),
             Box::new(MicrodataValidator::new()),
-            Box::new(EntityLinkingAnalyzer::new()),
+            // `EntityLinkingAnalyzer` (ELINK001, ELINK002) removed. Both codes
+            // asserted that entities in structured data need outbound body links
+            // -- "to strengthen entity signals" and "to strengthen topical
+            // authority". No search engine states that requirement, and the
+            // mechanism that actually exists (`sameAs` in the entity's own
+            // structured data) is not what the rule checked: it looked at
+            // `ctx.page.links`, i.e. links in the body. Fabricated advice is
+            // worse than no advice, because a user who acts on it edits correct
+            // markup for no benefit. ELINK001 fired on 40/40 crawled pages.
             Box::new(ShippingSchemaValidator::new()),
             Box::new(OfferAvailabilityAnalyzer::new()),
             Box::new(CouponSchemaValidator::new()),
@@ -1207,7 +1214,22 @@ impl AnalyzerRegistry {
             Box::new(FocusManagementDeepAnalyzerV2::new()),
             Box::new(LanguageAttributesDeepAnalyzerV2::new()),
             Box::new(ColorContrastTextAnalyzerV2::new()),
-            Box::new(ColorContrastLinkAnalyzerV2::new()),
+            // `ColorContrastLinkAnalyzerV2` (COLRCL-V2001-UNDERLINE) removed.
+            // It fired whenever *any* CSS rule paired `text-decoration:none` with
+            // a `color:` declaration anywhere in the document -- not on links,
+            // not on the link in question. That is the default styling of most
+            // navigation, so it fired on 40/40 crawled pages while describing a
+            // concern (WCAG 1.4.1) it never actually tested.
+            //
+            // The concern is real; this check could not reach it. WCAG 1.4.1 asks
+            // whether a link has *any* non-colour indicator, which is a property
+            // of the computed style of one element -- underline, border, icon,
+            // background change on hover/focus. That needs a rendering engine,
+            // not a stylesheet regex.
+            //
+            // The ratio-math analyzers are untouched and remain canonical:
+            // `ColorContrastAnalyzer` (CONTR001/002) and `ColorContrastLinkAnalyzer`
+            // (COLRCL001) compute real WCAG ratios.
             Box::new(AnchorTextGenericAnalyzerV2::new()),
             Box::new(TableCaptionPresenceAnalyzerV2::new()),
             Box::new(TableHeaderScopeAnalyzerV2::new()),
@@ -1232,7 +1254,14 @@ impl AnalyzerRegistry {
             Box::new(RobotsTxtSizeValidatorV2::new()),
             Box::new(HreflangSelfReferenceValidatorV2::new()),
             Box::new(OpenSearchDescriptionValidatorV2::new()),
-            Box::new(CanonicalDepthAnalyzerV2::new()),
+            // `CanonicalDepthAnalyzerV2` (CANDEP-V2003) removed. A trailing
+            // slash on a canonical is a valid URL form, not a defect, and the
+            // recommendation ("ensure canonical URL format is consistent") is
+            // unactionable without knowing the site's chosen form. It also
+            // contradicted this product's own model: `analyzers::url_norm`
+            // deliberately folds trailing slashes when deciding whether two URLs
+            // are equivalent, so crawlkit was normalising the difference away in
+            // one place and reporting it in another. Fired on 40/40 crawled pages.
             Box::new(MetaDescriptionLengthAnalyzerV3::new()),
             Box::new(TitleAnalyzerV4::new()),
             Box::new(CanonicalUrlAnalyzerV3::new()),

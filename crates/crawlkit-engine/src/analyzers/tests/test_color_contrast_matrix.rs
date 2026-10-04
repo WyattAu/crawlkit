@@ -8,12 +8,26 @@
 //! | `ColorContrastAnalyzer` | `CONTR001/002` | Full WCAG ratio math on inline fg/bg pairs | **Canonical** |
 //! | `ColorContrastTextAnalyzer` | `COLRCT-V2003` | Hidden-text detection (distinct check) | Distinct, retained |
 //! | `ColorContrastLinkAnalyzer` | `COLRCL001` | Link-specific ratio math (<3:1) | Distinct, retained |
-//! | `ColorContrastLinkAnalyzerV2` | `COLRCL-V2001` | Underline heuristic (NOT contrast math) | Distinct, retained |
-//! | `ColorContrastLinkDeepValidator` | `COLRCL-V2001` | White-on-white deep heuristic | Distinct trigger, SHARED code |
+//! | ~~`ColorContrastLinkAnalyzerV2`~~ | ~~`COLRCL-V2001`~~ | Underline heuristic (NOT contrast math) | **Removed** |
+//! | `ColorContrastLinkDeepValidator` | `COLRCL-V2001-DEEP` | White-on-white deep heuristic | Distinct trigger, own code |
 //!
-//! The V2 and deep link analyzers both emit `COLRCL-V2001` but with
-//! different triggers and titles; they are namespaced here so the
-//! registry-level uniqueness guard stays meaningful.
+//! ## Why the underline heuristic was removed
+//!
+//! `ColorContrastLinkAnalyzerV2` fired whenever *any* CSS rule paired
+//! `text-decoration:none` with a `color:` declaration anywhere in the document
+//! — not on links, and not on the link in question. That is the default styling
+//! of most navigation, so it fired on 40 of 40 crawled pages of
+//! kingstonpeptides.com while claiming to test a WCAG 1.4.1 concern.
+//!
+//! The concern is real and this check could not reach it. WCAG 1.4.1 asks
+//! whether a link has *any* non-colour indicator, which is a property of one
+//! element's computed style — underline, border, icon, or a background change on
+//! hover/focus. Determining that needs a rendering engine, not a stylesheet
+//! regex. The remaining analyzers compute real ratios and are unaffected.
+//!
+//! Note the code collision this also resolved: the deep validator and the V2
+//! analyzer both emitted `COLRCL-V2001`, differing only in title, so the
+//! registry-level uniqueness guard could not distinguish them.
 
 use crate::analyzers::*;
 use crate::meta::MetaTags;
@@ -91,42 +105,6 @@ fn link_ratio_analyzer_flags_low_contrast_link() {
         findings.iter().any(|f| f.code == "COLRCL001"),
         "link ratio math must flag low-contrast link: {findings:?}"
     );
-}
-
-#[test]
-fn v2_underline_heuristic_is_distinct_from_ratio_math() {
-    // The V2 analyzer fires on underline removal, not on contrast ratios.
-    let page = page_at("https://example.com");
-    let body = r#"<style>a { color: #333; text-decoration: none; }</style>"#;
-    let findings = ColorContrastLinkAnalyzerV2::new().analyze(&ctx(&page, body));
-    assert!(
-        findings.iter().any(|f| f.code == "COLRCL-V2001-UNDERLINE"),
-        "underline heuristic must fire with its own code: {findings:?}"
-    );
-
-    // The ratio analyzers must NOT flag #333 on white (sufficient contrast).
-    assert!(ColorContrastAnalyzer::new()
-        .analyze(&ctx(&page, body))
-        .is_empty());
-    assert!(ColorContrastLinkAnalyzer::new()
-        .analyze(&ctx(&page, body))
-        .is_empty());
-}
-
-#[test]
-fn deep_white_on_white_heuristic_is_distinct_from_underline_check() {
-    let page = page_at("https://example.com");
-    let body = r#"<style>a { color: #fff; background-color: #fff; }</style>"#;
-    let findings = ColorContrastLinkDeepValidator::new().analyze(&ctx(&page, body));
-    assert!(
-        findings.iter().any(|f| f.code == "COLRCL-V2001-DEEP"),
-        "deep white-on-white heuristic must use its own code: {findings:?}"
-    );
-
-    // The V2 underline heuristic must not fire on this input.
-    assert!(ColorContrastLinkAnalyzerV2::new()
-        .analyze(&ctx(&page, body))
-        .is_empty());
 }
 
 #[test]

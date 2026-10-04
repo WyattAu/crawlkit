@@ -848,10 +848,15 @@ fn rendered_page_summary_is_owned_and_serializable() {
 fn test_registry_default() {
     let config = default_config();
     let registry = AnalyzerRegistry::new(&config);
+    // 772 = 775 minus the three analyzers removed as unconditional noise:
+    // `EntityLinkingAnalyzer` (ELINK001/ELINK002),
+    // `ColorContrastLinkAnalyzerV2` (COLRCL-V2001-UNDERLINE) and
+    // `CanonicalDepthAnalyzerV2` (CANDEP-V2003). Each fired on 100% of crawled
+    // pages. See the rationale at each registration site in `analyzers/mod.rs`.
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 775);
+    assert_eq!(registry.len(), 772);
     #[cfg(not(feature = "full"))]
-    assert_eq!(registry.len(), 771);
+    assert_eq!(registry.len(), 768);
     assert!(!registry.is_empty());
 }
 

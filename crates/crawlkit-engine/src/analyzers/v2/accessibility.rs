@@ -552,48 +552,6 @@ impl Analyzer for ColorContrastTextAnalyzerV2 {
     }
 }
 
-pub struct ColorContrastLinkAnalyzerV2;
-impl Default for ColorContrastLinkAnalyzerV2 {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-impl ColorContrastLinkAnalyzerV2 {
-    pub fn new() -> Self {
-        Self
-    }
-}
-impl Analyzer for ColorContrastLinkAnalyzerV2 {
-    fn name(&self) -> &str {
-        "color-contrast-link-v2"
-    }
-    fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        let mut findings = Vec::new();
-        let url = &ctx.page.url;
-        if let Some(body) = ctx.body {
-            // "text-decoration: none" and a color declaration must co-occur
-            // in a single rule; previously ANY occurrence anywhere (comments,
-            // code samples, unrelated elements) flagged the whole page.
-            let underline_removed = style_rule_blocks(body).iter().any(|b| {
-                let compact: String = b.chars().filter(|c| !c.is_whitespace()).collect();
-                compact.contains("text-decoration:none") && compact.contains("color:")
-            });
-            if underline_removed {
-                findings.push(Finding {
-                    severity: Severity::Info,
-                    category: IssueCategory::Accessibility,
-                    code: "COLRCL-V2001-UNDERLINE".to_string(),
-                    title: "Links without underline".to_string(),
-                    description: "Links may be indistinguishable from text.".to_string(),
-                    url: url.clone(),
-                    recommendation: "Provide non-color visual indicator for links.".to_string(),
-                });
-            }
-        }
-        findings
-    }
-}
-
 pub struct AnchorTextGenericAnalyzerV2;
 impl Default for AnchorTextGenericAnalyzerV2 {
     fn default() -> Self {
@@ -3405,12 +3363,6 @@ mod tests {
             .is_empty());
     }
     #[test]
-    fn test_color_link_v2() {
-        assert!(ColorContrastLinkAnalyzerV2::new()
-            .analyze(&make_ctx(&make_page("https://example.com"), None))
-            .is_empty());
-    }
-    #[test]
     fn test_anchor_v2() {
         assert!(AnchorTextGenericAnalyzerV2::new()
             .analyze(&make_ctx(&make_page("https://example.com"), None))
@@ -4438,16 +4390,6 @@ mod tests {
         </style></head><body></body></html>"#;
         let f = ColorContrastLinkDeepValidator::new().analyze(&make_ctx(&p, Some(body)));
         assert!(f.iter().any(|x| x.code == "COLRCL-V2001-DEEP"));
-    }
-    #[test]
-    fn test_link_underline_v2_ignores_prose_mentions() {
-        let p = make_page("https://example.com");
-        let body = r#"<html><body>
-            <p>Remember: text-decoration: none removes underlines, and color: matters.</p>
-        </body></html>"#;
-        assert!(ColorContrastLinkAnalyzerV2::new()
-            .analyze(&make_ctx(&p, Some(body)))
-            .is_empty());
     }
     #[test]
     fn test_hidden_text_v2_detects_spaced_property() {

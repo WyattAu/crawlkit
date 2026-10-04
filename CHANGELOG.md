@@ -58,6 +58,16 @@ verified against live markup rather than inferred.
   This replaces the manual 10-site plan in `docs/CRAWL_VALIDATION_PLAN.md`, which
   needed network access and could not run in CI.
 
+### Known issues
+
+- **The `crawlkit` crate name is owned by an unrelated project on crates.io**
+  (`github.com/launcher-rs/crawlkit`, v0.5.0), so the CLI cannot be published under
+  its current name. `crawlkit-engine` and `crawlkit-plugin-sdk` are ours
+  (v2.0.0 and v1.0.0); `crawlkit-types`, `crawlkit-scanner` and `crawlkit-api` are
+  unclaimed. All six package cleanly, which is a weaker property than being
+  publishable — resolving the name collision is a product decision. See
+  `docs/fp-audit-kingstonpeptides.md`.
+
 ### Fixed
 
 - **`A11Y-LINK-V2001` ignored the accessible name of an image.** xkcd.com's only

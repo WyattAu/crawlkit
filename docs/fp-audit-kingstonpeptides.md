@@ -816,6 +816,41 @@ Noted, not bundled into a wording change.
 | `CORSMISS` for XHR assets | Correctly removed for documents, but the check is legitimate for a JSON/font target type. Gating on content type would restore it. |
 | Re-signing the two fixed plugins | Blocked on the private key for `12a7a8db5aabb20b`. Not self-executable here. |
 
+## Release blocker — the `crawlkit` crate name is owned by a third party
+
+`cargo publish --dry-run` passing is **not** the same as being able to publish. The
+dry run verifies packaging; it says nothing about whether the name is yours. Checking
+crates.io directly:
+
+| Crate | crates.io status | Repository there |
+|---|---|---|
+| `crawlkit` | **taken**, v0.5.0, 8 versions | `github.com/launcher-rs/crawlkit` |
+| `crawlkit-engine` | taken, v2.0.0, 2 versions | `github.com/WyattAu/crawlkit` (ours) |
+| `crawlkit-plugin-sdk` | taken, v1.0.0, 1 version | `github.com/WyattAu/crawlkit` (ours) |
+| `crawlkit-types` | free | — |
+| `crawlkit-scanner` | free | — |
+| `crawlkit-api` | free | — |
+
+The `crawlkit` name belongs to an unrelated project — a Chinese-language Rust crawler
+toolkit, last released 2026-08-06. Publishing our CLI under it would fail, and would
+be wrong if it somehow did not.
+
+`crawlkit-engine` and `crawlkit-plugin-sdk` *are* ours, at v2.0.0 and v1.0.0 — so
+3.x, 4.x and 5.x were never published, and the jump to 6.0.0 is a version skip rather
+than an increment.
+
+**This is a product decision, not an engineering one.** Options:
+
+1. Rename the CLI crate (`crawlkit-cli`, `seo-crawlkit`, or a scoped name).
+2. Publish the five library crates now and leave the CLI internal until resolved.
+   `crawlkit-plugin-sdk` has the strongest claim to urgency: third-party plugin
+   authors cannot build plugins without it.
+3. Leave publishing off crates.io entirely and distribute via GitHub Releases, which
+   is what happens today.
+
+Nothing was published. All six package cleanly; that is a weaker property than
+"publishable".
+
 ## Reproducing
 
 ```bash

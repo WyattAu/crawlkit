@@ -35,7 +35,7 @@
     "must_have": [
       "IMG003",
       "A11Y008",
-      "SKIPLINK001",
+      "A11Y008",
       "KW001",
       "LINK001"
     ],
@@ -51,7 +51,7 @@
   "corporate_about.html": {
     "must_have": [
       "A11Y008",
-      "SKIPLINK001",
+      "A11Y008",
       "IMG003",
       "KW001"
     ],
@@ -147,7 +147,7 @@
       "IMG003",
       "IMG005",
       "ASYNC001",
-      "SCRIPT002"
+      "CRIT001"
     ],
     "must_not_have": [
       "METADESCMISS001",
@@ -173,7 +173,7 @@
   },
   "mixed_content.html": {
     "must_have": [
-      "MIXED001",
+      "MIXCONT-V2001",
       "MIXSCR001",
       "MIXIMG001",
       "MIXIFRAME-V2001",
@@ -194,7 +194,7 @@
   "multi_language.html": {
     "must_have": [
       "A11Y008",
-      "SKIPLINK001",
+      "A11Y008",
       "IMG003",
       "KW001",
       "LINK001"
@@ -212,7 +212,7 @@
     "must_have": [
       "META005",
       "META003",
-      "SKIPLINK001",
+      "A11Y008",
       "KW001"
     ],
     "must_not_have": [
@@ -225,8 +225,8 @@
   },
   "redirect_chain.html": {
     "must_have": [
-      "HREF001",
-      "HREFXD-V2001",
+      "HREF-V3001",
+      "HREF-V3001",
       "ROBOTS001",
       "META-V3001"
     ],
@@ -304,8 +304,8 @@
   "unicode_heavy.html": {
     "must_have": [
       "CLANG001",
-      "HREF001",
-      "HREFXD-V2001",
+      "HREF-V3001",
+      "HREF-V3001",
       "TITLE001",
       "KW001"
     ],

@@ -96,16 +96,24 @@ fn defect_signature(title: &str) -> String {
     cleaned
 }
 
-/// Identity of a defect: the page and its normalized message.
+/// Identity of a defect: the page and a defect key.
 ///
-/// `category` is deliberately **not** part of the key. Several analyzers
-/// describe one defect under different categories — "Multiple H1 headings"
-/// arrives as `accessibility` (A11Y004), `content` (CDEPTH003) and `seo`
-/// (HEAD003) — so including the category let the same defect survive under
-/// three codes. The normalized title already identifies the defect; the
-/// category is metadata about it, and the surviving finding keeps the most
-/// severe member's severity plus every contributing code.
+/// The key comes from [`defect_family::defect_key`], which resolves curated
+/// code families ("Missing main landmark" / "Missing main landmark region" /
+/// "Page missing main landmark" are one defect) and otherwise falls back to the
+/// normalized title. `category` is deliberately **not** part of the key:
+/// "Multiple H1 headings" arrives as `accessibility` (A11Y004), `content`
+/// (CDEPTH003) and `seo` (HEAD003), and the category is metadata about a defect
+/// rather than part of its identity.
 type Key = (String, String);
+
+/// Defect identity for one finding: the page plus its family-or-title key.
+fn defect_key_of(f: &Finding) -> Key {
+    (
+        f.url.clone(),
+        crate::analyzers::defect_family::defect_key(&f.code, &defect_signature(&f.title)),
+    )
+}
 
 /// Codes retained behind a collapsed finding, for auditability.
 type AliasMap = HashMap<Key, Vec<String>>;
@@ -129,7 +137,7 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
     let mut out: Vec<Finding> = Vec::with_capacity(findings.len());
 
     for f in findings {
-        let key: Key = (f.url.clone(), defect_signature(&f.title));
+        let key = defect_key_of(&f);
         aliases.entry(key.clone()).or_default().push(f.code.clone());
 
         match representative.get(&key).copied() {
@@ -161,7 +169,7 @@ pub fn collapse_duplicates(findings: Vec<Finding>) -> Vec<Finding> {
     aliases.retain(|_, codes| codes.len() > 1);
 
     for f in &mut out {
-        let key: Key = (f.url.clone(), defect_signature(&f.title));
+        let key = defect_key_of(f);
         if let Some(codes) = aliases.get(&key) {
             let others: Vec<&str> = codes.iter().filter(|c| **c != f.code).map(String::as_str).collect();
             if !others.is_empty() {
@@ -222,17 +230,37 @@ mod tests {
         );
     }
 
+    /// The real `script-src 'unsafe-inline'` cluster: three codes, one defect.
+    ///
+    /// `CSPDIR002` is deliberately absent — it reports `style-src`, a different
+    /// defect, and the family table pins it there regardless of the title it is
+    /// handed. Pairing it here with a script-src title was an artifact of the
+    /// old title-only keying and no longer describes any real page.
     #[test]
     fn collapses_the_real_csp_cluster() {
         let findings = vec![
             f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPDIR002", "CSP script-src allows unsafe-inline", Severity::Warning),
             f("https://e.com/", "CSPSS-V2002", "CSP script-src allows unsafe-inline (deep)", Severity::Warning),
             f("https://e.com/", "CSPSSRC-V5001", "CSP script-src allows unsafe-inline", Severity::Warning),
         ];
         let out = collapse_duplicates(findings);
-        assert_eq!(out.len(), 1, "four identical reports must collapse to one");
+        assert_eq!(out.len(), 1, "three identical reports must collapse to one");
         assert!(out[0].description.contains("also reported by"));
+    }
+
+    #[test]
+    fn script_src_and_style_src_never_merge_despite_similar_titles() {
+        let findings = vec![
+            f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
+            f("https://e.com/", "CSPSTY-V2002", "CSP style-src allows unsafe-inline", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(
+            out.len(),
+            2,
+            "different CSP directives are different defects: {:?}",
+            out.iter().map(|x| x.code.clone()).collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -320,12 +348,12 @@ mod tests {
     fn aliases_list_every_suppressed_code_exactly_once() {
         let findings = vec![
             f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
-            f("https://e.com/", "CSPDIR002", "CSP script-src allows unsafe-inline", Severity::Warning),
+            f("https://e.com/", "CSPSSRC-V5001", "CSP script-src allows unsafe-inline", Severity::Warning),
             f("https://e.com/", "CSP001", "CSP script-src allows unsafe-inline", Severity::Warning),
         ];
         let out = collapse_duplicates(findings);
         // Two `CSP001` reports are kept (same code = two separate occurrences),
-        // and the single `CSPDIR002` cross-code report is folded in.
+        // and the single `CSPSSRC-V5001` cross-code report is folded in.
         assert_eq!(out.len(), 2);
         let aliases: Vec<&str> = out
             .iter()
@@ -333,7 +361,7 @@ mod tests {
             .collect();
         assert!(!aliases.is_empty(), "cross-code report must be recorded");
         for alias in &aliases {
-            assert_eq!(alias.trim(), "CSPDIR002)");
+            assert_eq!(alias.trim(), "CSPSSRC-V5001)");
         }
     }
 

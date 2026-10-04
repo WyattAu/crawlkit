@@ -55,7 +55,10 @@ fn severity_rank(s: Severity) -> u8 {
 /// "CSP script-src allows unsafe-inline (deep)"        -> "csp script src allows unsafe inline"
 /// "CSP script-src allows unsafe-inline (deep-deep)"    -> "csp script src allows unsafe inline"
 /// ```
-fn defect_signature(title: &str) -> String {
+///
+/// Public so that tests elsewhere in the crate can assert on defect identity
+/// without re-deriving the normalization.
+pub fn defect_signature(title: &str) -> String {
     let mut out = String::with_capacity(title.len());
     let mut depth = 0usize;
     for ch in title.chars() {

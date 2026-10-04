@@ -1,0 +1,11 @@
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/zeroize-1b650ba52dcd8348.d: /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/lib.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/x86.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/barrier.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/stack.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/../README.md
+
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/libzeroize-1b650ba52dcd8348.rlib: /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/lib.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/x86.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/barrier.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/stack.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/../README.md
+
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/libzeroize-1b650ba52dcd8348.rmeta: /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/lib.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/x86.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/barrier.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/stack.rs /home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/../README.md
+
+/home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/lib.rs:
+/home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/x86.rs:
+/home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/barrier.rs:
+/home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/stack.rs:
+/home/wyatt/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/zeroize-1.9.0/src/../README.md:

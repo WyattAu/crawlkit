@@ -162,3 +162,111 @@ fn dirs_home() -> Option<PathBuf> {
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
 }
+
+#[cfg(test)]
+mod dedupe_tests {
+    use crate::analyzers::dedupe::collapse_duplicates;
+    use crate::types::{IssueCategory, Severity};
+    use crate::Finding;
+
+    fn f(code: &str, title: &str, severity: Severity) -> Finding {
+        Finding {
+            severity,
+            category: IssueCategory::Seo,
+            code: code.to_string(),
+            title: title.to_string(),
+            description: "d".to_string(),
+            url: "https://example.com/p".to_string(),
+            recommendation: "r".to_string(),
+        }
+    }
+
+    /// Plugin output must collapse against the built-in family, not only against
+    /// itself.
+    ///
+    /// `AnalyzerRegistry::analyze` deduplicates before plugins run, and
+    /// `crawl_engine::pipeline` used to append plugin findings afterwards, so a
+    /// plugin reporting an already-covered defect produced a second row that no
+    /// aggregate collapsed.
+    #[test]
+    fn plugin_finding_collapses_with_builtin_family_member() {
+        let findings = vec![
+            f("A11Y004", "Multiple H1 headings", Severity::Error),
+            f("HEADING-MULTIH1", "Multiple H1 headings", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(
+            out.len(),
+            1,
+            "a plugin reporting a built-in defect must not add a second row: {:?}",
+            out.iter().map(|x| &x.code).collect::<Vec<_>>()
+        );
+    }
+
+    /// A plugin must not be able to absorb an unrelated built-in defect.
+    ///
+    /// This is the false negative the first-party plugins were causing.
+    /// `meta-description-checker` emitted `META002` for *"Meta description too
+    /// short"*, but `META002` is registered in the **title** family ("title too
+    /// short"). `defect_key` resolves by code, so the description finding was
+    /// keyed as a title defect and merged into the built-in `TITLE001` — silently
+    /// dropping a real description problem on any page that also had a short
+    /// title. Codes now say what they mean, so the two stay distinct.
+    #[test]
+    fn description_and_title_defects_do_not_collapse_into_one() {
+        let findings = vec![
+            f("TITLE001", "Title too short", Severity::Warning),
+            f("METADESC-SHORT", "Meta description too short", Severity::Warning),
+        ];
+        let out = collapse_duplicates(findings);
+        assert_eq!(
+            out.len(),
+            2,
+            "a short title and a short description are two defects: {:?}",
+            out.iter().map(|x| &x.code).collect::<Vec<_>>()
+        );
+    }
+
+    /// The specific regression: with the plugin's old code, one of these two
+    /// vanished. Pinned so re-using a built-in code in a plugin fails loudly.
+    #[test]
+    fn reusing_a_builtin_code_would_absorb_an_unrelated_defect() {
+        // `META002` resolves to the title family regardless of the title passed.
+        let key_desc = crate::analyzers::defect_family::defect_key(
+            "META002",
+            &crate::analyzers::dedupe::defect_signature("Meta description too short"),
+        );
+        let key_title = crate::analyzers::defect_family::defect_key(
+            "TITLE001",
+            &crate::analyzers::dedupe::defect_signature("Title too short"),
+        );
+        assert_eq!(
+            key_desc, key_title,
+            "if these ever diverge, `META002` is no longer a title-family code and this test should be revisited"
+        );
+    }
+
+    /// A plugin reporting the same code once per element is left alone: several
+    /// analyzers legitimately report one finding per offending element, and those
+    /// are distinct defects.
+    #[test]
+    fn same_code_repeats_from_a_plugin_are_not_collapsed() {
+        let findings = vec![
+            f("MYP001", "Widget alignment is off", Severity::Warning),
+            f("MYP001", "Widget alignment is off", Severity::Warning),
+        ];
+        assert_eq!(collapse_duplicates(findings).len(), 2);
+    }
+
+    /// A plugin using a *different* code for a genuinely different defect is
+    /// untouched — the collapse is keyed on defect identity, not on "came from a
+    /// plugin".
+    #[test]
+    fn unrelated_plugin_finding_survives() {
+        let findings = vec![
+            f("A11Y004", "Multiple H1 headings", Severity::Error),
+            f("MYP001", "Widget alignment is off by 3px", Severity::Warning),
+        ];
+        assert_eq!(collapse_duplicates(findings).len(), 2);
+    }
+}

@@ -62,7 +62,7 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("duplicate titles across pages", &["DUP-CROSS001", "KEY-CANNIB001"]),
     ("meta description too short", &["MDESC-PX002", "META005", "METADEEP-V2001", "METADEEP001", "METADESC001", "METADESSSHORT-V2001", "METADESSSHORT-V6086", "METADESSSHORT001", "METALEN-V2002", "METAQLT-V2001"]),
     ("missing hreflang x-default", &["HREF-V3001", "HREF-V4001", "HREF001", "HREFNET002", "HREFRECIP001", "HREFXD-V2001", "HREFXD-V5001", "HREFXD-V6094", "HREFXD001", "ISEO002"]),
-    ("multiple h1 headings", &["A11Y004", "CDEPTH003", "H1MULTI-V6108", "HEAD003", "HEADH1-V5002", "HEADSC003", "HHIER-V2003-DEEP-DEEP", "HHIER-V2003-DEEP-DEEP-DEEP", "HHIERDEEP003"]),
+    ("multiple h1 headings", &["A11Y004", "CDEPTH003", "H1MULTI-V6108", "HEAD003", "HEADH1-V5002", "HEADSC003", "HHIER-V2003-DEEP-DEEP", "HHIER-V2003-DEEP-DEEP-DEEP", "HHIERDEEP003", "HEADING-MULTIH1"]),
     ("tables missing captions", &["A11Y015", "TABACC-V2002", "TABACC-V2002-DEEP-DEEP-DEEP", "TABACCDEEP002", "TABCAP-V6112", "TABLECAP001", "TACC002", "TBLCAP001", "TBLCAPT-V5001"]),
     ("missing h1 heading", &["A11Y003", "CDEPTH002", "H1COUNT-V6107", "HEAD002", "HEADH1-V5001", "HEADSC002", "HHIER-V2002-DEEP-DEEP", "HHIER-V2002-DEEP-DEEP-DEEP"]),
     ("missing x-content-type-options header", &["CT-V2001", "CTSNIFF001", "SEC005", "XCTO-V2001", "XCTO-V2001-DEEP", "XCTO-V5001", "XCTO001", "XCTODEEP001"]),
@@ -78,7 +78,7 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("meta description too long", &["META-V3001-LENGTH", "META006", "METADEEP002", "METADESC002", "METALEN-V2001"]),
     ("missing html lang attribute", &["A11Y016", "LANG001", "LANGACC001", "LANGATTR-V2001", "LANGATTRDEEP001"]),
     ("missing permissions-policy header", &["PERM001", "PERMP-V2001", "PERMP-V2001-DEEP-DEEP", "PERMPDEEP001", "SEC008"]),
-    ("no headings found", &["A11Y002", "HEAD001", "HEADSC001", "HHIER-V2001", "HHIER-V2001-DEEP-DEEP-DEEP"]),
+    ("no headings found", &["A11Y002", "HEAD001", "HEADSC001", "HHIER-V2001", "HHIER-V2001-DEEP-DEEP-DEEP", "HEADING-NONE"]),
     ("tables without headers", &["TABACC-V2001", "TABACC-V2001-DEEP-DEEP", "TABACC-V2001-DEEP-DEEP-DEEP", "TABACCDEEP001", "TBL-V2001"]),
     ("webapi missing documentation", &["WAPI-V2001", "WAPI002", "WAPIDOC-V2001", "WAPIDOC-V6049", "WAPIDOCS001"]),
     ("webpageelement missing name", &["WELEM-V2001", "WELEM001", "WPELACC001", "WPELNAME-V2001", "WPELNAME-V6051"]),
@@ -87,7 +87,7 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("article missing headline", &["ART-HL001", "ART001", "ARTHL-V2001", "ARTQUAL001"]),
     ("car missing model", &["CAR-V2001", "CAR002", "CARMODEL-V2001", "CARMODEL001"]),
     ("event missing location", &["ELOC-V2001", "ELOC001", "EVENT002", "EVTLOC-V6059"]),
-    ("heading levels skipped", &["HEADSKIP-V2001", "HEADSKIP-V5001", "HEADSKIP-V6121", "HHIER-V2003"]),
+    ("heading level skipped", &["A11Y005", "HCOV002", "HEAD004", "HEADSC004", "HEADSKIP001", "HEADSKIP-V2001", "HEADSKIP-V5001", "HEADSKIP-V6121", "HHIER-V2003", "HHIER-V2004", "HORDER001", "HEADING-SKIPLEVEL"]),
     ("healthplan missing provider", &["HP-V2001", "HP002", "HPPRV-V2001", "HPPRV-V6036"]),
     ("images missing alt attribute", &["A11Y001", "IMG-V2001", "IMGALT-V2001-DEEP-DEEP", "IMGALT-V2001-DEEP-DEEP-DEEP"]),
     ("missing banner landmark", &["LAND003", "LANDBAN-V2001", "LANDBAN001", "LANDBANNER-V5001"]),
@@ -111,7 +111,6 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("external scripts missing integrity attribute", &["SRI-V5001", "SRI001", "SRISCRIPT001"]),
     ("form inputs without labels", &["FORMLBL-V2001-DEEP-DEEP", "FORMLBL-V2001-DEEP-DEEP-DEEP", "FORMLBLASSOC-V5001"]),
     ("generic link text", &["LINKGEN-V6113", "LINKTQ-V2001", "LINKTQ-V2002-DEEP"]),
-    ("heading level skipped", &["HCOV002", "HEADSC004", "HHIER-V2004"]),
     ("howto missing name", &["HOWNAME001", "HOWTO001", "HOWTONAME-V5001"]),
     ("hsts missing preload", &["HSTSPR-V2002", "HSTSPRE-V5001", "SEC016"]),
     ("hsts preload readiness incomplete", &["HSTSPR-V2001-DEEP-DEEP", "HSTSPR001-DEEP", "HSTSPRELIST-V6064"]),
@@ -178,7 +177,6 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("form input missing associated label", &["FILABEL001", "FLABEL001"]),
     ("generic anchor text", &["ANCHGEN-V2001", "ANCHGEN-V2001-DEEP"]),
     ("governmentservice missing provider", &["GOV-V2001", "GOV002"]),
-    ("heading level skip detected", &["HEADSKIP001", "HORDER001"]),
     ("high crawl-delay value", &["ROBOT003", "ROBOTSDEEP002"]),
     ("hsts max-age below 1 year", &["HSTSMAX-V2001", "HSTSMAX001"]),
     ("hsts max-age is too short", &["HSTS-V2002", "STRICT002"]),
@@ -249,7 +247,6 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("required fields missing labels", &["FORMREQ-V5001", "FORMREQ-V6110"]),
     ("robots.txt blocks all", &["ROBOTS-V3002", "ROBOTSDEEP-V2001"]),
     ("service missing areaserved", &["SVC-V2001", "SVCAREA-V6034"]),
-    ("skipped heading level", &["A11Y005", "HEAD004"]),
     ("sportsevent missing name", &["SENAME-V6016", "SPORTSEVT001"]),
     ("table headers missing scope", &["TBLSCOP-V2001", "TBLSCOPE-V5001"]),
     ("table missing header cells", &["A11Y014", "TACC001"]),
@@ -311,6 +308,7 @@ pub fn defect_key(code: &str, normalized_title: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::analyzers::dedupe::defect_signature;
 
     #[test]
     fn no_code_appears_in_two_families() {
@@ -543,6 +541,71 @@ mod tests {
     /// to its title while `ART-HL001` resolved to a family id; the two stopped
     /// merging and gov.uk's error tier doubled from 40 to 80. Canonicalizing
     /// through the title means the two schemes cannot disagree.
+    /// Four near-identical heading-skip families existed, differing only by
+    /// singular/plural and word order ("heading level skipped", "heading levels
+    /// skipped", "heading level skip detected", "skipped heading level").
+    /// `defect_signature` strips version and depth decorations but does not
+    /// normalize word order, so the same defect was reported up to four times
+    /// under four families.
+    #[test]
+    fn heading_skip_was_split_across_four_families() {
+        let members = [
+            "A11Y005", "HCOV002", "HEAD004", "HEADSC004", "HEADSKIP001", "HEADSKIP-V2001",
+            "HEADSKIP-V5001", "HEADSKIP-V6121", "HHIER-V2003", "HHIER-V2004", "HORDER001",
+            "HEADING-SKIPLEVEL",
+        ];
+        for code in members {
+            assert_eq!(
+                defect_key(code, "ignored: curated"),
+                "heading level skipped",
+                "{code} belongs to the single heading-skip family"
+            );
+        }
+    }
+
+    /// First-party plugin codes must name the family their title implies.
+    ///
+    /// The plugins originally reused built-in codes, shifted by one:
+    /// `heading-structure` emitted `HEAD001` for "Multiple H1 headings" although
+    /// `HEAD001` means "no headings found", and `meta-description-checker`
+    /// emitted `META002` for "Meta description too short" although `META002`
+    /// lives in the **title** family. Because `defect_key` resolves by code, the
+    /// description finding was keyed as a title defect and merged into the
+    /// built-in `TITLE001` — a silent false negative on any page with both a
+    /// short title and a short description.
+    #[test]
+    fn first_party_plugin_codes_match_their_family() {
+        for (code, expected_family) in [
+            ("HEADING-MULTIH1", "multiple h1 headings"),
+            ("HEADING-SKIPLEVEL", "heading level skipped"),
+            ("HEADING-NONE", "no headings found"),
+        ] {
+            let key = defect_key(code, &defect_signature("irrelevant: code is curated"));
+            assert_eq!(
+                key, expected_family,
+                "{code} must resolve to `{expected_family}`, not `{key}`"
+            );
+        }
+    }
+
+    /// Codes no family claims fall back to their normalized title, which is how
+    /// the description-length codes stay out of the title family.
+    #[test]
+    fn description_codes_are_not_in_the_title_family() {
+        for code in ["METADESC-MISSING", "METADESC-SHORT", "METADESC-LONG"] {
+            assert!(
+                !canonical_table().contains_key(code),
+                "{code} must not claim a curated family; the title fallback keeps it distinct"
+            );
+        }
+        let key = defect_key("METADESC-SHORT", &defect_signature("Meta description too short"));
+        let title_key = defect_key("TITLE001", &defect_signature("Title too short"));
+        assert_ne!(
+            key, title_key,
+            "a short description must not collapse into a short title"
+        );
+    }
+
     #[test]
     fn dynamic_title_sibling_merges_with_static_family() {
         let title = "article missing headline";

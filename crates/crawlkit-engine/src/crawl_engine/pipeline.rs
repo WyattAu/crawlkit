@@ -395,6 +395,22 @@ impl CrawlRun<'_> {
             for plugin in &self.plugins {
                 findings.extend(plugin.analyze(body_text, &url_str, Some(&context_json)));
             }
+            // Collapse the combined vector, not just the built-ins.
+            //
+            // `AnalyzerRegistry::analyze` deduplicates before plugins run, so
+            // plugin output was appended afterwards and never participated. The
+            // first-party `heading-structure` plugin emits `HEAD001` ("Multiple
+            // H1 headings"), which is in the same curated family as the built-in
+            // `HEAD003` and `A11Y004`; a crawl with that plugin loaded reported
+            // every multiple-H1 page twice under two codes, and no aggregate
+            // collapsed them.
+            //
+            // Safe to run over the whole vector: `collapse_duplicates` never
+            // merges two findings that share a code, so a plugin legitimately
+            // reporting the same code per element is untouched, and the
+            // canonical `(code, url)` sort keeps the result deterministic.
+            findings = crate::analyzers::dedupe::collapse_duplicates(findings);
+            findings.sort_by(|a, b| a.code.cmp(&b.code).then_with(|| a.url.cmp(&b.url)));
         }
 
         (findings, analysis_start.elapsed())

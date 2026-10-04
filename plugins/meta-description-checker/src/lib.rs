@@ -34,7 +34,7 @@ impl Analyzer for MetaDescriptionChecker {
             None => vec![Finding {
                 severity: Severity::Error,
                 category: "seo".into(),
-                code: "META001".into(),
+                code: "METADESC-MISSING".into(),
                 title: "Missing meta description".into(),
                 description: "No <meta name=\"description\"> tag with content was found \
                               in the document; search engines will synthesize a snippet."
@@ -50,7 +50,7 @@ impl Analyzer for MetaDescriptionChecker {
                     vec![Finding {
                         severity: Severity::Warning,
                         category: "seo".into(),
-                        code: "META002".into(),
+                        code: "METADESC-SHORT".into(),
                         title: "Meta description too short".into(),
                         description: format!(
                             "Meta description is {len} characters; \
@@ -66,7 +66,7 @@ impl Analyzer for MetaDescriptionChecker {
                     vec![Finding {
                         severity: Severity::Warning,
                         category: "seo".into(),
-                        code: "META003".into(),
+                        code: "METADESC-LONG".into(),
                         title: "Meta description too long".into(),
                         description: format!(
                             "Meta description is {len} characters; \
@@ -180,7 +180,7 @@ mod tests {
     fn missing_description_is_an_error() {
         let findings = analyze_html("<html><head><title>x</title></head></html>");
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META001");
+        assert_eq!(findings[0].code, "METADESC-MISSING");
         assert_eq!(findings[0].severity, Severity::Error);
     }
 
@@ -188,14 +188,14 @@ mod tests {
     fn empty_content_counts_as_missing() {
         let findings = analyze_html(&page_with("   "));
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META001");
+        assert_eq!(findings[0].code, "METADESC-MISSING");
     }
 
     #[test]
     fn short_description_warns() {
         let findings = analyze_html(&page_with(&"a".repeat(MIN_LEN - 1)));
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META002");
+        assert_eq!(findings[0].code, "METADESC-SHORT");
         assert_eq!(findings[0].severity, Severity::Warning);
     }
 
@@ -203,7 +203,7 @@ mod tests {
     fn long_description_warns() {
         let findings = analyze_html(&page_with(&"a".repeat(MAX_LEN + 1)));
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META003");
+        assert_eq!(findings[0].code, "METADESC-LONG");
         assert_eq!(findings[0].severity, Severity::Warning);
     }
 
@@ -224,7 +224,7 @@ mod tests {
         let html = "<html><head><META NAME=\"description\" CONTENT='x'></head></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META002");
+        assert_eq!(findings[0].code, "METADESC-SHORT");
     }
 
     #[test]
@@ -232,7 +232,7 @@ mod tests {
         let html = "<html><head><meta content=\"x\" name=description></head></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META002");
+        assert_eq!(findings[0].code, "METADESC-SHORT");
     }
 
     #[test]
@@ -243,7 +243,7 @@ mod tests {
                     </head></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META001");
+        assert_eq!(findings[0].code, "METADESC-MISSING");
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod tests {
         );
         let findings = analyze_html(&html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "META002");
+        assert_eq!(findings[0].code, "METADESC-SHORT");
     }
 
     #[test]

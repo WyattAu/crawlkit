@@ -1,0 +1,12 @@
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/crawlkit_plugin_sdk-fdcd3b57ec77024e.d: /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/lib.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/analyzer.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/context.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/export.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/finding.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/host.rs
+
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/libcrawlkit_plugin_sdk-fdcd3b57ec77024e.rlib: /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/lib.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/analyzer.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/context.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/export.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/finding.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/host.rs
+
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/plugins/heading-structure/target/debug/deps/libcrawlkit_plugin_sdk-fdcd3b57ec77024e.rmeta: /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/lib.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/analyzer.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/context.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/export.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/finding.rs /home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/host.rs
+
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/lib.rs:
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/analyzer.rs:
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/context.rs:
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/export.rs:
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/finding.rs:
+/home/wyatt/dev/src/github.com/WyattAu/crawlkit/crates/crawlkit-plugin-sdk/src/host.rs:

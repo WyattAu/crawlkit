@@ -36,7 +36,7 @@ impl Analyzer for HeadingStructure {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: "seo".into(),
-                code: "HEAD001".into(),
+                code: "HEADING-MULTIH1".into(),
                 title: "Multiple H1 headings".into(),
                 description: format!(
                     "Page has {h1_count} <h1> elements; \
@@ -53,7 +53,7 @@ impl Analyzer for HeadingStructure {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: "seo".into(),
-                code: "HEAD002".into(),
+                code: "HEADING-SKIPLEVEL".into(),
                 title: "Heading level skipped".into(),
                 description: format!(
                     "An <h{to}> follows an <h{from}> without an intermediate \
@@ -71,7 +71,7 @@ impl Analyzer for HeadingStructure {
             findings.push(Finding {
                 severity: Severity::Info,
                 category: "seo".into(),
-                code: "HEAD003".into(),
+                code: "HEADING-NONE".into(),
                 title: "No headings found".into(),
                 description: "Page contains no <h1>-<h6> headings; \
                               the document has no machine-readable outline."
@@ -144,7 +144,7 @@ mod tests {
         let html = "<html><body><h1>A</h1><h3>B</h3><h2>C</h2></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD002");
+        assert_eq!(findings[0].code, "HEADING-SKIPLEVEL");
     }
 
     #[test]
@@ -152,7 +152,7 @@ mod tests {
         let html = "<html><body><h1>A</h1><h3>B</h3></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD002");
+        assert_eq!(findings[0].code, "HEADING-SKIPLEVEL");
         assert_eq!(findings[0].severity, Severity::Warning);
     }
 
@@ -161,7 +161,7 @@ mod tests {
         let html = "<html><body><h1>A</h1><h2>B</h2><h1>C</h1></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD001");
+        assert_eq!(findings[0].code, "HEADING-MULTIH1");
         assert_eq!(findings[0].severity, Severity::Warning);
     }
 
@@ -170,7 +170,7 @@ mod tests {
         let html = "<html><body><p>Plain text</p></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD003");
+        assert_eq!(findings[0].code, "HEADING-NONE");
         assert_eq!(findings[0].severity, Severity::Info);
     }
 
@@ -180,7 +180,7 @@ mod tests {
         let findings = analyze_html(html);
         let mut codes: Vec<_> = findings.iter().map(|f| f.code.as_str()).collect();
         codes.sort_unstable();
-        assert_eq!(codes, vec!["HEAD001", "HEAD002"]);
+        assert_eq!(codes, vec!["HEADING-MULTIH1", "HEADING-SKIPLEVEL"]);
     }
 
     #[test]
@@ -200,7 +200,7 @@ mod tests {
         let html = "<html><body><h0>A</h0><h7>B</h7></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD003");
+        assert_eq!(findings[0].code, "HEADING-NONE");
     }
 
     #[test]
@@ -208,6 +208,6 @@ mod tests {
         let html = "<html><body></h1></h2></body></html>";
         let findings = analyze_html(html);
         assert_eq!(findings.len(), 1);
-        assert_eq!(findings[0].code, "HEAD003");
+        assert_eq!(findings[0].code, "HEADING-NONE");
     }
 }

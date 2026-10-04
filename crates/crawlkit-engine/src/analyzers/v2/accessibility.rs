@@ -411,7 +411,16 @@ impl Analyzer for LinkTextQualityAnalyzerV2 {
             let text = link.text.trim().to_lowercase();
             // aria-label (or an image alt) provides the accessible name, so
             // a link with either is not "empty" even without visible text.
-            if text.is_empty() && link.aria_label.is_none() && link.img_alt.is_none() {
+            //
+            // `analyzers::link_name::is_nameless` rather than a local predicate:
+            // this test had drifted into treating `aria-label=""` as a name,
+            // because `Some("")` is not `None`. See that module for why the
+            // answer is defined once instead of six times.
+            if crate::analyzers::link_name::is_nameless(
+                &link.text,
+                link.aria_label.as_deref(),
+                link.img_alt.as_deref(),
+            ) {
                 empty_count += 1;
             }
             // aria-label overrides visible text for assistive technology,
@@ -1610,11 +1619,15 @@ impl Analyzer for LinkTextEmptyDeepValidator {
             .links
             .iter()
             .filter(|l| {
-                l.text.trim().is_empty()
-                    && l.aria_label.is_none()
-                    // A link wrapping an image gets its accessible name
-                    // from the image's alt attribute.
-                    && l.img_alt.is_none()
+                // A link wrapping an image gets its accessible name from the
+                // image's alt attribute. `is_nameless` also treats an *empty*
+                // `aria-label` or `alt` as naming nothing, which the
+                // `is_none()` checks this replaced did not.
+                crate::analyzers::link_name::is_nameless(
+                    &l.text,
+                    l.aria_label.as_deref(),
+                    l.img_alt.as_deref(),
+                )
             })
             .count();
         if empty_count > 0 {
@@ -2347,7 +2360,13 @@ impl Analyzer for LinkTextQualityDeepValidator {
             .page
             .links
             .iter()
-            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none() && l.img_alt.is_none())
+            .filter(|l| {
+                crate::analyzers::link_name::is_nameless(
+                    &l.text,
+                    l.aria_label.as_deref(),
+                    l.img_alt.as_deref(),
+                )
+            })
             .count();
         if empty_text > 0 {
             findings.push(Finding {
@@ -2769,7 +2788,13 @@ impl Analyzer for LinkTextQualityDeepDeepValidator {
             .page
             .links
             .iter()
-            .filter(|l| l.text.trim().is_empty() && l.aria_label.is_none() && l.img_alt.is_none())
+            .filter(|l| {
+                crate::analyzers::link_name::is_nameless(
+                    &l.text,
+                    l.aria_label.as_deref(),
+                    l.img_alt.as_deref(),
+                )
+            })
             .count();
         if empty_text > 0 {
             findings.push(Finding {

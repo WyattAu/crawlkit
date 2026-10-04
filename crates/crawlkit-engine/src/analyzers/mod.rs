@@ -64,6 +64,7 @@ pub mod landmark_heading_validator_analyzers;
 pub mod language_accessibility_analyzers;
 /// Link accessibility analyzers.
 pub mod link_accessibility_analyzers;
+pub mod link_name;
 /// Media and e-commerce analyzers for images, products, and shopping signals.
 pub mod media_analyzers;
 pub mod metric_codes;

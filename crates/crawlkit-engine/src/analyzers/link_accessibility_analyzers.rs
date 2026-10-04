@@ -45,12 +45,14 @@ impl Analyzer for LinkAccessibilityAnalyzer {
 
         for link in &ctx.page.links {
             let text_lower = link.text.trim().to_lowercase();
-            let has_accessible_name = !text_lower.is_empty()
-                || link
-                    .aria_label
-                    .as_ref()
-                    .is_some_and(|l| !l.trim().is_empty())
-                || link.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty());
+            // One definition, shared: see `analyzers::link_name`. These two sites were
+            // already correct, which is exactly why leaving them spelled out
+            // separately is the risk -- the other four drifted.
+            let has_accessible_name = !crate::analyzers::link_name::is_nameless(
+                &link.text,
+                link.aria_label.as_deref(),
+                link.img_alt.as_deref(),
+            );
 
             if !has_accessible_name {
                 findings.push(Finding {

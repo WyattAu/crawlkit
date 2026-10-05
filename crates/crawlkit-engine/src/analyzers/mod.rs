@@ -29,6 +29,7 @@ pub mod cross_origin_advice;
 /// CSP directive validator and color contrast analyzers.
 pub mod csp_color_contrast_analyzers;
 pub mod csp_wildcard;
+pub mod css_evidence;
 pub mod dedupe;
 /// Deep security-header analyzers extracted from the security monolith.
 pub mod deep_security_header_analyzers;
@@ -819,6 +820,12 @@ impl AnalyzerRegistry {
             Box::new(FontSizeAnalyzer::new()),
             Box::new(ColorContrastAnalyzer::new()),
             Box::new(FocusOrderAnalyzer::new()),
+            // Reports once per page that CSS-derived rules could not run, because
+            // crawlkit does not fetch external stylesheets. Registered here rather
+            // than pushed by each gated rule: two of them wanted to report it and
+            // `collapse_duplicates` never merges same-code findings, which produced
+            // two identical rows per page.
+            Box::new(crate::analyzers::css_evidence::CssCoverageAnalyzer),
             // E-commerce: product variants, pricing, aggregate rating
             Box::new(ProductVariantAnalyzer::new()),
             Box::new(PricingSchemaValidator::new()),

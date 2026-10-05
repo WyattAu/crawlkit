@@ -59,7 +59,13 @@ impl Analyzer for FocusManagementAnalyzer {
             .count()
             + ctx.page.forms.len();
 
-        if interactive_count > 0 && !has_focus_style {
+        // Same gate as `A11Y-FOCUS002`: this rule asserts *absence* of `:focus`,
+        // and crawlkit does not fetch external stylesheets. "Not detected" is not
+        // "not present" -- see `analyzers::css_evidence`. On
+        // wyattsnotes.wyattau.com this fired on every page while the real
+        // stylesheet defines five focus rules.
+        let css_incomplete = !crate::analyzers::css_evidence::is_complete(ctx);
+        if interactive_count > 0 && !has_focus_style && !css_incomplete {
             findings.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,

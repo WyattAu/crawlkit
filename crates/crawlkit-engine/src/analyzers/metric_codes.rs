@@ -75,6 +75,10 @@ pub const METRIC_CODES: &[&str] = &[
     "HTTP006", // Status category
     "SSL000",  // SSL certificate not inspected
     "IMG003",  // Lazy-loaded images
+    // crawlkit does not fetch external stylesheets, so CSS-derived rules
+    // cannot run. That is a fact about the crawl's coverage, not a defect in
+    // the page, which is why it belongs here rather than on the issue channel.
+    "CSS-COVERAGE-PARTIAL",
 ];
 
 /// True when `code` reports a measurement rather than a defect.

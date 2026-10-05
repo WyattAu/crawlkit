@@ -252,7 +252,18 @@ impl FocusOrderAnalyzer {
             .count()
             + ctx.page.forms.len();
 
-        if interactive_count > 0 && !has_focus_style {
+        // Absence is only provable from a document that contains all the CSS.
+        // crawlkit does not fetch external stylesheets, so on a page that links one
+        // — which is most of the web — `has_focus_style` being false means "not
+        // looked at", not "not present".
+        //
+        // Verified against wyattsnotes.wyattau.com: its stylesheet
+        // /_astro/Layout.QTI7V5vg.css has five focus rules including
+        // `:focus-visible { outline: 2px solid … }`, and this finding fired on
+        // 60 of 60 pages. What crawlkit could not see is reported as a coverage
+        // measurement instead, on the channel where "I did not check" belongs.
+        let css_incomplete = !crate::analyzers::css_evidence::is_complete(ctx);
+        if interactive_count > 0 && !has_focus_style && !css_incomplete {
             f.push(Finding {
                 severity: Severity::Warning,
                 category: IssueCategory::Accessibility,

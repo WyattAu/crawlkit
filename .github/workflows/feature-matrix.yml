@@ -34,6 +34,13 @@ jobs:
       - name: Check crawlkit CLI queue-ops target (ADR-015 §3 surface)
         if: matrix.name == 'full'
         run: cargo check -p crawlkit --features queue-ops
+      # `cargo check` proves the feature-gated code compiles; it does not run its
+      # tests. Every `#[cfg(feature = "full")]` test — including the raw-versus-
+      # rendered parity analyzer, whose whole subject is the rendered DOM — was
+      # therefore never executed by CI and could rot silently.
+      - name: Test crawlkit-engine (full)
+        if: matrix.name == 'full'
+        run: cargo test -p crawlkit-engine --features full --lib
 
   warehouse-drill:
     name: Warehouse migration drill (ADR-016 §2.4)

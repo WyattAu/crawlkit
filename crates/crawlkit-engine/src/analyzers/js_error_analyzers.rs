@@ -149,6 +149,7 @@ mod tests {
 
     fn clean_page() -> RenderedPage {
         RenderedPage {
+            source_html: None,
             final_url: "https://example.com/".to_string(),
             html: "<html></html>".to_string(),
             console_messages: Vec::new(),

@@ -227,7 +227,12 @@ impl CrawlRun<'_> {
             )
             .await
             {
-                Ok(Ok(page)) => {
+                Ok(Ok(mut page)) => {
+                    // The served document is about to be overwritten by the
+                    // rendered DOM. Keep it: without it no analyzer can tell
+                    // whether content exists for a crawler that does not run
+                    // JavaScript, which is most of them.
+                    page.source_html = Some(body_text.clone());
                     *body_text = page.html.clone();
                     *parsed = crate::HtmlParser::parse(body_text, url);
                     *rendered_page = Some(page);
@@ -270,8 +275,11 @@ impl CrawlRun<'_> {
         )
         .await
         {
-            Ok(Ok(page)) => {
+            Ok(Ok(mut page)) => {
                 self.metrics.record_render_completed();
+                // See the unbounded-budget arm above: preserve the served document
+                // before the rendered DOM replaces it.
+                page.source_html = Some(body_text.clone());
                 *body_text = page.html.clone();
                 *parsed = crate::HtmlParser::parse(body_text, url);
                 *rendered_page = Some(page);

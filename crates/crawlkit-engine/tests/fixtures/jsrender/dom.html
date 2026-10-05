@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<title>Widget Store | Official</title>
+<meta name="description" content="A store.">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<nav><a href="/">Home</a></nav>
+<div id="root">
+  <h1>Our Products</h1>
+  <p>We sell carefully sourced goods for every occasion, delivered worldwide.
+     Each piece is chosen for how it wears over years rather than seasons, and
+     every order is packed by hand at our workshop before it leaves our doors.</p>
+  <p>Returns are free within thirty days, and our team answers questions
+     directly rather than through an automated ticket queue that nobody reads.</p>
+  <a href="/catalogue">Browse the catalogue</a>
+  <a href="/support">Customer support</a>
+  <script type="application/ld+json">{"@type":"Store","name":"Widget Store"}</script>
+</div>
+<script>
+document.getElementById('root').innerHTML = `
+  <h1>Our Products</h1>
+  <p>We sell carefully sourced goods for every occasion, delivered worldwide.
+     Each piece is chosen for how it wears over years rather than seasons, and
+     every order is packed by hand at our workshop before it leaves our doors.</p>
+  <p>Returns are free within thirty days, and our team answers questions
+     directly rather than through an automated ticket queue that nobody reads.</p>
+  <a href="/catalogue">Browse the catalogue</a>
+  <a href="/support">Customer support</a>
+  <script type="application/ld+json">{"@type":"Store","name":"Widget Store"}<\/script>
+`;
+document.title = "Widget Store | Official";
+</script>
+
+</body></html>

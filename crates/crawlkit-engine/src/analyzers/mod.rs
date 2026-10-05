@@ -57,6 +57,7 @@ pub mod image_accessibility_analyzers;
 /// and full-gated finding types, and is registered only under the same gate.
 #[cfg(feature = "full")]
 pub mod js_error_analyzers;
+pub mod js_render_parity;
 /// Landmark accessibility analyzers.
 pub mod landmark_analyzers;
 /// Landmark and heading-level accessibility validators.
@@ -826,6 +827,11 @@ impl AnalyzerRegistry {
             // `collapse_duplicates` never merges same-code findings, which produced
             // two identical rows per page.
             Box::new(crate::analyzers::css_evidence::CssCoverageAnalyzer),
+            // Content that exists only after JavaScript runs, and is therefore
+            // invisible to GPTBot, ClaudeBot, PerplexityBot and CCBot. Returns
+            // nothing unless the page was actually rendered, since asserting that
+            // content might be hidden without rendering it would be a guess.
+            Box::new(crate::analyzers::js_render_parity::JsRenderParityAnalyzer::new()),
             // E-commerce: product variants, pricing, aggregate rating
             Box::new(ProductVariantAnalyzer::new()),
             Box::new(PricingSchemaValidator::new()),

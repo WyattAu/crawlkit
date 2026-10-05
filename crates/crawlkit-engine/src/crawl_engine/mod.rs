@@ -56,6 +56,9 @@ pub trait JsRenderer: Send + Sync {
         Ok(crate::playwright::RenderedPage {
             final_url: url.to_string(),
             html,
+            // `render()` returns only the rendered document; the served response
+            // body is not available through this trait method.
+            source_html: None,
             console_messages: Vec::new(),
             network_requests: Vec::new(),
             wasm_errors: Vec::new(),
@@ -1478,7 +1481,7 @@ mod tests {
         // With AI and WASM disabled, only base analyzers remain (768 = 772 - 4
         // feature-flagged; see `test_registry_default` for the three noise
         // analyzers removed from the base registry).
-        assert_eq!(registry.len(), 766);
+        assert_eq!(registry.len(), 767);
     }
 
     struct MockJsRenderer {

@@ -463,6 +463,7 @@ mod tests {
     fn test_wasm_runtime_analyzer_console_error() {
         let analyzer = WasmRuntimeAnalyzer::new();
         let rendered = RenderedPage {
+            source_html: None,
             final_url: "https://example.com".to_string(),
             html: String::new(),
             console_messages: vec![ConsoleMessage {
@@ -486,6 +487,7 @@ mod tests {
     fn test_wasm_performance_analyzer_large_bundle() {
         let analyzer = WasmPerformanceAnalyzer::new();
         let rendered = RenderedPage {
+            source_html: None,
             final_url: "https://example.com".to_string(),
             html: String::new(),
             console_messages: Vec::new(),

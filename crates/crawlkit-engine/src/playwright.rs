@@ -118,6 +118,17 @@ pub struct RenderedPage {
     pub final_url: String,
     /// Rendered HTML content.
     pub html: String,
+    /// The HTML response body this render was performed against — the document as
+    /// served, before any script ran.
+    ///
+    /// The crawl pipeline overwrites its working copy of the body with the rendered
+    /// DOM before analyzers run, so without this field the served document is
+    /// simply gone by the time an analyzer could compare it. That comparison is the
+    /// only way to know whether content a crawler would receive exists at all.
+    ///
+    /// `None` when the render was produced without access to the response body,
+    /// which is the case for every render initiated inside Playwright itself.
+    pub source_html: Option<String>,
     /// Console messages from the page.
     pub console_messages: Vec<ConsoleMessage>,
     /// Network requests made during rendering.
@@ -631,6 +642,9 @@ const targetUrl = process.argv[2];
         Ok(RenderedPage {
             final_url: result["final_url"].as_str().unwrap_or(url).to_string(),
             html: result["html"].as_str().unwrap_or("").to_string(),
+            // Playwright navigated to the URL itself and never saw the response
+            // body, so there is no served document to record here.
+            source_html: None,
             console_messages: serde_json::from_value(result["console_messages"].clone())
                 .unwrap_or_default(),
             network_requests: serde_json::from_value(result["network_requests"].clone())
@@ -683,6 +697,7 @@ mod tests {
         let page = RenderedPage {
             final_url: "https://example.com/final".to_string(),
             html: "<html></html>".to_string(),
+            source_html: None,
             console_messages: vec![ConsoleMessage {
                 level: "warning".to_string(),
                 text: "test".to_string(),

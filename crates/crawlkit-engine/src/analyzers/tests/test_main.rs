@@ -854,9 +854,9 @@ fn test_registry_default() {
     // `CanonicalDepthAnalyzerV2` (CANDEP-V2003). Each fired on 100% of crawled
     // pages. See the rationale at each registration site in `analyzers/mod.rs`.
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 773);
+    assert_eq!(registry.len(), 774);
     #[cfg(not(feature = "full"))]
-    assert_eq!(registry.len(), 769);
+    assert_eq!(registry.len(), 770);
     assert!(!registry.is_empty());
 }
 

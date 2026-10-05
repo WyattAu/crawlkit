@@ -259,13 +259,26 @@ impl BrowserContext {
 
 /// Playwright binary detection and management.
 pub struct PlaywrightDetector {
-    /// Path to Playwright binary.
+    /// Path to the interpreter that runs the render script.
     binary_path: Option<PathBuf>,
-    /// Playwright version.
+    /// Interpreter version.
     version: Option<String>,
     /// Available browsers.
     available_browsers: Vec<BrowserType>,
+    /// Whether `require('playwright')` resolves for that interpreter.
+    ///
+    /// Tracked separately from `binary_path` because Node being present is not
+    /// sufficient: the render script's first act is `require('playwright')`, and on
+    /// a machine with Node but no Playwright package every render fails. Reporting
+    /// availability from the interpreter alone would trade a clear up-front warning
+    /// for a per-page failure with no explanation.
+    module_resolved: bool,
 }
+
+/// Interpreters `render_via_cli` can run the render script with.
+///
+/// Checked in order; the first on `PATH` wins.
+const NODE_CANDIDATES: &[&str] = &["node", "nodejs", "/usr/local/bin/node", "/usr/bin/node"];
 
 impl PlaywrightDetector {
     /// Detect Playwright installation.
@@ -273,43 +286,61 @@ impl PlaywrightDetector {
     pub fn detect() -> Self {
         let binary_path = Self::find_binary();
         let version = binary_path.as_ref().and_then(Self::get_version);
-        let available_browsers = binary_path
+        let (module_resolved, available_browsers) = binary_path
             .as_ref()
-            .map(Self::get_browsers)
-            .unwrap_or_default();
+            .map_or((false, Vec::new()), Self::probe_module);
 
         Self {
             binary_path,
             version,
             available_browsers,
+            module_resolved,
         }
     }
 
-    /// Find Playwright binary in PATH.
+    /// Locate the interpreter that actually runs the render script.
+    ///
+    /// `render_via_cli` does not invoke a Playwright binary. It writes a script
+    /// that does `require('playwright')` and runs it with `node`, so the things
+    /// that must exist are Node and a resolvable `playwright` module -- not a
+    /// `playwright` executable on `PATH`.
+    ///
+    /// The previous implementation shelled out to `which` once per candidate,
+    /// including candidates like `npx playwright`. `which` matches a single
+    /// executable name, so that entry could never resolve and was dead code.
+    ///
+    /// Every candidate is therefore a single executable, and `on_path` handles the
+    /// absolute-path entries directly, since `which` does not search when its
+    /// argument contains a separator.
     fn find_binary() -> Option<PathBuf> {
-        // Check common locations
-        let candidates = [
-            "npx playwright",
-            "playwright",
-            "/usr/local/bin/playwright",
-            "/usr/bin/playwright",
-        ];
-
-        for candidate in &candidates {
-            if let Ok(output) = Command::new("which").arg(candidate).output() {
-                if output.status.success() {
-                    let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    if !path.is_empty() {
-                        return Some(PathBuf::from(path));
-                    }
-                }
-            }
-        }
-
-        None
+        NODE_CANDIDATES.iter().find_map(|c| Self::resolve(c))
     }
 
-    /// Get Playwright version.
+    /// Resolve `name` to an executable path.
+    ///
+    /// Returns the resolved path rather than the candidate, because
+    /// `binary_path()` is public and previously yielded whatever `which` printed.
+    fn resolve(name: &str) -> Option<PathBuf> {
+        // `which` does not search when its argument contains a separator, so an
+        // absolute-path candidate is checked directly.
+        if name.contains('/') {
+            let p = PathBuf::from(name);
+            return p.is_file().then_some(p);
+        }
+        let out = Command::new("which").arg(name).output().ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        (!path.is_empty()).then(|| PathBuf::from(path))
+    }
+
+    /// The interpreter's version.
+    ///
+    /// This is Node's version, not Playwright's. Playwright's version can only be
+    /// read from the module itself, which is not resolvable at detection time on
+    /// every install layout. Reporting the interpreter's version under a
+    /// "playwright version" name would be a lie, so it is named for what it is.
     fn get_version(binary: &PathBuf) -> Option<String> {
         Command::new(binary)
             .arg("--version")
@@ -326,34 +357,50 @@ impl PlaywrightDetector {
             })
     }
 
-    /// Get available browsers.
-    fn get_browsers(binary: &PathBuf) -> Vec<BrowserType> {
-        Command::new(binary)
-            .arg("install")
-            .arg("--dry-run")
-            .output()
-            .ok()
-            .map(|o| {
-                let output = String::from_utf8_lossy(&o.stdout);
-                let mut browsers = Vec::new();
-                if output.contains("chromium") {
-                    browsers.push(BrowserType::Chromium);
-                }
-                if output.contains("firefox") {
-                    browsers.push(BrowserType::Firefox);
-                }
-                if output.contains("webkit") {
-                    browsers.push(BrowserType::WebKit);
-                }
-                browsers
-            })
-            .unwrap_or_default()
+    /// Whether `require('playwright')` resolves, and which engines it exposes.
+    ///
+    /// Asks the module rather than a CLI. The previous implementation ran
+    /// `<binary> install --dry-run`, which was meaningful when `<binary>` was a
+    /// `playwright` executable -- but the render path never invokes one, it runs
+    /// `node`, and `node install --dry-run` is not a Node command. That returned an
+    /// empty browser list for every real install, so `has_browser` reported "no
+    /// browsers" while rendering was in fact about to be attempted.
+    fn probe_module(binary: &PathBuf) -> (bool, Vec<BrowserType>) {
+        const PROBE: &str = "const p=require('playwright');\
+            console.log(Object.keys(p).filter(k=>/chromium|firefox|webkit/i.test(k)).join(','))";
+
+        match Command::new(binary).args(["-e", PROBE]).output() {
+            // A non-zero exit means `require` threw, i.e. the module is absent.
+            Ok(o) if o.status.success() => (
+                true,
+                Self::parse_browser_list(&String::from_utf8_lossy(&o.stdout)),
+            ),
+            _ => (false, Vec::new()),
+        }
+    }
+
+    /// Parse the probe's comma-separated engine names.
+    fn parse_browser_list(raw: &str) -> Vec<BrowserType> {
+        let mut browsers = Vec::new();
+        if raw.contains("chromium") {
+            browsers.push(BrowserType::Chromium);
+        }
+        if raw.contains("firefox") {
+            browsers.push(BrowserType::Firefox);
+        }
+        if raw.contains("webkit") {
+            browsers.push(BrowserType::WebKit);
+        }
+        browsers
     }
 
     /// Check if Playwright is available.
     #[must_use]
     pub fn is_available(&self) -> bool {
-        self.binary_path.is_some()
+        // Both conditions, not just the interpreter. Node alone does not imply a
+        // usable renderer, and reporting availability anyway would mean every page
+        // fails its render with no up-front explanation.
+        self.binary_path.is_some() && self.module_resolved
     }
 
     /// Get binary path.
@@ -733,6 +780,57 @@ mod tests {
         let detector = PlaywrightDetector::detect();
         // May or may not be available depending on environment
         let _ = detector.is_available();
+    }
+
+    /// Every candidate the detector probes must be a single executable name.
+    /// The old list contained `"npx playwright"`, and `which` matches one name, so
+    /// that entry could never resolve -- JS rendering was therefore unreachable
+    /// for anyone relying on the conventional `npx playwright` invocation.
+    #[test]
+    fn every_node_candidate_is_a_single_executable_name() {
+        for candidate in NODE_CANDIDATES {
+            assert_eq!(
+                candidate.split_whitespace().count(),
+                1,
+                "candidate {candidate:?} could never resolve"
+            );
+            assert!(!candidate.is_empty());
+        }
+    }
+
+    /// Resolution is checked against the real filesystem rather than a mock: the
+    /// bug that prompted this was in the shell interaction, which a mock would
+    /// have reproduced faithfully and hidden.
+    #[test]
+    fn path_resolution_matches_the_filesystem() {
+        assert!(
+            PlaywrightDetector::resolve("sh").is_some(),
+            "sh must resolve"
+        );
+        assert!(
+            PlaywrightDetector::resolve("definitely-not-a-real-binary-xyzzy").is_none(),
+            "a nonexistent binary must not resolve"
+        );
+        // A candidate containing a separator is used as given rather than searched.
+        assert!(PlaywrightDetector::resolve("/bin/sh").is_some());
+        assert!(PlaywrightDetector::resolve("/bin/definitely-not-here").is_none());
+    }
+
+    /// The probe prints a comma-separated engine list. Each name maps to exactly
+    /// one browser type, and unrelated exports must not register as engines.
+    #[test]
+    fn browser_probe_output_is_parsed() {
+        use BrowserType::*;
+        assert_eq!(
+            PlaywrightDetector::parse_browser_list("chromium"),
+            vec![Chromium]
+        );
+        assert_eq!(
+            PlaywrightDetector::parse_browser_list("chromium,firefox,webkit"),
+            vec![Chromium, Firefox, WebKit]
+        );
+        assert!(PlaywrightDetector::parse_browser_list("").is_empty());
+        assert!(PlaywrightDetector::parse_browser_list("request,response").is_empty());
     }
 
     #[test]

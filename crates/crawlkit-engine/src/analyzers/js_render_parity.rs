@@ -175,6 +175,40 @@ fn jsonld_blocks(html: &str) -> usize {
     n
 }
 
+/// Read an attribute value from a start tag, quoted or not.
+///
+/// Minifiers emit unquoted attributes -- Astro writes `<meta content="..."
+/// name=description>` -- so a matcher that assumes `name="description"` silently
+/// finds nothing on exactly the build-optimized sites most likely to be
+/// client-rendered.
+fn attr_value(tag: &str, name: &str) -> Option<String> {
+    let bytes = tag.as_bytes();
+    let needle = name.as_bytes();
+    let mut from = 0usize;
+    while let Some(rel) = tag[from..].find(name) {
+        let at = from + rel;
+        // Require a delimiter before the name so `name` does not match inside
+        // `data-name` or `hostname`.
+        let delimited = at == 0 || matches!(bytes[at - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/');
+        let after = at + needle.len();
+        if delimited && matches!(bytes.get(after), Some(b'=')) {
+            let rest = &tag[after + 1..];
+            let value = match rest.chars().next() {
+                Some(q @ ('"' | '\'')) => {
+                    let body = &rest[q.len_utf8()..];
+                    let end = body.find(q)?;
+                    &body[..end]
+                }
+                Some(_) => rest.split_whitespace().next()?,
+                None => return None,
+            };
+            return Some(value.to_string());
+        }
+        from = at + needle.len();
+    }
+    None
+}
+
 /// Extract `<title>` and the meta description, for rewrite detection.
 fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
     let lower = html.to_ascii_lowercase();
@@ -190,9 +224,19 @@ fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
             Some(head[gt..close].trim().to_string())
         })
     };
-    let description = head.split("name=\"description\"").nth(1).and_then(|after| {
-        let content = after.split("content=\"").nth(1)?;
-        content.split('"').next().map(str::to_string)
+
+    // Every `<meta>` tag is scanned rather than splitting on a literal
+    // `name="description"`: attribute order and quoting both vary between the
+    // served and the rendered document, and a literal split matches only one shape.
+    let description = head.match_indices("<meta").find_map(|(at, _)| {
+        let rest = &head[at..];
+        let end = rest.find('>')?;
+        let tag = &rest[..end];
+        if attr_value(tag, "name").as_deref() == Some("description") {
+            attr_value(tag, "content")
+        } else {
+            None
+        }
     });
     (title, description)
 }
@@ -785,6 +829,65 @@ mod tests {
     fn real_capture_without_a_render_reports_nothing() {
         const SERVED: &str = include_str!("../../tests/fixtures/jsrender/served.html");
         assert!(codes(SERVED, None).is_empty());
+    }
+
+    /// Minified output drops attribute quotes. A matcher written against
+    /// `name="description"` therefore finds nothing on Astro/Next.js builds --
+    /// which are exactly the sites most likely to be client-rendered, so the check
+    /// would report "no rewrite" for the population it most needs to cover.
+    ///
+    /// Third time this session a grep assuming quoted attributes has misled me, so
+    /// it is pinned here rather than left to inspection.
+    #[test]
+    fn metadata_is_read_from_minified_unquoted_attributes() {
+        let minified = concat!(
+            r#"<html><head><meta charset=utf-8>"#,
+            r#"<meta content="A shop for tools and hardware." name=description>"#,
+            r#"<title>Shop</title></head><body><p>hi</p></body></html>"#
+        );
+        let (_, desc) = head_signatures(minified);
+        assert_eq!(
+            desc.as_deref(),
+            Some("A shop for tools and hardware."),
+            "unquoted attribute values must be read"
+        );
+    }
+
+    /// The same tag with quotes, and attributes in both orders.
+    #[test]
+    fn metadata_is_read_from_quoted_attributes_in_any_order() {
+        let a = r#"<meta name="description" content="Hello there">"#;
+        let b = r#"<meta content="Hello there" name="description">"#;
+        for tag in [a, b] {
+            let head = format!("<html><head>{tag}</head><body></body></html>");
+            let (_, desc) = head_signatures(&head);
+            assert_eq!(desc.as_deref(), Some("Hello there"), "failed for {tag}");
+        }
+    }
+
+    /// `name` must not match inside a longer attribute name.
+    #[test]
+    fn attribute_name_matching_requires_a_delimiter() {
+        assert_eq!(attr_value(r#"<meta data-name="description""#, "name"), None);
+        assert_eq!(attr_value(r#"<meta hostname="description""#, "name"), None);
+        assert_eq!(
+            attr_value(r#"<meta name="description""#, "name").as_deref(),
+            Some("description")
+        );
+    }
+
+    /// An unquoted value ends at whitespace, and must not swallow the next attribute.
+    #[test]
+    fn unquoted_values_terminate_at_whitespace() {
+        let tag = "<meta content=Hello name=description>";
+        assert_eq!(attr_value(tag, "content").as_deref(), Some("Hello"));
+    }
+
+    /// A `charset` or `viewport` meta must not be mistaken for the description.
+    #[test]
+    fn non_description_meta_tags_are_ignored() {
+        let head = r#"<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head><body></body></html>"#;
+        assert_eq!(head_signatures(head).1, None);
     }
 
     #[test]

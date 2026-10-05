@@ -93,28 +93,39 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
     );
 
     let playwright_detector = PlaywrightDetector::detect();
-    let js_renderer: Option<Arc<dyn crawlkit_engine::crawl_engine::JsRenderer>> = if params
-        .javascript
-    {
-        if playwright_detector.is_available() {
-            tracing::info!("Playwright detected: JS rendering enabled");
-            let renderer = PlaywrightRenderer::new(PlaywrightConfig {
-                enabled: true,
-                timeout: std::time::Duration::from_secs(30),
-                max_memory_per_context: 512 * 1024 * 1024,
-                max_cpu_seconds: 30,
-                max_concurrent: 5,
-                headless: true,
-                ..Default::default()
-            });
-            Some(Arc::new(PlaywrightJsRenderer(renderer)))
+    let js_renderer: Option<Arc<dyn crawlkit_engine::crawl_engine::JsRenderer>> =
+        if params.javascript {
+            if playwright_detector.is_available() {
+                tracing::info!("Playwright detected: JS rendering enabled");
+                let renderer = PlaywrightRenderer::new(PlaywrightConfig {
+                    enabled: true,
+                    timeout: std::time::Duration::from_secs(30),
+                    max_memory_per_context: 512 * 1024 * 1024,
+                    max_cpu_seconds: 30,
+                    max_concurrent: 5,
+                    headless: true,
+                    ..Default::default()
+                });
+                Some(Arc::new(PlaywrightJsRenderer(renderer)))
+            } else {
+                // The old advice here was `npm install -g playwright`. That does not
+                // work: the render script is written to a temp file and does
+                // `require('playwright')`, which resolves from the script's own
+                // directory upward -- not from the global node_modules. Following the
+                // old message left rendering disabled, and now that availability also
+                // requires the module to resolve, it left the same warning repeating
+                // with no way out.
+                tracing::warn!(
+                    "JavaScript rendering unavailable: no resolvable `playwright` module. \
+                 Install it locally (`npm install playwright`) and run crawlkit from that \
+                 directory, or install it globally and set NODE_PATH to the global root \
+                 (`export NODE_PATH=$(npm root -g)`)."
+                );
+                None
+            }
         } else {
-            tracing::warn!("Playwright not found: JS rendering disabled. Install with: npm install -g playwright");
             None
-        }
-    } else {
-        None
-    };
+        };
 
     let plugin_dirs = match &params.plugins {
         Some(dirs) => dirs.clone(),

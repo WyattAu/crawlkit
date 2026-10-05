@@ -1177,4 +1177,4 @@ consolidate the analyzers).
 | `XPCDP002` | `XPermittedCrossDomainPoliciesAnalyzer` | `crates/crawlkit-engine/src/analyzers/x_header_analyzers.rs` | X-Permitted-Cross-Domain-Policies set to all |
 | `XSS-V2001` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | Missing X-XSS-Protection header |
 | `XSS-V2002` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | X-XSS-Protection explicitly disabled |
-| `XSS002` | `XSSProtectionAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | X-XSS-Protection set to mode=block |
+| `XSS002` | `XSSProtectionAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | (no title literal) |

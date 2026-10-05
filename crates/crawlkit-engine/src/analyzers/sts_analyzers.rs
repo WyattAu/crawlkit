@@ -150,7 +150,13 @@ impl Analyzer for XSSProtectionAnalyzer {
                     severity: Severity::Info,
                     category: IssueCategory::Security,
                     code: "XSS002".to_string(),
-                    title: "X-XSS-Protection set to mode=block".to_string(),
+                    // The title names the deprecated header rather than leading
+                    // with `mode=block`, so it reads as the defect it is. The
+                    // advice was already correct -- remove the header, use CSP --
+                    // but "X-XSS-Protection set to mode=block" reads like
+                    // `mode=block` is the problem, when it is the header's
+                    // presence that is.
+                    title: "Deprecated X-XSS-Protection header still set".to_string(),
                     description: "X-XSS-Protection is set to mode=block. While this enables \
                                   the XSS auditor in mode=block, the header is deprecated \
                                   and Content-Security-Policy is preferred."

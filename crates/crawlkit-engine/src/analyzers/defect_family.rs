@@ -253,9 +253,22 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
             "CANSELFRF001",
         ],
     ),
+    // Measured on a 60-page crawl of a Starlight site: `PIMP003` and
+    // `LINK-V2001` both fired on every page describing the same thing — too many
+    // external links — under different codes, so one page produced two rows for
+    // one defect.
+    ("too many external links", &["PIMP003", "LINK-V2001"]),
+    // Same shape: both fired on every page for a page that references no sitemap.
+    (
+        "no sitemap reference in page",
+        &["SITEMAPMISS001", "SITEMAPMISS-V2001"],
+    ),
     (
         "meta description too long",
         &[
+            "METADEEP-V2002",
+            "META-PX001",
+            "MDESC-PX001",
             "META-V3001-LENGTH",
             "META006",
             "METADEEP002",
@@ -407,7 +420,13 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ),
     (
         "title too long",
-        &["META003", "TITLE002", "TITLEDEEP002", "TITLELEN-V2001"],
+        &[
+            "META003",
+            "TITLE002",
+            "TITLEDEEP002",
+            "TITLEDEEP-V2002",
+            "TITLELEN-V2001",
+        ],
     ),
     (
         "trip missing itinerary",
@@ -609,7 +628,12 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ),
     (
         "title may truncate",
-        &["TITLE-V4003", "TITLELEN-V5003", "TITLEQLT-V2002"],
+        &[
+            "TITLEPX-V6084",
+            "TITLE-V4003",
+            "TITLELEN-V5003",
+            "TITLEQLT-V2002",
+        ],
     ),
     (
         "tvseries missing numberofepisodes",

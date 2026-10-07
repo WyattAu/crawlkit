@@ -74,30 +74,45 @@ const MIN_SIGNIFICANT_WORDS: usize = 25;
 /// Lowercased, punctuation-stripped words, for comparing two documents.
 fn words(html: &str) -> BTreeSet<String> {
     // Strip script and style wholesale: their contents are not visible text and
-    // a framework's inline bundle would otherwise dominate the comparison.
+    // a framework's inline bundle or theme stylesheet would otherwise dominate the
+    // comparison.
+    //
+    // Whichever of the two comes *first in the document* must be handled first.
+    // Preferring `<script` and only then looking for `<style` skips an earlier
+    // stylesheet entirely, because a single `find` over the whole remainder reports
+    // the later `<script>` and the earlier `<style>` is never visited. On
+    // wyattsnotes.wyattau.com the theme stylesheet precedes the first script, so
+    // its CSS was counted as page text and a real 12% delta was reported as 35%.
     let mut cleaned = String::with_capacity(html.len());
     let mut rest = html;
     loop {
         let lower = rest.to_ascii_lowercase();
-        if let Some(start) = lower.find("<script") {
-            cleaned.push_str(&rest[..start]);
-            let after = &rest[start..];
-            // An unterminated `<script` or `<style` means the rest of the document is that
-            // element's body, so there is nothing left to keep.
-            match lower[start..].find("</script>") {
-                Some(end) => rest = &after[end + "</script>".len()..],
-                None => break,
+        let script = lower.find("<script").map(|i| (i, "</script>"));
+        let style = lower.find("<style").map(|i| (i, "</style>"));
+        // Earliest position wins; `>` breaks a tie so `<script>` nests are handled
+        // consistently.
+        let next = match (script, style) {
+            (Some((s, se)), Some((t, te))) => {
+                if s <= t {
+                    Some((s, se))
+                } else {
+                    Some((t, te))
+                }
             }
-        } else if let Some(start) = lower.find("<style") {
-            cleaned.push_str(&rest[..start]);
-            let after = &rest[start..];
-            match lower[start..].find("</style>") {
-                Some(end) => rest = &after[end + "</style>".len()..],
-                None => break,
-            }
-        } else {
+            (Some(x), None) | (None, Some(x)) => Some(x),
+            (None, None) => None,
+        };
+        let Some((start, close)) = next else {
             cleaned.push_str(rest);
             break;
+        };
+        cleaned.push_str(&rest[..start]);
+        let after = &rest[start..];
+        // An unterminated element means the rest of the document is that
+        // element's body, so there is nothing left to keep.
+        match lower[start..].find(close) {
+            Some(end) => rest = &after[end + close.len()..],
+            None => break,
         }
     }
 
@@ -115,23 +130,84 @@ fn words(html: &str) -> BTreeSet<String> {
 }
 
 /// Remove tags and decode the handful of entities that affect word comparison.
+///
+/// A naive `<[^>]*>` strip is wrong for real HTML: attribute *values* may legally
+/// contain `>`, and minifiers emit them unquoted-but-quoted-in-value constantly —
+/// Starlight ships `<html style="--wn-line-height: 1.7; … a > b …">`. Stripping to
+/// the first `>` ends the "tag" mid-attribute and the remainder leaks out as if it
+/// were page text. On wyattsnotes.wyattau.com that leaked the whole theme
+/// stylesheet (`monokai`, `papercolor`, `0px`, `auto`, …) into the word comparison
+/// and inflated a 12% real delta into a reported 35%.
+///
+/// So this tracks quoting: `>` only closes a tag when it is outside a quoted
+/// attribute value. Unquoted values cannot contain `>` per the HTML spec, so there
+/// is nothing more to handle. Comments are skipped whole.
 fn strip_tags(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
-    let mut depth = 0usize;
-    for c in html.chars() {
-        match c {
-            '<' => depth += 1,
-            '>' => depth = depth.saturating_sub(1),
-            _ if depth == 0 => out.push(c),
-            _ => {}
+    let mut in_tag = false;
+    let mut quote: Option<char> = None;
+    let mut rest = html;
+
+    while let Some(c) = rest.chars().next() {
+        rest = &rest[c.len_utf8()..];
+        if in_tag {
+            match quote {
+                Some(q) if c == q => quote = None,
+                Some(_) => {}
+                None => match c {
+                    '"' | '\'' => quote = Some(c),
+                    '>' => {
+                        in_tag = false;
+                        // Separate text either side of a tag. Without this,
+                        // `<button>简体中文</button><button>Paper</button>` yields
+                        // one token `简体中文paper`, and a page of adjacent inline
+                        // elements fabricates words that appear nowhere in the
+                        // source. That is how `themepaperdarklightsepia` came to be
+                        // "missing" from a document that never contained it.
+                        out.push(' ');
+                    }
+                    _ => {}
+                },
+            }
+        } else {
+            match c {
+                '<' => {
+                    in_tag = true;
+                    out.push(' ');
+                    // Drop comments wholesale rather than emitting their text.
+                    if rest.starts_with("!--") {
+                        // An unterminated comment runs to the end of the document,
+                        // and nothing after it is text.
+                        let Some(end) = rest[3..].find("-->") else {
+                            break;
+                        };
+                        rest = &rest[3 + end + 3..];
+                    }
+                }
+                _ => out.push(c),
+            }
         }
     }
-    out.replace("&amp;", "&")
+    decode_entities(&out)
+}
+
+/// Decode the entities that appear in titles and descriptions.
+///
+/// `Wyatt&#39;s Notes` and `Wyatt's Notes` are the same title. Without decoding,
+/// a minifier that switches an entity for its literal makes every such page look
+/// like JavaScript rewrote its metadata — which is how a title FP reached a live
+/// audit on two pages.
+fn decode_entities(s: &str) -> String {
+    s.replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&quot;", "\"")
         .replace("&lt;", "<")
         .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
         .replace("&nbsp;", " ")
+        .replace("&mdash;", "\u{2014}")
+        .replace("&ndash;", "\u{2013}")
+        .replace("&hellip;", "\u{2026}")
+        .replace("&amp;", "&")
 }
 
 /// Origin-relative link targets, so `/a` and `https://host/a` compare equal.
@@ -159,20 +235,18 @@ fn link_paths(html: &str, base_url: &url::Url) -> BTreeSet<String> {
         .collect()
 }
 
-/// Counts of JSON-LD blocks, used to detect schema injected by hydration.
-fn jsonld_blocks(html: &str) -> usize {
-    let lower = html.to_ascii_lowercase();
-    let mut n = 0usize;
-    let mut rest = lower.as_str();
-    while let Some(start) = rest.find("application/ld+json") {
-        n += 1;
-        let after = &rest[start..];
-        match after.find("</script>") {
-            Some(end) => rest = &after[end + "</script>".len()..],
-            None => break,
-        }
-    }
-    n
+/// Number of parseable JSON-LD blocks, used to detect schema injected by hydration.
+///
+/// Delegates to [`HtmlParser`] rather than searching for the string
+/// `application/ld+json`. A substring search cannot tell a real script element from
+/// the same text appearing inside a JavaScript string -- which is how a client-side
+/// schema injector writes it. Counting those made a served page with no structured
+/// data at all look as though it already had one, suppressing the finding.
+///
+/// It also discards unparseable blocks, so a malformed block is not counted as
+/// present on either side.
+fn jsonld_blocks(html: &str, base_url: &url::Url) -> usize {
+    HtmlParser::parse(html, base_url).structured_data.len()
 }
 
 /// Read an attribute value from a start tag, quoted or not.
@@ -221,7 +295,10 @@ fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
             let after = &l[s..];
             let gt = after.find('>')? + s + 1;
             let close = after[after.find('>')? + 1..].find("</title>")? + gt;
-            Some(head[gt..close].trim().to_string())
+            // Decoded here rather than at each comparison site: a caller that
+            // forgets to decode sees `Wyatt&#39;s Notes` differ from `Wyatt's Notes`
+            // and reports a rewrite that never happened.
+            Some(decode_entities(head[gt..close].trim()))
         })
     };
 
@@ -233,7 +310,7 @@ fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
         let end = rest.find('>')?;
         let tag = &rest[..end];
         if attr_value(tag, "name").as_deref() == Some("description") {
-            attr_value(tag, "content")
+            attr_value(tag, "content").map(|v| decode_entities(&v))
         } else {
             None
         }
@@ -366,8 +443,8 @@ impl Analyzer for JsRenderParityAnalyzer {
             }
 
             // --- structured data ---
-            let raw_ld = jsonld_blocks(raw);
-            let rendered_ld = jsonld_blocks(&rendered.html);
+            let raw_ld = jsonld_blocks(raw, &page_url);
+            let rendered_ld = jsonld_blocks(&rendered.html, &page_url);
             if rendered_ld > raw_ld {
                 out.push(Finding {
                     severity: Severity::Warning,
@@ -468,6 +545,10 @@ mod tests {
 
     /// Leaked so a context can borrow it for `'static`; these are test fixtures
     /// built a handful of times per run.
+    fn base() -> url::Url {
+        url::Url::parse("https://shop.example/").unwrap()
+    }
+
     fn page() -> &'static ParsedPage {
         Box::leak(Box::new(ParsedPage {
             url: "https://shop.example/".to_string(),
@@ -890,19 +971,189 @@ mod tests {
         assert_eq!(head_signatures(head).1, None);
     }
 
+    /// A JSON-LD script written as *text inside* another script is not structured
+    /// data. Client-side injectors build it exactly this way, and counting the
+    /// string made a served page with no schema at all look like it already had
+    /// one -- which suppresses the very finding this analyzer exists to raise.
+    #[test]
+    fn jsonld_inside_a_javascript_string_is_not_structured_data() {
+        let injector = r#"<html><head><title>T</title></head><body><div id="root"></div>
+            <script>
+              const html = '<script type="application/ld+json">{"@type":"Store"}<\/script>';
+              document.getElementById('root').innerHTML = html;
+            </script></body></html>"#;
+        assert_eq!(
+            jsonld_blocks(injector, &base()),
+            0,
+            "a schema literal inside JS source is not a served JSON-LD block"
+        );
+        // And once actually injected, it is one.
+        let after = r#"<html><head><title>T</title></head><body><div id="root">
+            <script type="application/ld+json">{"@type":"Store"}</script>
+            </div></body></html>"#;
+        assert_eq!(jsonld_blocks(after, &base()), 1);
+        assert!(
+            codes(injector, Some(after)).contains(&JSRENDER_SCHEMA.to_string()),
+            "schema injected by script must still be reported"
+        );
+    }
+
+    /// `>` inside a quoted attribute value must not end the tag.
+    ///
+    /// Starlight ships `<html style="--wn-line-height: 1.7; … a > b …">`. A
+    /// strip-to-first-`>` ends the tag mid-attribute, and everything after the
+    /// stray `>` — an entire theme stylesheet — is then counted as page text. On
+    /// wyattsnotes.wyattau.com that turned a 12% real delta into a reported 35%.
+    #[test]
+    fn angle_bracket_inside_an_attribute_value_does_not_leak_text() {
+        let html = r#"<html style="--line-height: 1.7; --x: a > b"><body><p>Real prose here.</p></body></html>"#;
+        let found = words(html);
+        assert!(
+            found.contains("prose"),
+            "the paragraph must be visible text; got {found:?}"
+        );
+        for leaked in ["line", "height", "style"] {
+            assert!(
+                !found.contains(leaked),
+                "attribute contents must not become text ({leaked} leaked); got {found:?}"
+            );
+        }
+    }
+
+    /// Comments must not contribute words either.
+    #[test]
+    fn comment_text_is_not_page_text() {
+        let html = "<body><p>Real prose.</p><!-- buildId: 9f2a hidden comment --></body>";
+        let found = words(html);
+        assert!(found.contains("prose"));
+        assert!(
+            !found.contains("hidden") && !found.contains("buildid"),
+            "comment text leaked; got {found:?}"
+        );
+    }
+
+    /// An entity-encoded title and its decoded literal are the same title. Without
+    /// decoding, minifiers that switch between the two make every page look as
+    /// though a script rewrote its metadata — which is how this false positive
+    /// reached a live audit on two real pages.
+    #[test]
+    fn entity_encoded_and_literal_titles_are_the_same_title() {
+        let encoded = r#"<html><head><title>Wyatt&#39;s Notes | Free</title></head><body><p>hi</p></body></html>"#;
+        let literal = r#"<html><head><title>Wyatt's Notes | Free</title></head><body><p>hi</p></body></html>"#;
+        let (a, b) = (head_signatures(encoded).0, head_signatures(literal).0);
+        assert_eq!(a, b, "entity and literal forms must compare equal");
+        assert!(
+            !codes(encoded, Some(literal)).contains(&JSRENDER_META.to_string()),
+            "an entity change is not a metadata rewrite"
+        );
+    }
+
+    /// The same must hold for descriptions, in both attribute orders.
+    #[test]
+    fn entity_encoded_and_literal_descriptions_are_the_same_description() {
+        let a = r#"<meta name="description" content="Tom &amp; Jerry &quot;quoted&quot;">"#;
+        let b = r#"<meta content='Tom & Jerry "quoted"' name=description>"#;
+        let head = |tag: &str| format!("<html><head>{tag}</head><body></body></html>");
+        assert_eq!(
+            head_signatures(&head(a)).1,
+            head_signatures(&head(b)).1,
+            "descriptions must decode before comparison"
+        );
+    }
+
+    /// A stylesheet appearing *before* the first script must still be removed.
+    ///
+    /// The original loop searched the whole remainder for `<script` before ever
+    /// looking for `<style`, so a page whose stylesheet precedes its first script
+    /// kept the stylesheet and counted its CSS as page text. Starlight's theme
+    /// stylesheet sits before its scripts, which turned a 12% real delta into a
+    /// reported 35% on two live pages.
+    #[test]
+    fn a_stylesheet_before_the_first_script_is_removed() {
+        let html = "<html><head><style>.x{align-items:center;padding:.001em}</style></head>\
+                   <body><p>Real prose.</p><script>var a=1;</script></body></html>";
+        let found = words(html);
+        assert!(found.contains("prose"), "got {found:?}");
+        for css in ["alignitems", "padding", "001em"] {
+            assert!(
+                !found.contains(css),
+                "{css} leaked from the stylesheet: {found:?}"
+            );
+        }
+    }
+
+    /// The inverse order, and interleaving, must behave identically.
+    #[test]
+    fn script_and_style_removal_is_order_independent() {
+        let a = "<style>.a{margin:0}</style><script>var x=1;</script><p>Prose here.</p>";
+        let b = "<script>var x=1;</script><style>.a{margin:0}</style><p>Prose here.</p>";
+        let c =
+            "<p>Prose.</p><style>.a{margin:0}</style><script>var x=1;</script><style>.b{}</style>";
+        for html in [a, b, c] {
+            let found = words(html);
+            assert!(
+                found.contains("prose"),
+                "prose missing for {html}: {found:?}"
+            );
+            assert!(
+                !found.contains("margin"),
+                "css leaked for {html}: {found:?}"
+            );
+        }
+        assert_eq!(words(a), words(b), "order must not change the result");
+    }
+
+    /// Adjacent inline elements must not merge into one token.
+    ///
+    /// Without a separator at tag boundaries, `<button>简体中文</button><button>Paper
+    /// </button>` yields `简体中文paper`, and the comparison then reports a document
+    /// as containing a word it never had. That is how `themepaperdarklightsepia`
+    /// came to be "missing" from a page that never contained it.
+    #[test]
+    fn adjacent_inline_elements_do_not_merge_into_one_word() {
+        let html =
+            "<div><button>简体中文</button><button>Paper</button><button>Dark</button></div>";
+        let found = words(html);
+        assert!(
+            found.contains("paper") && found.contains("dark"),
+            "got {found:?}"
+        );
+        for glued in ["简体中文paper", "paperdark", "themepaper"] {
+            assert!(
+                !found.contains(glued),
+                "{glued} was fabricated; got {found:?}"
+            );
+        }
+    }
+
+    /// Real adjacent prose must still read as separate words, not one token.
+    #[test]
+    fn adjacent_text_nodes_stay_separate() {
+        let html = "<p>hello</p><p>world</p><span>again</span>";
+        let found = words(html);
+        for w in ["hello", "world", "again"] {
+            assert!(found.contains(w), "{w} missing from {found:?}");
+        }
+        assert!(!found.contains("helloworld"), "got {found:?}");
+    }
+
     #[test]
     fn jsonld_block_counting_handles_multiple_blocks() {
         assert_eq!(
-            jsonld_blocks(r#"<script type="application/ld+json">{}</script>"#),
+            jsonld_blocks(
+                r#"<script type="application/ld+json">{"@type":"Store"}</script>"#,
+                &base()
+            ),
             1
         );
         assert_eq!(
             jsonld_blocks(
-                r#"<script type="application/ld+json">{}</script>
-                   <script type="application/ld+json">{}</script>"#
+                r#"<script type="application/ld+json">{"@type":"Store"}</script>
+                   <script type="application/ld+json">{"@type":"WebPage"}</script>"#,
+                &base()
             ),
             2
         );
-        assert_eq!(jsonld_blocks("<p>none</p>"), 0);
+        assert_eq!(jsonld_blocks("<p>none</p>", &base()), 0);
     }
 }

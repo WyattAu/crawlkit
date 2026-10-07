@@ -105,6 +105,13 @@ pub mod backlinks;
 /// ensuring the crawler stays within resource budgets.
 #[cfg(feature = "unstable")]
 pub mod backpressure;
+/// Rendering JavaScript by invoking a Chrome binary directly.
+///
+/// Needs no Node runtime and no npm package, which is what makes it usable on
+/// machines where the Playwright backend's `require('playwright')` cannot resolve.
+/// Limited to what `--dump-dom` can observe; see the module docs.
+#[cfg(feature = "full")]
+pub mod chrome_cli;
 /// Circuit breaker for failing HTTP endpoints to avoid cascading failures.
 ///
 /// Per-domain circuit breakers track consecutive failures and automatically

@@ -92,9 +92,9 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
         params.feature_flags.get(crawlkit_engine::feature_flags::FLAG_BACKLINK_ANALYSIS),
     );
 
-    let playwright_detector = PlaywrightDetector::detect();
     let js_renderer: Option<Arc<dyn crawlkit_engine::crawl_engine::JsRenderer>> =
         if params.javascript {
+            let playwright_detector = PlaywrightDetector::detect();
             if playwright_detector.is_available() {
                 tracing::info!("Playwright detected: JS rendering enabled");
                 let renderer = PlaywrightRenderer::new(PlaywrightConfig {
@@ -107,19 +107,26 @@ pub async fn run(params: &CrawlParams) -> Result<()> {
                     ..Default::default()
                 });
                 Some(Arc::new(PlaywrightJsRenderer(renderer)))
+            } else if let Some(chrome) = crawlkit_engine::chrome_cli::ChromeCliRenderer::detect() {
+                // Chrome is present but Playwright's `require` does not resolve.
+                // A direct Chrome render still produces the post-JS DOM, which is
+                // what the raw-versus-rendered analyzer compares. It cannot observe
+                // console output or client-side errors, and those analyzers stay
+                // silent rather than reporting on a signal nobody collected.
+                tracing::info!(
+                    "Rendering via Chrome at {} (Playwright module not resolvable, so \
+                     console and client-side error capture is unavailable)",
+                    chrome.binary().display()
+                );
+                Some(Arc::new(chrome))
             } else {
-                // The old advice here was `npm install -g playwright`. That does not
-                // work: the render script is written to a temp file and does
-                // `require('playwright')`, which resolves from the script's own
-                // directory upward -- not from the global node_modules. Following the
-                // old message left rendering disabled, and now that availability also
-                // requires the module to resolve, it left the same warning repeating
-                // with no way out.
+                // Reaching here means neither a usable Playwright module nor a
+                // Chrome binary was found, so both remedies are named.
                 tracing::warn!(
-                    "JavaScript rendering unavailable: no resolvable `playwright` module. \
-                 Install it locally (`npm install playwright`) and run crawlkit from that \
-                 directory, or install it globally and set NODE_PATH to the global root \
-                 (`export NODE_PATH=$(npm root -g)`)."
+                    "JavaScript rendering unavailable: neither a resolvable `playwright` \
+                     module nor a Chrome/Chromium binary was found. Install one of: \
+                     `npm install playwright` (then run crawlkit from that directory, or \
+                     set NODE_PATH to the global root), or install Chrome/Chromium."
                 );
                 None
             }

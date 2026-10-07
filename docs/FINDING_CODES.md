@@ -15,8 +15,8 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1143 |
-| `impl Analyzer for` blocks scanned | 736 |
+| Distinct finding codes | 1218 |
+| `impl Analyzer for` blocks scanned | 2455 |
 | Codes shared by 2+ analyzers | 6 |
 
 ## Shared codes (recorded ownership)
@@ -34,7 +34,25 @@ consolidate the analyzers).
 
 | Code | Owner(s) | Source | First title |
 |---|---|---|---|
+| `A11Y-FOCUS001` | `FocusOrderAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_visual_analyzers.rs` | Positive tabindex values disrupt tab order |
+| `A11Y-FOCUS002` | `FocusOrderAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_visual_analyzers.rs` | No visible focus indicators found |
 | `A11Y-LINK-V2001` | `LinkAccessibilityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/accessibility_v2_analyzers.rs` | Links with empty text |
+| `A11Y001` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Images missing alt attribute |
+| `A11Y002` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | No headings found |
+| `A11Y003` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Missing H1 heading |
+| `A11Y004` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Multiple H1 headings |
+| `A11Y005` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Skipped heading level |
+| `A11Y006` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Missing main landmark |
+| `A11Y007` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | No navigation landmark |
+| `A11Y008` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Missing skip navigation link |
+| `A11Y009` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Empty link text |
+| `A11Y010` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Non-descriptive link text |
+| `A11Y011` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Form input missing label |
+| `A11Y012` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Positive tabindex values detected |
+| `A11Y013` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | ARIA roles without labels |
+| `A11Y014` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Table missing header cells |
+| `A11Y015` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Table missing caption |
+| `A11Y016` | `AccessibilityAnalyzer` | `crates/crawlkit-engine/src/analyzers/accessibility_aggregator_analyzers.rs` | Missing html lang attribute |
 | `A11YSC001` | `AccessibilityScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Accessibility compliance score |
 | `ACTION-V2001` | `ActionSchemaValidatorV2` | `crates/crawlkit-engine/src/analyzers/schema/action_schema_v2.rs` | Action schema missing actionType |
 | `ACTION001` | `ActionSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/action_schema.rs` | Action schema missing actionType |
@@ -50,6 +68,7 @@ consolidate the analyzers).
 | `AI-CS002` | `AiContentStructureAnalyzer` | `crates/crawlkit-engine/src/ai_analyzers.rs` | Content lacks subheadings |
 | `AI-CS008` | `AiContentStructureAnalyzer` | `crates/crawlkit-engine/src/ai_analyzers.rs` | Missing date metadata |
 | `AI-CS009` | `AiContentStructureAnalyzer` | `crates/crawlkit-engine/src/ai_analyzers.rs` | Missing author attribution |
+| `ANALYZER-PANIC` | `AnalyzerRegistry` | `crates/crawlkit-engine/src/analyzers/mod.rs` | (no title literal) |
 | `ANCH-DIV001` | `AnchorTextDiversityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | All internal links use identical anchor text |
 | `ANCH-DIV002` | `AnchorTextDiversityAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Overuse of generic anchor text |
 | `ANCH-V3001` | `InternalLinkAnchorAnalyzerV3` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Generic internal anchor text |
@@ -145,6 +164,9 @@ consolidate the analyzers).
 | `CANMISS-V2001` | `CanonicalMissingDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing canonical URL (deep-deep) |
 | `CANMISS-V6088` | `CanonicalMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing canonical URL |
 | `CANMISS001` | `CanonicalMissingDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | Missing canonical on paginated page |
+| `CANNIB001` | `CannibalizationDetector` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Keyword cannibalization detected |
+| `CANNIB002` | `CannibalizationDetector` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Duplicate canonical URLs |
+| `CANON-C001` | `CanonicalConsistencyAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High self-referencing canonical rate |
 | `CANON001` | `CanonicalUrlValidator` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Missing canonical URL |
 | `CANON002` | `CanonicalUrlValidator` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Canonical URL differs |
 | `CANON003` | `CanonicalUrlValidator` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Canonical URL mismatch |
@@ -235,6 +257,7 @@ consolidate the analyzers).
 | `COURSENAME-V2001` | `CourseMissingNameValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Course missing name |
 | `COURSEPRE001` | `CoursePrerequisiteValidator` | `crates/crawlkit-engine/src/analyzers/schema/course_prerequisite.rs` | Course missing prerequisites |
 | `COURSEPV-V5001` | `CourseProviderNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Course provider missing name |
+| `COVERAGE001` | `SitemapCoverageAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Page not in sitemap |
 | `CPROV001` | `CourseProviderValidator` | `crates/crawlkit-engine/src/analyzers/schema/course_provider.rs` | Course provider missing name |
 | `CPROV002` | `CourseProviderValidator` | `crates/crawlkit-engine/src/analyzers/schema/course_provider.rs` | Course provider missing URL |
 | `CQ001` | `ContentQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Flesch-Kincaid readability score |
@@ -245,6 +268,9 @@ consolidate the analyzers).
 | `CREATIVE001` | `CreativeWorkSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/creative_work_schema.rs` | CreativeWork schema missing name |
 | `CREATIVE002` | `CreativeWorkSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/creative_work_schema.rs` | CreativeWork schema missing author |
 | `CREATIVE003` | `CreativeWorkSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/creative_work_schema.rs` | CreativeWork schema missing date |
+| `CRIT001` | `CriticalResourceAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Render-blocking scripts detected |
+| `CRIT002` | `CriticalResourceAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Render-blocking stylesheets detected |
+| `CRIT003` | `CriticalResourceAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Missing preconnect hints for external origins |
 | `CSP-V2001` | `ContentSecurityPolicyAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v3_analyzers.rs` | CSP missing script-src directive |
 | `CSP001` | `ContentSecurityPolicyAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_analyzers.rs` | CSP script-src allows unsafe-inline |
 | `CSP002` | `ContentSecurityPolicyAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_analyzers.rs` | CSP missing frame-ancestors directive |
@@ -304,6 +330,8 @@ consolidate the analyzers).
 | `DSDIST-V5001` | `DatasetDistributionValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Dataset distribution missing contentUrl |
 | `DSLICENSE-V5001` | `DatasetLicenseValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Dataset missing license |
 | `DUMMY001` | `DummyAnalyzer` | `crates/crawlkit-engine/src/analyzers/tests/test_main.rs` | Dummy finding |
+| `DUP-CROSS001` | `CrossPageDuplicateContentDetector` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Duplicate titles across pages |
+| `DUP-CROSS002` | `CrossPageDuplicateContentDetector` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Duplicate descriptions across pages |
 | `DUP-V2001` | `DuplicateContentDetectorV2` | `crates/crawlkit-engine/src/analyzers/v2/content.rs` | Repeated text chunks detected |
 | `DUP001` | `DuplicateContentDetector` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Title and description are nearly identical |
 | `DUP002` | `DuplicateContentDetector` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Description starts with title text |
@@ -385,18 +413,27 @@ consolidate the analyzers).
 | `FORMREQ-V5001` | `FormRequiredFieldsValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Required fields missing labels |
 | `FORMREQ-V6110` | `FormRequiredFieldsDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Required fields missing labels |
 | `FP001` | `FeaturePolicyAnalyzer` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | No Feature-Policy or Permissions-Policy header |
+| `FRESH-C002` | `ContentFreshnessCrossPageAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Low average content depth |
 | `FRESH001` | `ContentFreshnessScorer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | No date metadata on time-sensitive content |
 | `FRESH002` | `ContentFreshnessScorer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Date mismatch between visible text \
                                                              and schema |
 | `FRESHSC001` | `ContentFreshnessScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | No date metadata found |
 | `FRESHSC002` | `ContentFreshnessScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Content is over a year old |
 | `FRESHSC003` | `ContentFreshnessScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Content is over 6 months old |
+| `FSIZE001` | `FontSizeAnalyzer` | `crates/crawlkit-engine/src/analyzers/font_analyzers.rs` | Text smaller than 12px detected |
+| `FSIZE002` | `FontSizeAnalyzer` | `crates/crawlkit-engine/src/analyzers/font_analyzers.rs` | Insufficient line-height for body text |
 | `GOV-V2001` | `GovernmentServiceSchemaValidatorV2` | `crates/crawlkit-engine/src/analyzers/schema/government_service_schema_v2.rs` | GovernmentService schema missing provider |
 | `GOV001` | `GovernmentServiceSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/government_service_schema.rs` | GovernmentService schema missing name |
 | `GOV002` | `GovernmentServiceSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/government_service_schema.rs` | GovernmentService schema missing provider |
 | `GOVSERVICE001` | `GovernmentServiceMissingServiceAreaValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | GovernmentService missing serviceArea |
+| `GRAPH001` | `InternalLinkGraphAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Orphan page detected |
+| `GRAPH002` | `InternalLinkGraphAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Link spam detected |
+| `GRAPH003` | `InternalLinkGraphAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Deep navigation depth |
+| `GRAPH004` | `InternalLinkGraphAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Authority concentration |
 | `H1COUNT-V6107` | `HeadingH1CountValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Missing H1 heading |
 | `H1MULTI-V6108` | `HeadingH1CountValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Multiple H1 headings |
+| `HEAD-C001` | `HeadingStructureAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High rate of pages without H1 |
+| `HEAD-C002` | `HeadingStructureAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High rate of multiple H1s |
 | `HEAD-V2001` | `HeadingHierarchyAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/accessibility_v2_analyzers.rs` | Heading levels skip |
 | `HEAD001` | `HeadingHierarchyAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | No headings found |
 | `HEAD002` | `HeadingHierarchyAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Missing H1 heading |
@@ -415,6 +452,7 @@ consolidate the analyzers).
 | `HEADSKIP-V5001` | `HeadingSkipLevelsValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Heading levels skipped |
 | `HEADSKIP-V6121` | `HeadingSkipLevelsDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Heading levels skipped |
 | `HEADSKIP001` | `HeadingLevelSkipAnalyzer` | `crates/crawlkit-engine/src/analyzers/landmark_heading_validator_analyzers.rs` | Heading level skip detected |
+| `HEALTH001` | `OverallHealthScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | (no title literal) |
 | `HEALTHY-001` | `HealthyAnalyzer` | `crates/crawlkit-engine/src/analyzers/tests/test_panic_isolation.rs` | Healthy analyzer ran |
 | `HHIER-V2001` | `HeadingHierarchyDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No headings found (deep-deep) |
 | `HHIER-V2001-DEEP-DEEP-DEEP` | `HeadingHierarchyDeepDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | No headings found (deep-deep-deep) |
@@ -505,6 +543,7 @@ consolidate the analyzers).
 | `HTTP007` | `HttpStatusAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Possible soft 404 — error page content detected |
 | `HTTPVER001` | `HttpVersionAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | HTTP/1.0 response when HTTP/2 may be available |
 | `HTTPVER002` | `HttpVersionAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | HTTP/1.1 response |
+| `IMG-OPT001` | `ImageOptimizationAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High rate of missing alt text |
 | `IMG-V2001` | `ImageAccessibilityAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/accessibility_v2_analyzers.rs` | Images missing alt attribute |
 | `IMG001` | `ImageAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Image missing alt text |
 | `IMG003` | `ImageAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Lazy-loaded images |
@@ -571,6 +610,7 @@ consolidate the analyzers).
 | `JSAL002` | `JobPostingSalaryValidator` | `crates/crawlkit-engine/src/analyzers/schema/job_posting_salary.rs` | JobPosting missing employmentType |
 | `JSERR001` | `JsErrorAnalyzer` | `crates/crawlkit-engine/src/analyzers/js_error_analyzers.rs` | Uncaught JavaScript error during rendering |
 | `JSERR002` | `JsErrorAnalyzer` | `crates/crawlkit-engine/src/analyzers/js_error_analyzers.rs` | Elevated JavaScript console errors |
+| `KEY-CANNIB001` | `KeywordCannibalizationAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Duplicate titles detected |
 | `KW001` | `KeywordAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Top TF-IDF keywords |
 | `KW002` | `KeywordAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Keyword density |
 | `KW003` | `KeywordAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Prominent keywords detected |
@@ -618,6 +658,11 @@ consolidate the analyzers).
 | `LBPI-V2001` | `LocalBusinessMissingNpiValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | LocalBusiness missing identifier (NPI) |
 | `LBSTAR-V6007` | `LodgingBusinessMissingStarRatingValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | LodgingBusiness missing starRating |
 | `LFNAME-V6011` | `LandformMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Landform missing name |
+| `LINK-BAL001` | `InternalLinkBalanceAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Imbalanced link ratio |
+| `LINK-BAL002` | `InternalLinkBalanceAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High percentage of dead-end pages |
+| `LINK-EQ001` | `LinkEquityDistributor` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Seed page dominates link equity |
+| `LINK-EQ002` | `LinkEquityDistributor` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Unbalanced link ratio |
+| `LINK-V001` | `LinkVelocityAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Low average link count |
 | `LINK001` | `LinkAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Link counts |
 | `LINK002` | `LinkAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Link on broken page |
 | `LINK003` | `LinkAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Nofollow links present |
@@ -704,6 +749,7 @@ consolidate the analyzers).
 | `MOB004` | `MobileFriendlinessChecker` | `crates/crawlkit-engine/src/analyzers/mobile_analyzers.rs` | Zooming is disabled (user-scalable=no) |
 | `MOB005` | `MobileFriendlinessChecker` | `crates/crawlkit-engine/src/analyzers/mobile_analyzers.rs` | Maximum scale restricted |
 | `MOB009` | `MobileFriendlinessChecker` | `crates/crawlkit-engine/src/analyzers/mobile_analyzers.rs` | Non-standard initial scale |
+| `MOBILE-C001` | `MobileReadinessAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High rate of missing viewport |
 | `MOBVIEW001` | `MobileViewportAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Viewport missing initial-scale |
 | `MOBVIEW002` | `MobileViewportAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Viewport width not set to device-width |
 | `MOBVIEW003` | `MobileViewportAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Viewport disables user scaling |
@@ -762,6 +808,7 @@ consolidate the analyzers).
 | `ORGLOGO-V5001` | `OrganizationLogoUrlValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Organization logo missing URL |
 | `ORGNAME-V2001` | `OrganizationMissingNameValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Organization missing name |
 | `ORGURL-V5001` | `OrganizationUrlValidatorV5` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Organization missing URL |
+| `ORPHAN001` | `OrphanPageDetector` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Orphan page |
 | `ORSAMEAS001` | `OrganizationSameAsValidator` | `crates/crawlkit-engine/src/analyzers/schema/organization_sameas.rs` | Organization sameAs URL is invalid |
 | `PAG001` | `PaginationAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Missing rel=\ |
 | `PAG002` | `PaginationAnalyzer` | `crates/crawlkit-engine/src/analyzers/seo_analyzers.rs` | Infinite scroll pagination detected |
@@ -841,6 +888,8 @@ consolidate the analyzers).
 | `PROFFER003` | `ProductOfferValidator` | `crates/crawlkit-engine/src/analyzers/schema/product_offer.rs` | Invalid priceCurrency value |
 | `PVAR001` | `ProductVariantAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Product schema missing variant information |
 | `PVAR002` | `ProductVariantAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Product schema has offers but no availability |
+| `QUALITY001` | `CrawlQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High 4xx error rate |
+| `QUALITY002` | `CrawlQualityAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High 5xx error rate |
 | `QUEST001` | `QuestSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/quest_schema.rs` | Quest schema missing name |
 | `QUEST002` | `QuestSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/quest_schema.rs` | Quest schema missing questType |
 | `RDFA001` | `RdfaValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | RDFa attributes present but missing vocab |
@@ -862,6 +911,7 @@ consolidate the analyzers).
 | `RECIPEING-V5002` | `RecipeIngredientsValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe missing ingredients |
 | `RECIPENAME-V2001` | `RecipeMissingNameValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe missing name |
 | `RECIPEPT-V5001` | `RecipePrepTimeValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe missing prepTime |
+| `REDIR-C001` | `RedirectChainOptimizer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | High redirect ratio detected |
 | `REDIR001` | `RedirectChainAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Long redirect chain |
 | `REDIR002` | `RedirectChainAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Redirect loop detected |
 | `REDIR003` | `RedirectChainAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Mixed-protocol redirect |
@@ -926,6 +976,7 @@ consolidate the analyzers).
 | `SCHEDFREQ001` | `ScheduleMissingRepeatFrequencyValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Schedule missing repeatFrequency |
 | `SCHEDTZ-V2001` | `ScheduleMissingTimezoneValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Schedule missing timezone |
 | `SCHEDTZ-V6046` | `ScheduleMissingTimezoneValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Schedule missing scheduleTimezone |
+| `SCHEMA-COV001` | `SchemaCoverageAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Low structured data coverage |
 | `SCHEMACOV001` | `SchemaCoverageScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | No structured data present |
 | `SCHEMACOV002` | `SchemaCoverageScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Non-standard @context |
 | `SCRIPT001` | `ScriptAnalyzer` | `crates/crawlkit-engine/src/analyzers/media_analyzers.rs` | Excessive script count |
@@ -937,7 +988,23 @@ consolidate the analyzers).
 | `SD004` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Missing @type |
 | `SD005` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Unknown @type |
 | `SD006` | `StructuredDataValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | (no title literal) |
+| `SEC-C001` | `SecurityPostureAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Low CSP coverage |
+| `SEC-C002` | `SecurityPostureAnalyzer` | `crates/crawlkit-engine/src/analyzers/post_crawl_analyzers.rs` | Low HSTS coverage |
+| `SEC001` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing Content-Security-Policy header |
+| `SEC002` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing Strict-Transport-Security header |
+| `SEC003` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing X-Frame-Options header |
+| `SEC004` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Invalid X-Frame-Options value |
+| `SEC005` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing X-Content-Type-Options header |
+| `SEC006` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Invalid X-Content-Type-Options value |
+| `SEC007` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing Referrer-Policy header |
+| `SEC008` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Missing Permissions-Policy header |
 | `SEC012` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Security posture score |
+| `SEC013` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Invalid Content-Security-Policy syntax |
+| `SEC014` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | HSTS configuration issue |
+| `SEC015` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | HSTS missing includeSubDomains |
+| `SEC016` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | HSTS missing preload |
+| `SEC017` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | Uncommon Referrer-Policy value |
+| `SEC018` | `SecurityHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/security_header_aggregator_analyzers.rs` | (no title literal) |
 | `SECSC001` | `SecurityScoreAnalyzer` | `crates/crawlkit-engine/src/analyzers/v2/scoring.rs` | Security header score |
 | `SENAME-V6016` | `SportsEventMissingNameValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | SportsEvent missing name |
 | `SERVER001` | `ServerHeaderAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Server header leaks version information |
@@ -1119,6 +1186,14 @@ consolidate the analyzers).
 | `WAPIDOC-V2001` | `WebAPIMissingDocumentationValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
 | `WAPIDOC-V6049` | `WebAPIMissingDocumentationValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
 | `WAPIDOCS001` | `WebAPIDocumentationMissingValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | WebAPI missing documentation |
+| `WASM-P001` | `WasmPerformanceAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Too many WASM modules |
+| `WASM-P002` | `WasmPerformanceAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM bundle too large |
+| `WASM-P003` | `WasmPerformanceAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Slow WASM compilation detected |
+| `WASM-P004` | `WasmPerformanceAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Missing WASM module preload |
+| `WASM-R001` | `WasmRuntimeAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM runtime error detected |
+| `WASM-R002` | `WasmRuntimeAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM module load failure |
+| `WASM-R003` | `WasmRuntimeAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM deprecation warning |
+| `WASM-R004` | `WasmRuntimeAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM module HTTP error |
 | `WASM001` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Missing WASM module preload |
 | `WASM002` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | Synchronous WASM compilation detected |
 | `WASM003` | `WasmPatternAnalyzer` | `crates/crawlkit-engine/src/wasm_analyzers.rs` | WASM instantiation without error handling |

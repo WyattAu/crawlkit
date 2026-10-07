@@ -31,7 +31,13 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "crates" / "crawlkit-engine" / "src"
 DOC = ROOT / "docs" / "FINDING_CODES.md"
 
-IMPL_RE = re.compile(r"impl\s+Analyzer\s+for\s+(\w+)\s*\{")
+# Matches any trait implementation, not only `impl Analyzer for`. The twenty
+# cross-page analyzers implement `PostCrawlAnalyzer`, and their emit sites were
+# therefore attributed to no analyzer at all: their codes fired in production
+# while the catalog recorded nothing, so `--check` could not flag a new
+# cross-page code as unrecorded -- the exact failure this script exists to
+# prevent.
+IMPL_RE = re.compile(r"impl\s+(?:[A-Za-z0-9_]+\s+for\s+)?([A-Za-z0-9_]+)\s*\{")
 CODE_RE = re.compile(r'code:\s*"([A-Z][A-Z0-9-]+)"')
 TITLE_RE = re.compile(r'title:\s*"([^"]*)"')
 CHAR_RE = re.compile(r"'(\\.|[^'\\])'")

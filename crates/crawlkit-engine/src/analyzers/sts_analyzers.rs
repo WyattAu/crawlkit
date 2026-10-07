@@ -222,7 +222,11 @@ impl Analyzer for ContentTypeSniffingAnalyzer {
                                   the declared content type."
                         .to_string(),
                     url: url.to_string(),
-                    recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
+                    recommendation: crate::analyzers::hosting_advice::adjust(
+                        ctx.server,
+                        "Set X-Content-Type-Options: nosniff.",
+                    )
+                    .to_string(),
                 });
             }
             Some(value) => {
@@ -237,7 +241,11 @@ impl Analyzer for ContentTypeSniffingAnalyzer {
                              Only the nosniff value is recognized by browsers."
                         ),
                         url: url.to_string(),
-                        recommendation: "Set X-Content-Type-Options: nosniff.".to_string(),
+                        recommendation: crate::analyzers::hosting_advice::adjust(
+                            ctx.server,
+                            "Set X-Content-Type-Options: nosniff.",
+                        )
+                        .to_string(),
                     });
                 }
             }
@@ -512,8 +520,11 @@ impl Analyzer for FeaturePolicyAnalyzer {
                 description: "Neither Feature-Policy nor Permissions-Policy header is set."
                     .to_string(),
                 url: url.clone(),
-                recommendation: "Add a Permissions-Policy header to control browser features."
-                    .to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    ctx.server,
+                    "Add a Permissions-Policy header to control browser features.",
+                )
+                .to_string(),
             });
         }
         findings

@@ -549,7 +549,11 @@ impl Analyzer for XFrameOptionsDeepAnalyzerV2 {
                 title: "No clickjacking protection".to_string(),
                 description: "Neither X-Frame-Options nor CSP frame-ancestors set.".to_string(),
                 url: url.clone(),
-                recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors.".to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    ctx.server,
+                    "Add X-Frame-Options: DENY or CSP frame-ancestors.",
+                )
+                .to_string(),
             });
         }
         findings
@@ -1137,7 +1141,11 @@ impl Analyzer for XFrameOptionsValidatorV5 {
                 title: "No clickjacking protection".to_string(),
                 description: "Neither X-Frame-Options nor CSP frame-ancestors.".to_string(),
                 url: url.clone(),
-                recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors.".to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    ctx.server,
+                    "Add X-Frame-Options: DENY or CSP frame-ancestors.",
+                )
+                .to_string(),
             });
         }
         if let Some(val) = xfo {
@@ -2115,7 +2123,11 @@ impl Analyzer for XFrameOptionsMissingValidator {
                 title: "No clickjacking protection".to_string(),
                 description: "Neither X-Frame-Options nor CSP frame-ancestors set.".to_string(),
                 url: url.clone(),
-                recommendation: "Add X-Frame-Options: DENY or CSP frame-ancestors.".to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    ctx.server,
+                    "Add X-Frame-Options: DENY or CSP frame-ancestors.",
+                )
+                .to_string(),
             });
         }
         findings

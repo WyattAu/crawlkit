@@ -124,7 +124,13 @@ impl SecurityHeaderAnalyzer {
     }
     // ---- Individual header checks (single responsibility each) ----
 
-    fn check_csp(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_csp(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         match Self::get_header(h, "Content-Security-Policy") {
             None => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
@@ -132,7 +138,10 @@ impl SecurityHeaderAnalyzer {
                 title: "Missing Content-Security-Policy header".to_string(),
                 description: "No Content-Security-Policy header was found. CSP helps prevent XSS, clickjacking, and other code injection attacks.".into(),
                 url: url.to_string(),
-                recommendation: "Implement a Content-Security-Policy header. Start with default-src \'self\' and refine as needed.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Implement a Content-Security-Policy header. Start with default-src \'self\' and refine as needed.",
+                ).into(),
             }),
             Some(csp) if !Self::is_valid_csp(csp) => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
@@ -146,7 +155,13 @@ impl SecurityHeaderAnalyzer {
         }
     }
 
-    fn check_hsts(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_hsts(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         match Self::get_header(h, "Strict-Transport-Security") {
             None => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
@@ -154,7 +169,10 @@ impl SecurityHeaderAnalyzer {
                 title: "Missing Strict-Transport-Security header".to_string(),
                 description: "No Strict-Transport-Security (HSTS) header was found. HSTS forces browsers to use HTTPS.".into(),
                 url: url.to_string(),
-                recommendation: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.",
+                ).into(),
             }),
             Some(hsts) => {
                 for issue in Self::validate_hsts(hsts) {
@@ -186,13 +204,23 @@ impl SecurityHeaderAnalyzer {
         }
     }
 
-    fn check_xfo(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_xfo(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         match Self::get_header(h, "X-Frame-Options") {
             None => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
                 code: "SEC003".to_string(), title: "Missing X-Frame-Options header".into(),
                 description: "No X-Frame-Options header was found. This header prevents clickjacking by controlling frame embedding.".into(),
-                url: url.to_string(), recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".into(),
+                url: url.to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Set X-Frame-Options to DENY or SAMEORIGIN.",
+                ).into(),
             }),
             Some(value) => {
                 if value.to_uppercase().trim() != "DENY" && value.to_uppercase().trim() != "SAMEORIGIN" {
@@ -200,32 +228,56 @@ impl SecurityHeaderAnalyzer {
                         severity: Severity::Warning, category: IssueCategory::Security,
                         code: "SEC004".to_string(), title: "Invalid X-Frame-Options value".into(),
                         description: format!("X-Frame-Options is \"{value}\" but must be DENY or SAMEORIGIN."),
-                        url: url.to_string(), recommendation: "Set X-Frame-Options to DENY (preferred) or SAMEORIGIN.".into(),
+                        url: url.to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Set X-Frame-Options to DENY (preferred) or SAMEORIGIN.",
+                ).into(),
                     });
                 }
             }
         }
     }
 
-    fn check_xcto(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_xcto(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         match Self::get_header(h, "X-Content-Type-Options") {
             None => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
                 code: "SEC005".to_string(), title: "Missing X-Content-Type-Options header".into(),
                 description: "No X-Content-Type-Options header was found. This header prevents MIME-type sniffing.".into(),
-                url: url.to_string(), recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+                url: url.to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Set X-Content-Type-Options to nosniff.",
+                ).into(),
             }),
             Some(value) if value.trim().to_lowercase() != "nosniff" => f.push(Finding {
                 severity: Severity::Warning, category: IssueCategory::Security,
                 code: "SEC006".to_string(), title: "Invalid X-Content-Type-Options value".into(),
                 description: format!("X-Content-Type-Options is \"{value}\" but must be nosniff."),
-                url: url.to_string(), recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+                url: url.to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Set X-Content-Type-Options to nosniff.",
+                ).into(),
             }),
             _ => {}
         }
     }
 
-    fn check_referrer(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_referrer(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         const RECOMMENDED: &[&str] = &[
             "no-referrer",
             "no-referrer-when-downgrade",
@@ -241,7 +293,11 @@ impl SecurityHeaderAnalyzer {
                 severity: Severity::Info, category: IssueCategory::Security,
                 code: "SEC007".to_string(), title: "Missing Referrer-Policy header".into(),
                 description: "No Referrer-Policy header was found. This header controls how much referrer information is sent with requests.".into(),
-                url: url.to_string(), recommendation: "Set Referrer-Policy to strict-origin-when-cross-origin or no-referrer for maximum privacy.".into(),
+                url: url.to_string(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Set Referrer-Policy to strict-origin-when-cross-origin or no-referrer for maximum privacy.",
+                ).into(),
             }),
             Some(value) if !RECOMMENDED.contains(&value.trim()) => f.push(Finding {
                 severity: Severity::Info, category: IssueCategory::Security,
@@ -253,14 +309,23 @@ impl SecurityHeaderAnalyzer {
         }
     }
 
-    fn check_permissions(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_permissions(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         match Self::get_header(h, "Permissions-Policy") {
             None => f.push(Finding {
                 severity: Severity::Info, category: IssueCategory::Security,
                 code: "SEC008".to_string(), title: "Missing Permissions-Policy header".into(),
                 description: "No Permissions-Policy header was found. This header controls which browser features APIs can be used.".into(),
                 url: url.to_string(),
-                recommendation: "Consider setting Permissions-Policy to disable unused features like camera, microphone, geolocation.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(
+                    server,
+                    "Consider setting Permissions-Policy to disable unused features like camera, microphone, geolocation.",
+                ).into(),
             }),
             Some(pp) => {
                 let pp_lower = pp.to_lowercase();
@@ -278,7 +343,13 @@ impl SecurityHeaderAnalyzer {
         }
     }
 
-    fn check_cross_origin(&self, h: &[(String, String)], url: &str, f: &mut Vec<Finding>) {
+    fn check_cross_origin(
+        &self,
+        h: &[(String, String)],
+        url: &str,
+        server: Option<&str>,
+        f: &mut Vec<Finding>,
+    ) {
         let checks = [
             (
                 "Cross-Origin-Embedder-Policy",
@@ -311,7 +382,7 @@ impl SecurityHeaderAnalyzer {
                     title: format!("Missing {name} header"),
                     description: format!("No {name} header was found. {desc}"),
                     url: url.to_string(),
-                    recommendation: rec.into(),
+                    recommendation: crate::analyzers::hosting_advice::adjust(server, rec).into(),
                 });
             }
         }
@@ -333,13 +404,13 @@ impl Analyzer for SecurityHeaderAnalyzer {
         let mut f = Vec::new();
         let url = &ctx.page.url;
         let h = ctx.headers;
-        self.check_csp(h, url, &mut f);
-        self.check_hsts(h, url, &mut f);
-        self.check_xfo(h, url, &mut f);
-        self.check_xcto(h, url, &mut f);
-        self.check_referrer(h, url, &mut f);
-        self.check_permissions(h, url, &mut f);
-        self.check_cross_origin(h, url, &mut f);
+        self.check_csp(h, url, ctx.server, &mut f);
+        self.check_hsts(h, url, ctx.server, &mut f);
+        self.check_xfo(h, url, ctx.server, &mut f);
+        self.check_xcto(h, url, ctx.server, &mut f);
+        self.check_referrer(h, url, ctx.server, &mut f);
+        self.check_permissions(h, url, ctx.server, &mut f);
+        self.check_cross_origin(h, url, ctx.server, &mut f);
         let score = Self::compute_score(&f);
         f.push(Finding {
             severity: Severity::Info, category: IssueCategory::Security,

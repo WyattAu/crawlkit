@@ -46,6 +46,7 @@ pub mod form_analyzers;
 pub mod form_table_validator_analyzers;
 /// Heading hierarchy accessibility analyzers.
 pub mod heading_analyzers;
+pub mod hosting_advice;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.

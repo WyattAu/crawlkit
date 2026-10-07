@@ -41,7 +41,7 @@ impl Analyzer for ReferrerPolicyAnalyzerV2 {
                 title: "Missing Referrer-Policy header".to_string(),
                 description: "No Referrer-Policy header was found. This header controls how much referrer information is sent with requests.".into(),
                 url: url.clone(),
-                recommendation: "Add Referrer-Policy: strict-origin-when-cross-origin or no-referrer.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(ctx.server, "Add Referrer-Policy: strict-origin-when-cross-origin or no-referrer.").into(),
             });
         }
         findings
@@ -82,7 +82,7 @@ impl Analyzer for XFrameOptionsAnalyzerV2 {
                 title: "Missing X-Frame-Options header".to_string(),
                 description: "No X-Frame-Options header was found. This header prevents clickjacking by controlling frame embedding.".into(),
                 url: url.clone(),
-                recommendation: "Set X-Frame-Options to DENY or SAMEORIGIN.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(ctx.server, "Set X-Frame-Options to DENY or SAMEORIGIN.").into(),
             });
         }
         findings
@@ -176,7 +176,7 @@ impl Analyzer for StrictTransportSecurityAnalyzerV3 {
                 title: "HSTS missing includeSubDomains".to_string(),
                 description: "No Strict-Transport-Security header with includeSubDomains was found.".into(),
                 url: url.clone(),
-                recommendation: "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(ctx.server, "Add Strict-Transport-Security: max-age=31536000; includeSubDomains; preload.").into(),
             }),
             Some(val) if !val.to_lowercase().contains("includesubdomains") => findings.push(Finding {
                 severity: Severity::Info,
@@ -227,7 +227,7 @@ impl Analyzer for XContentTypeOptionsAnalyzerV2 {
                 title: "Missing X-Content-Type-Options header".to_string(),
                 description: "No X-Content-Type-Options header was found. This header prevents MIME-type sniffing.".into(),
                 url: url.clone(),
-                recommendation: "Set X-Content-Type-Options to nosniff.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(ctx.server, "Set X-Content-Type-Options to nosniff.").into(),
             });
         }
         findings
@@ -269,7 +269,7 @@ impl Analyzer for PermissionsPolicyAnalyzerV3 {
                 title: "Permissions-Policy missing camera restriction".to_string(),
                 description: "No Permissions-Policy header was found. Without it, the camera API may be accessible by default.".into(),
                 url: url.clone(),
-                recommendation: "Add Permissions-Policy header with camera=() to disable camera access if not needed.".into(),
+                recommendation: crate::analyzers::hosting_advice::adjust(ctx.server, "Add Permissions-Policy header with camera=() to disable camera access if not needed.").into(),
             }),
             Some(val) if !val.to_lowercase().contains("camera=()") => findings.push(Finding {
                 severity: Severity::Info,

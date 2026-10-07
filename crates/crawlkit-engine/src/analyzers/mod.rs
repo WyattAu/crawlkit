@@ -49,6 +49,7 @@ pub mod heading_analyzers;
 pub mod hosting_advice;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
+pub mod html_lang;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
 /// Image accessibility analyzers.
@@ -828,6 +829,9 @@ impl AnalyzerRegistry {
             // `collapse_duplicates` never merges same-code findings, which produced
             // two identical rows per page.
             Box::new(crate::analyzers::css_evidence::CssCoverageAnalyzer),
+            // WCAG 3.1.1 (Level A). The parser has always extracted the lang
+            // attribute; this is the first analyzer to read it.
+            Box::new(crate::analyzers::html_lang::HtmlLangAnalyzer::new()),
             // Content that exists only after JavaScript runs, and is therefore
             // invisible to GPTBot, ClaudeBot, PerplexityBot and CCBot. Returns
             // nothing unless the page was actually rendered, since asserting that

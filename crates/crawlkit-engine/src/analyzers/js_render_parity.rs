@@ -38,10 +38,18 @@
 //! ordering, quoting and whitespace differences between the two documents do not
 //! register as changes.
 
+#[cfg(feature = "full")]
 use std::collections::BTreeSet;
 
 use crate::analyzers::Analyzer;
+#[cfg(feature = "full")]
 use crate::parser::HtmlParser;
+// The analyzer's whole body is behind `feature = "full"`, because
+// `AnalysisContext::rendered` is `Option<&RenderedPage>` with it and `Option<&()>`
+// without. Importing unconditionally would warn on every `core` build, and the
+// thresholds below are equally only read under that feature.
+#[cfg(feature = "full")]
+#[cfg(feature = "full")]
 use crate::types::{IssueCategory, Severity};
 use crate::{AnalysisContext, Finding};
 
@@ -62,6 +70,7 @@ pub const JSRENDER_META: &str = "JSRENDER-META-REWRITTEN";
 /// rule that fires on that trains users to ignore it. Content that is *entirely*
 /// client-rendered is unambiguous, and the threshold catches that while ignoring
 /// chrome.
+#[cfg(feature = "full")]
 const TEXT_DELTA_THRESHOLD: f64 = 0.20;
 
 /// Word-count floor below which missing text is noise rather than missing content.
@@ -69,9 +78,11 @@ const TEXT_DELTA_THRESHOLD: f64 = 0.20;
 /// Applied to the words present only in the rendered document. Three leaked
 /// words are a cookie banner; thirty are a page nobody can read without running
 /// scripts.
+#[cfg(feature = "full")]
 const MIN_SIGNIFICANT_WORDS: usize = 25;
 
 /// Lowercased, punctuation-stripped words, for comparing two documents.
+#[cfg(feature = "full")]
 fn words(html: &str) -> BTreeSet<String> {
     // Strip script and style wholesale: their contents are not visible text and
     // a framework's inline bundle or theme stylesheet would otherwise dominate the
@@ -142,6 +153,7 @@ fn words(html: &str) -> BTreeSet<String> {
 /// So this tracks quoting: `>` only closes a tag when it is outside a quoted
 /// attribute value. Unquoted values cannot contain `>` per the HTML spec, so there
 /// is nothing more to handle. Comments are skipped whole.
+#[cfg(feature = "full")]
 fn strip_tags(html: &str) -> String {
     let mut out = String::with_capacity(html.len());
     let mut in_tag = false;
@@ -197,6 +209,7 @@ fn strip_tags(html: &str) -> String {
 /// a minifier that switches an entity for its literal makes every such page look
 /// like JavaScript rewrote its metadata — which is how a title FP reached a live
 /// audit on two pages.
+#[cfg(feature = "full")]
 fn decode_entities(s: &str) -> String {
     s.replace("&#39;", "'")
         .replace("&apos;", "'")
@@ -218,6 +231,7 @@ fn decode_entities(s: &str) -> String {
 /// href resolves against the base while an absolute one carries its own. Resolving
 /// both against `base_url` and then discarding the origin is what makes the two
 /// forms meet.
+#[cfg(feature = "full")]
 fn link_paths(html: &str, base_url: &url::Url) -> BTreeSet<String> {
     let parsed = HtmlParser::parse(html, base_url);
     parsed
@@ -245,6 +259,7 @@ fn link_paths(html: &str, base_url: &url::Url) -> BTreeSet<String> {
 ///
 /// It also discards unparseable blocks, so a malformed block is not counted as
 /// present on either side.
+#[cfg(feature = "full")]
 fn jsonld_blocks(html: &str, base_url: &url::Url) -> usize {
     HtmlParser::parse(html, base_url).structured_data.len()
 }
@@ -255,6 +270,7 @@ fn jsonld_blocks(html: &str, base_url: &url::Url) -> usize {
 /// name=description>` -- so a matcher that assumes `name="description"` silently
 /// finds nothing on exactly the build-optimized sites most likely to be
 /// client-rendered.
+#[cfg(feature = "full")]
 fn attr_value(tag: &str, name: &str) -> Option<String> {
     let bytes = tag.as_bytes();
     let needle = name.as_bytes();
@@ -284,6 +300,7 @@ fn attr_value(tag: &str, name: &str) -> Option<String> {
 }
 
 /// Extract `<title>` and the meta description, for rewrite detection.
+#[cfg(feature = "full")]
 fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
     let lower = html.to_ascii_lowercase();
     let head_end = lower.find("</head>").unwrap_or(lower.len());
@@ -339,11 +356,13 @@ impl Analyzer for JsRenderParityAnalyzer {
     }
 
     fn analyze(&self, ctx: &AnalysisContext) -> Vec<Finding> {
-        // Feature-gated: `rendered` is a `()` without the `full` feature.
+        // Feature-gated: `rendered` is a `()` without the `full` feature. The
+        // `cfg` blocks are block expressions rather than a `return`, so the
+        // non-`full` build has no reachable `return` to warn about.
         #[cfg(not(feature = "full"))]
         {
             let _ = ctx;
-            return Vec::new();
+            Vec::new()
         }
         #[cfg(feature = "full")]
         {
@@ -505,6 +524,7 @@ impl Analyzer for JsRenderParityAnalyzer {
     }
 }
 
+#[cfg(feature = "full")]
 fn normalize_ws(s: &str) -> String {
     s.split_whitespace().collect::<Vec<_>>().join(" ")
 }

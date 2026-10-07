@@ -32,6 +32,7 @@
 //!
 //! [`AnalysisContext`]: crate::AnalysisContext
 
+use crate::types::{IssueCategory, Severity};
 use crate::AnalysisContext;
 
 /// Codes reporting that a CSS-derived rule could not run.
@@ -83,8 +84,8 @@ pub fn coverage_finding(ctx: &AnalysisContext) -> Option<crate::Finding> {
         return None;
     }
     Some(crate::Finding {
-        severity: crate::Severity::Info,
-        category: crate::IssueCategory::Performance,
+        severity: Severity::Info,
+        category: IssueCategory::Performance,
         code: CSS_COVERAGE_PARTIAL.to_string(),
         title: "External stylesheets were not analyzed".to_string(),
         description: format!(
@@ -241,6 +242,6 @@ mod tests {
         let f = coverage_finding(&ctx_with(vec![external("/a.css"), external("/b.css")]))
             .expect("two stylesheets");
         assert!(f.description.contains("2 external stylesheet"));
-        assert_eq!(f.severity, crate::Severity::Info);
+        assert_eq!(f.severity, Severity::Info);
     }
 }

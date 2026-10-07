@@ -16,7 +16,7 @@ consolidate the analyzers).
 | Metric | Value |
 |---|---|
 | Distinct finding codes | 1218 |
-| `impl Analyzer for` blocks scanned | 2455 |
+| `impl Analyzer for` blocks scanned | 2458 |
 | Codes shared by 2+ analyzers | 6 |
 
 ## Shared codes (recorded ownership)

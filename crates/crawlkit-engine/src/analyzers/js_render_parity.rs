@@ -41,6 +41,8 @@
 #[cfg(feature = "full")]
 use std::collections::BTreeSet;
 
+#[cfg(feature = "full")]
+use crate::analyzers::html_text::{attr_value, decode_entities, strip_tags};
 use crate::analyzers::Analyzer;
 #[cfg(feature = "full")]
 use crate::parser::HtmlParser;
@@ -150,79 +152,6 @@ fn words(html: &str) -> BTreeSet<String> {
 /// stylesheet (`monokai`, `papercolor`, `0px`, `auto`, …) into the word comparison
 /// and inflated a 12% real delta into a reported 35%.
 ///
-/// So this tracks quoting: `>` only closes a tag when it is outside a quoted
-/// attribute value. Unquoted values cannot contain `>` per the HTML spec, so there
-/// is nothing more to handle. Comments are skipped whole.
-#[cfg(feature = "full")]
-fn strip_tags(html: &str) -> String {
-    let mut out = String::with_capacity(html.len());
-    let mut in_tag = false;
-    let mut quote: Option<char> = None;
-    let mut rest = html;
-
-    while let Some(c) = rest.chars().next() {
-        rest = &rest[c.len_utf8()..];
-        if in_tag {
-            match quote {
-                Some(q) if c == q => quote = None,
-                Some(_) => {}
-                None => match c {
-                    '"' | '\'' => quote = Some(c),
-                    '>' => {
-                        in_tag = false;
-                        // Separate text either side of a tag. Without this,
-                        // `<button>简体中文</button><button>Paper</button>` yields
-                        // one token `简体中文paper`, and a page of adjacent inline
-                        // elements fabricates words that appear nowhere in the
-                        // source. That is how `themepaperdarklightsepia` came to be
-                        // "missing" from a document that never contained it.
-                        out.push(' ');
-                    }
-                    _ => {}
-                },
-            }
-        } else {
-            match c {
-                '<' => {
-                    in_tag = true;
-                    out.push(' ');
-                    // Drop comments wholesale rather than emitting their text.
-                    if rest.starts_with("!--") {
-                        // An unterminated comment runs to the end of the document,
-                        // and nothing after it is text.
-                        let Some(end) = rest[3..].find("-->") else {
-                            break;
-                        };
-                        rest = &rest[3 + end + 3..];
-                    }
-                }
-                _ => out.push(c),
-            }
-        }
-    }
-    decode_entities(&out)
-}
-
-/// Decode the entities that appear in titles and descriptions.
-///
-/// `Wyatt&#39;s Notes` and `Wyatt's Notes` are the same title. Without decoding,
-/// a minifier that switches an entity for its literal makes every such page look
-/// like JavaScript rewrote its metadata — which is how a title FP reached a live
-/// audit on two pages.
-#[cfg(feature = "full")]
-fn decode_entities(s: &str) -> String {
-    s.replace("&#39;", "'")
-        .replace("&apos;", "'")
-        .replace("&quot;", "\"")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&nbsp;", " ")
-        .replace("&mdash;", "\u{2014}")
-        .replace("&ndash;", "\u{2013}")
-        .replace("&hellip;", "\u{2026}")
-        .replace("&amp;", "&")
-}
-
 /// Origin-relative link targets, so `/a` and `https://host/a` compare equal.
 ///
 /// The host is deliberately dropped. Both documents are versions of the *same*
@@ -260,45 +189,12 @@ fn link_paths(html: &str, base_url: &url::Url) -> BTreeSet<String> {
 /// It also discards unparseable blocks, so a malformed block is not counted as
 /// present on either side.
 #[cfg(feature = "full")]
-fn jsonld_blocks(html: &str, base_url: &url::Url) -> usize {
+fn parseable_jsonld_count(html: &str, base_url: &url::Url) -> usize {
     HtmlParser::parse(html, base_url).structured_data.len()
 }
 
 /// Read an attribute value from a start tag, quoted or not.
 ///
-/// Minifiers emit unquoted attributes -- Astro writes `<meta content="..."
-/// name=description>` -- so a matcher that assumes `name="description"` silently
-/// finds nothing on exactly the build-optimized sites most likely to be
-/// client-rendered.
-#[cfg(feature = "full")]
-fn attr_value(tag: &str, name: &str) -> Option<String> {
-    let bytes = tag.as_bytes();
-    let needle = name.as_bytes();
-    let mut from = 0usize;
-    while let Some(rel) = tag[from..].find(name) {
-        let at = from + rel;
-        // Require a delimiter before the name so `name` does not match inside
-        // `data-name` or `hostname`.
-        let delimited = at == 0 || matches!(bytes[at - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/');
-        let after = at + needle.len();
-        if delimited && matches!(bytes.get(after), Some(b'=')) {
-            let rest = &tag[after + 1..];
-            let value = match rest.chars().next() {
-                Some(q @ ('"' | '\'')) => {
-                    let body = &rest[q.len_utf8()..];
-                    let end = body.find(q)?;
-                    &body[..end]
-                }
-                Some(_) => rest.split_whitespace().next()?,
-                None => return None,
-            };
-            return Some(value.to_string());
-        }
-        from = at + needle.len();
-    }
-    None
-}
-
 /// Extract `<title>` and the meta description, for rewrite detection.
 #[cfg(feature = "full")]
 fn head_signatures(html: &str) -> (Option<String>, Option<String>) {
@@ -462,8 +358,8 @@ impl Analyzer for JsRenderParityAnalyzer {
             }
 
             // --- structured data ---
-            let raw_ld = jsonld_blocks(raw, &page_url);
-            let rendered_ld = jsonld_blocks(&rendered.html, &page_url);
+            let raw_ld = parseable_jsonld_count(raw, &page_url);
+            let rendered_ld = parseable_jsonld_count(&rendered.html, &page_url);
             if rendered_ld > raw_ld {
                 out.push(Finding {
                     severity: Severity::Warning,
@@ -1003,7 +899,7 @@ mod tests {
               document.getElementById('root').innerHTML = html;
             </script></body></html>"#;
         assert_eq!(
-            jsonld_blocks(injector, &base()),
+            parseable_jsonld_count(injector, &base()),
             0,
             "a schema literal inside JS source is not a served JSON-LD block"
         );
@@ -1011,7 +907,7 @@ mod tests {
         let after = r#"<html><head><title>T</title></head><body><div id="root">
             <script type="application/ld+json">{"@type":"Store"}</script>
             </div></body></html>"#;
-        assert_eq!(jsonld_blocks(after, &base()), 1);
+        assert_eq!(parseable_jsonld_count(after, &base()), 1);
         assert!(
             codes(injector, Some(after)).contains(&JSRENDER_SCHEMA.to_string()),
             "schema injected by script must still be reported"
@@ -1160,20 +1056,20 @@ mod tests {
     #[test]
     fn jsonld_block_counting_handles_multiple_blocks() {
         assert_eq!(
-            jsonld_blocks(
+            parseable_jsonld_count(
                 r#"<script type="application/ld+json">{"@type":"Store"}</script>"#,
                 &base()
             ),
             1
         );
         assert_eq!(
-            jsonld_blocks(
+            parseable_jsonld_count(
                 r#"<script type="application/ld+json">{"@type":"Store"}</script>
                    <script type="application/ld+json">{"@type":"WebPage"}</script>"#,
                 &base()
             ),
             2
         );
-        assert_eq!(jsonld_blocks("<p>none</p>", &base()), 0);
+        assert_eq!(parseable_jsonld_count("<p>none</p>", &base()), 0);
     }
 }

@@ -50,6 +50,7 @@ pub mod hosting_advice;
 /// HSTS preload readiness analyzer (extracted from security_analyzers).
 pub mod hsts_analyzer;
 pub mod html_lang;
+pub mod html_text;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
 /// Image accessibility analyzers.
@@ -105,6 +106,7 @@ pub mod seo_analyzers;
 pub mod skip_link_analyzers;
 /// Social media analyzers for Open Graph, Twitter Cards, and social sharing metadata.
 pub mod social_analyzers;
+pub mod structured_data_errors;
 /// Strict-Transport-Security / COOP / COEP / Feature-Policy / Expect-CT / CT
 /// analyzers (extracted from security_analyzers).
 pub mod sts_analyzers;
@@ -832,6 +834,10 @@ impl AnalyzerRegistry {
             // WCAG 3.1.1 (Level A). The parser has always extracted the lang
             // attribute; this is the first analyzer to read it.
             Box::new(crate::analyzers::html_lang::HtmlLangAnalyzer::new()),
+            // The parser discards any JSON-LD block that fails to parse, so a
+            // page with broken schema looked identical to one with none. This
+            // re-reads the document and reports what was thrown away.
+            Box::new(crate::analyzers::structured_data_errors::JsonLdValidityAnalyzer::new()),
             // Content that exists only after JavaScript runs, and is therefore
             // invisible to GPTBot, ClaudeBot, PerplexityBot and CCBot. Returns
             // nothing unless the page was actually rendered, since asserting that

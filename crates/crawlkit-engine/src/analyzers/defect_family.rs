@@ -251,6 +251,16 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
             "CANSELFRF-V2001",
             "CANSELFRF-V6089",
             "CANSELFRF001",
+            // "canonical url mismatch" described the same defect and is folded
+            // in here. Measured on a 50-page Starlight crawl, one page carried
+            // five separate findings for having one non-self-referencing
+            // canonical: CAN-SR001, CAN-V2001, CANDEEP001, CANCON002 and
+            // CANSELFRF-V6089.
+            "CAN-V2001",
+            "CANON003",
+            "CAN-SR001",
+            "CANDEEP001",
+            "CANCON002",
         ],
     ),
     // Measured on a 60-page crawl of a Starlight site: `PIMP003` and
@@ -258,6 +268,10 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     // external links — under different codes, so one page produced two rows for
     // one defect.
     ("too many external links", &["PIMP003", "LINK-V2001"]),
+    // Both are the Flesch-Kincaid measurement saying the content is hard to
+    // read; CREAD001 is the Warning threshold and CQ-V2001 the Info one, so a
+    // difficult page produced two findings for one property.
+    ("content readability too low", &["CREAD001", "CQ-V2001"]),
     // Same shape: both fired on every page for a page that references no sitemap.
     (
         "no sitemap reference in page",
@@ -657,7 +671,6 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
         "broadcastevent missing name",
         &["BENAME-V6020", "BROADCAST001"],
     ),
-    ("canonical url mismatch", &["CAN-V2001", "CANON003"]),
     (
         "canonical url points to different domain",
         &["CANCH001", "CANCON003"],

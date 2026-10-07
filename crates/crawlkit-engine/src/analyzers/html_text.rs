@@ -187,6 +187,37 @@ fn find_tag_end(s: &str) -> Option<usize> {
     None
 }
 
+/// Every start tag for elements named `name`, as the raw tag text.
+///
+/// The tag includes its closing `>`, so [`attr_value`] can be called on it
+/// directly. Matching is case-insensitive and ignores `</a>` closers, `<!doctype>`
+/// and comments, because `find_tag_end` only stops the scan at a `>` that is not
+/// inside a quoted attribute value.
+#[must_use]
+pub fn start_tags(html: &str, name: &str) -> Vec<String> {
+    let mut tags = Vec::new();
+    let lower = html.to_ascii_lowercase();
+    let needle = format!("<{name}");
+    let mut i = 0usize;
+    while let Some(rel) = lower[i..].find(&needle) {
+        let open = i + rel;
+        // The next character must be a name boundary, so `<abstract>` does not
+        // match a search for `<a`.
+        let after = open + needle.len();
+        if matches!(lower.as_bytes().get(after), Some(b) if b.is_ascii_alphanumeric()) {
+            i = after;
+            continue;
+        }
+        let Some(tag_end_rel) = find_tag_end(&lower[after..]) else {
+            break;
+        };
+        let tag_end = after + tag_end_rel;
+        tags.push(html[open..tag_end].to_string());
+        i = tag_end;
+    }
+    tags
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -272,5 +303,21 @@ mod tests {
     fn unterminated_script_does_not_loop() {
         let html = r#"<script type="application/ld+json">{"a":1}"#;
         assert!(ldjson_script_bodies(html).is_empty());
+    }
+
+    /// `<abstract>` shares a prefix with `<a`, and must not be returned when
+    /// scanning for anchors.
+    #[test]
+    fn start_tags_match_on_a_name_boundary() {
+        let html = r#"<a href="/x">anchor</a><abstract>not an anchor</abstract>"#;
+        let tags = start_tags(html, "a");
+        assert_eq!(tags.len(), 1, "got {tags:?}");
+        assert!(tags[0].contains(r#"href="/x""#));
+    }
+
+    #[test]
+    fn start_tags_are_case_insensitive_and_skip_closers() {
+        let html = r#"<A HREF="/x">upper</A><a href="/y">lower</a>"#;
+        assert_eq!(start_tags(html, "a").len(), 2);
     }
 }

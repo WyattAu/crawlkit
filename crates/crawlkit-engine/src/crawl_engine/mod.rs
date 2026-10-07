@@ -1481,7 +1481,7 @@ mod tests {
         // With AI and WASM disabled, only base analyzers remain (768 = 772 - 4
         // feature-flagged; see `test_registry_default` for the three noise
         // analyzers removed from the base registry).
-        assert_eq!(registry.len(), 769);
+        assert_eq!(registry.len(), 770);
     }
 
     struct MockJsRenderer {

@@ -116,6 +116,7 @@ pub mod tabindex_analyzers;
 pub mod table_analyzers;
 /// Table caption accessibility analyzer.
 pub mod table_caption_analyzers;
+pub mod tabnabbing;
 pub mod url_norm;
 pub mod v2;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
@@ -838,6 +839,10 @@ impl AnalyzerRegistry {
             // page with broken schema looked identical to one with none. This
             // re-reads the document and reports what was thrown away.
             Box::new(crate::analyzers::structured_data_errors::JsonLdValidityAnalyzer::new()),
+            // target="_blank" without rel="noopener" hands the opened page a
+            // window.opener handle. Modern browsers imply noopener, so this is
+            // deliberately a Warning with a description that says so.
+            Box::new(crate::analyzers::tabnabbing::TabnabbingAnalyzer::new()),
             // Content that exists only after JavaScript runs, and is therefore
             // invisible to GPTBot, ClaudeBot, PerplexityBot and CCBot. Returns
             // nothing unless the page was actually rendered, since asserting that

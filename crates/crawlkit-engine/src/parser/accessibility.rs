@@ -45,22 +45,18 @@ impl HtmlParser {
         let mut tables_total = 0usize;
         let mut tables_with_captions = 0usize;
 
-        // Detect html lang from raw HTML string directly (scraper's Element.attr() is unreliable)
+        // Detect html lang from the raw HTML string directly (scraper's
+        // Element.attr() is unreliable). The value must come from the `<html>`
+        // start tag itself: searching the document for `lang="` also matches
+        // `hreflang="` and `data-lang="`, which reported a language a page never
+        // declared and silenced the missing-lang check on exactly the pages that
+        // declare alternates.
         let mut has_lang = false;
         let mut html_lang: Option<String> = None;
         if let Some(raw) = html_raw {
-            if let Some(pos) = raw.find("lang=\"") {
-                let start = pos + 6; // len("lang=\"")
-                if let Some(end) = raw[start..].find('"') {
-                    html_lang = Some(raw[start..start + end].to_string());
-                    has_lang = true;
-                }
-            } else if let Some(pos) = raw.find("lang='") {
-                let start = pos + 6;
-                if let Some(end) = raw[start..].find('\'') {
-                    html_lang = Some(raw[start..start + end].to_string());
-                    has_lang = true;
-                }
+            if let Some(lang) = html_tag_lang(raw) {
+                has_lang = true;
+                html_lang = Some(lang);
             }
         }
 
@@ -200,4 +196,85 @@ impl HtmlParser {
             tables_with_captions,
         )
     }
+}
+
+/// The `lang` attribute of the `<html>` start tag, if it declares one.
+///
+/// Three constraints make this stricter than a document-wide search:
+///
+/// - only the `<html>` start tag is considered, so `hreflang="en"` or
+///   `data-lang="en"` elsewhere in the document cannot satisfy it
+/// - the attribute name is matched case-insensitively, because `LANG="EN"` is
+///   valid HTML and was previously invisible, which reported a missing lang on
+///   a page that had one
+/// - the value may be double-quoted, single-quoted, or unquoted; the scan for
+///   the tag's closing `>` honours quoting, because attribute values may contain
+///   `>` (CSS custom properties do)
+///
+/// Returns `None` when there is no `<html>` tag or it declares no `lang`.
+fn html_tag_lang(raw: &str) -> Option<String> {
+    let lower = raw.to_ascii_lowercase();
+    let mut i = 0usize;
+    let open = loop {
+        let rel = lower[i..].find("<html")?;
+        let at = i + rel;
+        let after = at + 5;
+        // A name boundary, so `<htmlparser>`-style prefixes do not match.
+        let ok = match lower.as_bytes().get(after) {
+            None => true,
+            Some(b) => matches!(b, b' ' | b'\t' | b'\n' | b'\r' | b'>'),
+        };
+        if ok {
+            break after;
+        }
+        i = after;
+    };
+
+    // The `>` that closes the start tag, honouring quoted attribute values.
+    let mut quote: Option<char> = None;
+    let mut tag_end = lower.len();
+    for (idx, c) in lower[open..].char_indices() {
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None => match c {
+                q @ ('"' | '\'') => quote = Some(q),
+                '>' => {
+                    tag_end = open + idx;
+                    break;
+                }
+                _ => {}
+            },
+        }
+    }
+    let tag = &raw[open..tag_end];
+
+    // Searched in the tag's own lowercase text: `lower` is the whole document,
+    // and indexing a document offset into the tag is how the first version of
+    // this looked up the wrong bytes and reported every page as missing a lang.
+    let tag_lower = tag.to_ascii_lowercase();
+    let bytes = tag.as_bytes();
+    let mut from = 0usize;
+    while let Some(rel) = tag_lower[from..].find("lang") {
+        let at = from + rel;
+        let delimited = at > 0 && matches!(bytes[at - 1], b' ' | b'\t' | b'\n' | b'\r' | b'/');
+        let after = at + 4;
+        if delimited && matches!(bytes.get(after), Some(b'=')) {
+            let rest = &tag[after + 1..];
+            return match rest.chars().next() {
+                Some(q @ ('"' | '\'')) => {
+                    let body = &rest[q.len_utf8()..];
+                    let end = body.find(q)?;
+                    Some(body[..end].to_string())
+                }
+                Some(_) => rest
+                    .split(|c: char| c == '>' || c.is_whitespace())
+                    .next()
+                    .map(String::from),
+                None => None,
+            };
+        }
+        from = at + 4;
+    }
+    None
 }

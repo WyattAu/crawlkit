@@ -408,17 +408,98 @@ mod lang_test {
     use super::*;
     use url::Url;
 
+    fn parse(html: &str) -> crate::ParsedPage {
+        HtmlParser::parse(html, &Url::parse("https://example.com").unwrap())
+    }
+
     #[test]
     fn test_lang_attribute_from_html() {
         let html = r#"<!DOCTYPE html><html lang="en" data-theme="midnight-navy"><head><title>Test</title></head><body></body></html>"#;
-        let url = Url::parse("https://example.com").unwrap();
-        let page = HtmlParser::parse(html, &url);
+        let page = parse(html);
         // Check the accessibility section
         assert!(
             page.has_lang_attribute,
             "should detect lang attribute from raw HTML fallback"
         );
         assert_eq!(page.html_lang.as_deref(), Some("en"));
+    }
+
+    /// `hreflang="en"` contains `lang="en"` as a substring. The old
+    /// implementation searched the whole document for `lang="`, so a page with
+    /// NO html lang but a single alternate link reported a declared language,
+    /// and the missing-lang check was silenced on exactly the pages that
+    /// declare alternates.
+    #[test]
+    fn hreflang_does_not_satisfy_the_html_lang() {
+        let html = r#"<html><head><link rel="alternate" hreflang="en" href="/en"></head>
+            <body><p>hi</p></body></html>"#;
+        let page = parse(html);
+        assert!(
+            !page.has_lang_attribute,
+            "hreflang must not be read as the html lang"
+        );
+        assert_eq!(page.html_lang, None);
+    }
+
+    /// Same confusion, one step removed: `data-lang` also ends in `lang=`.
+    #[test]
+    fn data_lang_does_not_satisfy_the_html_lang() {
+        let html = r#"<html><body><div data-lang="en">x</div></body></html>"#;
+        let page = parse(html);
+        assert!(!page.has_lang_attribute);
+        assert_eq!(page.html_lang, None);
+    }
+
+    /// Attribute names are case-insensitive in HTML. `LANG="EN"` is valid and
+    /// was previously invisible, so a page that declared its language was
+    /// reported as having none.
+    #[test]
+    fn uppercase_attribute_is_recognised() {
+        let html = r#"<HTML LANG="EN"><head><title>t</title></head><body></body></HTML>"#;
+        let page = parse(html);
+        assert!(page.has_lang_attribute);
+        assert_eq!(page.html_lang.as_deref(), Some("EN"));
+    }
+
+    /// Minifiers drop attribute quotes.
+    #[test]
+    fn unquoted_value_is_recognised() {
+        let html = r#"<html lang=en><head><title>t</title></head><body></body></html>"#;
+        let page = parse(html);
+        assert!(page.has_lang_attribute);
+        assert_eq!(page.html_lang.as_deref(), Some("en"));
+    }
+
+    /// An attribute value may contain `>` -- CSS custom properties do -- so the
+    /// scan for the tag's closing bracket has to honour quoting.
+    #[test]
+    fn quoted_value_containing_a_bracket_does_not_end_the_tag() {
+        let html = r#"<html lang="en" data-tip="a > b"><head><title>t</title></head>
+            <body><p>x</p></body></html>"#;
+        let page = parse(html);
+        assert!(page.has_lang_attribute);
+        assert_eq!(page.html_lang.as_deref(), Some("en"));
+    }
+
+    /// `<htmlprefix>`-style element names must not match a search for `<html`.
+    #[test]
+    fn element_name_matching_requires_a_boundary() {
+        let html = r#"<htmlroot><html lang="en"></htmlroot><head></head><body></body></htmlroot>"#;
+        let page = parse(html);
+        assert!(
+            page.has_lang_attribute,
+            "the real <html> tag must still be found"
+        );
+        assert_eq!(page.html_lang.as_deref(), Some("en"));
+    }
+
+    /// A genuinely absent lang, the case the analyzer reports.
+    #[test]
+    fn absent_lang_is_absent() {
+        let html = r#"<html><head><title>t</title></head><body><p>x</p></body></html>"#;
+        let page = parse(html);
+        assert!(!page.has_lang_attribute);
+        assert_eq!(page.html_lang, None);
     }
 }
 

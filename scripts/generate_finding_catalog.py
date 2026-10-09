@@ -41,7 +41,16 @@ IMPL_RE = re.compile(r"impl\s+(?:[A-Za-z0-9_]+\s+for\s+)?([A-Za-z0-9_]+)\s*\{")
 CODE_RE = re.compile(r'code:\s*"([A-Z][A-Z0-9-]+)"')
 TITLE_RE = re.compile(r'title:\s*"([^"]*)"')
 CHAR_RE = re.compile(r"'(\\.|[^'\\])'")
-TEST_SPLIT = re.compile(r"#\[cfg\(test\)\]|mod\s+tests")
+# A `#[cfg(test)]` item was where test code USED to be assumed to start, and
+# everything from the first one to EOF was dropped. That is wrong whenever a
+# test module sits mid-file: content_analyzers.rs has `#[cfg(test)] mod
+# schema_context_tests` at line 2078 of 10481, and 135 emitted codes across
+# ten files -- including live production analyzers -- were invisible to the
+# catalog as a result. RNUT-V2001, whose duplicate registration the corpus
+# suite caught, could not be gated against exactly because the scanner could
+# not see it. Test items are now blanked individually (see
+# test_item_spans()); production code before, between, and after them is read.
+TEST_ITEM_RE = re.compile(r"#\[cfg\(test\)\]")
 
 # Codes deliberately shared by two registered analyzers, with the owning
 # convention (ANALYZER_AUDIT Phase 4: generation suffixes identify
@@ -181,6 +190,69 @@ def sanitize(body: str) -> str:
     return "".join(out)
 
 
+def _match_brace(body: str, open_brace: int) -> int:
+    """Index of the brace closing the one at `open_brace` (must be sanitized
+    text: braces inside strings or comments would break the count)."""
+    depth, i, n = 0, open_brace, len(body)
+    while i < n:
+        if body[i] == "{":
+            depth += 1
+        elif body[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return i
+        i += 1
+    return n - 1
+
+
+def test_item_spans(clean: str) -> list[tuple[int, int]]:
+    """Spans of `#[cfg(test)]` items in sanitized source.
+
+    The item after the attribute is brace-matched when it has a body
+    (`mod`, `fn`, `impl`, …) and run to the terminator when it does not
+    (`use`, `include!`). Blanking these spans -- and only these spans --
+    removes test code wherever it sits while keeping every offset valid.
+    """
+    spans: list[tuple[int, int]] = []
+    n = len(clean)
+    for m in TEST_ITEM_RE.finditer(clean):
+        j = m.end()
+        while j < n:
+            while j < n and clean[j] in " \t\n":
+                j += 1
+            if clean.startswith("//", j):
+                k = clean.find("\n", j)
+                j = n if k == -1 else k
+                continue
+            if clean.startswith("/*", j):
+                k = clean.find("*/", j)
+                j = n if k == -1 else k + 2
+                continue
+            if clean.startswith("#[", j):
+                k = clean.find("]", j)
+                j = k + 1 if k != -1 else n
+                continue
+            break
+        if j < n and (clean.startswith("mod", j) or clean.startswith("fn", j)
+                      or clean.startswith("impl", j)):
+            b = clean.find("{", j)
+            end = _match_brace(clean, b) + 1 if b != -1 else j
+        else:
+            semi = clean.find(";", j)
+            nl = clean.find("\n", j)
+            end = min(x for x in (semi, nl, n) if x != -1) + 1
+        spans.append((m.start(), min(end, n)))
+    return spans
+
+
+def blank_spans(body: str, spans: list[tuple[int, int]]) -> str:
+    """Blank `spans` in `body`, keeping newlines so offsets stay aligned."""
+    out = list(body)
+    for s, e in spans:
+        _blank(body, out, s, e)
+    return "".join(out)
+
+
 def impl_spans(body: str) -> list[tuple[int, int, str]]:
     """Return (start, end, type_name) for every `impl Analyzer for X { … }`.
 
@@ -204,15 +276,47 @@ def impl_spans(body: str) -> list[tuple[int, int, str]]:
     return spans
 
 
+def registered_analyzers() -> set[str]:
+    """Names wired into a registry via `Box::new(<path>::Name::new(...))`.
+
+    Read from the two registration sites, with comments and string
+    literals blanked first: mod.rs documents deliberate exclusions by
+    name, and a name in a comment is not a registration -- trusting the
+    raw text made eight unregistered analyzers look live (the same
+    failure `tests/no_orphan_analyzers.rs` guards against on the Rust
+    side; the two definitions must agree).
+
+    `tests/…` registration helpers are excluded because collect() reads
+    the same test-split bodies the catalog is built from.
+    """
+    names: set[str] = set()
+    reg_re = re.compile(r"Box::new\(\s*(?:[A-Za-z0-9_]+::)*([A-Za-z0-9_]+)::new\b")
+    for path in (
+        SRC / "analyzers" / "mod.rs",
+        SRC / "analyzers" / "post_crawl_analyzers.rs",
+    ):
+        src = path.read_text()
+        clean = sanitize(src)
+        body = blank_spans(clean, test_item_spans(clean))
+        names.update(reg_re.findall(body))
+    return names
+
+
 def collect() -> tuple[dict[str, dict[str, list[tuple[str, str]]]], int]:
     """Return ({code: {analyzer: [(file, title), …]}}, analyzer_impl_count)."""
     catalog: dict[str, dict[str, list[tuple[str, str]]]] = {}
     impl_count = 0
     for path in sorted(SRC.rglob("*.rs")):
         src = path.read_text()
-        m = TEST_SPLIT.search(src)
-        body = src[: m.start()] if m else src
-        clean = sanitize(body)
+        clean = sanitize(src)
+        # Blank test items in both views at identical offsets: emit sites are
+        # read from the raw text (string literals survive there) while impl
+        # spans are matched on the sanitized text. Blank -- not truncate --
+        # because production code lives before, between, and after test
+        # modules in most analyzer files.
+        test_spans = test_item_spans(clean)
+        body = blank_spans(src, test_spans)
+        clean = blank_spans(clean, test_spans)
         spans = impl_spans(clean)
         impl_count += len(spans)
         rel = path.relative_to(ROOT).as_posix()
@@ -228,8 +332,28 @@ def collect() -> tuple[dict[str, dict[str, list[tuple[str, str]]]], int]:
     return catalog, impl_count
 
 
-def render(catalog: dict[str, dict[str, list[tuple[str, str]]]], impl_count: int) -> str:
-    shared = {c: owners for c, owners in catalog.items() if len(owners) > 1}
+def render(
+    catalog: dict[str, dict[str, list[tuple[str, str]]]],
+    impl_count: int,
+    registered: set[str],
+) -> str:
+    """Render the catalog, splitting codes by whether they can fire.
+
+    A code whose every emitter is unregistered cannot appear in any
+    audit. Documenting it alongside live codes told users crawlkit
+    checks something it does not check -- the same fiction as shipping
+    an unregistered analyzer. Until the orphan tripwire existed, the
+    catalog carried dozens of such codes (both spellings of every
+    deliberately-excluded ladder rung); they are still listed, in their
+    own section, so the knowledge that the spelling exists survives.
+    """
+    live: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    never_fire: dict[str, dict[str, list[tuple[str, str]]]] = {}
+    for code, owners in catalog.items():
+        target = live if any(name in registered for name in owners) else never_fire
+        target[code] = owners
+
+    shared = {c: owners for c, owners in live.items() if len(owners) > 1}
     unrecorded = sorted(c for c in shared if c not in KNOWN_SHARED)
     lines: list[str] = [
         "# Finding-Code Catalog",
@@ -249,9 +373,15 @@ def render(catalog: dict[str, dict[str, list[tuple[str, str]]]], impl_count: int
         "",
         "| Metric | Value |",
         "|---|---|",
-        f"| Distinct finding codes | {len(catalog)} |",
+        f"| Distinct finding codes | {len(live)} |",
         f"| `impl Analyzer for` blocks scanned | {impl_count} |",
+        f"| Registered analyzers | {len(registered)} |",
         f"| Codes shared by 2+ analyzers | {len(shared)} |",
+        f"| Codes with no registered emitter | {len(never_fire)} |",
+        "",
+        "Only codes with at least one registered emitter are documented",
+        "below; a code whose every emitter is unregistered cannot appear",
+        "in any audit and is listed separately at the bottom.",
         "",
     ]
     lines += ["## Shared codes (recorded ownership)", ""]
@@ -267,8 +397,28 @@ def render(catalog: dict[str, dict[str, list[tuple[str, str]]]], impl_count: int
     else:
         lines += ["None."]
     lines += ["", "## All codes", "", "| Code | Owner(s) | Source | First title |", "|---|---|---|---|"]
-    for code in sorted(catalog):
-        owners = catalog[code]
+    for code in sorted(live):
+        owners = live[code]
+        names = sorted(owners)
+        owner_cell = ", ".join(f"`{n}`" for n in names)
+        files = sorted({f for n in names for f, _ in owners[n]})
+        file_cell = ", ".join(f"`{f}`" for f in files)
+        title = owners[names[0]][0][1]
+        lines.append(f"| `{code}` | {owner_cell} | {file_cell} | {title} |")
+    lines += [
+        "",
+        "## Codes with no registered emitter",
+        "",
+        "Every analyzer emitting these is deliberately unregistered",
+        "(`tests/no_orphan_analyzers.rs` holds the reasons). Each is a",
+        "second spelling of a defect a registered analyzer already",
+        "reports; none of these codes can appear in an audit.",
+        "",
+        "| Code | Unregistered owner(s) | Source | First title |",
+        "|---|---|---|---|",
+    ]
+    for code in sorted(never_fire):
+        owners = never_fire[code]
         names = sorted(owners)
         owner_cell = ", ".join(f"`{n}`" for n in names)
         files = sorted({f for n in names for f, _ in owners[n]})
@@ -420,7 +570,11 @@ def main() -> int:
         return self_test()
     check = "--check" in sys.argv[1:]
     catalog, impl_count = collect()
-    shared = {c: owners for c, owners in catalog.items() if len(owners) > 1}
+    registered = registered_analyzers()
+    live = {
+        c: owners for c, owners in catalog.items() if any(n in registered for n in owners)
+    }
+    shared = {c: owners for c, owners in live.items() if len(owners) > 1}
     unrecorded = sorted(c for c in shared if c not in KNOWN_SHARED)
     stale_known = sorted(c for c in KNOWN_SHARED if c not in shared)
 
@@ -439,7 +593,7 @@ def main() -> int:
             "remove them): " + ", ".join(stale_known)
         )
 
-    content = render(catalog, impl_count)
+    content = render(catalog, impl_count, registered)
     if check:
         if DOC.exists():
             current = DOC.read_text()
@@ -452,8 +606,10 @@ def main() -> int:
             failures.append("docs/FINDING_CODES.md is missing — generate and commit it.")
     else:
         DOC.write_text(content)
+        never_fire = len(catalog) - len(live)
         print(
-            f"wrote {DOC.relative_to(ROOT)}: {len(catalog)} codes, "
+            f"wrote {DOC.relative_to(ROOT)}: {len(live)} live codes, "
+            f"{never_fire} never-fire codes listed separately, "
             f"{len(shared)} shared, {impl_count} impl blocks"
         )
 

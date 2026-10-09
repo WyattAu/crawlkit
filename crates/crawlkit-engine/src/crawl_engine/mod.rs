@@ -1478,10 +1478,12 @@ mod tests {
         config.feature_flags.set(crate::FLAG_WASM_ANALYZERS, false);
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
-        // With AI and WASM disabled, only base analyzers remain (768 = 772 - 4
-        // feature-flagged; see `test_registry_default` for the three noise
-        // analyzers removed from the base registry).
-        assert_eq!(registry.len(), 770);
+        // With AI and WASM disabled, only base analyzers remain. Ten of the
+        // orphan analyzers wired in this change are plain analyzers with no
+        // feature gate, so the flagged count moved with the full count
+        // (770 -> 780 when the full registry went 777 -> 787). The number is
+        // measured from this exact configuration, not derived.
+        assert_eq!(registry.len(), 780);
     }
 
     struct MockJsRenderer {

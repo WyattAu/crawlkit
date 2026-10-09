@@ -843,6 +843,33 @@ impl AnalyzerRegistry {
             // window.opener handle. Modern browsers imply noopener, so this is
             // deliberately a Warning with a description that says so.
             Box::new(crate::analyzers::tabnabbing::TabnabbingAnalyzer::new()),
+            // Written, unit-tested, and never wired in. Seventeen analyzers
+            // implemented the trait and emitted codes that no registered
+            // analyzer emits, so every one of them was a silent false
+            // negative: the check existed, passed its tests, and could not
+            // run. `no_orphan_analyzers` in tests now fails CI if one is
+            // added and left unregistered.
+            //
+            // The first audit compared CODE NAMES and found no collision, which
+            // was the wrong criterion and seven of the seventeen failed it. Comparing
+            // what each one actually REPORTS -- its finding titles -- showed seven
+            // report exactly what a registered analyzer already reports, under a
+            // second code spelling: RecipeNutritionValidatorV2 said the same
+            // sentence as RecipeNutritionValidator, and so on. Those are listed in
+            // DELIBERATELY_UNREGISTERED in tests/no_orphan_analyzers.rs with their
+            // registered twin. The corpus suite caught this: registering
+            // RecipeNutritionValidatorV2 made RNUT-V2001 appear on a fixture whose
+            // expectation is that the nutrition finding is absent.
+            Box::new(crate::analyzers::content_analyzers::MetaDescriptionUniquenessAnalyzer::new()),
+            Box::new(crate::analyzers::content_analyzers::StructuredDataNestingValidator::new()),
+            Box::new(crate::analyzers::content_analyzers::LocalBusinessNapAnalyzerUtil::new()),
+            Box::new(crate::analyzers::content_analyzers::CourseProviderValidatorV2::new()),
+            Box::new(crate::analyzers::schema::CoursePrerequisiteValidator::new()),
+            Box::new(crate::analyzers::schema::ProductOfferValidator::new()),
+            Box::new(crate::analyzers::seo_analyzers::TitleLengthQualityAnalyzer::new()),
+            Box::new(crate::analyzers::seo_analyzers::MetaDescriptionQualityAnalyzer::new()),
+            Box::new(crate::analyzers::seo_analyzers::InternalLinkAnchorAnalyzerV2::new()),
+            Box::new(crate::analyzers::seo_analyzers::WikipediaLinkAnalyzerV2::new()),
             // Content that exists only after JavaScript runs, and is therefore
             // invisible to GPTBot, ClaudeBot, PerplexityBot and CCBot. Returns
             // nothing unless the page was actually rendered, since asserting that
@@ -1676,6 +1703,15 @@ impl AnalyzerRegistry {
             // CanonicalChainDeepDeepDeepValidator is intentionally NOT
             // registered: strict subset of CanonicalChainDeepDeepValidator
             // (misses the curly-quote variant). See `tests/test_generation_dedup.rs`.
+            //
+            // CookieSecureDeepDeepDeepValidator, CookieHttpOnlyDeepDeepDeepValidator and
+            // CookieSameSiteDeepDeepDeepValidator are intentionally NOT registered for
+            // the same reason: each repeats a check a registered validator already
+            // makes (CookieSecureFlagDeepValidator and friends) under a third code
+            // spelling, so registering them would report one cookie defect three times
+            // at three depths. The Secure and HttpOnly ladders otherwise stop at
+            // "Deep" while SameSite continues, which is what made them look like an
+            // oversight worth "fixing" -- they are not.
             Box::new(HreflangMissingDeepDeepValidator::new()),
             Box::new(HreflangReciprocalDeepDeepDeepValidator::new()),
             Box::new(HreflangXDefaultMissingDeepDeepValidator::new()),

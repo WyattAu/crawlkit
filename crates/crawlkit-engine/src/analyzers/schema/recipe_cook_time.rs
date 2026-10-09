@@ -137,6 +137,8 @@ mod tests {
             robots_txt: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
+            user_agent: None,
             server: None,
             content_type: None,
             rendered: None,

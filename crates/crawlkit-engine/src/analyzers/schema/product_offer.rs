@@ -76,7 +76,9 @@ impl Analyzer for ProductOfferValidator {
                     }
                     Some(cur) => {
                         if let Some(cur_str) = cur.as_str() {
-                            if cur_str.len() != 3 || !cur_str.chars().all(|c| c.is_ascii_uppercase()) {
+                            if cur_str.len() != 3
+                                || !cur_str.chars().all(|c| c.is_ascii_uppercase())
+                            {
                                 findings.push(Finding {
                                     severity: Severity::Warning,
                                     category: IssueCategory::Schema,
@@ -152,6 +154,8 @@ mod tests {
             robots_txt: None,
             body_size: None,
             compressed_size: None,
+            content_encoding: None,
+            user_agent: None,
             server: None,
             content_type: None,
             rendered: None,

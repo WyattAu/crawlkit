@@ -24,6 +24,21 @@ mod event_location;
 mod event_schema;
 mod event_start_date;
 mod faq_page_entity;
+// These four files existed on disk with unit tests and were never declared
+// here, so they were not compiled: their analyzers never ran and their tests
+// never executed. Every code they emit is unique -- nothing else reported
+// them. `tests/no_orphan_analyzers.rs` fails if an analyzer file is added and
+// left undeclared.
+//
+// `job_posting_valid_through.rs` is deliberately left undeclared too: it
+// duplicates `JobPostingValidThroughValidator` in v2/schema.rs, which is
+// compiled and registered, so declaring it would be a name collision rather
+// than a missing check. Its tests live on in the registered copy.
+mod course_prerequisite;
+mod product_offer;
+mod recipe_cook_time;
+mod video_object_embed_url;
+
 mod faq_schema;
 mod food_establishment_schema;
 mod government_service_schema;
@@ -124,6 +139,7 @@ pub use car_schema::*;
 pub use car_schema_v2::*;
 pub use civic_structure_schema::*;
 pub use coupon_schema::*;
+pub use course_prerequisite::*;
 pub use course_provider::*;
 pub use course_schema::*;
 pub use creative_work_schema::*;
@@ -179,8 +195,10 @@ pub use playlist_schema::*;
 pub use product_availability::*;
 pub use product_model_schema::*;
 pub use product_model_schema_v2::*;
+pub use product_offer::*;
 pub use product_review::*;
 pub use quest_schema::*;
+pub use recipe_cook_time::*;
 pub use recipe_nutrition::*;
 pub use recipe_schema::*;
 pub use research_project_schema::*;
@@ -204,6 +222,7 @@ pub use tv_series_episode_schema::*;
 pub use tv_series_schema::*;
 pub use tv_series_schema_v2::*;
 pub use video_object_duration::*;
+pub use video_object_embed_url::*;
 pub use video_schema::*;
 pub use wearable_schema::*;
 pub use wearable_schema_v2::*;

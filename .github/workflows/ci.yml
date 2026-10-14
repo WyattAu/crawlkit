@@ -373,7 +373,7 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: semver
-      - uses: taiki-e/install-action@4314395b773db6ec53370cf7e57cc6bfefb6ae8f # v2
+      - uses: taiki-e/install-action@32e16a23c68a001a1621efca19f131f965d4d122 # v2
         with:
           tool: cargo-semver-checks
       # Enforcing against the latest tag. Breaking API changes require a

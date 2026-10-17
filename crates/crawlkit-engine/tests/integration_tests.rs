@@ -613,7 +613,7 @@ fn test_circuit_breaker_opens_after_failures() {
     assert!(!cb.is_allowed());
 }
 
-#[cfg(feature = "unstable")]
+#[cfg(feature = "unstable-legacy")]
 #[tokio::test]
 async fn test_backpressure_limits_concurrency() {
     use crawlkit_engine::BackpressureController;

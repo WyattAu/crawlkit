@@ -103,7 +103,7 @@ pub mod backlinks;
 ///
 /// Uses tokio semaphores and bounded channels to limit concurrent tasks,
 /// ensuring the crawler stays within resource budgets.
-#[cfg(feature = "unstable")]
+#[cfg(feature = "unstable-legacy")]
 pub mod backpressure;
 /// Rendering JavaScript by invoking a Chrome binary directly.
 ///
@@ -183,7 +183,7 @@ pub mod dns;
 #[cfg(feature = "full")]
 pub mod encryption;
 /// Enterprise feature gating and licensing utilities.
-#[cfg(feature = "unstable")]
+#[cfg(feature = "unstable-legacy")]
 pub mod enterprise;
 /// Export of crawl data to JSON, CSV, HTML, and Markdown formats.
 ///
@@ -265,7 +265,7 @@ pub mod ssrf;
 ///
 /// Provides [`NativePlugin`](native_plugin::NativePlugin) for loading
 /// shared libraries that implement the crawlkit native plugin ABI.
-#[cfg(feature = "unstable")]
+#[cfg(feature = "unstable-legacy")]
 pub mod native_plugin;
 /// Metrics collection and observability hooks.
 ///
@@ -441,7 +441,7 @@ pub use backlink_adapters::{
 };
 #[cfg(feature = "full")]
 pub use backlinks::{Backlink, BacklinkAnalyzer, BacklinkReport, BacklinkSummary, PageScore};
-#[cfg(feature = "unstable")]
+#[cfg(feature = "unstable-legacy")]
 pub use backpressure::{BackpressureController, BackpressureError, BoundedPipeline};
 #[cfg(feature = "full")]
 pub use circuit_breaker::{

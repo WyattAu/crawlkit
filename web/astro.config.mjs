@@ -1,9 +1,13 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
+import { peleRehype } from 'pele-rehype';
 
 export default defineConfig({
   site: 'https://wyattau.github.io',
   base: '/crawlkit',
+  markdown: {
+    rehypePlugins: [[peleRehype, { loader: true }]],
+  },
   integrations: [
     starlight({
       title: 'crawlkit',

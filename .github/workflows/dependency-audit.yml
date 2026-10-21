@@ -41,4 +41,16 @@ jobs:
           cache: 'pnpm'
           cache-dependency-path: dashboard/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --audit-level high
+      - name: pnpm audit (gate)
+        # GHSA-vfj7-8cjw-p6xm (braces, stack-exhaustion DoS) is held on
+        # purpose: it reaches the dashboard only through the tailwindcss 3
+        # dev toolchain, and no fixed braces release exists — 3.0.3 is the
+        # newest. Held visibly, like the estate's pins_held entries, until
+        # upstream ships a fix or the dashboard migrates to tailwind 4.
+        run: |
+          pnpm audit --json > audit.json
+          UNHELD=$(jq --arg held 'GHSA-vfj7-8cjw-p6xm' \
+            '[.advisories[] | select(.github_advisory_id != $held and (.severity == "high" or .severity == "critical"))] | length' \
+            audit.json)
+          echo "non-held high/critical advisories: $UNHELD"
+          test "$UNHELD" -eq 0

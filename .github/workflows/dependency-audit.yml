@@ -50,7 +50,7 @@ jobs:
         run: |
           pnpm audit --json > audit.json
           UNHELD=$(jq --arg held 'GHSA-vfj7-8cjw-p6xm' \
-            '[.advisories[] | select(.github_advisory_id != $held and (.severity == "high" or .severity == "critical"))] | length' \
+            '[((.advisories // {})[]) | select(.github_advisory_id != $held and (.severity == "high" or .severity == "critical"))] | length' \
             audit.json)
           echo "non-held high/critical advisories: $UNHELD"
           test "$UNHELD" -eq 0

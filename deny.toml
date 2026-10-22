@@ -15,7 +15,6 @@ ignore = [
     # compile-time token-pasting proc-macro with no runtime surface.
     # Introduced by the ADR-016 warehouse exporter (`warehouse` feature);
     # tracked for a parquet release that drops it.
-    { id = "RUSTSEC-2024-0436" },
 ]
 
 [licenses]

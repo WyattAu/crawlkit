@@ -48,7 +48,10 @@ jobs:
         # newest. Held visibly, like the estate's pins_held entries, until
         # upstream ships a fix or the dashboard migrates to tailwind 4.
         run: |
-          pnpm audit --json > audit.json
+          # `pnpm audit` exits nonzero when it finds anything — finding
+          # vulnerabilities is this gate's INPUT, not its failure. The jq
+          # check below decides.
+          pnpm audit --json > audit.json || true
           UNHELD=$(jq --arg held 'GHSA-vfj7-8cjw-p6xm' \
             '[((.advisories // {})[]) | select(.github_advisory_id != $held and (.severity == "high" or .severity == "critical"))] | length' \
             audit.json)

@@ -58,7 +58,7 @@ opentelemetry = { version = "0.32" }
 opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"] }
 percent-encoding = { version = "2" }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
-pulley-interpreter = { version = "47", default-features = false, features = ["disas", "interp", "std"] }
+pulley-interpreter = { version = "48", default-features = false, features = ["disas", "interp", "std"] }
 rand-274715c4dabd11b0 = { package = "rand", version = "0.9" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_chacha = { version = "0.9", default-features = false, features = ["std"] }
@@ -133,7 +133,7 @@ once_cell = { version = "1" }
 percent-encoding = { version = "2" }
 ppv-lite86 = { version = "0.2", default-features = false, features = ["simd", "std"] }
 proc-macro2 = { version = "1" }
-pulley-interpreter = { version = "47", default-features = false, features = ["disas", "interp", "std"] }
+pulley-interpreter = { version = "48", default-features = false, features = ["disas", "interp", "std"] }
 quote = { version = "1" }
 rand-c38e5c1d305a1b54 = { package = "rand", version = "0.8", features = ["small_rng"] }
 rand_core = { version = "0.6", default-features = false, features = ["std"] }

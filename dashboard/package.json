@@ -41,5 +41,10 @@
     "typescript-eslint": "^8.70.1",
     "vite": "^6.4.3",
     "vitest": "^4.1.12"
+  },
+  "pnpm": {
+    "overrides": {
+      "undici": "8.12.2"
+    }
   }
 }

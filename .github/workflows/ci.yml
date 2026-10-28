@@ -235,7 +235,7 @@ jobs:
       - uses: mozilla-actions/sccache-action@v0.0.11
       - name: sccache stats
         run: sccache --start-server || true
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
           python-version: '3.x'
       - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
@@ -373,7 +373,7 @@ jobs:
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           key: semver
-      - uses: taiki-e/install-action@4314395b773db6ec53370cf7e57cc6bfefb6ae8f # v2
+      - uses: taiki-e/install-action@2409e52fd2fc8a8601d0d900fab9d85ae1fe714a # v2
         with:
           tool: cargo-semver-checks
       # Enforcing against the latest tag. Breaking API changes require a

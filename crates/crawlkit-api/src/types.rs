@@ -714,6 +714,22 @@ pub struct WebhookPayload {
 // Scheduled crawl types
 // ---------------------------------------------------------------------------
 
+/// §G3 alert target persisted on a schedule: when a scheduled run's
+/// monitoring detects a regression, the server POSTs a signed
+/// `regression` event to the webhook.
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema, PartialEq)]
+pub struct ScheduleAlertsConfig {
+    /// Webhook endpoint receiving the signed event.
+    pub webhook_url: String,
+    /// Hex-encoded HMAC-SHA256 secret; omit for adapter URLs that embed
+    /// their credential (Slack/Discord).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub secret_hex: Option<String>,
+    /// Payload formatting: `generic`, `slack`, or `discord`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ScheduleConfig {
     pub id: String,
@@ -727,6 +743,9 @@ pub struct ScheduleConfig {
     pub last_run_at: Option<DateTime<Utc>>,
     /// Storage crawl ID from the most recent run (used as baseline for monitoring).
     pub last_crawl_id: Option<String>,
+    /// §G3 regression alert target (None = no alerting for this schedule).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alerts: Option<ScheduleAlertsConfig>,
     pub created_at: DateTime<Utc>,
 }
 
@@ -741,6 +760,10 @@ pub struct CreateScheduleRequest {
     pub concurrency: usize,
     #[serde(default = "default_schedule_interval")]
     pub interval_secs: u64,
+    /// §G3 alert target: signed regression webhook fired when a run
+    /// regresses. Optional.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub alerts: Option<ScheduleAlertsConfig>,
 }
 
 pub fn default_schedule_interval() -> u64 {

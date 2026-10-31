@@ -197,6 +197,11 @@ pub mod export;
 /// configuration and programmatic access via SharedFeatureFlags.
 #[cfg(feature = "full")]
 pub mod feature_flags;
+/// Score history store (§G6): per-run `(page, category, metric, value)`
+/// snapshots with an idempotent `history` table migration and trend
+/// queries. Finding counts until the §G2 scoring engine lands.
+#[cfg(feature = "full")]
+pub mod history;
 /// HTTP client with retry, redirect following, and rate limiting.
 ///
 /// Provides HttpClient with exponential backoff retry,
@@ -254,6 +259,10 @@ pub mod render_budget;
 /// addressed to some *other* crawler (training bots, for example) say nothing
 /// about whether this crawl may fetch the page.
 pub mod robots_group;
+/// Weighted scoring engine (§G2): `scoring.toml` weight tables, multiplicative
+/// page/category scores, site means, and prioritized fixes.
+#[cfg(feature = "full")]
+pub mod scoring;
 /// SSRF (Server-Side Request Forgery) validation for URLs.
 ///
 /// Shared validation used by both the plugin network guard and the API

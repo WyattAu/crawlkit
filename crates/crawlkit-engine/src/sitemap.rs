@@ -243,10 +243,8 @@ fn parse_sitemapindex(
             Ok(Event::Start(e)) => {
                 current_tag = String::from_utf8_lossy(e.name().local_name().as_ref()).to_string();
             }
-            Ok(Event::Text(e)) => {
-                if current_tag == "loc" {
-                    child_urls.push(String::from_utf8_lossy(e.as_ref()).to_string());
-                }
+            Ok(Event::Text(e)) if current_tag == "loc" => {
+                child_urls.push(String::from_utf8_lossy(e.as_ref()).to_string());
             }
             Ok(Event::End(_)) => {
                 current_tag.clear();

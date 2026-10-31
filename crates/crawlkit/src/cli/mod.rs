@@ -1,6 +1,8 @@
 #[cfg(feature = "full")]
 pub mod backlinks;
 #[cfg(feature = "full")]
+pub mod clone;
+#[cfg(feature = "full")]
 pub mod compare;
 #[cfg(feature = "full")]
 pub mod crawl;
@@ -13,8 +15,14 @@ pub(crate) mod findings;
 #[cfg(feature = "full")]
 pub mod gsc;
 #[cfg(feature = "full")]
+pub mod history;
+#[cfg(feature = "full")]
 pub mod inspect;
+#[cfg(feature = "full")]
+pub mod lighthouse;
 pub mod log_analyze;
+#[cfg(feature = "full")]
+pub mod md;
 #[cfg(feature = "full")]
 pub mod plugin;
 #[cfg(feature = "queue-ops")]
@@ -25,6 +33,9 @@ pub mod rank;
 pub mod report;
 #[cfg(feature = "full")]
 pub mod schedule;
+/// Shared polite fetch loop behind `clone` and `md` (GAP G8).
+#[cfg(feature = "full")]
+pub(crate) mod site_fetch;
 #[cfg(feature = "full")]
 pub mod trend;
 /// `crawlkit usage` — ADR-017 read-only usage mirror.
@@ -50,6 +61,26 @@ pub struct Config {
     pub output: Option<OutputConfig>,
     /// Feature flags.
     pub features: Option<FeaturesConfig>,
+    /// §G3 alerting defaults (`[alerts]` section). CLI `--alert-*` flags
+    /// override these.
+    pub alerts: Option<AlertsConfig>,
+}
+
+/// §G3 alerting configuration (`[alerts]` TOML section).
+#[cfg(feature = "full")]
+#[derive(serde::Deserialize, Default, Clone)]
+pub struct AlertsConfig {
+    /// Signed webhook URL (generic, Slack, or Discord endpoint).
+    pub webhook_url: Option<String>,
+    /// Hex-encoded HMAC-SHA256 secret for the `X-Crawlkit-Signature`
+    /// header. Optional for adapter URLs that embed a credential.
+    pub secret_hex: Option<String>,
+    /// Payload formatting: `generic`, `slack`, or `discord`.
+    pub format: Option<String>,
+    /// Email recipient (requires the `smtp` feature).
+    pub email_to: Option<String>,
+    /// SMTP relay host (`host` or `host:port`).
+    pub smtp_server: Option<String>,
 }
 
 /// Feature flag configuration loaded from file.
@@ -289,9 +320,54 @@ pub enum Commands {
         /// Output format: json, html, or md
         #[arg(long, default_value = "json")]
         format: String,
+
+        /// §G3: fire a signed `regression` webhook event when the diff
+        /// contains new errors. Overrides `[alerts].webhook_url` from the
+        /// config file.
+        #[arg(long)]
+        alert_webhook: Option<String>,
+
+        /// Hex-encoded HMAC-SHA256 secret for the `X-Crawlkit-Signature`
+        /// header. Overrides `[alerts].secret_hex`.
+        #[arg(long)]
+        alert_secret: Option<String>,
+
+        /// Webhook payload formatting: generic, slack, or discord
+        #[arg(long, default_value = "generic")]
+        alert_format: String,
+
+        /// Also email the alert (requires building with `--features smtp`)
+        #[arg(long)]
+        alert_email: Option<String>,
     },
 
     /// Generate a report from an existing crawl
+    ///
+    /// With `--ci` the report doubles as a CI quality gate (GAP G4): after
+    /// the report renders, a one-line summary is printed and the process
+    /// exits with:
+    ///
+    /// - `0` — pass
+    /// - `10` — more errors than `--max-errors` (default 0), or new errors
+    ///   versus `--baseline`
+    /// - `11` — more warnings than `--max-warnings` (default unbounded)
+    /// - `12` — score below a floor (reserved: no scoring model exists yet)
+    ///
+    /// Critical-severity findings count as errors.
+    ///
+    /// `--section` (GAP G9) limits the report to the named sections, given
+    /// repeatable or comma-separated: `summary`, `backlinks`, `previews`,
+    /// or `all`. The default — every section that predates G9 (summary +
+    /// backlinks) — keeps output byte-identical with earlier versions.
+    /// `previews` renders per-platform social share mock frames (Google,
+    /// Facebook, X, LinkedIn, iMessage) from the stored page meta; styled
+    /// frames appear in html output (and `--pdf`), markdown lists the card
+    /// text.
+    ///
+    /// `--pdf PATH` (GAP G10) additionally prints the HTML report to `PATH`
+    /// by shelling out to a `weasyprint`, `chromium`, or `chromium-browser`
+    /// binary found in PATH (10 s subprocess timeout). Exit codes: those of
+    /// `--ci` above, plus `3` when no PDF engine is found in PATH.
     #[cfg(feature = "full")]
     Report {
         /// Crawl database path or directory
@@ -302,11 +378,12 @@ pub enum Commands {
         #[arg(short, long)]
         output: Option<PathBuf>,
 
-        /// Report format: json, markdown (md), or csv
+        /// Report format: json, markdown (md), html, or csv
         ///
         /// Defaults to markdown. `html` was previously advertised here and was
         /// also the built-in default, but no HTML report was ever implemented,
         /// so both the documented value and the default failed at runtime.
+        /// The html format now exists (GAP G10) and is what `--pdf` prints.
         #[arg(long)]
         format: Option<String>,
 
@@ -316,6 +393,45 @@ pub enum Commands {
         /// report format is offered.
         #[arg(long, default_value = "light", hide = true)]
         theme: String,
+
+        /// Enable CI mode: after rendering, print a one-line gate summary
+        /// and exit non-zero (10/11) when a threshold is exceeded. Exit
+        /// codes are documented in this command's help.
+        #[arg(long)]
+        ci: bool,
+
+        /// Maximum tolerated error-severity findings in `--ci` mode
+        /// (critical findings count as errors). Default 0: any error fails.
+        #[arg(long, default_value_t = 0)]
+        max_errors: usize,
+
+        /// Maximum tolerated warning-severity findings in `--ci` mode.
+        /// Omit for unbounded warnings.
+        #[arg(long)]
+        max_warnings: Option<usize>,
+
+        /// Baseline crawl database (or directory) to compare against. In
+        /// `--ci` mode, any new error-severity findings versus the baseline
+        /// fail the gate with exit 10, even under a lenient `--max-errors`.
+        #[arg(long)]
+        baseline: Option<PathBuf>,
+
+        /// Report sections to render: summary, backlinks, previews, or all.
+        /// Repeatable or comma-separated (GAP G9). Default: summary +
+        /// backlinks (everything that predates the previews section), so
+        /// unqualified output is unchanged. Applies to markdown and html
+        /// output (and the page `--pdf` prints); json and csv have a fixed
+        /// layout.
+        #[arg(long, value_name = "SECTIONS")]
+        section: Vec<String>,
+
+        /// Also print the HTML report to a PDF file at PATH, using a PDF
+        /// engine found in PATH (`weasyprint`, `chromium`, or
+        /// `chromium-browser`; 10 s timeout). Exits with code 3 when no
+        /// engine is found. The textual report is still produced according
+        /// to `--format`.
+        #[arg(long, value_name = "PATH")]
+        pdf: Option<PathBuf>,
     },
 
     /// Analyze backlinks from an existing crawl
@@ -379,6 +495,64 @@ pub enum Commands {
         /// Custom user agent string
         #[arg(long)]
         user_agent: Option<String>,
+    },
+
+    /// Ingest a Lighthouse JSON report and classify CWV (GAP G5)
+    #[cfg(feature = "full")]
+    Lighthouse {
+        /// Path to the Lighthouse JSON report file
+        #[arg(long)]
+        report: PathBuf,
+
+        /// URL the report was generated for
+        #[arg(long)]
+        url: String,
+
+        /// Crawl database to store findings into (prints when omitted)
+        #[arg(long)]
+        crawl: Option<PathBuf>,
+    },
+
+    /// Mirror a site offline: pages + assets with relative links (GAP G8)
+    #[cfg(feature = "full")]
+    Clone {
+        /// Site to mirror
+        url: String,
+
+        /// Output directory for the mirror
+        #[arg(short, long)]
+        out: PathBuf,
+
+        /// Maximum number of resources to fetch
+        #[arg(long)]
+        max_pages: Option<usize>,
+
+        /// Delay between requests in milliseconds
+        #[arg(long)]
+        delay: Option<u64>,
+    },
+
+    /// Convert a site to Markdown, one file per page (GAP G8)
+    #[cfg(feature = "full")]
+    Md {
+        /// Site to convert
+        url: String,
+
+        /// Output directory for the markdown files
+        #[arg(short, long)]
+        out: PathBuf,
+
+        /// Merge every page into a single site.md, dropping duplicate content
+        #[arg(long)]
+        merge: bool,
+
+        /// Maximum number of pages to fetch
+        #[arg(long)]
+        max_pages: Option<usize>,
+
+        /// Delay between requests in milliseconds
+        #[arg(long)]
+        delay: Option<u64>,
     },
 
     /// Manage WASM plugin signing keys and verify plugin trust chains
@@ -490,6 +664,23 @@ pub enum Commands {
         format: String,
     },
 
+    /// §G6 score history: print the finding-count trend recorded by
+    /// scheduled runs (`history` table in a crawlkit database).
+    ///
+    /// TARGET is a database path/directory, or a run id — when it is not a
+    /// path, the database is resolved from `--db` / `$CRAWLKIT_DB` /
+    /// `./crawlkit.db`.
+    #[cfg(feature = "full")]
+    History {
+        /// Database path/directory, or a run id
+        #[arg(default_value = ".")]
+        target: String,
+
+        /// Database to use when TARGET is a run id
+        #[arg(long)]
+        db: Option<PathBuf>,
+    },
+
     /// Fetch and analyze Google Search Console data
     #[cfg(feature = "full")]
     Gsc {
@@ -567,6 +758,20 @@ pub enum ScheduleCommands {
         /// Concurrent fetchers per run
         #[arg(long, default_value_t = 4)]
         concurrency: usize,
+
+        /// §G3: webhook to POST a signed `regression` event to whenever a
+        /// scheduled run's monitoring detects a regression. Persisted on
+        /// the schedule server-side.
+        #[arg(long)]
+        alert_webhook: Option<String>,
+
+        /// Hex-encoded HMAC-SHA256 secret for the webhook signature
+        #[arg(long)]
+        alert_secret: Option<String>,
+
+        /// Webhook payload formatting: generic, slack, or discord
+        #[arg(long, default_value = "generic")]
+        alert_format: String,
     },
 
     /// List schedules visible to your credentials
@@ -643,6 +848,70 @@ pub enum QueueCommands {
         #[arg(long)]
         force: bool,
     },
+}
+
+/// Resolve §G3 alert delivery targets: CLI flags override the `[alerts]`
+/// config section. `None` when neither configures anything.
+///
+/// # Errors
+///
+/// Returns an error when the format name is unknown.
+#[cfg(feature = "full")]
+pub fn resolve_alert_delivery(
+    config: Option<&AlertsConfig>,
+    alert_webhook: Option<&str>,
+    alert_secret: Option<&str>,
+    alert_format: &str,
+    alert_email: Option<&str>,
+) -> anyhow::Result<Option<crate::alerts::AlertDelivery>> {
+    // The flag's default is `generic`, so a non-generic `[alerts].format`
+    // in the config wins unless the caller explicitly asked for a format.
+    let format = match crate::alerts::AlertFormat::parse(alert_format)? {
+        crate::alerts::AlertFormat::Generic => {
+            let configured = config
+                .and_then(|c| c.format.as_deref())
+                .map(str::trim)
+                .filter(|f| !f.is_empty());
+            match configured {
+                Some(name) => crate::alerts::AlertFormat::parse(name)?,
+                None => crate::alerts::AlertFormat::Generic,
+            }
+        }
+        explicit => explicit,
+    };
+    let mut delivery = crate::alerts::AlertDelivery::default();
+
+    fn non_empty(value: Option<&str>) -> Option<&str> {
+        value.map(str::trim).filter(|v| !v.is_empty())
+    }
+
+    let url = non_empty(alert_webhook)
+        .map(str::to_string)
+        .or_else(|| non_empty(config.and_then(|c| c.webhook_url.as_deref())).map(str::to_string));
+    if let Some(url) = url {
+        let secret = non_empty(alert_secret).map(str::to_string).or_else(|| {
+            non_empty(config.and_then(|c| c.secret_hex.as_deref())).map(str::to_string)
+        });
+        delivery.webhook = Some(crate::alerts::WebhookConfig {
+            url,
+            secret_hex: secret,
+            format,
+        });
+    }
+
+    let email_to = non_empty(alert_email)
+        .map(str::to_string)
+        .or_else(|| config.and_then(|c| c.email_to.clone()));
+    if let Some(to) = email_to {
+        delivery.email = Some(crate::alerts::EmailTarget {
+            server: config
+                .and_then(|c| c.smtp_server.clone())
+                .unwrap_or_else(|| "localhost:25".to_string()),
+            to,
+        });
+    }
+
+    Ok(delivery.is_configured().then_some(delivery))
 }
 
 /// Parameters for a crawl operation, bundling all CLI/config values.

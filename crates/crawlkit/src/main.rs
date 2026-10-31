@@ -5,6 +5,7 @@
 //! Configuration can be supplied via CLI flags or a TOML config file.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+mod alerts;
 mod cli;
 
 /// dhat instruments allocations only through its own global allocator;
@@ -175,7 +176,27 @@ async fn main() -> Result<()> {
             crawl2,
             output,
             format,
-        } => cli::compare::run(&crawl1, &crawl2, output.as_deref(), &format),
+            alert_webhook,
+            alert_secret,
+            alert_format,
+            alert_email,
+        } => {
+            let alerts = cli::resolve_alert_delivery(
+                config.alerts.as_ref(),
+                alert_webhook.as_deref(),
+                alert_secret.as_deref(),
+                &alert_format,
+                alert_email.as_deref(),
+            )?;
+            cli::compare::run(
+                &crawl1,
+                &crawl2,
+                output.as_deref(),
+                &format,
+                alerts.as_ref(),
+            )
+            .await
+        }
         #[cfg(feature = "warehouse")]
         Commands::Export {
             db,
@@ -218,13 +239,39 @@ async fn main() -> Result<()> {
             output,
             format,
             theme,
+            ci,
+            max_errors,
+            max_warnings,
+            baseline,
+            section,
+            pdf,
         } => {
             // Default is markdown: `html` was the previous default and had no
             // implementation, so a bare `crawlkit report` always failed.
             let format = format
                 .or_else(|| config.output.as_ref().and_then(|o| o.format.clone()))
                 .unwrap_or_else(|| "markdown".to_string());
-            cli::report::run(&crawl, output.as_deref(), &format, &theme, &feature_flags)
+            cli::report::run(
+                &crawl,
+                output.as_deref(),
+                &format,
+                &theme,
+                &feature_flags,
+                &cli::report::CiGateOptions {
+                    enabled: ci,
+                    max_errors,
+                    max_warnings,
+                    // GAP G2 (scoring) is unimplemented: no score exists to
+                    // floor against, so `--min-score` is not offered yet.
+                    min_score: None,
+                    baseline,
+                    new_errors_vs_baseline: 0,
+                },
+                &cli::report::ReportRenderOptions {
+                    sections: section,
+                    pdf,
+                },
+            )
         }
         #[cfg(feature = "full")]
         Commands::Backlinks {
@@ -260,6 +307,42 @@ async fn main() -> Result<()> {
         }
         #[cfg(feature = "full")]
         Commands::Plugin { command } => cli::plugin::run(command),
+        #[cfg(feature = "full")]
+        Commands::Lighthouse { report, url, crawl } => {
+            cli::lighthouse::run(cli::lighthouse::LighthouseParams { report, url, crawl })
+        }
+        #[cfg(feature = "full")]
+        Commands::Clone {
+            url,
+            out,
+            max_pages,
+            delay,
+        } => {
+            cli::clone::run(cli::clone::CloneParams {
+                url,
+                out,
+                max_pages,
+                delay,
+            })
+            .await
+        }
+        #[cfg(feature = "full")]
+        Commands::Md {
+            url,
+            out,
+            merge,
+            max_pages,
+            delay,
+        } => {
+            cli::md::run(cli::md::MdParams {
+                url,
+                out,
+                merge,
+                max_pages,
+                delay,
+            })
+            .await
+        }
         Commands::LogAnalyze(args) => cli::log_analyze::run(args),
         #[cfg(feature = "full")]
         Commands::Usage {
@@ -280,6 +363,8 @@ async fn main() -> Result<()> {
             output,
             format,
         } => cli::trend::run(&db, &crawl_ids, output.as_deref(), &format),
+        #[cfg(feature = "full")]
+        Commands::History { target, db } => cli::history::run(&target, db.as_deref()),
         #[cfg(feature = "full")]
         Commands::Gsc {
             site_url,
@@ -337,6 +422,9 @@ async fn main() -> Result<()> {
                     max_pages,
                     delay_ms,
                     concurrency,
+                    alert_webhook,
+                    alert_secret,
+                    alert_format,
                 } => ScheduleAction::Add {
                     base: api,
                     url,
@@ -344,6 +432,9 @@ async fn main() -> Result<()> {
                     max_pages,
                     delay_ms,
                     concurrency,
+                    alert_webhook,
+                    alert_secret,
+                    alert_format,
                 },
                 ScheduleCommands::List { api } => ScheduleAction::List { base: api },
                 ScheduleCommands::Enable { api, id } => ScheduleAction::Enable {

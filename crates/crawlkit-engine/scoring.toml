@@ -1,0 +1,61 @@
+# crawlkit scoring configuration (GAP_CLOSURE_PLAN §G2).
+#
+# Determinism rail (ITER-09): this table is versioned. Any change to shipped
+# weights or categories is breaking for report diffs and score history
+# comparisons (§G6) and MUST bump `schema_version` (see
+# `scoring::weights::SCHEMA_VERSION`) plus a changelog entry.
+
+# Schema version this table conforms to.
+schema_version = 1
+
+# Category assigned to rule ids that match no pattern below, and the
+# fallback for rules that omit `category`. One of: seo, performance,
+# accessibility, security, best-practices.
+default_category = "seo"
+
+# Rule-id patterns -> (category, weight). `*` matches any sequence, `?` one
+# character. Weights live in the half-open range (0, 1]; a weight of 1.0
+# zeroes the page score. When several patterns match, the most specific
+# (most non-wildcard characters) wins, ties broken by lexicographically
+# smaller pattern.
+[rules]
+
+# --- security ---
+"SEC*"    = { category = "security",     weight = 0.25 }
+"SSL*"    = { category = "security",     weight = 0.20 }
+"CSP*"    = { category = "security",     weight = 0.15 }
+"HSTS*"   = { category = "security",     weight = 0.10 }
+"SRI*"    = { category = "security",     weight = 0.10 }
+
+# --- accessibility ---
+"A11Y*"   = { category = "accessibility", weight = 0.12 }
+"ARIA*"   = { category = "accessibility", weight = 0.08 }
+"FOCUS*"  = { category = "accessibility", weight = 0.08 }
+"LANG*"   = { category = "accessibility", weight = 0.05 }
+
+# --- performance ---
+"CWV*"    = { category = "performance",  weight = 0.15 }
+"PERF*"   = { category = "performance",  weight = 0.12 }
+"TTFB*"   = { category = "performance",  weight = 0.10 }
+"CACHE*"  = { category = "performance",  weight = 0.08 }
+
+# --- best practices ---
+"MOB*"    = { category = "best-practices", weight = 0.10 }
+"CHARSET*" = { category = "best-practices", weight = 0.05 }
+
+# --- SEO (category omitted -> default_category) ---
+"METADESC*" = { weight = 0.08 }
+"TITLE*"    = { weight = 0.10 }
+"META*"     = { weight = 0.05 }
+"HEAD*"     = { weight = 0.05 }
+"LINK*"     = { weight = 0.04 }
+"IMG*"      = { weight = 0.05 }
+"SEO*"      = { weight = 0.06 }
+"SITEMAP*"  = { weight = 0.05 }
+"ROBOTS*"   = { weight = 0.05 }
+"CAN*"      = { weight = 0.06 }
+
+# Catch-all: rule ids no pattern above matches (e.g. plugin findings) cost a
+# little so silent scoring misses stay visible in reports. Remove or reweight
+# to taste.
+"*" = { weight = 0.02 }

@@ -143,6 +143,13 @@ pub enum ScheduleAction {
         max_pages: usize,
         delay_ms: u64,
         concurrency: usize,
+        /// §G3: webhook receiving signed `regression` events when a
+        /// scheduled run's monitoring detects a regression.
+        alert_webhook: Option<String>,
+        /// Hex HMAC secret for the webhook signature.
+        alert_secret: Option<String>,
+        /// Payload formatting: generic, slack, or discord.
+        alert_format: String,
     },
     List {
         base: String,
@@ -168,14 +175,31 @@ pub async fn run(action: ScheduleAction) -> Result<()> {
             max_pages,
             delay_ms,
             concurrency,
+            alert_webhook,
+            alert_secret,
+            alert_format,
         } => {
-            let payload = serde_json::json!({
+            let mut payload = serde_json::json!({
                 "start_url": url,
                 "interval_secs": interval_secs,
                 "max_pages": max_pages,
                 "request_delay_ms": delay_ms,
                 "concurrency": concurrency,
             });
+            // §G3: persist the alert target on the schedule so the server
+            // can fire signed regression events after each run.
+            if let Some(webhook_url) = alert_webhook {
+                let format = match crate::alerts::AlertFormat::parse(&alert_format)? {
+                    crate::alerts::AlertFormat::Slack => "slack",
+                    crate::alerts::AlertFormat::Discord => "discord",
+                    crate::alerts::AlertFormat::Generic => "generic",
+                };
+                payload["alerts"] = serde_json::json!({
+                    "webhook_url": webhook_url,
+                    "secret_hex": alert_secret,
+                    "format": format,
+                });
+            }
             let (status, body) = request(
                 &base,
                 reqwest::Method::POST,

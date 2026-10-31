@@ -984,6 +984,7 @@ async fn schedule_crud_and_partial_update_are_tenant_scoped() {
             next_run: chrono::Utc::now(),
             last_run_at: None,
             last_crawl_id: None,
+            alerts: None,
             created_at: chrono::Utc::now(),
         },
     );

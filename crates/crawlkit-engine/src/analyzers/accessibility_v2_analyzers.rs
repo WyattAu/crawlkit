@@ -88,7 +88,7 @@ impl Analyzer for LinkAccessibilityAnalyzerV2 {
                     // and `accessibility_aggregator_analyzers`; `alt=""` does not
                     // rescue a link, since an empty alt means the image is
                     // decorative and the link still has no name.
-                    && !l.img_alt.as_ref().is_some_and(|a| !a.trim().is_empty())
+                    && l.img_alt.as_ref().is_none_or(|a| a.trim().is_empty())
             })
             .map(|l| l.href.as_str())
             .collect();

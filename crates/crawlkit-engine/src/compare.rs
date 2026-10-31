@@ -140,6 +140,13 @@ pub fn compare_crawls(baseline_path: &Path, target_path: &Path) -> Result<CrawlD
     compare_crawl_ids(&baseline_conn, &baseline_crawl, &target_conn, &target_crawl)
 }
 
+/// Latest crawl id in a database (public so CLI alert events can name the
+/// crawls a regression refers to).
+pub fn latest_crawl_id_of(db_path: &Path) -> Result<String, CompareError> {
+    let conn = Connection::open(db_path)?;
+    latest_crawl_id(&conn)
+}
+
 /// Compare two crawl IDs that live in the **same** database.
 ///
 /// This avoids the deadlock that would occur if [`compare_crawl_ids`] were

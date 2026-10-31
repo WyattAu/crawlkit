@@ -3,11 +3,17 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::path::Path;
 
 /// Compare two crawl results.
-pub fn run(
+///
+/// When `alerts` is configured and the diff contains new errors (§G3), a
+/// signed `regression` event is delivered to the webhook (and optionally
+/// emailed). Alert delivery is best-effort: a webhook outage is reported
+/// on stderr but does not fail the comparison itself.
+pub async fn run(
     crawl1_path: &Path,
     crawl2_path: &Path,
     output: Option<&Path>,
     format: &str,
+    alerts: Option<&crate::alerts::AlertDelivery>,
 ) -> Result<()> {
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -71,5 +77,63 @@ pub fn run(
         println!("{output_str}");
     }
 
+    if let Some(alerts) = alerts {
+        if crate::alerts::has_regressions(&diff) {
+            if let Err(e) =
+                fire_regression_alerts(alerts, &storage1_path, &storage2_path, &diff).await
+            {
+                tracing::warn!(error = %e, "alert delivery failed");
+                eprintln!("warning: alert delivery failed: {e}");
+            }
+        }
+    }
+
     Ok(())
+}
+
+/// Deliver the regression event for a diff to every configured target.
+async fn fire_regression_alerts(
+    alerts: &crate::alerts::AlertDelivery,
+    baseline_db: &Path,
+    target_db: &Path,
+    diff: &crawlkit_engine::compare::CrawlDiff,
+) -> Result<()> {
+    let baseline_id = latest_crawl_id(baseline_db);
+    let target_id = latest_crawl_id(target_db);
+    let event = crate::alerts::AlertEvent::regression_from_diff(
+        &baseline_id,
+        &target_id,
+        diff,
+        chrono::Utc::now(),
+    );
+
+    if let Some(webhook) = &alerts.webhook {
+        crate::alerts::deliver_event(&reqwest::Client::new(), webhook, &event).await?;
+        println!(
+            "alert: regression event delivered to webhook ({} new errors, {} removed pages, {} cwv regressions)",
+            event.findings_delta.get("new_errors").copied().unwrap_or(0),
+            event.findings_delta.get("removed_pages").copied().unwrap_or(0),
+            event
+                .findings_delta
+                .get("cwv_regressions")
+                .copied()
+                .unwrap_or(0),
+        );
+    }
+
+    if let Some(email) = &alerts.email {
+        let subject = format!("crawlkit {} alert", event.event);
+        let body = crate::alerts::canonical_event_body(&event)?;
+        crate::alerts::send_email(email, &subject, &body).await?;
+        println!("alert: regression event emailed to {}", email.to);
+    }
+
+    Ok(())
+}
+
+/// Latest crawl id in a crawl database, falling back to the database path
+/// string when the id cannot be read (the id is advisory event context).
+fn latest_crawl_id(db_path: &Path) -> String {
+    crawlkit_engine::compare::latest_crawl_id_of(db_path)
+        .unwrap_or_else(|_| db_path.display().to_string())
 }

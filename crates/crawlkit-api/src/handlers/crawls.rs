@@ -600,7 +600,46 @@ pub async fn run_crawl_task_with_monitoring(
                     super::webhooks::fire_monitoring_webhooks(
                         &state, &crawl_id, &tenant_id, monitoring,
                     );
+
+                    // §G3: schedule-scoped signed regression webhook.
+                    if let Some(ref sid) = schedule_id {
+                        let (alerts, baseline) = {
+                            let entry = state.schedules.get(sid);
+                            (
+                                entry.as_ref().and_then(|s| s.alerts.clone()),
+                                entry.as_ref().and_then(|s| s.last_crawl_id.clone()),
+                            )
+                        };
+                        if let Some(alerts) = alerts {
+                            let event = super::regression_alerts::RegressionEvent::from_monitoring(
+                                baseline.as_deref(),
+                                &output.crawl_id,
+                                monitoring,
+                                Utc::now(),
+                            );
+                            super::regression_alerts::fire_regression_alert(
+                                &state, &alerts, &event,
+                            );
+                        }
+                    }
                 }
+            }
+
+            // §G6: record the history snapshot + stored HTML report for
+            // this run (best-effort, off the async runtime).
+            {
+                let storage = state.storage.clone();
+                let run_id = output.crawl_id.clone();
+                let ts = Utc::now().to_rfc3339();
+                let db_path = crate::handlers::reports::db_path_from_env();
+                tokio::task::spawn_blocking(move || {
+                    crate::handlers::reports::snapshot_and_store_report(
+                        storage.as_ref(),
+                        &run_id,
+                        &ts,
+                        &db_path,
+                    );
+                });
             }
 
             // Update the schedule's last_crawl_id so the next run can

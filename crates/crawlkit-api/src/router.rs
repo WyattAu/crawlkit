@@ -86,6 +86,10 @@ pub fn create_router(state: AppState, csrf_allowed_origins: Vec<String>) -> Rout
             "/api/v1/schedules/{id}",
             axum::routing::delete(delete_schedule).patch(update_schedule),
         )
+        .route(
+            "/api/v1/reports/{run_id}",
+            axum::routing::get(crate::handlers::reports::get_report),
+        )
         .route("/api/v1/audit", get(get_audit_events))
         .route("/api/v1/tenants", post(create_tenant).get(list_tenants))
         .route(

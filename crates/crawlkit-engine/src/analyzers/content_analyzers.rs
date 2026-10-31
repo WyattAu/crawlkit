@@ -8013,7 +8013,7 @@ impl Analyzer for MobileFriendlinessScoreAnalyzer {
                 issues.push("pinch-to-zoom disabled");
             }
 
-            if !ctx.page.has_lang_attribute && !ctx.page.html_lang.is_some() {
+            if !ctx.page.has_lang_attribute && ctx.page.html_lang.is_none() {
                 score = score.saturating_sub(5);
             }
         }

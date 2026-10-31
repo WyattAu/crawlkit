@@ -185,15 +185,11 @@ pub fn parse_robots_txt(content: &str, target_agent: &str) -> (Vec<RobotsRule>, 
                 current_delay = None;
                 applies_to_all = current_agent == "*";
             }
-            "disallow" => {
-                if !value.is_empty() {
-                    current_disallowed.push(value);
-                }
+            "disallow" if !value.is_empty() => {
+                current_disallowed.push(value);
             }
-            "allow" => {
-                if !value.is_empty() {
-                    current_allowed.push(value);
-                }
+            "allow" if !value.is_empty() => {
+                current_allowed.push(value);
             }
             "crawl-delay" => {
                 if let Ok(delay) = value.parse::<f64>() {

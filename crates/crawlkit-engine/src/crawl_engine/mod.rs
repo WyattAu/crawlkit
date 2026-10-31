@@ -1478,12 +1478,12 @@ mod tests {
         config.feature_flags.set(crate::FLAG_WASM_ANALYZERS, false);
         let engine = CrawlEngine::new(config, storage);
         let registry = engine.build_analyzer_registry();
-        // With AI and WASM disabled, only base analyzers remain. The orphan
-        // analyzers wired in the no-orphan work are plain analyzers with no
-        // feature gate, so the flagged count moves with the full count
-        // (770 -> 780 -> 784 as the full registry went 777 -> 787 -> 791).
-        // The number is measured from this exact configuration, not derived.
-        assert_eq!(registry.len(), 784);
+        // With AI and WASM disabled, only base analyzers remain. Plain and
+        // orphan ungated analyzers move this count with the full count
+        // (770 -> 780 -> 784 from upstream re-registrations, then 784 -> 786
+        // for the ungated tech-detection and lighthouse analyzers). The
+        // number is measured from this exact configuration, not derived.
+        assert_eq!(registry.len(), 786);
     }
 
     struct MockJsRenderer {

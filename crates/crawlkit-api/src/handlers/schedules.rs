@@ -66,6 +66,7 @@ pub async fn create_schedule(
         next_run: now + chrono::Duration::seconds(req.interval_secs as i64),
         last_run_at: None,
         last_crawl_id: None,
+        alerts: req.alerts,
         created_at: now,
     };
 

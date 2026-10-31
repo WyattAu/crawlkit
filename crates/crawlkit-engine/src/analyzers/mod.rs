@@ -67,6 +67,8 @@ pub mod landmark_analyzers;
 pub mod landmark_heading_validator_analyzers;
 /// HTML language-attribute accessibility analyzers.
 pub mod language_accessibility_analyzers;
+/// Lighthouse / Core Web Vitals report ingestion (GAP G5).
+pub mod lighthouse;
 /// Link accessibility analyzers.
 pub mod link_accessibility_analyzers;
 pub mod link_name;
@@ -117,6 +119,8 @@ pub mod table_analyzers;
 /// Table caption accessibility analyzer.
 pub mod table_caption_analyzers;
 pub mod tabnabbing;
+/// Passive technology (stack) detection from stored response data (GAP G7).
+pub mod tech_detection;
 pub mod url_norm;
 pub mod v2;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
@@ -193,6 +197,7 @@ pub use landmark_analyzers::LandmarkRegionsAnalyzer;
 pub use landmark_heading_validator_analyzers::{
     HeadingLevelSkipAnalyzer, LandmarkBannerAnalyzer, LandmarkMainAnalyzer, LandmarkNavAnalyzer,
 };
+pub use lighthouse::{LighthouseAnalyzer, LighthouseParseError, LighthouseReport};
 pub use link_accessibility_analyzers::LinkAccessibilityAnalyzer;
 pub use media_analyzers::{
     AggregateRatingValidator, AsyncScriptAnalyzer, BlockingStyleAnalyzer, ConnectionAnalyzer,
@@ -267,6 +272,7 @@ pub use sts_analyzers::{
 pub use tabindex_analyzers::TabindexAnalyzer;
 pub use table_analyzers::TableAccessibilityAnalyzer;
 pub use table_caption_analyzers::TableCaptionAnalyzer;
+pub use tech_detection::TechDetectionAnalyzer;
 pub use v2::*;
 pub use x_header_analyzers::{
     CrossOriginResourcePolicyAnalyzer, XContentTypeOptionsAnalyzer,
@@ -984,6 +990,15 @@ impl AnalyzerRegistry {
             // HTTP: version and server header analysis
             Box::new(HttpVersionAnalyzer::new()),
             Box::new(ServerHeaderAnalyzer::new()),
+            // Passive technology (stack) detection from already-stored response
+            // data — server / x-powered-by headers, generator meta, asset
+            // fingerprints, cookie names (GAP G7). Makes no network requests.
+            Box::new(crate::analyzers::tech_detection::TechDetectionAnalyzer::new()),
+            // Lighthouse / CWV report ingestion (GAP G5). Silent on every
+            // ordinary body; produces findings only when the body is a
+            // Lighthouse JSON report. Makes no network requests and never
+            // shells out — running Lighthouse is the caller's job.
+            Box::new(crate::analyzers::lighthouse::LighthouseAnalyzer::new()),
             // Performance: preload hints, async scripts, lazy loading, font display
             Box::new(PreloadHintAnalyzer::new()),
             Box::new(AsyncScriptAnalyzer::new()),

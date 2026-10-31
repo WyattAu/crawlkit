@@ -6,6 +6,8 @@ pub mod crawls;
 pub mod ga4;
 pub mod health;
 pub mod marketplace;
+pub mod regression_alerts;
+pub mod reports;
 pub mod schedules;
 pub mod tenants;
 pub mod usage;

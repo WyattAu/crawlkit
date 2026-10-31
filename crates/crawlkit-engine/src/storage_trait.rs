@@ -125,6 +125,19 @@ pub trait StorageBackend: Send + Sync {
         Ok((defects.len(), measurements.len()))
     }
 
+    /// Append a §G6 score-history snapshot for a finished crawl: one
+    /// `findings`-count row per `(page, category)` into the `history`
+    /// table. Scheduled runs call this so `crawlkit history` can print the
+    /// trend across runs.
+    ///
+    /// Backends that do not implement the history table return
+    /// [`StorageError::Unsupported`].
+    fn record_history_snapshot(&self, _run_id: &str, _ts: &str) -> Result<(), StorageError> {
+        Err(StorageError::Unsupported(
+            "history snapshots are not supported by this backend".to_string(),
+        ))
+    }
+
     /// Get aggregate statistics for a crawl.
     fn get_stats(&self, crawl_id: &str) -> Result<CrawlStats, StorageError>;
 

@@ -3250,7 +3250,7 @@ impl Analyzer for BlockingStyleAnalyzer {
             .filter(|s| {
                 s.href.is_some()
                     && s.media.as_deref() != Some("print")
-                    && !s.media.as_deref().is_some_and(|m| m != "all")
+                    && s.media.as_deref().is_none_or(|m| m == "all")
             })
             .count();
 

@@ -16,6 +16,14 @@ ignore = [
     # Introduced by the ADR-016 warehouse exporter (`warehouse` feature);
     # tracked for a parquet release that drops it.
     { id = "RUSTSEC-2024-0436" },
+    # zstd 0.13 / zstd-safe 7.x (transitive via wasmtime-internal-cache):
+    # patched only in zstd 0.14.3 / zstd-safe 8.2.0, which no published
+    # wasmtime line requires yet — 48.0.8 and 50.0.1 both pin zstd 0.13.
+    # wasmtime itself is current (50.0.1) and its own RUSTSEC-2026-0422/23/24
+    # fixes are applied. Drop these three when bytecodealliance bumps zstd.
+    { id = "RUSTSEC-2026-0391" },
+    { id = "RUSTSEC-2026-0398" },
+    { id = "RUSTSEC-2026-0403" },
 ]
 
 [licenses]

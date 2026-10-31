@@ -27,6 +27,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use crawlkit_engine::analyzers::defect_family::CANONICAL_TITLES;
+
 /// Analyzers that implement the trait and are intentionally not registered.
 ///
 /// Each entry is a name and why. An analyzer absent from both this list and
@@ -64,29 +66,23 @@ const DELIBERATELY_UNREGISTERED: &[(&str, &str)] = &[
         "same finding as RecipeNutritionValidator (RNUT001), second code spelling",
     ),
     (
-        "RecipeCookTimeValidator",
-        "same findings as RecipeMissingCookTimeValidator and RecipePrepTimeValidator",
-    ),
-    (
-        "VideoObjectEmbedUrlValidator",
-        "same finding as VideoSchemaValidator (embedUrl)",
-    ),
-    (
         "EventLocationValidatorV2",
         "same findings as EventLocationValidator and EventMissingLocationValidator",
-    ),
-    (
-        "OrganizationLogoValidatorV2",
-        "same finding as OrganizationLogoValidator",
-    ),
-    (
-        "PersonJobTitleValidatorV2",
-        "same finding as PersonJobTitleValidator",
     ),
     (
         "ContentFreshnessDateAnalyzer",
         "same finding as ContentFreshnessScorer",
     ),
+    // The four below were ALSO excluded on title evidence, and that verdict
+    // was wrong: reading their conditions showed each contains one check no
+    // registered analyzer performs (VideoObjectEmbedUrl's contentUrl,
+    // RecipeCookTime's totalTime, OrganizationLogoV2's empty logo string,
+    // PersonJobTitleV2's worksFor-or-affiliation precondition). Titles being
+    // equal does not make conditions equal. They are registered; they left
+    // this list in the same change that added
+    // `excluded_duplicate_findings_have_live_family_members`, which now pins
+    // every exclusion to a live defect-family member so the next
+    // "same title" verdict has to survive a machine check.
     // The eight below surfaced only once the registry match stopped reading
     // comments: mod.rs documents several exclusions by name, and a name in a
     // comment looked registered to the substring match. All eight are rungs of
@@ -199,6 +195,9 @@ fn analyzer_structs() -> BTreeMap<String, String> {
 
 /// `title: "..."` or `title: format!("...")`.
 const TITLE_RE: &str = r#"title:\s*(?:format!\(\s*)?"([^"]{8,})"#;
+
+/// `code: "ABC001"` emit sites.
+const CODE_RE: &str = r#"code:\s*"([A-Z][A-Z0-9-]+)""#;
 
 fn struct_names(src: &str) -> Vec<String> {
     let mut names = Vec::new();
@@ -512,4 +511,113 @@ fn finding_titles(file: &str, analyzer: &str) -> BTreeSet<String> {
     re.captures_iter(&body[..end])
         .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
         .collect()
+}
+
+/// Finding codes emitted inside one analyzer's own `impl Analyzer` block,
+/// accumulated across every impl block that shares the type name (a type with
+/// `impl Default`, an inherent `impl`, and `impl Analyzer` yields three spans,
+/// and only the last carries the emit sites -- a first version returned the
+/// first span and saw no codes at all).
+fn finding_codes(file: &str, analyzer: &str) -> BTreeSet<String> {
+    let Ok(src) = std::fs::read_to_string(file) else {
+        return BTreeSet::new();
+    };
+    let re = regex::Regex::new(CODE_RE).expect("CODE_RE is a valid pattern");
+    let needle = format!("Analyzer for {analyzer}");
+    let mut out = BTreeSet::new();
+    let mut from = 0usize;
+    while let Some(pos) = src[from..].find(&needle) {
+        let block_start = from + pos;
+        from = block_start + needle.len();
+        // Matches `impl Analyzer for X` and `impl crate::analyzers::Analyzer
+        // for X`; inherent and Default impls never match, so nothing but the
+        // trait block that owns the emit sites is scanned.
+        let Some(open) = src[block_start..].find('{') else {
+            continue;
+        };
+        let body = &src[block_start + open + 1..];
+        let mut depth = 1usize;
+        let mut end = 0usize;
+        for (i, c) in body.char_indices() {
+            match c {
+                '{' => depth += 1,
+                '}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        end = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+        out.extend(
+            re.captures_iter(&body[..end])
+                .filter_map(|c| c.get(1).map(|m| m.as_str().to_string())),
+        );
+    }
+    out
+}
+
+/// Every code an excluded analyzer emits must stay tied to a live defect.
+///
+/// An exclusion is a claim that a registered analyzer already reports the
+/// same defect. Exactly two things can make that claim true: the code itself
+/// is also emitted by a registered analyzer (shared ownership, recorded in
+/// KNOWN_SHARED in the finding-catalog script), or the code is a member of a
+/// defect family in `CANONICAL_TITLES` that contains at least one code a
+/// registered analyzer emits. Anything else is an orphaned spelling: if the
+/// analyzer ever ran again, dedupe could not collapse its findings into the
+/// registered twin, and the defect model would not even acknowledge that the
+/// two are the same defect.
+///
+/// Nine codes failed this check when it was first written -- the cookie
+/// ladder's deepest rungs among them, plus RECIPECOOK003, VIDEMB002,
+/// OLOGO-V2001 and PJOB-V2002. Investigating those nine also showed that
+/// four of the "duplicate" analyzers carried one unique check apiece, and
+/// they were registered after all. Same title does not imply same defect;
+/// this test is what keeps the difference load-bearing.
+#[test]
+fn excluded_duplicate_findings_have_live_family_members() {
+    let registry = registry_code();
+    let known = analyzer_structs();
+
+    let mut registered_codes: BTreeSet<String> = BTreeSet::new();
+    for (name, file) in &known {
+        if registry.contains(name.as_str()) {
+            registered_codes.extend(finding_codes(file, name));
+        }
+    }
+    assert!(
+        !registered_codes.is_empty(),
+        "no registered analyzers were found; the registry match is broken"
+    );
+
+    let mut orphaned = Vec::new();
+    for (name, _reason) in DELIBERATELY_UNREGISTERED {
+        let Some(file) = known.get(*name) else {
+            continue; // existence is `exemptions_are_still_accurate`'s job
+        };
+        for code in finding_codes(file, name) {
+            let shared = registered_codes.contains(&code);
+            let familied = CANONICAL_TITLES.iter().any(|(_, members)| {
+                members.contains(&code.as_str())
+                    && members.iter().any(|m| registered_codes.contains(*m))
+            });
+            if !shared && !familied {
+                orphaned.push(format!("  {name} emits {code}"));
+            }
+        }
+    }
+
+    assert!(
+        orphaned.is_empty(),
+        "these analyzers are excluded as duplicates, but their codes are tied to \
+         no live defect: not emitted by any registered analyzer, and absent from \
+         every defect family that contains one. If they ever ran again, dedupe \
+         could not collapse them into the registered twin. Extend the family in \
+         defect_family.rs -- or register the analyzer, if the check is unique.\
+         \n{}",
+        orphaned.join("\n")
+    );
 }

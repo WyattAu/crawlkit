@@ -860,12 +860,26 @@ impl AnalyzerRegistry {
             // registered twin. The corpus suite caught this: registering
             // RecipeNutritionValidatorV2 made RNUT-V2001 appear on a fixture whose
             // expectation is that the nutrition finding is absent.
+            //
+            // The title comparison itself was later found too coarse in the
+            // OTHER direction: four of the seven "duplicates" each contain one
+            // check no registered analyzer performs -- VideoObjectEmbedUrl's
+            // contentUrl, RecipeCookTime's totalTime, OrganizationLogoV2's
+            // empty-logo string, PersonJobTitleV2's worksFor-or-affiliation
+            // precondition. They are registered below; family dedupe collapses
+            // the genuinely duplicated halves, and
+            // `excluded_duplicate_findings_have_live_family_members` pins the
+            // cookie trio (true strict subsets) to families that prove it.
             Box::new(crate::analyzers::content_analyzers::MetaDescriptionUniquenessAnalyzer::new()),
             Box::new(crate::analyzers::content_analyzers::StructuredDataNestingValidator::new()),
             Box::new(crate::analyzers::content_analyzers::LocalBusinessNapAnalyzerUtil::new()),
             Box::new(crate::analyzers::content_analyzers::CourseProviderValidatorV2::new()),
+            Box::new(crate::analyzers::content_analyzers::OrganizationLogoValidatorV2::new()),
+            Box::new(crate::analyzers::content_analyzers::PersonJobTitleValidatorV2::new()),
             Box::new(crate::analyzers::schema::CoursePrerequisiteValidator::new()),
             Box::new(crate::analyzers::schema::ProductOfferValidator::new()),
+            Box::new(crate::analyzers::schema::RecipeCookTimeValidator::new()),
+            Box::new(crate::analyzers::schema::VideoObjectEmbedUrlValidator::new()),
             Box::new(crate::analyzers::seo_analyzers::TitleLengthQualityAnalyzer::new()),
             Box::new(crate::analyzers::seo_analyzers::MetaDescriptionQualityAnalyzer::new()),
             Box::new(crate::analyzers::seo_analyzers::InternalLinkAnchorAnalyzerV2::new()),

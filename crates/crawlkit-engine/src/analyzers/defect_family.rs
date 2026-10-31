@@ -679,11 +679,33 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ("civicstructure missing name", &["CIVIC001", "CVNAME-V6010"]),
     (
         "cookie missing httponly flag",
-        &["COOKIE002", "COOKIEHTTP001"],
+        &[
+            "COOKIE002",
+            "COOKIEHTTP001",
+            "COOKIEHTTP-V2001",
+            "COOKIEHTTP-V5001",
+            "COOKIEHTTP-V6066",
+        ],
+    ),
+    (
+        "cookie missing samesite attribute",
+        &[
+            "COOKIESAME001",
+            "COOKIESAME-V2001",
+            "COOKIESAME-V5001",
+            "COOKIESAME-V6067",
+        ],
     ),
     (
         "cookie missing secure flag",
-        &["COOKIE001", "COOKIESEC001-VALIDATOR"],
+        &[
+            "COOKIE001",
+            "COOKIESEC001",
+            "COOKIESEC001-VALIDATOR",
+            "COOKIESEC-V2001",
+            "COOKIESEC-V5001",
+            "COOKIESEC-V6065",
+        ],
     ),
     ("cors allows all origins", &["CORS002", "CORSWILD-V6069"]),
     ("cors wildcard with credentials", &["CORS-V2001", "CORS001"]),
@@ -864,7 +886,10 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
         "occupation missing occupationalcategory",
         &["OCCUP-V2001", "OCCUP002"],
     ),
-    ("organization missing logo", &["OLOGO001", "ORG003"]),
+    (
+        "organization missing logo",
+        &["OLOGO001", "OLOGO-V2001", "ORG003"],
+    ),
     ("organization missing url", &["ORG002", "ORGURL-V5001"]),
     ("orphan page", &["LINK006", "ORPHAN001"]),
     (
@@ -889,6 +914,7 @@ pub const CANONICAL_TITLES: &[(&str, &[&str])] = &[
     ),
     ("permit missing issuedby", &["PERMISS-V6041", "PERMIT002"]),
     ("person missing jobtitle", &["PJOB-V2001", "PJOB001"]),
+    ("person missing worksfor", &["PJOB002", "PJOB-V2002"]),
     ("playbook missing name", &["PLAYBOOK-V2001", "PLAYBOOK001"]),
     (
         "positive tabindex detected",

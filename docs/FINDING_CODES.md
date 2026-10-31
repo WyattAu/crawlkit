@@ -15,11 +15,11 @@ consolidate the analyzers).
 
 | Metric | Value |
 |---|---|
-| Distinct finding codes | 1276 |
+| Distinct finding codes | 1284 |
 | `impl Analyzer for` blocks scanned | 2725 |
-| Registered analyzers | 800 |
+| Registered analyzers | 804 |
 | Codes shared by 2+ analyzers | 6 |
-| Codes with no registered emitter | 66 |
+| Codes with no registered emitter | 58 |
 
 Only codes with at least one registered emitter are documented
 below; a code whose every emitter is unregistered cannot appear
@@ -851,6 +851,7 @@ in any audit and is listed separately at the bottom.
 | `OGVID001` | `OpenGraphVideoAnalyzer` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | og:video present but missing og:video:url |
 | `OGVID002` | `OpenGraphVideoAnalyzer` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | og:video present but missing og:video:type |
 | `OGVIDURL001` | `OpenGraphVideoUrlValidator` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Empty og:video URL |
+| `OLOGO-V2001` | `OrganizationLogoValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Organization missing logo |
 | `OLOGO001` | `OrganizationLogoValidator` | `crates/crawlkit-engine/src/analyzers/schema/organization_logo.rs` | Organization missing logo |
 | `OLOGO002` | `OrganizationLogoValidator` | `crates/crawlkit-engine/src/analyzers/schema/organization_logo.rs` | Organization logo URL invalid format |
 | `OPDESC-V2001` | `OpenSearchDescriptionValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/seo.rs` | No OpenSearch description |
@@ -899,6 +900,8 @@ in any audit and is listed separately at the bottom.
 | `PIMP001` | `PageImportanceAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Page has no links |
 | `PIMP002` | `PageImportanceAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Content page missing internal links |
 | `PIMP003` | `PageImportanceAnalyzer` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | High number of external links |
+| `PJOB-V2001` | `PersonJobTitleValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Person missing jobTitle |
+| `PJOB-V2002` | `PersonJobTitleValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Person missing worksFor/affiliation |
 | `PJOB001` | `PersonJobTitleValidator` | `crates/crawlkit-engine/src/analyzers/schema/person_job_title.rs` | Person missing jobTitle |
 | `PJOB002` | `PersonJobTitleValidator` | `crates/crawlkit-engine/src/analyzers/schema/person_job_title.rs` | Person missing worksFor |
 | `PLAN-V2001` | `PlanSchemaValidatorV2` | `crates/crawlkit-engine/src/analyzers/schema/plan_schema_v2.rs` | Plan schema missing description |
@@ -964,6 +967,9 @@ in any audit and is listed separately at the bottom.
 | `RECIPE001` | `RecipeSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_schema.rs` | Recipe schema missing name |
 | `RECIPE002` | `RecipeSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_schema.rs` | Recipe schema missing cookTime |
 | `RECIPE003` | `RecipeSchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_schema.rs` | Recipe schema missing recipeIngredient |
+| `RECIPECOOK001` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing cookTime |
+| `RECIPECOOK002` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing prepTime |
+| `RECIPECOOK003` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing totalTime |
 | `RECIPEING-V5001` | `RecipeIngredientsValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe has empty ingredients |
 | `RECIPEING-V5002` | `RecipeIngredientsValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe missing ingredients |
 | `RECIPENAME-V2001` | `RecipeMissingNameValidatorV2` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Recipe missing name |
@@ -1242,6 +1248,8 @@ in any audit and is listed separately at the bottom.
 | `VIDDUR001` | `VideoObjectDurationValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_duration.rs` | VideoObject missing duration |
 | `VIDDUR002` | `VideoObjectDurationValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_duration.rs` | VideoObject duration is not valid ISO 8601 |
 | `VIDDURFMT-V5001` | `VideoDurationFormatValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Video duration not ISO 8601 |
+| `VIDEMB001` | `VideoObjectEmbedUrlValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_embed_url.rs` | VideoObject missing embedUrl |
+| `VIDEMB002` | `VideoObjectEmbedUrlValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_embed_url.rs` | VideoObject missing contentUrl |
 | `VIDTHUMB-V5001` | `VideoThumbnailValidator` | `crates/crawlkit-engine/src/analyzers/v2/schema.rs` | Video missing thumbnailUrl |
 | `WAPI-V2001` | `WebAPISchemaValidatorV2` | `crates/crawlkit-engine/src/analyzers/schema/web_api_schema_v2.rs` | WebAPI schema missing documentation |
 | `WAPI001` | `WebAPISchemaValidator` | `crates/crawlkit-engine/src/analyzers/schema/web_api_schema.rs` | WebAPI schema missing name |
@@ -1360,16 +1368,10 @@ reports; none of these codes can appear in an audit.
 | `OGSITE001` | `OpenGraphSiteNameValidator` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | Empty og:site_name |
 | `OGSITE002` | `OpenGraphSiteNameValidator` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | Missing og:site_name |
 | `OGURL001` | `OpenGraphUrlValidator` | `crates/crawlkit-engine/src/analyzers/social_analyzers.rs` | og:url doesn't match page URL |
-| `OLOGO-V2001` | `OrganizationLogoValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Organization missing logo |
 | `PERM-V2001` | `PermissionsPolicyAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/permissions_policy_v2_analyzers.rs` | Permissions-Policy header missing |
 | `PERM-V2002` | `PermissionsPolicyAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/permissions_policy_v2_analyzers.rs` | (no title literal) |
-| `PJOB-V2001` | `PersonJobTitleValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Person missing jobTitle |
-| `PJOB-V2002` | `PersonJobTitleValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Person missing worksFor/affiliation |
 | `PPERM001` | `PermissionsPolicyAnalyzerNew` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | Permissions-Policy header missing |
 | `PPERM002` | `PermissionsPolicyAnalyzerNew` | `crates/crawlkit-engine/src/analyzers/sts_analyzers.rs` | Permissions-Policy allows camera by default |
-| `RECIPECOOK001` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing cookTime |
-| `RECIPECOOK002` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing prepTime |
-| `RECIPECOOK003` | `RecipeCookTimeValidator` | `crates/crawlkit-engine/src/analyzers/schema/recipe_cook_time.rs` | Recipe missing totalTime |
 | `RNUT-V2001` | `RecipeNutritionValidatorV2` | `crates/crawlkit-engine/src/analyzers/content_analyzers.rs` | Recipe missing nutrition information |
 | `ROBOT001` | `RobotsTxtAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Path allowed by robots.txt override |
 | `ROBOT002` | `RobotsTxtAnalyzer` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Path disallowed by robots.txt |
@@ -1389,7 +1391,5 @@ reports; none of these codes can appear in an audit.
 | `SSL006` | `SslCertificateValidator` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | Self-signed certificate detected |
 | `SSL008` | `SslCertificateValidator` | `crates/crawlkit-engine/src/analyzers/http_analyzers.rs` | SSL certificate details |
 | `TABACC-V2001-DEEP-DEEP` | `TableAccessibilityDeepDeepValidator` | `crates/crawlkit-engine/src/analyzers/v2/accessibility.rs` | Tables without headers (deep-deep) |
-| `VIDEMB001` | `VideoObjectEmbedUrlValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_embed_url.rs` | VideoObject missing embedUrl |
-| `VIDEMB002` | `VideoObjectEmbedUrlValidator` | `crates/crawlkit-engine/src/analyzers/schema/video_object_embed_url.rs` | VideoObject missing contentUrl |
 | `XSS-V2001` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | Missing X-XSS-Protection header |
 | `XSS-V2002` | `XssProtectionAnalyzerV2` | `crates/crawlkit-engine/src/analyzers/security_header_v2_analyzers.rs` | X-XSS-Protection explicitly disabled |

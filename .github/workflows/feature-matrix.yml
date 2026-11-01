@@ -19,6 +19,8 @@ jobs:
             args: '--no-default-features'
           - name: warehouse
             args: '--features warehouse'
+          - name: unstable-legacy
+            args: '--features unstable-legacy'
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable

@@ -2236,11 +2236,13 @@ impl Storage {
     }
 
     /// Append §G6 history snapshots for a finished crawl: one
-    /// `findings`-count row per `(page URL, category)`.
+    /// `findings`-count row **and** one §G2 weighted-`score` row per
+    /// `(page URL, category)`.
     ///
     /// Creates the `history` table on demand (migration-on-write), so
     /// databases created before §G6 are upgraded in place. Counts mirror
     /// `get_issues` defaults: defect rows only, measurements excluded.
+    /// The returned count includes both metrics' rows.
     ///
     /// # Errors
     ///
@@ -2265,7 +2267,78 @@ impl Storage {
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?;
-        crate::history::append_findings(&conn, run_id, ts, &counts).map_err(StorageError::from)
+        drop(stmt);
+        let mut inserted = crate::history::append_findings(&conn, run_id, ts, &counts)
+            .map_err(StorageError::from)?;
+        // §G2: weighted scores for the same (page, category) pairs the
+        // counts above aggregate, written under the `score` metric so
+        // trends can chart both side by side. No schema change: the
+        // `metric` column already namespaces the rows.
+        inserted += Self::append_score_rows(&conn, run_id, ts)?;
+        Ok(inserted)
+    }
+
+    /// Compute §G2 category scores per `(page, category)` from the crawl's
+    /// defect rows and append them as `metric = "score"` history rows.
+    ///
+    /// Score per pair: `100 × Π (1 − wᵢ)` over the resolved penalty weight
+    /// of every finding code in the pair, using the embedded `scoring.toml`
+    /// table (deterministic; see `scoring::weights`). Codes matching no
+    /// pattern carry weight `0.0` and leave the score untouched.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`StorageError`] when the query or any insert fails. The
+    /// embedded weight table is validated by tests at build time, so its
+    /// load cannot fail in practice; a failure maps to
+    /// [`StorageError::Unsupported`] rather than panicking.
+    fn append_score_rows(conn: &Connection, run_id: &str, ts: &str) -> Result<usize, StorageError> {
+        let weights = crate::scoring::Weights::embedded().map_err(|e| {
+            StorageError::Unsupported(format!("embedded scoring table rejected: {e}"))
+        })?;
+        let mut stmt = conn.prepare(
+            "SELECT COALESCE(p.url, f.page_id) AS page, f.category, f.code
+             FROM findings f
+             JOIN pages p ON p.id = f.page_id
+             WHERE p.crawl_id = ?1 AND (f.is_metric IS NULL OR f.is_metric = 0)
+             ORDER BY page, f.category",
+        )?;
+        let rows = stmt
+            .query_map([run_id], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+        drop(stmt);
+
+        // BTreeMap keyed on (page, category): deterministic insertion order
+        // matching the `trend` query's ORDER BY, so score series land right
+        // next to their findings-count series.
+        let mut penalties: std::collections::BTreeMap<(String, String), Vec<f64>> =
+            std::collections::BTreeMap::new();
+        for (page, category, code) in rows {
+            penalties
+                .entry((page, category))
+                .or_default()
+                .push(weights.resolve(&code).weight);
+        }
+
+        let scores = penalties
+            .into_iter()
+            .map(|((page, category), mut penalties)| {
+                // Determinism rail (scoring §ITER-09): sort the weights
+                // (total_cmp, descending) before folding, so the stored
+                // score is bit-identical regardless of the query's row
+                // order within the group.
+                penalties.sort_by(|a, b| b.total_cmp(a));
+                let score = penalties.iter().fold(100.0f64, |acc, w| acc * (1.0 - w));
+                (page, category, score)
+            })
+            .collect::<Vec<_>>();
+        crate::history::append_scores(conn, run_id, ts, &scores).map_err(StorageError::from)
     }
 
     /// Read §G6 trend series recorded by [`Self::record_history_snapshot`].
@@ -2815,8 +2888,11 @@ mod tests {
             .record_history_snapshot(&crawl_id, "2026-10-31T00:00:00+00:00")
             .unwrap();
 
+        // §G2: the snapshot now carries findings counts *and* weighted
+        // scores for the same (page, category) pairs — two metrics, four
+        // series in total, ordered by (page, category, metric).
         let trend = storage.history_trend(None).unwrap();
-        assert_eq!(trend.len(), 2, "one series per (page, category)");
+        assert_eq!(trend.len(), 4, "2 findings + 2 score series");
         assert_eq!(trend[0].page, "https://example.com/");
         assert_eq!(
             trend[0].category,
@@ -2824,8 +2900,16 @@ mod tests {
         );
         assert_eq!(trend[0].metric, crate::history::FINDINGS_METRIC);
         assert_eq!(trend[0].last_value(), Some(2.0));
-        assert_eq!(trend[1].page, "https://example.com/about");
-        assert_eq!(trend[1].last_value(), Some(1.0));
+        assert_eq!(
+            trend[1].metric,
+            crate::history::SCORE_METRIC,
+            "score series sits beside its counts"
+        );
+        assert!(
+            trend[3].page == "https://example.com/about"
+                && trend[3].metric == crate::history::SCORE_METRIC
+        );
+        assert_eq!(trend[2].last_value(), Some(1.0));
 
         // A second run for the same URLs extends the series. Fresh page
         // ids: page rows are keyed by id, so re-inserting "p1" under a new
@@ -2850,6 +2934,7 @@ mod tests {
             .find(|s| {
                 s.category == crawlkit_types::IssueCategory::Seo.as_str()
                     && s.page == "https://example.com/"
+                    && s.metric == crate::history::FINDINGS_METRIC
             })
             .unwrap();
         assert_eq!(seo.samples.len(), 2);
@@ -2889,8 +2974,54 @@ mod tests {
             .record_history_snapshot(&crawl_id, "2026-10-31T00:00:00+00:00")
             .unwrap();
         let trend = storage.history_trend(None).unwrap();
-        assert_eq!(trend.len(), 1);
-        assert_eq!(trend[0].last_value(), Some(1.0), "only the defect row");
+        assert_eq!(trend.len(), 2, "one findings + one score series");
+        assert_eq!(
+            trend[0].last_value(),
+            Some(1.0),
+            "only the defect row counted"
+        );
+        assert_eq!(
+            trend[1].metric,
+            crate::history::SCORE_METRIC,
+            "the score series exists too"
+        );
+        assert!((0.0..=100.0).contains(&trend[1].last_value().unwrap()));
+    }
+
+    /// §G2: score history rows use the embedded weight table, so known rule
+    /// codes produce exactly the multiplicative-formula score.
+    #[test]
+    fn test_history_snapshot_scores_use_weight_table() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        storage
+            .insert_pages(&crawl_id, &[test_page("p1", "https://example.com/", 200)])
+            .unwrap();
+        let mut sec1 = test_issue("i1", "p1", IssueCategory::Security, Severity::Error);
+        sec1.code = "SEC001".to_string();
+        let mut sec2 = test_issue("i2", "p1", IssueCategory::Security, Severity::Warning);
+        sec2.code = "SEC002".to_string();
+        let mut seo1 = test_issue("i3", "p1", IssueCategory::Seo, Severity::Info);
+        seo1.code = "SEOMETA001".to_string();
+        storage.insert_issues_batch(&[sec1, sec2, seo1]).unwrap();
+
+        storage
+            .record_history_snapshot(&crawl_id, "2026-10-31T00:00:00+00:00")
+            .unwrap();
+
+        let trend = storage.history_trend(None).unwrap();
+        // Embedded weights: "SEC*" = 0.25 security, "SEO*" = 0.06 seo.
+        // Security score: 100 × (1−0.25)² = 56.25. Seo score: 100 × 0.94.
+        let security = trend
+            .iter()
+            .find(|s| s.metric == crate::history::SCORE_METRIC && s.category == "security")
+            .unwrap();
+        assert!((security.last_value().unwrap() - 56.25).abs() < 1e-9);
+        let seo = trend
+            .iter()
+            .find(|s| s.metric == crate::history::SCORE_METRIC && s.category == "seo")
+            .unwrap();
+        assert!((seo.last_value().unwrap() - 94.0).abs() < 1e-9);
     }
 
     #[test]

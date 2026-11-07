@@ -106,6 +106,14 @@ observability = ["opentelemetry", "opentelemetry-otlp", "opentelemetry_sdk"]
 [dependencies]
 # Always available
 crawlkit-types = { version = "6.0.0-alpha.5", path = "../crawlkit-types" }
+# Consolidated estate rate limiter: crawlkit's limiter is a thin scheduler
+# over `ratelimit`'s GCRA cell. The integer-µs GCRA core is Lean-proven in
+# ratelimit/proofs (namespace `Ratelimit.Gcra`, THM-RATE-001..007).
+ratelimit = { path = "../../../ratelimit", package = "throttle-kit", default-features = false }
+# Consolidated estate circuit breaker: crawlkit's per-domain breaker
+# delegates its Closed/Open/HalfOpen FSM to `breaker` (consecutive-streak
+# tripping, fixed cooldown, success-threshold half-open recovery).
+breaker = { path = "../../../breaker", default-features = false }
 # Transfer-encoding negotiation. reqwest's own `gzip`/`brotli`/`deflate`
 # features strip `Content-Encoding` while decoding, which makes a compressed
 # response indistinguishable from an uncompressed one; crawlkit decodes

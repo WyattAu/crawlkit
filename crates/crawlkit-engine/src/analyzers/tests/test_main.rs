@@ -853,10 +853,11 @@ fn test_registry_default() {
     // `ColorContrastLinkAnalyzerV2` (COLRCL-V2001-UNDERLINE) and
     // `CanonicalDepthAnalyzerV2` (CANDEP-V2003). Each fired on 100% of crawled
     // pages. See the rationale at each registration site in `analyzers/mod.rs`.
+    // 793 -> 795: https-redirect and www-apex-consistency transport analyzers.
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 793);
+    assert_eq!(registry.len(), 795);
     #[cfg(not(feature = "full"))]
-    assert_eq!(registry.len(), 789);
+    assert_eq!(registry.len(), 791);
     assert!(!registry.is_empty());
 }
 

@@ -351,18 +351,21 @@ pub enum Commands {
     /// - `10` — more errors than `--max-errors` (default 0), or new errors
     ///   versus `--baseline`
     /// - `11` — more warnings than `--max-warnings` (default unbounded)
-    /// - `12` — score below a floor (reserved: no scoring model exists yet)
+    /// - `12` — score below `--min-score` (§G2 site score over the crawl's
+    ///   findings)
     ///
     /// Critical-severity findings count as errors.
     ///
     /// `--section` (GAP G9) limits the report to the named sections, given
     /// repeatable or comma-separated: `summary`, `backlinks`, `previews`,
-    /// or `all`. The default — every section that predates G9 (summary +
-    /// backlinks) — keeps output byte-identical with earlier versions.
-    /// `previews` renders per-platform social share mock frames (Google,
-    /// Facebook, X, LinkedIn, iMessage) from the stored page meta; styled
-    /// frames appear in html output (and `--pdf`), markdown lists the card
-    /// text.
+    /// `scores`, or `all`. The default — every section that predates G9
+    /// (summary + backlinks) — keeps output byte-identical with earlier
+    /// versions. `previews` renders per-platform social share mock frames
+    /// (Google, Facebook, X, LinkedIn, iMessage) from the stored page meta;
+    /// styled frames appear in html output (and `--pdf`), markdown lists
+    /// the card text. `scores` (§G2) renders the weighted scores table
+    /// (pages × categories plus the site mean) and the prioritized fix
+    /// list; json embeds it as data.
     ///
     /// `--pdf PATH` (GAP G10) additionally prints the HTML report to `PATH`
     /// by shelling out to a `weasyprint`, `chromium`, or `chromium-browser`
@@ -410,17 +413,25 @@ pub enum Commands {
         #[arg(long)]
         max_warnings: Option<usize>,
 
+        /// Lower bound on the §G2 site score in `--ci` mode: a computed
+        /// score below SCORE fails the gate with exit 12. Scores are
+        /// computed from the crawl's findings with the embedded weight
+        /// table, so this works on any existing crawl database.
+        #[arg(long, value_name = "SCORE")]
+        min_score: Option<f64>,
+
         /// Baseline crawl database (or directory) to compare against. In
         /// `--ci` mode, any new error-severity findings versus the baseline
         /// fail the gate with exit 10, even under a lenient `--max-errors`.
         #[arg(long)]
         baseline: Option<PathBuf>,
 
-        /// Report sections to render: summary, backlinks, previews, or all.
-        /// Repeatable or comma-separated (GAP G9). Default: summary +
-        /// backlinks (everything that predates the previews section), so
-        /// unqualified output is unchanged. Applies to markdown and html
-        /// output (and the page `--pdf` prints); json and csv have a fixed
+        /// Report sections to render: summary, backlinks, previews, scores,
+        /// or all. Repeatable or comma-separated (GAP G9). Default is
+        /// summary and backlinks (everything that predates the previews
+        /// section), so unqualified output is unchanged. Applies to
+        /// markdown and html output (and to the page `--pdf` prints); json
+        /// accepts `scores` only (embedded as data) and csv has a fixed
         /// layout.
         #[arg(long, value_name = "SECTIONS")]
         section: Vec<String>,

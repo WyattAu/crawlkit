@@ -336,19 +336,30 @@ impl CrawlRun<'_> {
         rendered: Option<&crate::playwright::RenderedPage>,
     ) -> (Vec<crate::Finding>, Duration) {
         let headers_vec: Vec<(String, String)> = result.headers.clone();
-        let empty_chain: Vec<RedirectHop> = Vec::new();
         let robots_ref = if fetched.robots_raw.is_empty() {
             None
         } else {
             Some(fetched.robots_raw.as_str())
         };
+        // Give the redirect analyzers the one transport observation the fetch
+        // layer can prove: this URL was requested, and this other URL served
+        // the response. reqwest auto-follows redirects (Policy::limited), so
+        // intermediate hop URLs and redirect statuses are not recoverable —
+        // the recorded status is the *final* response status, which is why
+        // MIXPROT001 only judges genuine 3xx statuses. A single hop cannot
+        // form a loop or exceed a length limit, so the loop/length analyzers
+        // stay silent, and scheme-changing hops are exactly what the
+        // https-redirect and mixed-protocol analyzers are defined over.
+        let observed_chain =
+            observation_hop(&fetched.entry.url, &result.final_url, result.status_code);
+        let observed_chain_slice = observed_chain.as_slice();
         let ctx = crate::analyzers::AnalysisContext {
             page: parsed,
             body: Some(body_text),
             status_code: Some(result.status_code),
             headers: &headers_vec,
             response_time: Some(fetched.fetch_time),
-            redirect_chain: &empty_chain,
+            redirect_chain: observed_chain_slice,
             robots_txt: robots_ref,
             user_agent: Some(fetched.user_agent.as_str()),
             body_size: Some(result.body_size),
@@ -644,4 +655,91 @@ pub(crate) fn encrypt_field(
             })
             .unwrap_or(v)
     })
+}
+
+/// The single redirect hop the fetch layer can prove happened.
+///
+/// `Some` only when the requested URL and the URL that actually served the
+/// response differ — an identical pair means no redirect occurred, and an
+/// empty chain must keep meaning "no redirect observed" for the analyzers
+/// that read `redirect_chain` (several treat presence of hops as their
+/// enable flag). The status is the final response status, not the redirect
+/// status, which reqwest's auto-follow policy does not expose.
+#[must_use]
+fn observation_hop(requested: &Url, final_url: &Url, status_code: u16) -> Option<RedirectHop> {
+    if requested == final_url {
+        return None;
+    }
+    Some(RedirectHop {
+        from: requested.clone(),
+        to: final_url.clone(),
+        status_code,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn url(s: &str) -> Url {
+        Url::parse(s).expect("static test URL")
+    }
+
+    #[test]
+    fn identical_urls_produce_no_hop() {
+        let requested = url("https://example.com/page");
+        assert!(
+            observation_hop(&requested, &requested, 200).is_none(),
+            "no redirect observed must stay an empty chain"
+        );
+    }
+
+    #[test]
+    fn http_to_https_upgrade_records_a_hop() {
+        let hop = observation_hop(
+            &url("http://example.com/"),
+            &url("https://example.com/"),
+            200,
+        )
+        .expect("upgrade is a transport observation");
+        assert_eq!(hop.from.as_str(), "http://example.com/");
+        assert_eq!(hop.to.as_str(), "https://example.com/");
+    }
+
+    #[test]
+    fn http_staying_on_http_records_a_hop() {
+        let hop = observation_hop(
+            &url("http://example.com/a"),
+            &url("http://example.com/b"),
+            200,
+        )
+        .expect("redirect within http is still a transport observation");
+        assert_eq!(hop.from.scheme(), "http");
+        assert_eq!(hop.to.scheme(), "http");
+    }
+
+    #[test]
+    fn www_to_apex_redirect_records_a_hop() {
+        let hop = observation_hop(
+            &url("https://www.example.com/x"),
+            &url("https://example.com/x"),
+            200,
+        )
+        .expect("host change is a transport observation");
+        assert_eq!(hop.from.host_str(), Some("www.example.com"));
+        assert_eq!(hop.to.host_str(), Some("example.com"));
+    }
+
+    #[test]
+    fn recorded_status_is_the_final_response_status() {
+        // The redirect status itself is not recoverable; the final status is
+        // what was actually seen on the wire.
+        let hop = observation_hop(
+            &url("http://example.com/"),
+            &url("https://example.com/"),
+            200,
+        )
+        .expect("upgrade observed");
+        assert_eq!(hop.status_code, 200);
+    }
 }

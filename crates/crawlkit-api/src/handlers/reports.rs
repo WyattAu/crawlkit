@@ -388,10 +388,13 @@ mod tests {
         let backend: &dyn crawlkit_engine::storage_trait::StorageBackend = &storage;
         snapshot_and_store_report(backend, &crawl_id, "2026-10-31T00:00:00+00:00", &db_path);
 
-        // History snapshot recorded.
+        // History snapshot recorded: the seo findings series carries the
+        // inserted issue's count (scoring rows may be appended alongside).
         let trend = storage.history_trend(None).unwrap();
-        assert_eq!(trend.len(), 1);
-        assert_eq!(trend[0].last_value(), Some(1.0));
+        let seo = trend
+            .iter()
+            .find(|s| s.category == "seo" && s.metric == crawlkit_engine::history::FINDINGS_METRIC);
+        assert_eq!(seo.map(|s| s.last_value()), Some(Some(1.0)));
 
         // Report stored + served through the handler.
         let state = make_state(dir.path());

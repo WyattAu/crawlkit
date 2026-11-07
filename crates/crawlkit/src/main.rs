@@ -242,6 +242,7 @@ async fn main() -> Result<()> {
             ci,
             max_errors,
             max_warnings,
+            min_score,
             baseline,
             section,
             pdf,
@@ -261,9 +262,9 @@ async fn main() -> Result<()> {
                     enabled: ci,
                     max_errors,
                     max_warnings,
-                    // GAP G2 (scoring) is unimplemented: no score exists to
-                    // floor against, so `--min-score` is not offered yet.
-                    min_score: None,
+                    // §G2: `--min-score` floors against the site score
+                    // computed from the crawl's findings (exit 12 below it).
+                    min_score,
                     baseline,
                     new_errors_vs_baseline: 0,
                 },

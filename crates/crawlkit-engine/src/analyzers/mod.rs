@@ -53,6 +53,8 @@ pub mod html_lang;
 pub mod html_text;
 /// HTTP-level analyzers for status codes, redirects, robots.txt, and SSL certificates.
 pub mod http_analyzers;
+/// HTTPS-redirect verification from recorded transport observations.
+pub mod https_redirect;
 /// Image accessibility analyzers.
 pub mod image_accessibility_analyzers;
 /// JavaScript error findings from rendered pages (6.0.0-alpha.2).
@@ -123,6 +125,8 @@ pub mod tabnabbing;
 pub mod tech_detection;
 pub mod url_norm;
 pub mod v2;
+/// www/apex canonical-host consistency from links the crawl already has.
+pub mod www_apex_consistency;
 /// X-header analyzers: X-Content-Type-Options, X-Permitted-Cross-Domain-Policies,
 /// Cross-Origin-Resource-Policy (extracted from security_analyzers).
 pub mod x_header_analyzers;
@@ -192,6 +196,7 @@ pub use http_analyzers::{
     RedirectChainAnalyzer, ResponseSizeAnalyzer, RobotsRule, RobotsTxtAnalyzer,
     ServerHeaderAnalyzer, SslCertificateValidator, TtfbAnalyzer,
 };
+pub use https_redirect::HttpsRedirectAnalyzer;
 pub use image_accessibility_analyzers::ImageAccessibilityAnalyzer;
 pub use landmark_analyzers::LandmarkRegionsAnalyzer;
 pub use landmark_heading_validator_analyzers::{
@@ -274,6 +279,7 @@ pub use table_analyzers::TableAccessibilityAnalyzer;
 pub use table_caption_analyzers::TableCaptionAnalyzer;
 pub use tech_detection::TechDetectionAnalyzer;
 pub use v2::*;
+pub use www_apex_consistency::WwwApexConsistencyAnalyzer;
 pub use x_header_analyzers::{
     CrossOriginResourcePolicyAnalyzer, XContentTypeOptionsAnalyzer,
     XPermittedCrossDomainPoliciesAnalyzer,
@@ -994,6 +1000,16 @@ impl AnalyzerRegistry {
             // data — server / x-powered-by headers, generator meta, asset
             // fingerprints, cookie names (GAP G7). Makes no network requests.
             Box::new(crate::analyzers::tech_detection::TechDetectionAnalyzer::new()),
+            // HTTPS-redirect verification from the one transport hop the fetch
+            // layer records (requested URL → serving URL). Flags http:// hosts
+            // that stay on http or redirect off https. Makes no network
+            // requests; the observed request was already rate-limited by the
+            // crawl itself.
+            Box::new(crate::analyzers::https_redirect::HttpsRedirectAnalyzer::new()),
+            // www/apex canonical-host consistency: both host forms of the
+            // page's own site linked from one page, with no redirect between
+            // them observed, splits the site's crawl signals in two. Passive.
+            Box::new(crate::analyzers::www_apex_consistency::WwwApexConsistencyAnalyzer::new()),
             // Lighthouse / CWV report ingestion (GAP G5). Silent on every
             // ordinary body; produces findings only when the body is a
             // Lighthouse JSON report. Makes no network requests and never

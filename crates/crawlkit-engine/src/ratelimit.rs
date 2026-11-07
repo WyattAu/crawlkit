@@ -1,20 +1,55 @@
+//! Per-domain and global request throttling for the crawl engine.
+//!
+//! The limiter is a thin scheduler over the estate's [`ratelimit`] crate:
+//! each bucket is a `ratelimit::GcraCell` (integer-microsecond GCRA state)
+//! parameterized by `ratelimit::GcraParams`. The GCRA core is Lean-proven in
+//! `ratelimit/proofs` (namespace `Ratelimit.Gcra`, THM-RATE-001..007): a
+//! request conforms iff `now ≥ TAT − τ`, an admission advances
+//! `TAT ← max(TAT, now) + T`, and the burst capacity is `b = 1 + ⌊τ/T⌋`
+//! with `(b−1)·T ≤ τ < b·T`.
+//!
+//! Each domain gets its own cell stored in an LRU cache that evicts
+//! least-recently-used domains when the capacity is reached. A global cell
+//! throttles all requests across all domains. A request proceeds only when
+//! both the domain and global cells conform. Supports crawl-delay from
+//! robots.txt and optional concurrency limiting.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use crawlkit_engine::ratelimit::RateLimiter;
+//!
+//! let limiter = RateLimiter::new(2.0, 10.0);
+//! assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);
+//! ```
 use std::num::NonZeroUsize;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use lru::LruCache;
 use parking_lot::Mutex;
+use ratelimit::{GcraCell, GcraParams};
 use tokio::sync::Semaphore;
 
 use crate::CrawlConfig;
 
-/// Token-bucket rate limiter for per-domain and global request throttling.
+/// Monotonic microseconds since process start (the GCRA clock domain).
 ///
-/// Each domain gets its own token bucket stored in an LRU cache that
+/// Anchored once so clock adjustments never move the TAT timeline; shared
+/// by the per-domain and global cells so their states are comparable.
+fn monotonic_us() -> u64 {
+    use std::sync::OnceLock;
+    static ANCHOR: OnceLock<Instant> = OnceLock::new();
+    ANCHOR.get_or_init(Instant::now).elapsed().as_micros() as u64
+}
+
+/// GCRA rate limiter for per-domain and global request throttling.
+///
+/// Each domain gets its own GCRA cell stored in an LRU cache that
 /// evicts least-recently-used domains when the capacity is reached.
-/// A global bucket throttles all requests across all domains. A request
-/// proceeds only when both the domain and global buckets have tokens.
-/// Supports crawl-delay from robots.txt and optional concurrency limiting.
+/// A global cell throttles all requests across all domains. A request
+/// proceeds only when both the domain and global cells conform. Supports
+/// crawl-delay from robots.txt and optional concurrency limiting.
 ///
 /// # Examples
 ///
@@ -25,10 +60,10 @@ use crate::CrawlConfig;
 /// assert!((limiter.per_domain_rps() - 2.0).abs() < f64::EPSILON);
 /// ```
 pub struct RateLimiter {
-    /// Per-domain token buckets (LRU eviction when full).
-    domain_buckets: Mutex<LruCache<String, TokenBucket>>,
-    /// Global token bucket.
-    global_bucket: Mutex<TokenBucket>,
+    /// Per-domain GCRA cells (LRU eviction when full).
+    domain_buckets: Mutex<LruCache<String, GcraBucket>>,
+    /// Global GCRA cell.
+    global_bucket: Mutex<GcraBucket>,
     /// Default per-domain RPS (requests per second).
     per_domain_rps: f64,
     /// Global RPS limit.
@@ -60,7 +95,7 @@ impl RateLimiter {
     /// Creates a rate limiter with a custom maximum number of tracked domains.
     ///
     /// When the cache is full and a new domain is accessed, the
-    /// least-recently-used domain bucket is evicted.
+    /// least-recently-used domain cell is evicted.
     pub fn with_max_domains(per_domain_rps: f64, global_rps: f64, max_domains: usize) -> Self {
         let per_domain_burst = (per_domain_rps * 2.0).ceil() as usize;
         let global_burst = (global_rps * 2.0).ceil() as usize;
@@ -69,7 +104,7 @@ impl RateLimiter {
             domain_buckets: Mutex::new(LruCache::new(
                 NonZeroUsize::new(max_domains).unwrap_or(NonZeroUsize::MIN),
             )),
-            global_bucket: Mutex::new(TokenBucket::new(global_rps, global_burst)),
+            global_bucket: Mutex::new(GcraBucket::new(global_rps, global_burst)),
             per_domain_rps,
             global_rps,
             per_domain_burst,
@@ -100,8 +135,8 @@ impl RateLimiter {
 
     /// Acquires permission to make a request to the given domain.
     ///
-    /// Blocks until tokens are available in both the domain and global
-    /// buckets. Returns `Err` if the wait exceeds the timeout.
+    /// Blocks until both the domain and global GCRA cells conform.
+    /// Returns `Err` if the wait exceeds the timeout.
     ///
     /// # Examples
     ///
@@ -137,17 +172,16 @@ impl RateLimiter {
             None
         };
 
-        // Wait for domain bucket token
+        // Wait for the domain cell to conform
         loop {
             {
                 let mut buckets = self.domain_buckets.lock();
                 let rps = self.per_domain_rps;
                 let burst = self.per_domain_burst;
                 let bucket =
-                    buckets.get_or_insert_mut(domain.to_string(), || TokenBucket::new(rps, burst));
-                bucket.refill();
+                    buckets.get_or_insert_mut(domain.to_string(), || GcraBucket::new(rps, burst));
 
-                if bucket.try_consume(1) {
+                if bucket.try_consume() {
                     break;
                 }
             }
@@ -156,12 +190,12 @@ impl RateLimiter {
                 return Err(RateLimitError::Timeout);
             }
 
-            // Sleep for the time until the next token is available
+            // Sleep until the domain cell can next conform
             let wait = {
                 let buckets = self.domain_buckets.lock();
                 buckets
                     .peek(domain)
-                    .map(|b| b.time_until_next_token())
+                    .map(GcraBucket::time_until_next_token)
                     .unwrap_or(Duration::from_millis(10))
             };
 
@@ -170,16 +204,15 @@ impl RateLimiter {
             tokio::time::sleep(sleep_time).await;
         }
 
-        // Wait for global bucket token
+        // Wait for the global cell to conform
         loop {
             // Acquire lock in a block to ensure it is dropped before any await point.
             // `parking_lot::Mutex` guards are `!Send`; holding them across an `.await`
             // would poison the future and violate tokio's Send requirement.
             let sleep_time = {
                 let mut global = self.global_bucket.lock();
-                global.refill();
 
-                if global.try_consume(1) {
+                if global.try_consume() {
                     break;
                 }
 
@@ -201,7 +234,8 @@ impl RateLimiter {
 
     /// Sets the crawl-delay for a specific domain (from robots.txt).
     ///
-    /// This overrides the default RPS for that domain.
+    /// This overrides the default RPS for that domain by replacing its
+    /// GCRA cell with a fresh full-burst budget.
     pub fn set_crawl_delay(&self, domain: &str, delay: Duration) {
         let rps = if delay.is_zero() {
             10.0
@@ -210,20 +244,20 @@ impl RateLimiter {
         };
         let burst = (rps * 2.0).ceil() as usize;
         let mut buckets = self.domain_buckets.lock();
-        buckets.put(domain.to_string(), TokenBucket::new(rps, burst));
+        buckets.put(domain.to_string(), GcraBucket::new(rps, burst));
     }
 
-    /// Returns the current token count for a domain bucket.
-    /// Creates the bucket if it doesn't exist.
+    /// Returns the current burst credits for a domain cell.
+    /// Creates the cell if it doesn't exist.
     pub fn domain_tokens(&self, domain: &str) -> f64 {
         let mut buckets = self.domain_buckets.lock();
         let rps = self.per_domain_rps;
         let burst = self.per_domain_burst;
-        let bucket = buckets.get_or_insert_mut(domain.to_string(), || TokenBucket::new(rps, burst));
+        let bucket = buckets.get_or_insert_mut(domain.to_string(), || GcraBucket::new(rps, burst));
         bucket.tokens()
     }
 
-    /// Returns the current global token count.
+    /// Returns the current global burst credits.
     pub fn global_tokens(&self) -> f64 {
         self.global_bucket.lock().tokens()
     }
@@ -242,7 +276,7 @@ impl RateLimiter {
 /// Errors that can occur during rate limiting.
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum RateLimitError {
-    /// The wait timed out before a token became available.
+    /// The wait timed out before the cells could conform.
     #[error("rate limit acquire timed out")]
     Timeout,
     /// The rate limiter has been closed.
@@ -250,105 +284,105 @@ pub enum RateLimitError {
     Closed,
 }
 
-/// Token bucket implementation for rate limiting.
+/// One GCRA bucket: a `ratelimit::GcraCell` plus its parameters.
+///
+/// Admission, wait-time, and credit accounting are all delegated to the
+/// Lean-proven `ratelimit::gcra` core — this type only owns the mapping
+/// from `(rps, burst)` config to GCRA parameters.
 #[derive(Debug)]
-struct TokenBucket {
-    /// Current tokens available.
-    tokens: f64,
-    /// Maximum tokens (burst size).
-    max_tokens: f64,
-    /// Refill rate in tokens per second.
-    refill_rate: f64,
-    /// Last time tokens were refilled.
-    last_refill: Instant,
+struct GcraBucket {
+    /// GCRA parameters: `T = 1/rps` µs, `τ = (burst−1)·T` (the integer
+    /// configuration of the proofs). Burst capacity is derived from `τ`
+    /// (`b = 1 + ⌊τ/T⌋`), so no separate field is stored.
+    params: GcraParams,
+    /// Integer-µs GCRA state (theoretical arrival time).
+    cell: GcraCell,
 }
 
-impl TokenBucket {
-    /// Creates a new token bucket.
+impl GcraBucket {
+    /// Creates a fresh bucket with a full burst budget.
+    ///
+    /// `burst` is clamped to at least 1 so a degenerate `rps` cannot mint a
+    /// zero-capacity bucket.
     fn new(rps: f64, burst: usize) -> Self {
+        let burst = (burst as u64).max(1);
         Self {
-            tokens: burst as f64,
-            max_tokens: burst as f64,
-            refill_rate: rps,
-            last_refill: Instant::now(),
+            params: GcraParams::from_rate(rps, burst),
+            cell: GcraCell::new(monotonic_us()),
         }
     }
 
-    /// Refills tokens based on elapsed time since last refill.
-    fn refill(&mut self) {
-        let now = Instant::now();
-        let elapsed = now.duration_since(self.last_refill).as_secs_f64();
-        self.tokens = (self.tokens + elapsed * self.refill_rate).min(self.max_tokens);
-        self.last_refill = now;
+    /// Runs one GCRA step at `now_us`; `true` iff the request conforms.
+    fn check_at(&mut self, now_us: u64) -> bool {
+        self.cell.check(now_us, self.params).allowed
     }
 
-    /// Tries to consume `n` tokens. Returns `true` if successful.
-    fn try_consume(&mut self, n: usize) -> bool {
-        if self.tokens >= n as f64 {
-            self.tokens -= n as f64;
-            true
-        } else {
-            false
-        }
+    /// Tries to admit one request now.
+    fn try_consume(&mut self) -> bool {
+        self.check_at(monotonic_us())
     }
 
-    /// Returns the time until the next token is available.
+    /// Time until the cell can next conform.
     fn time_until_next_token(&self) -> Duration {
-        if self.tokens >= 1.0 {
-            Duration::ZERO
-        } else {
-            let deficit = 1.0 - self.tokens;
-            Duration::from_secs_f64(deficit / self.refill_rate)
-        }
+        Duration::from_micros(self.cell.retry_after_us(monotonic_us(), self.params))
     }
 
-    /// Returns the current number of tokens.
+    /// Same-instant burst credits visible now, in `[0, burst]` — the
+    /// GCRA analogue of the token count (`ratelimit::GcraCell::credits`).
     fn tokens(&self) -> f64 {
-        self.tokens
+        self.cell.credits(monotonic_us(), self.params) as f64
     }
 }
 
+// Tests exercise delegation invariants directly; unwrap/expect,
+// slicing, and panicking asserts are acceptable here — violations
+// surface as test failures, not production panics.
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    clippy::panic
+)]
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_token_bucket_basic() {
-        let mut bucket = TokenBucket::new(10.0, 10);
-        assert!(bucket.try_consume(1));
+    fn test_gcra_bucket_basic() {
+        let mut bucket = GcraBucket::new(10.0, 10);
+        assert!(bucket.try_consume());
         assert_eq!(bucket.tokens(), 9.0);
     }
 
     #[test]
-    fn test_token_bucket_empty() {
-        let mut bucket = TokenBucket::new(1.0, 1);
-        assert!(bucket.try_consume(1));
-        assert!(!bucket.try_consume(1)); // empty
+    fn test_gcra_bucket_empty() {
+        let mut bucket = GcraBucket::new(1.0, 1);
+        assert!(bucket.try_consume());
+        assert!(!bucket.try_consume()); // burst exhausted
     }
 
     #[test]
-    fn test_token_bucket_refill() {
-        let mut bucket = TokenBucket::new(100.0, 10);
-        // Drain
+    fn test_gcra_bucket_recovers_after_elapsed() {
+        let mut bucket = GcraBucket::new(100.0, 10);
+        // Drain the burst (T = 10 ms, τ = 9·T: ten same-instant admissions).
         for _ in 0..10 {
-            bucket.try_consume(1);
+            assert!(bucket.try_consume());
         }
-        assert!(!bucket.try_consume(1));
+        assert!(!bucket.try_consume());
 
-        // Simulate time passing by manipulating last_refill
-        bucket.last_refill = Instant::now() - Duration::from_secs(1);
-        bucket.refill();
-        assert!(bucket.try_consume(1));
+        // Simulate 1.1 s passing by checking at an explicit future instant.
+        let now = monotonic_us();
+        assert!(bucket.check_at(now + 1_100_000));
     }
 
     #[test]
-    fn test_token_bucket_burst() {
-        let mut bucket = TokenBucket::new(5.0, 10);
-        // Should allow burst of 10
+    fn test_gcra_bucket_burst() {
+        let mut bucket = GcraBucket::new(5.0, 10);
+        // Should allow a burst of 10
         for _ in 0..10 {
-            assert!(bucket.try_consume(1));
+            assert!(bucket.try_consume());
         }
-        assert!(!bucket.try_consume(1));
+        assert!(!bucket.try_consume());
     }
 
     #[test]
@@ -370,7 +404,7 @@ mod tests {
     fn test_rate_limiter_domain_tokens() {
         let limiter = RateLimiter::new(5.0, 20.0);
         let tokens = limiter.domain_tokens("example.com");
-        // Bucket is created lazily with burst = ceil(5.0 * 2.0) = 10
+        // Cell is created lazily with burst = ceil(5.0 * 2.0) = 10
         assert!(
             (9.0..=11.0).contains(&tokens),
             "expected ~10.0, got {tokens}"
@@ -395,14 +429,14 @@ mod tests {
     }
 
     #[test]
-    fn test_token_bucket_time_until_next_token() {
-        let bucket = TokenBucket::new(10.0, 5);
+    fn test_bucket_time_until_next_token() {
+        let bucket = GcraBucket::new(10.0, 5);
         assert_eq!(bucket.time_until_next_token(), Duration::ZERO);
 
-        let mut bucket = TokenBucket::new(10.0, 1);
-        bucket.try_consume(1);
+        let mut bucket = GcraBucket::new(10.0, 1);
+        bucket.try_consume();
         let wait = bucket.time_until_next_token();
-        // Should be ~100ms (1 token / 10 tokens per second)
+        // Should be ~100ms (T = 1 / 10 rps, τ = 0)
         assert!(wait > Duration::from_millis(90));
         assert!(wait <= Duration::from_millis(110));
     }
@@ -419,11 +453,11 @@ mod tests {
     #[tokio::test]
     async fn test_rate_limiter_acquire_timeout() {
         let limiter = RateLimiter::new(0.001, 0.001); // very low RPS
-                                                      // Consume the initial burst token
+                                                      // Consume the initial burst cell
         let _ = limiter
             .acquire_with_timeout("example.com", Duration::from_secs(1))
             .await;
-        // Now the bucket is empty, should time out
+        // Now the cell cannot conform for ~1000 s, should time out
         let result = limiter
             .acquire_with_timeout("example.com", Duration::from_millis(50))
             .await;

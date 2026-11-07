@@ -19,12 +19,10 @@ pub struct CiGateOptions {
     pub max_errors: usize,
     /// Upper bound on warning-severity findings. `None` = unbounded.
     pub max_warnings: Option<usize>,
-    /// Lower bound on the report score.
-    ///
-    /// Reserved: crawlkit has no scoring model yet (GAP G2 is unimplemented),
-    /// so the CLI cannot set this and the gate always receives `None`. The
-    /// decision path is implemented and unit-tested so wiring `--min-score`
-    /// later is a one-flag change.
+    /// Lower bound on the report score (§G2 site score), as `--min-score`.
+    /// A computed score below the floor fails the gate with exit `12`. A
+    /// missing score (scoring produced nothing to floor against) never
+    /// fails the gate.
     pub min_score: Option<f64>,
     /// Crawl to diff against (database file or directory). `None` = no
     /// baseline comparison.
@@ -127,17 +125,21 @@ pub enum Section {
     Backlinks,
     /// Per-platform social share preview frames built from stored page meta.
     Previews,
+    /// Weighted scores (§G2): a pages × categories table with the site mean,
+    /// plus prioritized fix recommendations. Also the only section the json
+    /// format can embed (its layout is otherwise fixed).
+    Scores,
 }
 
 /// The sections rendered when `--section` is not passed: exactly the sections
-/// that existed before G9. `previews` is new and opt-in, so default output
-/// stays byte-identical with earlier crawlkit versions.
+/// that existed before G9. `previews` and `scores` are new and opt-in, so
+/// default output stays byte-identical with earlier crawlkit versions.
 const DEFAULT_SECTIONS: &[Section] = &[Section::Summary, Section::Backlinks];
 
 /// Parse repeatable/comma-separated `--section` values into a deduplicated
 /// list that preserves first-mention order. Empty input selects
 /// [`DEFAULT_SECTIONS`]. The token `all` selects every section, including the
-/// previews section that the default omits.
+/// previews and scores sections that the default omits.
 ///
 /// Pure and unit-tested; unknown tokens are a hard error so a typo cannot
 /// silently render an empty report.
@@ -154,8 +156,14 @@ fn parse_sections(values: &[String]) -> Result<Vec<Section>> {
                 "summary" => Section::Summary,
                 "backlinks" => Section::Backlinks,
                 "previews" => Section::Previews,
+                "scores" => Section::Scores,
                 "all" => {
-                    for section in [Section::Summary, Section::Backlinks, Section::Previews] {
+                    for section in [
+                        Section::Summary,
+                        Section::Backlinks,
+                        Section::Previews,
+                        Section::Scores,
+                    ] {
                         if !selected.contains(&section) {
                             selected.push(section);
                         }
@@ -164,7 +172,7 @@ fn parse_sections(values: &[String]) -> Result<Vec<Section>> {
                 }
                 other => {
                     return Err(anyhow::anyhow!(
-                        "Unknown report section '{other}'. Valid: summary, backlinks, previews, all."
+                        "Unknown report section '{other}'. Valid: summary, backlinks, previews, scores, all."
                     ));
                 }
             };
@@ -174,6 +182,33 @@ fn parse_sections(values: &[String]) -> Result<Vec<Section>> {
         }
     }
     Ok(selected)
+}
+
+/// Whether the parsed section selection can render in `format`. json and csv
+/// have fixed layouts (GAP G9), but the scores section is data, not layout:
+/// json embeds it as a `"scores"` object (§G2). `explicit` distinguishes a
+/// user-passed `--section` from the default selection.
+///
+/// Pure and unit-tested.
+fn sections_compatible_with_format(
+    explicit: bool,
+    selected: &[Section],
+    format: &str,
+) -> Result<()> {
+    if !explicit {
+        return Ok(());
+    }
+    let scores_only = selected.iter().all(|s| *s == Section::Scores);
+    match format {
+        // csv never gains sections: its layout is a flat crawl summary row.
+        "csv" => Err(anyhow::anyhow!(
+            "--section applies to markdown, html, and json (scores only); the 'csv' format has a fixed layout."
+        )),
+        "json" if !scores_only => Err(anyhow::anyhow!(
+            "--section applies to markdown and html output; for json only 'scores' is supported (the rest of the json layout is fixed)."
+        )),
+        _ => Ok(()),
+    }
 }
 
 /// Cap on pages rendered in the share-previews section. A report is a
@@ -355,8 +390,321 @@ fn render_share_previews_markdown(pages: &[PageData]) -> String {
 }
 
 // ---------------------------------------------------------------------------
-// HTML report (GAP G10)
+// Weighted scores (GAP G2 / §G2)
 // ---------------------------------------------------------------------------
+
+/// Cap on pages rendered in the scores section table. The site score and the
+/// fix ranking always cover *all* crawled pages; only the table is capped,
+/// worst-scoring pages first, keeping report output bounded.
+const SCORES_PAGE_LIMIT: usize = 20;
+
+/// Cap on fix recommendations rendered in the scores section.
+const SCORES_FIX_LIMIT: usize = 10;
+
+/// One page's scores (§G2): the overall page score in `[0, 100]` and the
+/// per-category scores for every category with at least one finding on the
+/// page. Deliberately free of engine types so the renderers and their tests
+/// stay decoupled from the weight-table implementation.
+#[derive(Debug, Clone, PartialEq)]
+struct PageScores {
+    /// Page URL (final URL when a canonical is absent, as stored).
+    url: String,
+    /// `100 × Π (1 − wᵢ)` over all findings on the page.
+    score: f64,
+    /// kebab-case category name → category score in `[0, 100]`.
+    categories: std::collections::BTreeMap<String, f64>,
+}
+
+/// One prioritized fix recommendation (§G2), flattened for rendering.
+#[derive(Debug, Clone, PartialEq)]
+struct FixRow {
+    /// Machine-readable issue code.
+    rule_id: String,
+    /// kebab-case category name.
+    category: String,
+    /// Penalty weight in `[0, 1]`.
+    weight: f64,
+    /// Number of pages affected.
+    pages_affected: usize,
+    /// Ranking key: `weight × pages_affected`.
+    impact: f64,
+}
+
+/// Site-wide scoring summary (§G2) computed from the crawl's findings.
+#[derive(Debug, Clone, PartialEq)]
+struct ScoreReport {
+    /// Every crawled page, worst score first (ties by URL ascending).
+    pages: Vec<PageScores>,
+    /// Distinct category names across the crawl, sorted (table columns).
+    categories: Vec<String>,
+    /// Page-count weighted mean of the page scores, two fixed decimals.
+    site: f64,
+    /// Findings ranked as fix recommendations (impact descending).
+    fixes: Vec<FixRow>,
+}
+
+/// Compute the §G2 score report from the crawl's stored findings.
+///
+/// Uses the engine's embedded `scoring.toml` weight table (deterministic,
+/// versioned): page scores are multiplicative penalties over finding codes,
+/// the site score is the page-count weighted mean, and fixes are ranked by
+/// `weight × pages_affected`. Only defect rows are scored — measurement rows
+/// (`is_metric = 1`) are not problems, matching `get_stats` and the §G6
+/// history snapshots.
+fn compute_score_report(storage: &Storage, crawl_id: &str) -> Result<ScoreReport> {
+    let weights = crawlkit_engine::scoring::Weights::embedded()
+        .context("embedded scoring table failed to load")?;
+
+    let issues = storage
+        .get_issues(crawl_id, &crawlkit_engine::storage::IssueFilter::default())
+        .context("Failed to load findings for scoring")?;
+
+    // Page universe: every crawled page, even ones with zero findings
+    // (they score 100 and pull the site mean up). id → url from the pages
+    // table; the URL column is NOT NULL so a page row always carries one.
+    let pages = storage
+        .get_pages(crawl_id, usize::MAX)
+        .context("Failed to load pages for scoring")?;
+    let page_urls: std::collections::BTreeMap<String, String> = pages
+        .into_iter()
+        .map(|page| (page.id, page.url.to_string()))
+        .collect();
+
+    // Group finding codes by page id. A finding whose page row is gone
+    // (page deleted between the two queries) has no URL to show and is
+    // skipped, mirroring the §G6 snapshot's JOIN.
+    let mut findings_by_page: std::collections::BTreeMap<&str, Vec<_>> =
+        std::collections::BTreeMap::new();
+    for issue in &issues {
+        if page_urls.contains_key(&issue.page_id) {
+            findings_by_page
+                .entry(issue.page_id.as_str())
+                .or_default()
+                .push(crawlkit_engine::scoring::FindingRef::new(&issue.code));
+        }
+    }
+
+    let mut scored: Vec<PageScores> = page_urls
+        .iter()
+        .map(|(page_id, url)| {
+            let refs = findings_by_page
+                .remove(page_id.as_str())
+                .unwrap_or_default();
+            let categories = weights
+                .category_scores(&refs)
+                .into_iter()
+                .map(|(category, score)| (category.as_str().to_string(), score))
+                .collect();
+            PageScores {
+                url: url.clone(),
+                score: weights.page_score(&refs),
+                categories,
+            }
+        })
+        .collect();
+
+    // Worst pages first — the point of the table is what to fix — with the
+    // URL as the deterministic tie-breaker.
+    scored.sort_by(|a, b| a.score.total_cmp(&b.score).then_with(|| a.url.cmp(&b.url)));
+
+    let mut categories: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    let site_rows: Vec<(String, f64)> = scored
+        .iter()
+        .map(|page| {
+            categories.extend(page.categories.keys().cloned());
+            (page.url.clone(), page.score)
+        })
+        .collect();
+    let site = crawlkit_engine::scoring::site_score(&site_rows);
+
+    // One fix per distinct rule id, ranked by weight × pages affected.
+    // Only findings whose page row exists are counted — the same filter the
+    // page scores above applied.
+    let all_refs: Vec<crawlkit_engine::scoring::FindingRef<'_>> = issues
+        .iter()
+        .filter(|issue| page_urls.contains_key(&issue.page_id))
+        .map(|issue| crawlkit_engine::scoring::FindingRef::new(&issue.code))
+        .collect();
+
+    let mut pages_affected: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for rule_id in issues
+        .iter()
+        .filter(|issue| page_urls.contains_key(&issue.page_id))
+        .map(|issue| issue.code.clone())
+    {
+        *pages_affected.entry(rule_id).or_default() += 1;
+    }
+
+    let fixes = weights
+        .prioritized_fixes(&all_refs, &pages_affected)
+        .into_iter()
+        .map(|fix| FixRow {
+            rule_id: fix.rule_id,
+            category: fix.category.as_str().to_string(),
+            weight: fix.weight,
+            pages_affected: fix.pages_affected,
+            impact: fix.impact,
+        })
+        .collect();
+
+    Ok(ScoreReport {
+        pages: scored,
+        categories: categories.into_iter().collect(),
+        site,
+        fixes,
+    })
+}
+
+/// Format a score the way every renderer prints it: two fixed decimals, the
+/// engine's determinism contract carried through to the output text.
+fn format_score(score: f64) -> String {
+    format!("{score:.2}")
+}
+
+/// Render the scores section for the markdown report: a pages × categories
+/// table (worst first, capped) with the site mean, then prioritized fixes.
+fn render_scores_markdown(scores: &ScoreReport) -> String {
+    let mut md = format!(
+        "\n## Scores\n\n\
+         Site score: **{}** (mean over {} crawled pages).\n",
+        format_score(scores.site),
+        scores.pages.len(),
+    );
+    if scores.pages.is_empty() {
+        md.push_str("\nNo pages stored for this crawl.\n");
+        return md;
+    }
+
+    md.push_str("\n| URL |");
+    for category in &scores.categories {
+        md.push_str(&format!(" {category} |"));
+    }
+    md.push_str(" Page score |\n");
+    md.push_str(&format!(
+        "|-----|{}------|\n",
+        "------|".repeat(scores.categories.len())
+    ));
+    for page in scores.pages.iter().take(SCORES_PAGE_LIMIT) {
+        md.push_str(&format!("| {} |", collapse_whitespace(&page.url)));
+        for category in &scores.categories {
+            match page.categories.get(category) {
+                Some(score) => md.push_str(&format!(" {} |", format_score(*score))),
+                None => md.push_str(" — |"),
+            }
+        }
+        md.push_str(&format!(" {} |\n", format_score(page.score)));
+    }
+    if scores.pages.len() > SCORES_PAGE_LIMIT {
+        md.push_str(&format!(
+            "\n... and {} more pages (table capped at {SCORES_PAGE_LIMIT}; \
+             the site score covers all pages).\n",
+            scores.pages.len() - SCORES_PAGE_LIMIT
+        ));
+    }
+
+    md.push_str(&render_fixes_markdown(&scores.fixes));
+    md
+}
+
+/// Render the prioritized-fixes list for the markdown report (§G2): ranked
+/// by `weight × pages_affected` descending, ties by rule id ascending.
+fn render_fixes_markdown(fixes: &[FixRow]) -> String {
+    if fixes.is_empty() {
+        return "\n### Prioritized fixes\n\nNo findings recorded; nothing to fix.\n".to_string();
+    }
+    let mut md = String::from(
+        "\n### Prioritized fixes\n\n\
+         Ranked by impact (weight × pages affected).\n\n\
+         | Rule | Category | Weight | Pages affected | Impact |\n\
+         |------|----------|--------|----------------|--------|\n",
+    );
+    for fix in fixes.iter().take(SCORES_FIX_LIMIT) {
+        md.push_str(&format!(
+            "| {} | {} | {:.2} | {} | {:.2} |\n",
+            fix.rule_id, fix.category, fix.weight, fix.pages_affected, fix.impact,
+        ));
+    }
+    if fixes.len() > SCORES_FIX_LIMIT {
+        md.push_str(&format!(
+            "\n... and {} more fixes (capped at {SCORES_FIX_LIMIT}).\n",
+            fixes.len() - SCORES_FIX_LIMIT
+        ));
+    }
+    md
+}
+
+/// Render the scores section of the HTML report: the pages × categories
+/// table with the site mean, then prioritized fixes.
+fn render_scores_html(scores: &ScoreReport) -> String {
+    let mut html = format!(
+        "<h2>Scores</h2>\n<p class=\"ck-meta\">Site score {} — mean over {} crawled pages.</p>\n",
+        escape_html(&format_score(scores.site)),
+        scores.pages.len(),
+    );
+    if scores.pages.is_empty() {
+        html.push_str("<p class=\"ck-meta\">No pages stored for this crawl.</p>\n");
+        return html;
+    }
+
+    html.push_str("<table class=\"ck-table\">\n<tr><th>URL</th>");
+    for category in &scores.categories {
+        html.push_str(&format!("<th>{}</th>", escape_html(category)));
+    }
+    html.push_str("<th>Page score</th></tr>\n");
+    for page in scores.pages.iter().take(SCORES_PAGE_LIMIT) {
+        html.push_str(&format!("<tr><td>{}</td>", escape_html(&page.url)));
+        for category in &scores.categories {
+            match page.categories.get(category) {
+                Some(score) => html.push_str(&format!("<td>{}</td>", format_score(*score))),
+                None => html.push_str("<td>—</td>"),
+            }
+        }
+        html.push_str(&format!("<td>{}</td></tr>\n", format_score(page.score)));
+    }
+    html.push_str("</table>\n");
+    if scores.pages.len() > SCORES_PAGE_LIMIT {
+        html.push_str(&format!(
+            "<p class=\"ck-meta\">... and {} more pages (table capped at \
+             {SCORES_PAGE_LIMIT}; the site score covers all pages).</p>\n",
+            scores.pages.len() - SCORES_PAGE_LIMIT
+        ));
+    }
+
+    html.push_str(&render_fixes_html(&scores.fixes));
+    html
+}
+
+/// Render the prioritized-fixes table for the HTML report (§G2).
+fn render_fixes_html(fixes: &[FixRow]) -> String {
+    if fixes.is_empty() {
+        return "<h3>Prioritized fixes</h3>\n<p class=\"ck-meta\">No findings recorded; nothing to fix.</p>\n".to_string();
+    }
+    let mut html = String::from(
+        "<h3>Prioritized fixes</h3>\n<p class=\"ck-meta\">Ranked by impact \
+         (weight × pages affected).</p>\n<table class=\"ck-table\">\n\
+         <tr><th>Rule</th><th>Category</th><th>Weight</th><th>Pages affected</th>\
+         <th>Impact</th></tr>\n",
+    );
+    for fix in fixes.iter().take(SCORES_FIX_LIMIT) {
+        html.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{:.2}</td><td>{}</td><td>{:.2}</td></tr>\n",
+            escape_html(&fix.rule_id),
+            escape_html(&fix.category),
+            fix.weight,
+            fix.pages_affected,
+            fix.impact,
+        ));
+    }
+    if fixes.len() > SCORES_FIX_LIMIT {
+        html.push_str(&format!(
+            "<p class=\"ck-meta\">... and {} more fixes (capped at {SCORES_FIX_LIMIT}).</p>\n",
+            fixes.len() - SCORES_FIX_LIMIT
+        ));
+    }
+    html.push_str("</table>\n");
+    html
+}
 
 /// Fixed stylesheet for the HTML report, including the `@media print` rules
 /// that make it print-ready for PDF export. Deliberately versionless and
@@ -474,6 +822,7 @@ fn build_html_report(
     )>,
     sections: &[Section],
     preview_pages: &[PageData],
+    scores: Option<&ScoreReport>,
 ) -> String {
     let mut body = String::new();
     if sections.contains(&Section::Summary) {
@@ -486,6 +835,11 @@ fn build_html_report(
     }
     if sections.contains(&Section::Previews) {
         body.push_str(&render_share_previews_html(preview_pages));
+    }
+    if sections.contains(&Section::Scores) {
+        if let Some(scores) = scores {
+            body.push_str(&render_scores_html(scores));
+        }
     }
     format!(
         "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n\
@@ -732,14 +1086,11 @@ pub fn run(
 ) -> Result<()> {
     let selected = parse_sections(&options.sections)?;
 
-    // json/csv have fixed layouts with no section structure; a silent ignore
-    // would look like the feature is broken. (markdown/html — and the page
-    // `--pdf` prints, which is always HTML — honor the selection.)
-    if !options.sections.is_empty() && matches!(format, "json" | "csv") {
-        return Err(anyhow::anyhow!(
-            "--section applies to markdown and html output; the '{format}' format has a fixed layout."
-        ));
-    }
+    // json/csv have fixed layouts; a silent ignore would look like the
+    // feature is broken. The scores section is the exception: json embeds
+    // it as data (§G2). (markdown/html — and the page `--pdf` prints,
+    // which is always HTML — honor the full selection.)
+    sections_compatible_with_format(!options.sections.is_empty(), &selected, format)?;
 
     let pb = ProgressBar::new_spinner();
     pb.set_style(
@@ -809,15 +1160,35 @@ pub fn run(
         Vec::new()
     };
 
+    // §G2 scores feed three consumers: the scores section (markdown/html/
+    // json), the CI summary line, and the `--min-score` floor (exit 12).
+    // Compute them once, whenever any consumer needs them.
+    let needs_scores = ci.enabled || selected.contains(&Section::Scores);
+    let score_report = if needs_scores {
+        Some(compute_score_report(&storage, &crawl_id)?)
+    } else {
+        None
+    };
+
     let report = match format {
-        "json" => build_json_report(&crawl_id, &stats, &backlink_data)?,
-        "markdown" | "md" => {
-            build_markdown_report(&crawl_id, &stats, &backlink_data, &selected, &preview_pages)
-        }
+        "json" => build_json_report(&crawl_id, &stats, &backlink_data, score_report.as_ref())?,
+        "markdown" | "md" => build_markdown_report(
+            &crawl_id,
+            &stats,
+            &backlink_data,
+            &selected,
+            &preview_pages,
+            score_report.as_ref(),
+        ),
         "csv" => build_csv_report(&crawl_id, &stats),
-        "html" | "htm" => {
-            build_html_report(&crawl_id, &stats, &backlink_data, &selected, &preview_pages)
-        }
+        "html" | "htm" => build_html_report(
+            &crawl_id,
+            &stats,
+            &backlink_data,
+            &selected,
+            &preview_pages,
+            score_report.as_ref(),
+        ),
         other => {
             // Name the values that exist. `--help` previously advertised `html`,
             // which had no implementation, so the error a user hit listed no
@@ -838,12 +1209,19 @@ pub fn run(
     }
 
     if let Some(pdf_path) = &options.pdf {
-        let html = build_html_report(&crawl_id, &stats, &backlink_data, &selected, &preview_pages);
+        let html = build_html_report(
+            &crawl_id,
+            &stats,
+            &backlink_data,
+            &selected,
+            &preview_pages,
+            score_report.as_ref(),
+        );
         export_pdf(&html, pdf_path)?;
     }
 
     if ci.enabled {
-        run_ci_gate(&stats, ci)?;
+        run_ci_gate(&stats, ci, score_report.as_ref().map(|s| s.site))?;
     }
 
     Ok(())
@@ -851,11 +1229,17 @@ pub fn run(
 
 /// Apply the CI quality gate after the report has rendered (GAP G4).
 ///
-/// Prints a one-line summary, then exits `10`/`11`/`12` on the first failed
-/// threshold via [`ci_exit_code`]. Baseline comparison reuses the engine's
-/// stored crawl data: error-severity finding counts on both sides give the
-/// "new errors" signal.
-fn run_ci_gate(stats: &crawlkit_engine::storage::CrawlStats, ci: &CiGateOptions) -> Result<()> {
+/// Prints a one-line summary (including the §G2 site score when one was
+/// computed), then exits `10`/`11`/`12` on the first failed threshold via
+/// [`ci_exit_code`]. Baseline comparison reuses the engine's stored crawl
+/// data: error-severity finding counts on both sides give the "new errors"
+/// signal. `site_score` comes from [`compute_score_report`] whenever the gate
+/// is enabled, so `--min-score` can floor against it (exit `12`).
+fn run_ci_gate(
+    stats: &crawlkit_engine::storage::CrawlStats,
+    ci: &CiGateOptions,
+    site_score: Option<f64>,
+) -> Result<()> {
     // Critical findings count as errors: a gate that lets criticals pass
     // while failing errors would hold the page to a weaker standard than
     // the findings themselves do.
@@ -897,7 +1281,7 @@ fn run_ci_gate(stats: &crawlkit_engine::storage::CrawlStats, ci: &CiGateOptions)
         };
     }
 
-    let verdict = match ci_exit_code(errors, warnings, None, &gate) {
+    let verdict = match ci_exit_code(errors, warnings, site_score, &gate) {
         None => "PASS".to_string(),
         Some(code) => format!(
             "FAIL exit {code} ({})",
@@ -911,15 +1295,16 @@ fn run_ci_gate(stats: &crawlkit_engine::storage::CrawlStats, ci: &CiGateOptions)
     };
 
     println!(
-        "CI gate: {} pages, {errors} errors, {warnings} warnings, \
+        "CI gate: {} pages, {errors} errors, {warnings} warnings, score {}, \
          max-errors {}, max-warnings {}, {baseline_summary}; {verdict}",
         stats.total_pages,
+        site_score.map_or_else(|| "n/a".to_string(), format_score),
         ci.max_errors,
         ci.max_warnings
             .map_or_else(|| "unbounded".to_string(), |m| m.to_string()),
     );
 
-    if let Some(code) = ci_exit_code(errors, warnings, None, &gate) {
+    if let Some(code) = ci_exit_code(errors, warnings, site_score, &gate) {
         exit_with_ci_code(code);
     }
     Ok(())
@@ -932,6 +1317,7 @@ fn build_json_report(
         crawlkit_engine::BacklinkSummary,
         std::collections::HashMap<String, f64>,
     )>,
+    scores: Option<&ScoreReport>,
 ) -> Result<String> {
     let mut data = serde_json::json!({
         "crawl_id": crawl_id,
@@ -969,6 +1355,42 @@ fn build_json_report(
         });
     }
 
+    // §G2 scores are data, not layout, so json can carry them under the
+    // fixed schema: every crawled page plus the ranked fix list. This is
+    // the only `--section` selection json accepts (see
+    // `sections_compatible_with_format`).
+    if let Some(scores) = scores {
+        let pages: Vec<serde_json::Value> = scores
+            .pages
+            .iter()
+            .map(|page| {
+                serde_json::json!({
+                    "url": page.url,
+                    "score": page.score,
+                    "categories": page.categories,
+                })
+            })
+            .collect();
+        let fixes: Vec<serde_json::Value> = scores
+            .fixes
+            .iter()
+            .map(|fix| {
+                serde_json::json!({
+                    "rule_id": fix.rule_id,
+                    "category": fix.category,
+                    "weight": fix.weight,
+                    "pages_affected": fix.pages_affected,
+                    "impact": fix.impact,
+                })
+            })
+            .collect();
+        data["scores"] = serde_json::json!({
+            "site": scores.site,
+            "pages": pages,
+            "prioritized_fixes": fixes,
+        });
+    }
+
     Ok(serde_json::to_string_pretty(&data)?)
 }
 
@@ -981,6 +1403,7 @@ fn build_markdown_report(
     )>,
     sections: &[Section],
     preview_pages: &[PageData],
+    scores: Option<&ScoreReport>,
 ) -> String {
     let mut md = format!(
         "# Crawl Report\n\n\
@@ -1042,6 +1465,12 @@ fn build_markdown_report(
 
     if sections.contains(&Section::Previews) {
         md.push_str(&render_share_previews_markdown(preview_pages));
+    }
+
+    if sections.contains(&Section::Scores) {
+        if let Some(scores) = scores {
+            md.push_str(&render_scores_markdown(scores));
+        }
     }
 
     md
@@ -1321,10 +1750,23 @@ mod tests {
     }
 
     #[test]
-    fn all_selects_every_section_including_previews() {
+    fn all_selects_every_section_including_previews_and_scores() {
         assert_eq!(
             parse_sections(&["all".to_string()]).unwrap(),
-            vec![Section::Summary, Section::Backlinks, Section::Previews]
+            vec![
+                Section::Summary,
+                Section::Backlinks,
+                Section::Previews,
+                Section::Scores
+            ]
+        );
+        assert_eq!(
+            parse_sections(&["scores".to_string()]).unwrap(),
+            vec![Section::Scores]
+        );
+        assert_eq!(
+            parse_sections(&["scores,previews".to_string()]).unwrap(),
+            vec![Section::Scores, Section::Previews]
         );
     }
 
@@ -1343,6 +1785,7 @@ mod tests {
             &empty_backlink_data(),
             &selection,
             &pages,
+            None,
         );
         assert!(html.contains("<h2>Summary</h2>"));
         assert!(html.contains("Social share previews"));
@@ -1355,6 +1798,7 @@ mod tests {
                 &empty_backlink_data(),
                 &selection,
                 &pages,
+                None,
             ),
             "the HTML report must be byte-identical across calls"
         );
@@ -1369,6 +1813,7 @@ mod tests {
             &empty_backlink_data(),
             &parse_sections(&[]).unwrap(),
             &pages,
+            None,
         );
         assert!(!html.contains("Social share previews"));
     }
@@ -1386,6 +1831,7 @@ mod tests {
             &empty_backlink_data(),
             &parse_sections(&[]).unwrap(),
             &[],
+            None,
         );
         assert!(!default_md.contains("Social share previews"));
 
@@ -1395,6 +1841,7 @@ mod tests {
             &empty_backlink_data(),
             &[Section::Previews],
             &pages,
+            None,
         );
         assert!(previews_md.contains("## Social share previews"));
 
@@ -1404,8 +1851,276 @@ mod tests {
             &empty_backlink_data(),
             &[Section::Summary],
             &[],
+            None,
         );
         assert!(!summary_only.contains("## Backlinks"));
+    }
+
+    // ---- §G2: score wiring ---------------------------------------------
+    //
+    // These tests pin the seam between the storage layer and the scoring
+    // engine: real (in-memory) crawl databases in, `ScoreReport` out, and
+    // the site score flowing into `ci_exit_code`'s floor check.
+
+    /// A stored page with only the fields scoring reads.
+    fn score_page(id: &str, url: &str) -> PageData {
+        PageData {
+            id: id.to_string(),
+            url: url::Url::parse(url).unwrap(),
+            final_url: url::Url::parse(url).unwrap(),
+            ..PageData::default()
+        }
+    }
+
+    /// A stored defect finding with the given machine-readable code (the
+    /// key the embedded weight table resolves on).
+    fn score_issue(id: &str, page_id: &str, code: &str) -> crawlkit_engine::storage::Issue {
+        use crawlkit_engine::storage::{IssueCategory, Severity};
+        crawlkit_engine::storage::Issue {
+            id: id.to_string(),
+            page_id: page_id.to_string(),
+            category: IssueCategory::Seo,
+            severity: Severity::Warning,
+            code: code.to_string(),
+            title: format!("Finding {id}"),
+            description: String::new(),
+            element: None,
+            recommendation: String::new(),
+            tenant_id: None,
+        }
+    }
+
+    /// Crawl database with two pages: `/a` carries META001 (weight 0.05 →
+    /// page score 95), `/b` carries SEC001 (weight 0.25 → page score 75).
+    fn scored_storage() -> (Storage, String) {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        storage
+            .insert_page(&crawl_id, &score_page("page-a", "https://example.com/a"))
+            .unwrap();
+        storage
+            .insert_page(&crawl_id, &score_page("page-b", "https://example.com/b"))
+            .unwrap();
+        storage
+            .insert_issue(&score_issue("i1", "page-a", "META001"))
+            .unwrap();
+        storage
+            .insert_issue(&score_issue("i2", "page-b", "SEC001"))
+            .unwrap();
+        (storage, crawl_id)
+    }
+
+    #[test]
+    fn score_report_computes_multiplicative_page_and_site_scores() {
+        let (storage, crawl_id) = scored_storage();
+        let report = compute_score_report(&storage, &crawl_id).unwrap();
+
+        assert_eq!(report.pages.len(), 2, "every crawled page is scored");
+        // Worst page first: SEC001 (×0.75) then META001 (×0.95).
+        assert_eq!(report.pages[0].url, "https://example.com/b");
+        assert!((report.pages[0].score - 75.0).abs() < 1e-9);
+        assert_eq!(report.pages[1].url, "https://example.com/a");
+        assert!((report.pages[1].score - 95.0).abs() < 1e-9);
+        // Per-category scores follow the same multiplicative formula.
+        let seo = report.pages[1]
+            .categories
+            .get("seo")
+            .copied()
+            .unwrap_or(-1.0);
+        assert!((seo - 95.0).abs() < 1e-9);
+        let security = report.pages[0]
+            .categories
+            .get("security")
+            .copied()
+            .unwrap_or(-1.0);
+        assert!((security - 75.0).abs() < 1e-9);
+        // Site score is the mean of the page scores.
+        assert!((report.site - 85.0).abs() < 1e-9);
+        assert_eq!(
+            report.categories,
+            vec!["security".to_string(), "seo".to_string()],
+            "table columns are the sorted distinct categories"
+        );
+    }
+
+    #[test]
+    fn score_report_scores_defects_only_not_measurement_rows() {
+        let (storage, crawl_id) = scored_storage();
+        // READ001 is a readability measurement (is_metric = 1 on insert);
+        // it must not lower any score and must not appear as a fix.
+        storage
+            .insert_issue(&score_issue("m1", "page-a", "READ001"))
+            .unwrap();
+
+        let report = compute_score_report(&storage, &crawl_id).unwrap();
+        let page_a = report
+            .pages
+            .iter()
+            .find(|p| p.url == "https://example.com/a")
+            .unwrap();
+        assert!(
+            (page_a.score - 95.0).abs() < 1e-9,
+            "measurement rows must not penalize the page score"
+        );
+        assert!(
+            report.fixes.iter().all(|f| f.rule_id != "READ001"),
+            "measurement rows must not be ranked as fixes"
+        );
+    }
+
+    #[test]
+    fn score_report_empty_crawl_yields_perfect_site_score() {
+        let storage = Storage::new_in_memory().unwrap();
+        let crawl_id = storage.start_crawl("https://example.com", None).unwrap();
+        let report = compute_score_report(&storage, &crawl_id).unwrap();
+        assert!(report.pages.is_empty());
+        assert_eq!(report.site, 100.0, "vacuously clean crawl scores 100");
+        assert!(report.fixes.is_empty());
+        assert!(report.categories.is_empty());
+    }
+    #[test]
+    fn score_report_ranks_fixes_by_weight_times_pages_affected() {
+        let (storage, crawl_id) = scored_storage();
+        // META001 now affects both pages (impact 0.05 × 2 = 0.10) while
+        // SEC001 affects one (0.25 × 1 = 0.25): the heavier weight wins
+        // even against the wider reach.
+        storage
+            .insert_issue(&score_issue("i3", "page-b", "META001"))
+            .unwrap();
+
+        let report = compute_score_report(&storage, &crawl_id).unwrap();
+        assert_eq!(report.fixes.len(), 2, "one fix per distinct rule id");
+        assert_eq!(report.fixes[0].rule_id, "SEC001");
+        assert!((report.fixes[0].impact - 0.25).abs() < 1e-9);
+        assert_eq!(report.fixes[0].pages_affected, 1);
+        assert_eq!(report.fixes[1].rule_id, "META001");
+        assert!((report.fixes[1].impact - 0.10).abs() < 1e-9);
+        assert_eq!(report.fixes[1].pages_affected, 2);
+    }
+
+    #[test]
+    fn computed_site_score_feeds_the_min_score_floor() {
+        // The CI gate consumes the *computed* site score, not a placeholder:
+        // floor just above the /a + /b crawl's 85.00 must fail with exit 12.
+        let (storage, crawl_id) = scored_storage();
+        let report = compute_score_report(&storage, &crawl_id).unwrap();
+        let mut gate = opts();
+        gate.min_score = Some(85.01);
+        assert_eq!(
+            ci_exit_code(0, 0, Some(report.site), &gate),
+            Some(12),
+            "site score below the floor fails the gate"
+        );
+        // Exactly at the computed score passes.
+        gate.min_score = Some(85.0);
+        assert_eq!(ci_exit_code(0, 0, Some(report.site), &gate), None);
+    }
+
+    // ---- §G2: scores section rendering ----------------------------------
+
+    /// A hand-built two-page report: page `/b` (75.0, security only),
+    /// page `/a` (95.0, seo only), site mean 85.0, one ranked fix.
+    fn sample_score_report() -> ScoreReport {
+        let mut categories_a = std::collections::BTreeMap::new();
+        categories_a.insert("seo".to_string(), 95.0);
+        let mut categories_b = std::collections::BTreeMap::new();
+        categories_b.insert("security".to_string(), 75.0);
+        ScoreReport {
+            pages: vec![
+                PageScores {
+                    url: "https://example.com/b".to_string(),
+                    score: 75.0,
+                    categories: categories_b,
+                },
+                PageScores {
+                    url: "https://example.com/a".to_string(),
+                    score: 95.0,
+                    categories: categories_a,
+                },
+            ],
+            categories: vec!["security".to_string(), "seo".to_string()],
+            site: 85.0,
+            fixes: vec![FixRow {
+                rule_id: "SEC001".to_string(),
+                category: "security".to_string(),
+                weight: 0.25,
+                pages_affected: 1,
+                impact: 0.25,
+            }],
+        }
+    }
+
+    #[test]
+    fn scores_markdown_renders_table_site_and_prioritized_fixes() {
+        let md = render_scores_markdown(&sample_score_report());
+        assert!(md.contains("## Scores"));
+        assert!(md.contains("Site score: **85.00**"), "site mean renders");
+        // Pages × categories table: both category columns plus the page
+        // score column, worst page first, missing categories dashed.
+        assert!(md.contains("| URL | security | seo | Page score |"));
+        assert!(md.contains("| https://example.com/b | 75.00 | — | 75.00 |"));
+        assert!(md.contains("| https://example.com/a | — | 95.00 | 95.00 |"));
+        // Prioritized fixes (task: fixes render with the scores section).
+        assert!(md.contains("### Prioritized fixes"));
+        assert!(md.contains("| SEC001 | security | 0.25 | 1 | 0.25 |"));
+    }
+
+    #[test]
+    fn scores_markdown_empty_crawl_stays_bounded() {
+        let empty = ScoreReport {
+            pages: Vec::new(),
+            categories: Vec::new(),
+            site: 100.0,
+            fixes: Vec::new(),
+        };
+        let md = render_scores_markdown(&empty);
+        assert!(md.contains("Site score: **100.00**"));
+        assert!(md.contains("No pages stored for this crawl."));
+        assert!(!md.contains("| URL |"), "no table without pages");
+        assert!(
+            !md.contains("Prioritized fixes"),
+            "the empty-crawl early return skips the fixes block"
+        );
+    }
+
+    #[test]
+    fn scores_html_renders_and_escapes_the_scores_table() {
+        let mut report = sample_score_report();
+        report.pages[0].url = "https://example.com/<script>".to_string();
+        let html = render_scores_html(&report);
+        assert!(html.contains("<h2>Scores</h2>"));
+        assert!(
+            html.contains("Site score 85.00"),
+            "site mean renders in the section meta line"
+        );
+        assert!(
+            html.contains("<th>security</th><th>seo</th><th>Page score</th>"),
+            "category columns render in sorted order"
+        );
+        assert!(!html.contains("<script>"), "page URLs must not inject HTML");
+        assert!(html.contains("&lt;script&gt;"));
+        assert!(html.contains("Prioritized fixes"));
+    }
+
+    #[test]
+    fn scores_json_embeds_pages_and_prioritized_fixes() {
+        let report = sample_score_report();
+        let json =
+            build_json_report("crawl-1", &stats(), &empty_backlink_data(), Some(&report)).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        let scores = parsed.get("scores").expect("json embeds the scores data");
+        assert_eq!(scores["site"], serde_json::json!(85.0));
+        assert_eq!(scores["pages"].as_array().map(Vec::len), Some(2));
+        assert_eq!(
+            scores["pages"][0]["url"],
+            serde_json::json!("https://example.com/b"),
+            "worst page first"
+        );
+        assert_eq!(scores["pages"][0]["categories"]["security"], 75.0);
+        let fixes = scores["prioritized_fixes"].as_array().unwrap();
+        assert_eq!(fixes.len(), 1);
+        assert_eq!(fixes[0]["rule_id"], "SEC001");
+        assert_eq!(fixes[0]["impact"], 0.25);
     }
 
     // ---- GAP G10: PDF export -------------------------------------------

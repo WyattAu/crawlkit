@@ -1,8 +1,9 @@
-use std::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
+
+use breaker::{BackoffStrategy, State as CrateState};
 
 /// Circuit breaker state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -15,10 +16,25 @@ pub enum CircuitState {
     HalfOpen,
 }
 
+impl From<CrateState> for CircuitState {
+    fn from(state: CrateState) -> Self {
+        match state {
+            CrateState::Closed => CircuitState::Closed,
+            CrateState::Open => CircuitState::Open,
+            CrateState::HalfOpen => CircuitState::HalfOpen,
+        }
+    }
+}
+
 /// Per-domain circuit breaker for failure isolation.
 ///
 /// Prevents cascade failures by breaking the circuit after consecutive failures.
 /// Transitions to Half-Open after cooldown to test recovery.
+///
+/// The Closed/Open/HalfOpen state machine is delegated to the estate
+/// [`breaker`](https://github.com/WyattAu/breaker) crate (consecutive-streak
+/// tripping, fixed cooldown, success-threshold half-open recovery); this
+/// module keeps the engine's per-domain public API.
 ///
 /// # States
 ///
@@ -26,11 +42,7 @@ pub enum CircuitState {
 /// - **Open**: Requests are blocked. After cooldown, transitions to Half-Open.
 /// - **Half-Open**: Limited requests allowed. If they succeed, close circuit.
 pub struct CircuitBreaker {
-    state: AtomicU8,
-    failure_count: AtomicU32,
-    success_count: AtomicU32,
-    last_failure_time: AtomicU64,
-    config: CircuitBreakerConfig,
+    inner: breaker::CircuitBreaker,
 }
 
 /// Configuration for circuit breaker behavior.
@@ -54,16 +66,25 @@ impl Default for CircuitBreakerConfig {
     }
 }
 
+impl CircuitBreakerConfig {
+    /// Map onto the estate crate's config: consecutive-streak tripping only
+    /// (sliding-window rate disabled) with a fixed cooldown.
+    fn to_crate_config(&self) -> breaker::CircuitBreakerConfig {
+        breaker::CircuitBreakerConfig::builder()
+            .consecutive_failures(self.failure_threshold)
+            .success_threshold(self.success_threshold)
+            .failure_rate_threshold(0.0)
+            .backoff(BackoffStrategy::Fixed(self.cooldown))
+            .build()
+    }
+}
+
 impl CircuitBreaker {
     /// Create a new circuit breaker.
     #[must_use]
     pub fn new(config: CircuitBreakerConfig) -> Self {
         Self {
-            state: AtomicU8::new(CircuitState::Closed as u8),
-            failure_count: AtomicU32::new(0),
-            success_count: AtomicU32::new(0),
-            last_failure_time: AtomicU64::new(0),
-            config,
+            inner: breaker::CircuitBreaker::new(config.to_crate_config()),
         }
     }
 
@@ -74,126 +95,38 @@ impl CircuitBreaker {
     }
 
     /// Get current state (pure read, no side effects).
+    ///
+    /// An `Open` circuit whose cooldown has elapsed reads as `HalfOpen`.
     #[must_use]
     pub fn state(&self) -> CircuitState {
-        match self.state.load(Ordering::Acquire) {
-            0 => CircuitState::Closed,
-            1 => CircuitState::Open,
-            2 => CircuitState::HalfOpen,
-            _ => CircuitState::Closed,
-        }
-    }
-
-    /// Atomically check if cooldown expired and transition Open → HalfOpen.
-    ///
-    /// Returns `true` if the caller should treat this as HalfOpen
-    /// (the transition happened or was already HalfOpen).
-    fn check_and_transition(&self) -> CircuitState {
-        let raw = self.state.load(Ordering::Acquire);
-        if raw != CircuitState::Open as u8 {
-            return match raw {
-                0 => CircuitState::Closed,
-                2 => CircuitState::HalfOpen,
-                _ => CircuitState::Closed,
-            };
-        }
-        let last_failure = self.last_failure_time.load(Ordering::Acquire);
-        let now = now_millis();
-        if now.saturating_sub(last_failure) >= self.config.cooldown.as_millis() as u64 {
-            if self
-                .state
-                .compare_exchange(
-                    CircuitState::Open as u8,
-                    CircuitState::HalfOpen as u8,
-                    Ordering::AcqRel,
-                    Ordering::Acquire,
-                )
-                .is_ok()
-            {
-                CircuitState::HalfOpen
-            } else {
-                // Another thread won the race — re-read the state.
-                self.state()
-            }
-        } else {
-            CircuitState::Open
-        }
+        CircuitState::from(self.inner.state())
     }
 
     /// Check if request is allowed.
     #[must_use]
     pub fn is_allowed(&self) -> bool {
-        match self.check_and_transition() {
-            CircuitState::Closed => true,
-            CircuitState::HalfOpen => true,
-            CircuitState::Open => false,
-        }
+        self.inner.is_allowed()
     }
 
     /// Record a successful request.
     pub fn record_success(&self) {
-        let raw = self.state.load(Ordering::Acquire);
-        match raw {
-            0 => {
-                // Closed — reset counters
-                self.failure_count.store(0, Ordering::Release);
-                self.success_count.store(0, Ordering::Release);
-            }
-            2 => {
-                // HalfOpen — count toward recovery threshold
-                let successes = self.success_count.fetch_add(1, Ordering::AcqRel) + 1;
-                if successes >= self.config.success_threshold {
-                    self.state
-                        .store(CircuitState::Closed as u8, Ordering::Release);
-                    self.failure_count.store(0, Ordering::Release);
-                    self.success_count.store(0, Ordering::Release);
-                }
-            }
-            _ => {
-                // Open — nothing to do
-            }
-        }
+        self.inner.record_success();
     }
 
     /// Record a failed request.
     pub fn record_failure(&self) {
-        let now = now_millis();
-        self.last_failure_time.store(now, Ordering::Release);
-
-        let raw = self.state.load(Ordering::Acquire);
-        match raw {
-            0 => {
-                // Closed — increment failure count
-                let failures = self.failure_count.fetch_add(1, Ordering::AcqRel) + 1;
-                if failures >= self.config.failure_threshold {
-                    self.state
-                        .store(CircuitState::Open as u8, Ordering::Release);
-                }
-            }
-            2 => {
-                // HalfOpen — failure during recovery, reopen
-                self.state
-                    .store(CircuitState::Open as u8, Ordering::Release);
-                self.success_count.store(0, Ordering::Release);
-            }
-            _ => {
-                // Open — nothing to do
-            }
-        }
+        self.inner.record_failure();
     }
 
     /// Reset circuit breaker to Closed state.
     pub fn reset(&self) {
-        self.state
-            .store(CircuitState::Closed as u8, Ordering::Release);
-        self.failure_count.store(0, Ordering::Release);
-        self.success_count.store(0, Ordering::Release);
+        self.inner.reset();
     }
 
     /// Get failure count.
     #[must_use]
     pub fn failure_count(&self) -> u32 {
-        self.failure_count.load(Ordering::Acquire)
+        self.inner.failure_count()
     }
 }
 
@@ -267,14 +200,6 @@ impl CircuitBreakerRef {
     }
 }
 
-/// Get current time in milliseconds since epoch.
-fn now_millis() -> u64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis() as u64
-}
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -331,5 +256,78 @@ mod tests {
         assert!(cb.is_allowed());
         cb.record_failure();
         assert_eq!(cb.failure_count(), 1);
+    }
+
+    #[test]
+    fn test_circuit_breaker_cooldown_gate() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 1,
+            success_threshold: 2,
+            cooldown: Duration::from_millis(20),
+        };
+        let cb = CircuitBreaker::new(config);
+
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+        assert!(!cb.is_allowed()); // still inside the cooldown
+
+        std::thread::sleep(Duration::from_millis(50));
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+        assert!(cb.is_allowed());
+    }
+
+    #[test]
+    fn test_circuit_breaker_half_open_recovery() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 1,
+            success_threshold: 2,
+            cooldown: Duration::from_millis(20),
+        };
+        let cb = CircuitBreaker::new(config);
+
+        cb.record_failure();
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Success below the threshold keeps HalfOpen.
+        cb.record_success();
+        assert_eq!(cb.state(), CircuitState::HalfOpen);
+
+        // A failure during recovery re-opens immediately.
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+        assert!(!cb.is_allowed());
+
+        // Recovery after the fresh cooldown closes the circuit.
+        std::thread::sleep(Duration::from_millis(50));
+        cb.record_success();
+        cb.record_success();
+        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.failure_count(), 0);
+    }
+
+    #[test]
+    fn test_circuit_breaker_reset() {
+        let config = CircuitBreakerConfig {
+            failure_threshold: 2,
+            ..Default::default()
+        };
+        let cb = CircuitBreaker::new(config);
+
+        cb.record_failure();
+        cb.record_failure();
+        assert_eq!(cb.state(), CircuitState::Open);
+
+        cb.reset();
+        assert_eq!(cb.state(), CircuitState::Closed);
+        assert_eq!(cb.failure_count(), 0);
+        assert!(cb.is_allowed());
+    }
+
+    #[test]
+    fn test_default_config_values() {
+        let config = CircuitBreakerConfig::default();
+        assert_eq!(config.failure_threshold, 5);
+        assert_eq!(config.success_threshold, 3);
+        assert_eq!(config.cooldown, Duration::from_secs(60));
     }
 }

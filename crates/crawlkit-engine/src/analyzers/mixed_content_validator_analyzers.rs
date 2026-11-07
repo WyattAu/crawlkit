@@ -5,6 +5,7 @@
 
 use crate::types::{IssueCategory, Severity};
 
+use super::mixed_content_analyzers::MIXED_CONTENT_CAP;
 use super::{AnalysisContext, Analyzer, Finding};
 
 // =========================================================================
@@ -36,9 +37,14 @@ impl Analyzer for MixedContentFormValidator {
         if let Some(body) = ctx.body {
             let prefix_dq = "action=\"http://";
             let prefix_sq = "action='http://";
+            // Capped like the other per-occurrence mixed-content findings:
+            // hundreds of insecure form actions are one defect with one fix.
             for (prefix, quote) in [(prefix_dq, '"'), (prefix_sq, '\'')] {
                 let mut remaining = body;
-                while let Some(pos) = remaining.find(prefix) {
+                while findings.len() < MIXED_CONTENT_CAP {
+                    let Some(pos) = remaining.find(prefix) else {
+                        break;
+                    };
                     let start = pos + prefix.len();
                     if let Some(end) = remaining[start..].find(quote) {
                         findings.push(Finding {

@@ -7337,7 +7337,17 @@ impl Analyzer for MixedProtocolRedirectValidator {
             let from_scheme = hop.from.scheme();
             let to_scheme = hop.to.scheme();
 
-            if from_scheme == "http" && to_scheme == "https" && hop.status_code != 301 {
+            // Judge redirect quality only from a genuine redirect status. A
+            // synthesized observation hop (crawl_engine::pipeline) records the
+            // *final* response status — a 200 says nothing about whether the
+            // redirect itself was permanent, and inventing a verdict from it
+            // would report every correctly-upgraded page.
+            let is_redirect_status = (300..400).contains(&hop.status_code);
+            if from_scheme == "http"
+                && to_scheme == "https"
+                && is_redirect_status
+                && hop.status_code != 301
+            {
                 findings.push(Finding {
                     severity: Severity::Warning,
                     category: IssueCategory::Http,
@@ -9442,6 +9452,26 @@ mod new_seo_tests {
             MixedProtocolRedirectValidator::new().name(),
             "mixed-protocol-redirect"
         );
+    }
+
+    #[test]
+    fn test_mixed_protocol_synthesized_final_status_not_judged() {
+        // The crawl pipeline records one observation hop whose status is the
+        // FINAL response status (reqwest auto-follows; the redirect status is
+        // not recoverable). A 200 must not be read as "redirected with a
+        // non-301 status": the upgrade itself is correct behaviour.
+        let page = make_page("https://example.com");
+        use url::Url;
+        let chain = vec![crate::RedirectHop {
+            from: Url::parse("http://example.com").unwrap(),
+            to: Url::parse("https://example.com").unwrap(),
+            status_code: 200,
+        }];
+        let ctx = make_ctx_with_chain(&page, &chain);
+        assert!(MixedProtocolRedirectValidator::new()
+            .analyze(&ctx)
+            .iter()
+            .all(|f| f.code != "MIXPROT001"));
     }
 
     #[test]

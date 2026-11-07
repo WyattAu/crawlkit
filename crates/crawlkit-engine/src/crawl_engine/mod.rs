@@ -1481,9 +1481,10 @@ mod tests {
         // With AI and WASM disabled, only base analyzers remain. Plain and
         // orphan ungated analyzers move this count with the full count
         // (770 -> 780 -> 784 from upstream re-registrations, then 784 -> 786
-        // for the ungated tech-detection and lighthouse analyzers). The
+        // for the ungated tech-detection and lighthouse analyzers, then
+        // 786 -> 788 for https-redirect and www-apex-consistency). The
         // number is measured from this exact configuration, not derived.
-        assert_eq!(registry.len(), 786);
+        assert_eq!(registry.len(), 788);
     }
 
     struct MockJsRenderer {

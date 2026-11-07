@@ -75,6 +75,7 @@ salting = { version = "1" }
 tokenkit = { version = "0.1" }
 cryptkit = { version = "0.1" }
 loop-retry = { version = "0.1" }
+webhookkit = { version = "2.2" }
 envstack = { version = "0.2" }
 
 [profile.release]
@@ -86,3 +87,9 @@ panic = "abort"
 
 [workspace.metadata.fuzz]
 targets = ["fuzz_parser"]
+
+# Kit migrations in flight: point the estate kits at the local checkouts so
+# the consumer builds against the unpublished capabilities (`webhookkit/send`,
+# `sign_hmac_sha256`). Drop when the kit releases land.
+[patch.crates-io]
+webhookkit = { path = "../webhookkit" }

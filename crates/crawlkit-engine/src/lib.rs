@@ -115,7 +115,8 @@ pub mod chrome_cli;
 /// Circuit breaker for failing HTTP endpoints to avoid cascading failures.
 ///
 /// Per-domain circuit breakers track consecutive failures and automatically
-/// stop requests to failing domains until they recover.
+/// stop requests to failing domains until they recover. The state machine
+/// delegates to the estate `breaker` crate.
 #[cfg(feature = "full")]
 pub mod circuit_breaker;
 /// Diff-based comparison of two crawl results.

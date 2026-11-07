@@ -9,9 +9,12 @@
 //!   runs over identical data produce byte-identical bodies (ITER-09
 //!   determinism rule).
 //! * **Delivery:** `POST` the canonical JSON body with
-//!   `X-Crawlkit-Signature: hex(hmac-sha256(secret, body))`; 3 retries with
-//!   exponential backoff ([`backoff_delay`], a pure function so the policy
-//!   is unit-testable). Secrets and URLs never appear in error messages.
+//!   `X-Crawlkit-Signature: hex(hmac-sha256(secret, body))`. Signing and
+//!   transport come from webhookkit (`sign_hmac_sha256`, `send::post_json`)
+//!   and the 3-retry exponential schedule from loop-retry
+//!   ([`retry_config`]); the kit-side policy keeps the same wire behavior
+//!   as the previous inline implementation. Secrets and URLs never appear
+//!   in error messages.
 //! * **Adapters:** Slack and Discord are formatting-only variants of the
 //!   same webhook delivery ([`AlertFormat`]).
 //! * **Email:** SMTP via `lettre` behind the opt-in `smtp` feature
@@ -159,26 +162,12 @@ pub fn canonical_event_body(event: &AlertEvent) -> Result<String> {
 // ---------------------------------------------------------------------------
 
 /// `hex(hmac-sha256(secret, body))` — the value carried by the
-/// `X-Crawlkit-Signature` header.
+/// `X-Crawlkit-Signature` header. Computed by webhookkit's
+/// [`sign_hmac_sha256`](webhookkit::sign_hmac_sha256); the hex output is the
+/// same bytes the previous inline HMAC produced.
 #[must_use]
 pub fn signature_hex(secret: &[u8], body: &[u8]) -> String {
-    use hmac::{Hmac, Mac};
-    // HMAC accepts keys of any length, so `new_from_slice` cannot fail;
-    // the targeted allow keeps the workspace panic-free lint satisfied
-    // without pretending there is a meaningful recovery.
-    #[allow(clippy::expect_used)]
-    let mut mac =
-        Hmac::<sha2::Sha256>::new_from_slice(secret).expect("HMAC accepts any key length");
-    mac.update(body);
-    hex_encode(&mac.finalize().into_bytes())
-}
-
-fn hex_encode(bytes: &[u8]) -> String {
-    let mut out = String::with_capacity(bytes.len() * 2);
-    for byte in bytes {
-        out.push_str(&format!("{byte:02x}"));
-    }
-    out
+    webhookkit::sign_hmac_sha256(body, secret)
 }
 
 /// Decode a hex-encoded webhook secret (`--alert-secret HEX`).
@@ -212,19 +201,21 @@ fn hex_val(byte: u8) -> Result<u8> {
 }
 
 // ---------------------------------------------------------------------------
-// Backoff (pure, unit-testable)
+// Retry policy (loop-retry)
 // ---------------------------------------------------------------------------
 
-/// Exponential backoff for retry `attempt` (0-based: the wait before the
-/// first retry). `base × 2^attempt`, capped at [`BACKOFF_CAP`].
+/// Retry schedule for webhook delivery (§G3): [`RETRY_ATTEMPTS`] retries
+/// with 500 ms → 1 s → 2 s exponential growth capped at [`BACKOFF_CAP`].
+/// Jitter is off so the schedule is deterministic and the retry path stays
+/// fast in tests.
 #[must_use]
-pub fn backoff_delay(attempt: u32, base: Duration) -> Duration {
-    let exp = attempt.min(16); // 2^16 × base saturates any realistic cap
-    let scaled = base.saturating_mul(1u32 << exp);
-    if scaled > BACKOFF_CAP {
-        BACKOFF_CAP
-    } else {
-        scaled
+fn retry_config() -> loop_retry::RetryConfig {
+    loop_retry::RetryConfig {
+        max_retries: RETRY_ATTEMPTS,
+        initial_delay: Duration::from_millis(500),
+        max_delay: BACKOFF_CAP,
+        backoff_multiplier: 2.0,
+        jitter: false,
     }
 }
 
@@ -351,9 +342,9 @@ impl std::error::Error for AlertError {}
 /// Deliver an alert event to a webhook endpoint with signed canonical JSON
 /// and bounded retries (initial attempt + [`RETRY_ATTEMPTS`] retries).
 ///
-/// Transport errors and `5xx`/`429` are retried with
-/// [`backoff_delay`]; other `4xx` statuses are fatal — the endpoint
-/// understood the request and refused it, so retrying cannot help.
+/// Transport errors and `5xx`/`429` are retried with the [`retry_config`]
+/// schedule; other `4xx` statuses are fatal — the endpoint understood the
+/// request and refused it, so retrying cannot help.
 ///
 /// # Errors
 ///
@@ -368,61 +359,91 @@ pub async fn deliver_event(
     deliver_body(client, webhook, body.as_bytes()).await
 }
 
+/// Per-request timeout for one webhook delivery attempt.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+
+/// One delivery attempt's failure, classified for loop-retry. Transport
+/// messages are URL-scrubbed upstream (webhookkit); statuses keep their
+/// code so non-retryable 4xx can fail fast.
+#[derive(Debug)]
+enum AttemptError {
+    /// Transport failed; the message carries no endpoint URL.
+    Transport(String),
+    /// The endpoint answered with a non-2xx status.
+    Status(u16),
+}
+
+impl std::fmt::Display for AttemptError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Transport(msg) => f.write_str(msg),
+            Self::Status(status) => write!(f, "endpoint returned HTTP {status}"),
+        }
+    }
+}
+
+impl loop_retry::IsRetryable for AttemptError {
+    fn is_retryable(&self) -> bool {
+        match self {
+            Self::Transport(_) => true,
+            // 5xx and 429 are transient; other 4xx are refusals.
+            Self::Status(status) => *status >= 500 || *status == 429,
+        }
+    }
+}
+
 /// [`deliver_event`] over pre-encoded bytes (the contract-test seam: tests
-/// assert against the exact bytes that hit the wire).
+/// assert against the exact bytes that hit the wire). One signed
+/// `webhookkit` POST per attempt; loop-retry owns the schedule.
 async fn deliver_body(
     client: &reqwest::Client,
     webhook: &WebhookConfig,
     body: &[u8],
 ) -> Result<(), AlertError> {
-    let secret = match &webhook.secret_hex {
-        Some(hex) => decode_secret_hex(hex)
-            .map_err(|e| AlertError::DeliveryFailed(format!("invalid alert secret: {e}")))?,
-        None => Vec::new(),
+    let signature = match &webhook.secret_hex {
+        Some(hex) => {
+            let secret = decode_secret_hex(hex)
+                .map_err(|e| AlertError::DeliveryFailed(format!("invalid alert secret: {e}")))?;
+            Some(("X-Crawlkit-Signature", signature_hex(&secret, body)))
+        }
+        None => None,
     };
 
-    for attempt in 0..=RETRY_ATTEMPTS {
-        if attempt > 0 {
-            tokio::time::sleep(backoff_delay(attempt - 1, Duration::from_millis(500))).await;
-        }
-
-        let mut request = client
-            .post(&webhook.url)
-            .header("Content-Type", "application/json")
-            .timeout(Duration::from_secs(10));
-        if !secret.is_empty() {
-            request = request.header("X-Crawlkit-Signature", signature_hex(&secret, body));
-        }
-
-        let outcome = request.body(body.to_vec()).send().await;
-        match outcome {
-            Ok(response) => {
-                let status = response.status();
-                if status.is_success() {
-                    return Ok(());
+    let outcome = loop_retry::with_backoff(&retry_config(), || {
+        let future = webhookkit::send::post_json(
+            client,
+            &webhook.url,
+            body.to_vec(),
+            signature.clone(),
+            REQUEST_TIMEOUT,
+        );
+        async move {
+            match future.await {
+                Ok(webhookkit::send::DeliveryOutcome::Delivered) => Ok(()),
+                Ok(webhookkit::send::DeliveryOutcome::Rejected(status)) => {
+                    Err(AttemptError::Status(status))
                 }
-                if status.is_client_error() && status.as_u16() != 429 {
-                    return Err(AlertError::Rejected(status.as_u16()));
-                }
-                tracing::warn!(
-                    status = status.as_u16(),
-                    attempt,
-                    "alert webhook returned retryable status"
-                );
+                Err(err) => Err(AttemptError::Transport(err.to_string())),
             }
-            Err(err) => {
-                // Scrub the URL before the error can reach a log line.
-                let msg = err.without_url().to_string();
-                if attempt == RETRY_ATTEMPTS {
-                    return Err(AlertError::DeliveryFailed(msg));
-                }
-                tracing::warn!(attempt, error = %msg, "alert webhook transport error, retrying");
+        }
+    })
+    .await;
+
+    match outcome {
+        Ok(()) => Ok(()),
+        Err(loop_retry::RetryError::FinalError(AttemptError::Status(status), _)) => {
+            if status < 500 && status != 429 {
+                Err(AlertError::Rejected(status))
+            } else {
+                Err(AlertError::DeliveryFailed(
+                    "webhook did not succeed after retries".to_string(),
+                ))
             }
+        }
+        Err(loop_retry::RetryError::FinalError(AttemptError::Transport(msg), _)) => {
+            Err(AlertError::DeliveryFailed(msg))
         }
     }
-    Err(AlertError::DeliveryFailed(
-        "webhook did not succeed after retries".to_string(),
-    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -616,22 +637,37 @@ mod tests {
     }
 
     #[test]
-    fn backoff_is_exponential_and_capped() {
-        let base = Duration::from_millis(500);
-        assert_eq!(backoff_delay(0, base), Duration::from_millis(500));
-        assert_eq!(backoff_delay(1, base), Duration::from_millis(1000));
-        assert_eq!(backoff_delay(2, base), Duration::from_millis(2000));
-        assert_eq!(backoff_delay(3, base), Duration::from_millis(4000));
+    fn backoff_schedule_is_exponential_and_capped() {
+        let config = retry_config();
+        assert!(!config.jitter, "the schedule is deterministic");
+        assert_eq!(config.delay_for_attempt(0), Duration::from_millis(500));
+        assert_eq!(config.delay_for_attempt(1), Duration::from_millis(1000));
+        assert_eq!(config.delay_for_attempt(2), Duration::from_millis(2000));
+        assert_eq!(config.delay_for_attempt(3), Duration::from_millis(4000));
         assert_eq!(
-            backoff_delay(40, base),
+            config.delay_for_attempt(40),
             BACKOFF_CAP,
             "backoff never exceeds the cap"
         );
+        let oversized = loop_retry::RetryConfig {
+            initial_delay: Duration::from_secs(60),
+            ..retry_config()
+        };
         assert_eq!(
-            backoff_delay(0, Duration::from_secs(60)),
+            oversized.delay_for_attempt(0),
             BACKOFF_CAP,
             "oversized base is capped"
         );
+    }
+
+    #[test]
+    fn attempt_error_classification_matches_the_old_retry_policy() {
+        use loop_retry::IsRetryable as _;
+        assert!(AttemptError::Transport("scrubbed".to_string()).is_retryable());
+        assert!(AttemptError::Status(500).is_retryable());
+        assert!(AttemptError::Status(429).is_retryable());
+        assert!(!AttemptError::Status(422).is_retryable());
+        assert!(!AttemptError::Status(404).is_retryable());
     }
 
     #[test]

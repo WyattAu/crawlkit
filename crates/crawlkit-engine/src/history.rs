@@ -7,10 +7,14 @@
 //! history(run_id TEXT, ts TEXT, page TEXT, category TEXT, metric TEXT, value REAL)
 //! ```
 //!
-//! The weighted scoring engine (§G2) does not exist yet, so snapshots record
-//! **finding counts** (`metric = "findings"`) instead of scores; the schema
-//! already carries `metric TEXT`, so a scoring engine can later append
-//! `metric = "score"` rows without a migration.
+//! Snapshots carry two metrics side by side, distinguished by the `metric`
+//! column (the schema needed no migration for the second one):
+//!
+//! - `metric = "findings"` — defect counts per `(page, category)`, appended
+//!   by [`append_findings`] (what storage snapshots wrote before §G2).
+//! - `metric = "score"` — weighted scores per `(page, category)` in
+//!   `[0, 100]`, appended by [`append_scores`] (§G2). For scores, a
+//!   *positive* delta is an improvement, the inverse of finding counts.
 //!
 //! The table is created additively and idempotently
 //! ([`ensure_table`]) following the storage-layer migration pattern:
@@ -31,9 +35,13 @@ pub enum HistoryError {
     Database(#[from] rusqlite::Error),
 }
 
-/// Metric name used for finding-count snapshots until the §G2 scoring
-/// engine lands and can record `score` rows.
+/// Metric name for finding-count snapshots (defect counts per
+/// `(page, category)`), recorded since the pre-§G2 era.
 pub const FINDINGS_METRIC: &str = "findings";
+
+/// Metric name for weighted-score snapshots (§G2): one row per
+/// `(page, category)` with the category score in `[0, 100]`.
+pub const SCORE_METRIC: &str = "score";
 
 /// One snapshot row.
 #[derive(Debug, Clone, PartialEq)]
@@ -47,7 +55,7 @@ pub struct HistoryRow {
     pub page: String,
     /// Finding category (e.g. `seo`, `a11y`).
     pub category: String,
-    /// Metric name (`findings` today; `score` once §G2 lands).
+    /// Metric name ([`FINDINGS_METRIC`] counts or [`SCORE_METRIC`] values).
     pub metric: String,
     /// Measured value.
     pub value: f64,
@@ -125,6 +133,44 @@ pub fn append_findings(
             category,
             FINDINGS_METRIC,
             *count as f64
+        ])?;
+    }
+    Ok(inserted)
+}
+
+/// Append weighted-score snapshots for one run: one row per
+/// `(page, category)` with `metric = "score"` and `value` in `[0, 100]`
+/// (§G2). Values are clamped to `[0, 100]` so a stray out-of-range input
+/// cannot distort trend charts downstream.
+///
+/// Scores are stored under their own [`SCORE_METRIC`] namespace, so
+/// [`trend`] keeps them as separate series from [`FINDINGS_METRIC`] rows
+/// for the same `(page, category)` — no migration, the schema already
+/// carries `metric TEXT`.
+///
+/// # Errors
+///
+/// Returns [`HistoryError`] when any insert fails.
+pub fn append_scores(
+    conn: &Connection,
+    run_id: &str,
+    ts: &str,
+    scores: &[(String, String, f64)],
+) -> Result<usize, HistoryError> {
+    ensure_table(conn)?;
+    let mut stmt = conn.prepare(
+        "INSERT INTO history (run_id, ts, page, category, metric, value)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+    )?;
+    let mut inserted = 0usize;
+    for (page, category, score) in scores {
+        inserted += stmt.execute(rusqlite::params![
+            run_id,
+            ts,
+            page,
+            category,
+            SCORE_METRIC,
+            score.clamp(0.0, 100.0)
         ])?;
     }
     Ok(inserted)
@@ -296,6 +342,20 @@ impl HistoryStore {
         append_findings(&self.conn, run_id, ts, counts)
     }
 
+    /// Append weighted-score snapshots for one run (§G2).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`HistoryError`] when any insert fails.
+    pub fn append_scores(
+        &self,
+        run_id: &str,
+        ts: &str,
+        scores: &[(String, String, f64)],
+    ) -> Result<usize, HistoryError> {
+        append_scores(&self.conn, run_id, ts, scores)
+    }
+
     /// All trend series, optionally restricted to one run id.
     ///
     /// # Errors
@@ -437,5 +497,116 @@ mod tests {
             samples: vec![],
         };
         assert_eq!(s.delta(), None);
+    }
+
+    // --- §G2: score metric rows ---
+
+    #[test]
+    fn score_rows_append_under_their_own_metric_and_never_mix_with_findings() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = HistoryStore::open(&dir.path().join("history.db")).unwrap();
+
+        let inserted = store
+            .append_scores(
+                "run-1",
+                "2026-11-01T00:00:00Z",
+                &[
+                    ("https://x/".into(), "seo".into(), 87.5),
+                    ("https://x/".into(), "security".into(), 25.0),
+                ],
+            )
+            .unwrap();
+        assert_eq!(inserted, 2);
+
+        // Same (page, category) also carries findings counts from the same
+        // run: the metrics must land in separate trend series.
+        store
+            .append_findings(
+                "run-1",
+                "2026-11-01T00:00:00Z",
+                &[("https://x/".into(), "seo".into(), 3)],
+            )
+            .unwrap();
+
+        let series = store.trend(None).unwrap();
+        assert_eq!(series.len(), 3, "two score series + one findings series");
+        let seo_score = series
+            .iter()
+            .find(|s| s.metric == SCORE_METRIC && s.category == "seo")
+            .unwrap();
+        assert_eq!(seo_score.last_value(), Some(87.5));
+        let seo_findings = series
+            .iter()
+            .find(|s| s.metric == FINDINGS_METRIC && s.category == "seo")
+            .unwrap();
+        assert_eq!(seo_findings.last_value(), Some(3.0));
+    }
+
+    #[test]
+    fn score_trend_delta_across_runs_positive_means_improvement() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = HistoryStore::open(&dir.path().join("history.db")).unwrap();
+
+        store
+            .append_scores(
+                "run-1",
+                "2026-11-01T00:00:00Z",
+                &[("https://x/".into(), "seo".into(), 72.25)],
+            )
+            .unwrap();
+        store
+            .append_scores(
+                "run-2",
+                "2026-11-01T01:00:00Z",
+                &[("https://x/".into(), "seo".into(), 91.0)],
+            )
+            .unwrap();
+
+        let seo = store
+            .trend(None)
+            .unwrap()
+            .into_iter()
+            .find(|s| s.metric == SCORE_METRIC)
+            .unwrap();
+        assert_eq!(seo.samples.len(), 2);
+        assert_eq!(seo.first_value(), Some(72.25));
+        assert_eq!(seo.last_value(), Some(91.0));
+        assert_eq!(
+            seo.delta(),
+            Some(18.75),
+            "scores rise as findings are fixed"
+        );
+    }
+
+    #[test]
+    fn score_append_clamps_out_of_range_values_and_accepts_empty_input() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = HistoryStore::open(&dir.path().join("history.db")).unwrap();
+
+        assert_eq!(
+            store
+                .append_scores("run-1", "2026-11-01T00:00:00Z", &[])
+                .unwrap(),
+            0,
+            "no rows for no scores"
+        );
+        store
+            .append_scores(
+                "run-1",
+                "2026-11-01T00:00:00Z",
+                &[
+                    ("https://x/".into(), "seo".into(), 120.0),
+                    ("https://x/".into(), "security".into(), -4.0),
+                ],
+            )
+            .unwrap();
+
+        let values: Vec<f64> = store
+            .trend(None)
+            .unwrap()
+            .into_iter()
+            .flat_map(|s| s.samples.into_iter().map(|(_, _, v)| v))
+            .collect();
+        assert_eq!(values, vec![0.0, 100.0], "clamped to [0, 100]");
     }
 }

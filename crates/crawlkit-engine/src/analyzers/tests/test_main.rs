@@ -854,10 +854,12 @@ fn test_registry_default() {
     // `CanonicalDepthAnalyzerV2` (CANDEP-V2003). Each fired on 100% of crawled
     // pages. See the rationale at each registration site in `analyzers/mod.rs`.
     // 793 -> 795: https-redirect and www-apex-consistency transport analyzers.
+    // 795 -> 797: agent-readiness (backlog P0+P1 passive audit) and the
+    // opt-in agent-discovery live prober.
     #[cfg(feature = "full")]
-    assert_eq!(registry.len(), 795);
+    assert_eq!(registry.len(), 797);
     #[cfg(not(feature = "full"))]
-    assert_eq!(registry.len(), 791);
+    assert_eq!(registry.len(), 793);
     assert!(!registry.is_empty());
 }
 

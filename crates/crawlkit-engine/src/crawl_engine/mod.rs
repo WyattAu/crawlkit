@@ -1482,9 +1482,10 @@ mod tests {
         // orphan ungated analyzers move this count with the full count
         // (770 -> 780 -> 784 from upstream re-registrations, then 784 -> 786
         // for the ungated tech-detection and lighthouse analyzers, then
-        // 786 -> 788 for https-redirect and www-apex-consistency). The
+        // 786 -> 788 for https-redirect and www-apex-consistency, then
+        // 788 -> 790 for agent-readiness and the agent-discovery prober). The
         // number is measured from this exact configuration, not derived.
-        assert_eq!(registry.len(), 788);
+        assert_eq!(registry.len(), 790);
     }
 
     struct MockJsRenderer {

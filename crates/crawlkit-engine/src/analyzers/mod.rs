@@ -13,6 +13,14 @@ pub mod accessibility_deep_analyzers;
 pub mod accessibility_v2_analyzers;
 /// Accessibility analyzers for color contrast and keyboard focus order.
 pub mod accessibility_visual_analyzers;
+/// Opt-in live probes of the agent-discovery well-known paths (backlog
+/// checks 5, 6, 10-12) — rate-limited GETs, disabled by default.
+pub mod agent_discovery_analyzers;
+/// Agent-readiness audit: robots.txt/sitemap/Content-Signal/AI-crawler rules
+/// and the `/.well-known/` discovery documents (backlog checks 1-6, 10-12).
+pub mod agent_readiness;
+/// Planned agent-readiness checks — P2/P3 backlog mapping, no analyzers yet.
+pub mod agent_readiness_planned;
 /// ARIA accessibility analyzers.
 pub mod aria_analyzers;
 /// Link, ARIA, and focus accessibility validators.
@@ -143,6 +151,7 @@ pub use accessibility_v2_analyzers::{
     TabindexAnalyzerV2, TableAccessibilityAnalyzerV2,
 };
 pub use accessibility_visual_analyzers::{ColorContrastAnalyzer, FocusOrderAnalyzer};
+pub use agent_readiness::AgentReadinessAnalyzer;
 pub use aria_analyzers::AriaRolesAnalyzer;
 pub use aria_focus_link_validator_analyzers::{
     AnchorTextGenericAnalyzer, AriaRequiredAttributesAnalyzer, FocusOrderPositiveTabindexAnalyzer,
@@ -1010,6 +1019,20 @@ impl AnalyzerRegistry {
             // page's own site linked from one page, with no redirect between
             // them observed, splits the site's crawl signals in two. Passive.
             Box::new(crate::analyzers::www_apex_consistency::WwwApexConsistencyAnalyzer::new()),
+            // Agent-readiness audit (docs/AGENT_READINESS_BACKLOG.md P0+P1):
+            // robots.txt/sitemap/Content-Signal/AI-crawler rules from the
+            // pre-fetched robots.txt, homepage discovery Link headers, and
+            // /.well-known/ discovery documents when the crawl fetches them.
+            // Passive — no added network requests. The non-HTML pipeline
+            // branch additionally runs the well-known subset directly, since
+            // the JSON cards never reach this registry path.
+            Box::new(crate::analyzers::agent_readiness::AgentReadinessAnalyzer::new()),
+            // Opt-in live probes of the /.well-known/ discovery surface (the
+            // same checks, from explicit rate-limited GETs instead of
+            // crawl-encountered documents). Disabled unless
+            // CRAWLKIT_AGENT_DISCOVERY=1, so default crawls and every
+            // registry fixture are unaffected; emits nothing when disabled.
+            Box::new(crate::analyzers::agent_discovery_analyzers::AgentDiscoveryAnalyzer::new()),
             // Lighthouse / CWV report ingestion (GAP G5). Silent on every
             // ordinary body; produces findings only when the body is a
             // Lighthouse JSON report. Makes no network requests and never

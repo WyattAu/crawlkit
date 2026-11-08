@@ -396,10 +396,20 @@ impl CrawlRun<'_> {
         let mut findings = if is_html_document {
             self.analyzer_registry.analyze(&ctx)
         } else {
-            vec![crate::analyzers::non_html_finding(
+            let mut findings = vec![crate::analyzers::non_html_finding(
                 &ctx.page.url,
                 ctx.content_type,
-            )]
+            )];
+            // The agent-readiness well-known checks (backlog 5, 10-12) are
+            // exactly about the JSON documents the HTML gate excludes, so
+            // they run here against the stored response. Path-matched: silent
+            // on every non-HTML resource whose path is not one of the four
+            // well-known paths, so ordinary resources gain no findings.
+            findings.extend(
+                crate::analyzers::agent_readiness::AgentReadinessAnalyzer::new()
+                    .analyze_resource(&ctx),
+            );
+            findings
         };
 
         // Crawl plugins run after the built-ins, with the B4 structured

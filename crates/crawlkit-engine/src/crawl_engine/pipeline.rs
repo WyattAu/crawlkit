@@ -518,6 +518,14 @@ impl CrawlRun<'_> {
             h1_count: Some(parsed.headings.iter().filter(|h| h.level == 1).count()),
             heading_count: Some(parsed.headings.len()),
             extractions: extractions_json,
+            // og:image, resolved to an absolute URL when the page declares it
+            // relative (the common `/img/cover.jpg` form) so stored previews
+            // render a usable image reference.
+            og_image: parsed.meta.og.image.as_deref().map(|raw| {
+                url.join(raw)
+                    .map(|absolute| absolute.to_string())
+                    .unwrap_or_else(|_| raw.to_string())
+            }),
         };
         if let Some(encryption) = self.cfg.encryption.as_ref() {
             if encryption.is_enabled() {

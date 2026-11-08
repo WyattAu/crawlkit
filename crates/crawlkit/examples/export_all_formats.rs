@@ -159,6 +159,7 @@ fn page_from(url: &Url, title: &Option<String>, status_code: u16, body_size: usi
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     }
 }
 
@@ -218,6 +219,7 @@ fn sample_page_and_issues(url: &Url) -> (PageData, Vec<Issue>) {
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     };
     let issues = vec![
         Issue {

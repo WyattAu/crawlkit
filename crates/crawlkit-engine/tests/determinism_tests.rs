@@ -176,6 +176,7 @@ fn seed_unsorted_crawl(storage: &Storage, crawl_id: &str) {
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     };
 
     // Deliberately unsorted insertion order.

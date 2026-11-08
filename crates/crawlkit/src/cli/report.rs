@@ -243,15 +243,16 @@ fn collapse_whitespace(value: &str) -> String {
 
 /// One page's share preview, derived from the meta data the crawler stored.
 ///
-/// `og:image`/`og:image:width`/`og:image:height` are parsed at crawl time but
-/// not persisted to the report database, so there is deliberately no image
-/// field here: the frames render a fixed placeholder instead of a plausible
-/// URL that was never observed.
+/// `image` is the stored, absolute-resolved `og:image` when the crawl observed
+/// one (`PageData.og_image`); frames render it as the card image. Pages with
+/// no observed og:image keep the fixed placeholder, never a plausible-looking
+/// URL that was never seen.
 struct SharePreview {
     url: String,
     title: String,
     description: String,
     site_name: String,
+    image: Option<String>,
 }
 
 /// Derive one [`SharePreview`] from a stored page: canonical URL when the
@@ -280,6 +281,7 @@ fn share_preview_from_page(page: &PageData) -> SharePreview {
             .clone()
             .unwrap_or_else(|| "No meta description stored for this page.".to_string()),
         site_name,
+        image: page.og_image.clone(),
     }
 }
 
@@ -313,7 +315,8 @@ fn render_share_previews_html(pages: &[PageData]) -> String {
     let mut html = String::from("<h2>Social share previews</h2>\n");
     html.push_str(
         "<p class=\"ck-meta\">Card text is derived from the stored page meta. \
-         og:image is not persisted by the crawler, so image slots are placeholders.</p>\n",
+         Image slots show the stored og:image when the crawl observed one and \
+         fall back to a placeholder otherwise.</p>\n",
     );
     for page in pages.iter().take(PREVIEW_PAGE_LIMIT) {
         let preview = share_preview_from_page(page);
@@ -322,7 +325,13 @@ fn render_share_previews_html(pages: &[PageData]) -> String {
         let description = escape_html(&preview.description);
         let site = escape_html(&preview.site_name);
         let crumb = escape_html(&breadcrumb_url(&preview.url));
-        let image_box = "<div class=\"ck-image-box\">og:image not stored</div>";
+        let image_box = match preview.image.as_deref() {
+            Some(src) => format!(
+                "<img class=\"ck-image-box\" src=\"{}\" alt=\"og:image\">",
+                escape_html(src)
+            ),
+            None => "<div class=\"ck-image-box\">og:image not stored</div>".to_string(),
+        };
         html.push_str(&format!(
             "<h3>{url}</h3>\n\
              <div class=\"ck-frame\"><span class=\"ck-platform\">Google</span>\n\
@@ -367,7 +376,7 @@ fn render_share_previews_markdown(pages: &[PageData]) -> String {
         "\n## Social share previews\n\n\
          Card text derived from stored page meta. Styled mock frames for\n\
          Google, Facebook, X, LinkedIn, and iMessage are rendered by the\n\
-         html format (and `--pdf`); og:image is not persisted by the crawler.\n",
+         html format (and `--pdf`), using the stored og:image when present.\n",
     );
     if pages.is_empty() {
         md.push_str("\nNo pages stored for this crawl.\n");
@@ -375,15 +384,21 @@ fn render_share_previews_markdown(pages: &[PageData]) -> String {
     }
     for page in pages.iter().take(PREVIEW_PAGE_LIMIT) {
         let preview = share_preview_from_page(page);
+        let image_line = preview
+            .image
+            .as_deref()
+            .map(|src| format!("\n- **Image:** {}", collapse_whitespace(src)))
+            .unwrap_or_default();
         md.push_str(&format!(
             "\n### {}\n\n\
              - **Title:** {}\n\
              - **Description:** {}\n\
-             - **Site:** {}\n",
+             - **Site:** {}{}\n",
             collapse_whitespace(&preview.url),
             collapse_whitespace(&preview.title),
             collapse_whitespace(&preview.description),
             collapse_whitespace(&preview.site_name),
+            image_line,
         ));
     }
     md
@@ -1669,6 +1684,52 @@ mod tests {
         let html = render_share_previews_html(&pages);
         assert!(html.contains("Untitled page"));
         assert!(html.contains("No meta description stored"));
+    }
+
+    /// A stored og:image renders as the card image, HTML-escaped; a page with
+    /// none keeps the fixed placeholder (never a fabricated URL).
+    #[test]
+    fn previews_html_uses_stored_og_image_with_placeholder_fallback() {
+        let mut with_image = preview_page("https://example.com/a", Some("A"), Some("d"));
+        with_image.og_image = Some("https://example.com/cover.jpg?a=1&b=2".to_string());
+        let html = render_share_previews_html(std::slice::from_ref(&with_image));
+        assert!(
+            html.contains("src=\"https://example.com/cover.jpg?a=1&amp;b=2\""),
+            "stored og:image must render escaped: {html}"
+        );
+        assert!(!html.contains("og:image not stored"));
+
+        let bare = preview_page("https://example.com/b", None, None);
+        let html = render_share_previews_html(std::slice::from_ref(&bare));
+        assert!(
+            html.contains("og:image not stored"),
+            "missing og:image keeps the placeholder: {html}"
+        );
+        assert!(!html.contains("<img"), "no img tag without a stored image");
+
+        // The image src must not inject markup.
+        let mut evil = preview_page("https://example.com/c", Some("C"), Some("d"));
+        evil.og_image = Some("https://x/\"><script>alert(1)</script>".to_string());
+        let html = render_share_previews_html(std::slice::from_ref(&evil));
+        assert!(
+            !html.contains("<script>alert"),
+            "src must be escaped: {html}"
+        );
+    }
+
+    #[test]
+    fn previews_markdown_lists_stored_og_image() {
+        let mut page = preview_page("https://example.com/post", Some("T"), Some("D"));
+        page.og_image = Some("https://example.com/cover.jpg".to_string());
+        let md = render_share_previews_markdown(std::slice::from_ref(&page));
+        assert!(
+            md.contains("**Image:** https://example.com/cover.jpg"),
+            "{md}"
+        );
+
+        let bare = preview_page("https://example.com/bare", None, None);
+        let md = render_share_previews_markdown(std::slice::from_ref(&bare));
+        assert!(!md.contains("**Image:**"), "{md}");
     }
 
     /// The previews renderer must be a pure function of its input: two calls

@@ -128,6 +128,7 @@ mod export_warehouse {
             h1_count: Some(1),
             heading_count: Some(5),
             extractions: None,
+            og_image: None,
         };
         storage.insert_page(&crawl_id, &page).unwrap();
         storage

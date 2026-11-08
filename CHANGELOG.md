@@ -7,6 +7,67 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [6.0.0-alpha.6]
+
+**Released:** 2026-11-08 · gap-closure integration, scoring wired end-to-end,
+and og:image persisted for share previews.
+
+### Added
+
+- **Ten competitive gaps closed (G1–G10).** MCP server (stdio JSON-RPC:
+  `crawl`, `compare`, `report`, `findings_search`, `schedule_list`, with an
+  optional `_meta` API-key gate), CI-gate mode (`crawlkit report` → exit-code
+  floor on the computed site score), regression alerting (canonical-body
+  HMAC-signed webhook events shared with the CLI compare path), weighted
+  scoring (§G2), Core Web Vitals storage columns, run-history snapshots and
+  trend series, technology detection, clone/near-duplicate detection plus a
+  markdown export renderer, per-platform social share previews (§G9), and PDF
+  output. Each area ships with its own contract tests.
+
+- **og:image persistence (§G9 follow-up).** `PageData` gains
+  `og_image: Option<String>`, captured during the crawl from the already-parsed
+  `og:image` meta tag and resolved to an absolute URL (page-relative values
+  are joined against the page URL). SQLite gains an idempotent `og_image TEXT`
+  column migration; PostgreSQL gains `migrations/003_og_image.sql`. Share
+  previews now render the observed image in every card frame instead of the
+  fixed "og:image not stored" placeholder — pages with no og:image keep the
+  placeholder rather than an invented URL.
+
+- **Scoring wired end-to-end.** `--min-score` is live on the report path, the
+  report gains a per-page/per-category scores section (page score
+  `100 × Π (1 − wᵢ)` over finding weights), and history rows record score
+  series alongside finding counts. Basic-check analyzers extend the CI-gate
+  floor.
+
+- **Legacy dead-code modules split behind an `unstable-legacy` gate (#45)**,
+  keeping the default build warning-clean without deleting reusable checks.
+
+### Fixed
+
+- **MCP read tools no longer create stores at typo'd paths.** `report`,
+  `findings_search`, and `compare` open their SQLite store through
+  create-if-missing mode, so a nonexistent `crawl_dir`/`db_path` argument
+  silently materialized an empty `crawlkit.db` (full schema) at the typo'd
+  location before failing with a misleading "no crawls found". A missing store
+  is now rejected as invalid params (JSON-RPC −32602) without touching the
+  filesystem.
+
+- **Regression-webhook secrets that are not valid hex now abort delivery**
+  instead of silently downgrading to an unsigned POST (a fail-open receiver
+  would have accepted forgeable alerts; a fail-closed one silently dropped
+  every alert). Empty/whitespace placeholder secrets keep the historical
+  unsigned behavior. Errors remain URL-scrubbed.
+
+### Changed
+
+- Estate dependency consolidation: `ctutils 0.4.6` (RUSTSEC-2026-0385),
+  `breaker 2.0.2`, `throttle-kit 3.0.0`; pinned analyzer re-registrations
+  after the duplicate-check audit.
+
+- Toolchain: `rust-toolchain.toml` pins 1.97.0. CI's MSRV job pins
+  `RUSTUP_TOOLCHAIN=1.95.0` explicitly so the workspace MSRV claim stays
+  verified despite the file-level pin.
+
 ## [6.0.0-alpha.5]
 
 **Released:** 2026-10-04 · accuracy pass over seven audit rounds against

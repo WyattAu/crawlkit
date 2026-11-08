@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "breaker"
-version = "2.0.1"
+version = "2.0.2"
 dependencies = [
  "loom",
  "parking_lot",
@@ -1130,7 +1130,7 @@ checksum = "6f34b169b8cbbaed2b4995205f1d02d7eac4b2771df5479255fe5483e1334a39"
 
 [[package]]
 name = "crawlkit"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -1170,7 +1170,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-api"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "anyhow",
  "argon2",
@@ -1220,7 +1220,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-budget-check"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "percentile-kit",
  "serde_json",
@@ -1232,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-engine"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "aes-gcm",
  "arrow",
@@ -1297,7 +1297,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-mcp"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "anyhow",
  "clap",
@@ -1307,6 +1307,8 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
+ "subtle",
+ "tempfile",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -1316,7 +1318,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-plugin-sdk"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "crawlkit-types",
  "serde",
@@ -1328,7 +1330,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-scanner"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "async-trait",
  "axum",
@@ -1355,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "crawlkit-types"
-version = "6.0.0-alpha.5"
+version = "6.0.0-alpha.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -5748,7 +5750,7 @@ dependencies = [
 
 [[package]]
 name = "throttle-kit"
-version = "1.1.2"
+version = "3.0.0"
 dependencies = [
  "thiserror 2.0.20",
  "tokio",

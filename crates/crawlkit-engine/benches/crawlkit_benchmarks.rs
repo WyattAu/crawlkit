@@ -392,6 +392,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                         h1_count: None,
                         heading_count: None,
                         extractions: None,
+                        og_image: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -435,6 +436,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                         h1_count: None,
                         heading_count: None,
                         extractions: None,
+                        og_image: None,
                     })
                     .collect();
                 storage.insert_pages(&crawl_id, &pages).unwrap();
@@ -482,6 +484,7 @@ fn bench_storage_operations(c: &mut Criterion) {
                     h1_count: None,
                     heading_count: None,
                     extractions: None,
+                    og_image: None,
                 };
                 storage.insert_page(&crawl_id, &page).unwrap();
                 (storage, crawl_id)

@@ -24,13 +24,15 @@ name = "crawlkit-mcp"
 path = "src/main.rs"
 
 [dependencies]
-crawlkit-engine = { version = "6.0.0-alpha.5", path = "../crawlkit-engine" }
+crawlkit-engine = { version = "6.0.0-alpha.6", path = "../crawlkit-engine" }
 # Official Rust MCP SDK. Default features = base64 + macros + server; the
 # `transport-io` feature adds the stdio (newline-delimited JSON-RPC) transport.
 rmcp = { version = "3.8", features = ["transport-io"] }
 # The `JsonSchema` derive expands to `schemars::` paths, so the crate must be
 # a direct dependency even though rmcp re-exports the trait.
 schemars = "1"
+# Constant-time comparison for the API-key gate.
+subtle = "2"
 tokio.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -41,3 +43,6 @@ anyhow.workspace = true
 url.workspace = true
 clap.workspace = true
 workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+tempfile = "3"

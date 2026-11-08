@@ -166,6 +166,7 @@ fn scoped_page(id: &str, url: &str, tenant_id: Option<&str>) -> Result<PageData,
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     })
 }
 

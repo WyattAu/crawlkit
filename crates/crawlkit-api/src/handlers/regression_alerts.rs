@@ -159,7 +159,18 @@ pub async fn deliver_signed(
     secret_hex: Option<&str>,
     body: &[u8],
 ) -> Result<(), String> {
-    let secret = secret_hex.and_then(decode_secret).unwrap_or_default();
+    // A configured secret that does not decode as hex must abort delivery,
+    // not silently downgrade to an unsigned POST: the receiver would either
+    // drop every alert (fail closed) or — worse — accept unsigned bodies an
+    // attacker can forge. `None` and an empty/whitespace placeholder keep the
+    // previous unsigned behavior.
+    let secret = match secret_hex {
+        None => Vec::new(),
+        Some(hex_str) if hex_str.trim().is_empty() => Vec::new(),
+        Some(hex_str) => decode_secret(hex_str)
+            .filter(|decoded| !decoded.is_empty())
+            .ok_or_else(|| "webhook secret is not valid hex; alert not sent".to_string())?,
+    };
 
     for attempt in 0..=RETRY_ATTEMPTS {
         if attempt > 0 {
@@ -397,6 +408,56 @@ mod tests {
             requests.lock().unwrap().len(),
             1 + RETRY_ATTEMPTS as usize,
             "1 initial + 3 retries"
+        );
+    }
+
+    /// A configured secret that is not valid hex must abort delivery before
+    /// any request leaves: sending unsigned would let a receiver accept
+    /// forgeable alerts (and silently drop alerts on fail-closed receivers).
+    #[tokio::test]
+    async fn invalid_secret_hex_aborts_delivery_unsigned() {
+        let (stub, requests) = Stub::spawn(200);
+        let body = canonical_event_body(&event()).unwrap();
+        let err = deliver_signed(
+            &reqwest::Client::new(),
+            &format!("http://{}", stub.addr),
+            Some("not-hex-secret"),
+            body.as_bytes(),
+        )
+        .await
+        .expect_err("invalid hex secret must abort");
+        assert!(
+            !err.contains(&stub.addr.to_string()),
+            "error must not embed the endpoint: {err}"
+        );
+        assert!(
+            requests.lock().unwrap().is_empty(),
+            "no request may be sent with a broken secret"
+        );
+    }
+
+    /// An empty-string secret keeps the historical "unsigned placeholder"
+    /// behavior (delivery proceeds, no signature header).
+    #[tokio::test]
+    async fn empty_secret_placeholder_sends_unsigned() {
+        let (stub, requests) = Stub::spawn(200);
+        let body = canonical_event_body(&event()).unwrap();
+        deliver_signed(
+            &reqwest::Client::new(),
+            &format!("http://{}", stub.addr),
+            Some("  "),
+            body.as_bytes(),
+        )
+        .await
+        .expect("empty placeholder delivers unsigned");
+        let seen = requests.lock().unwrap();
+        assert_eq!(seen.len(), 1);
+        assert!(
+            !seen[0]
+                .to_ascii_lowercase()
+                .contains("x-crawlkit-signature"),
+            "placeholder must not produce a signature header: {}",
+            seen[0]
         );
     }
 }

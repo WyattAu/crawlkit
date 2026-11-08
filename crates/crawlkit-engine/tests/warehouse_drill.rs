@@ -90,6 +90,7 @@ fn test_page(id: &str) -> PageData {
         h1_count: Some(1),
         heading_count: Some(3),
         extractions: None,
+        og_image: None,
     }
 }
 

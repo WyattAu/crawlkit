@@ -1,11 +1,11 @@
 # VERSION.md
 
 **Project:** crawlkit
-**Current Phase:** v5.4.0 stable — Queue Graduation (ADR-015) + operator surface; scanner GA decision pending runbook §7
-**Version:** 5.4.0
-**Status:** Stable release
-**Last Updated:** 2026-09-12
-**MSRV:** 1.95.0
+**Current Phase:** v6.0.0-alpha.6 — Gap-closure integration (G1–G10) + scoring wiring; og:image persistence; rolling alpha toward 6.0.0 stable
+**Version:** 6.0.0-alpha.6
+**Status:** Rolling prerelease
+**Last Updated:** 2026-11-08
+**MSRV:** 1.95.0 (dev toolchain pinned to 1.97.0 via rust-toolchain.toml)
 
 ---
 
@@ -24,6 +24,7 @@
 | 24 | v5.0.0 Ground Truth | Complete | 2026-08-27 | Type unification (crawlkit-types); DIP fix (dyn StorageBackend); client library completion; doc reconciliation; SSRF dedup; dead code gating |
 | 26 | v5.4.0 Queue Graduation | Released | 2026-09-12 | ADR-015 lease queue + operator surface; scanner fan-out, abuse limits, metrics data plane; scanner GA decision pending §7 |
 | 25 | v5.2.0 Truth and Surface | Released | 2026-09-11 | Capability manifest CI drift gate; schedule CLI; GSC → stable; findings JSON schema + conformance tests; 100% client parity (Python/Go/Node); hosted-scanner prototype (ADR-012) |
+| 27 | v6.0.0-alpha.6 Gap Closure | Released | 2026-11-08 | Ten competitive gaps (MCP, CI gate, alerting, scoring, CWV, history, tech-detection, clone/md, previews, PDF); scoring wired end-to-end; og:image persisted; legacy modules gated |
 
 ## Current State
 
@@ -35,7 +36,7 @@
 - **Analyzer Count:** Configuration/version-dependent; see `docs/capabilities.toml`
 - **Clippy Warnings:** 0 in the verified baseline
 - **Unsafe Code:** Denied in ordinary workspace code; scoped FFI exists with safety documentation
-- **Workspace Crates:** 6 (crawlkit, crawlkit-api, crawlkit-engine, crawlkit-plugin-sdk, crawlkit-scanner, crawlkit-types)
+- **Workspace Crates:** 8 (crawlkit, crawlkit-api, crawlkit-budget-check, crawlkit-engine, crawlkit-mcp, crawlkit-plugin-sdk, crawlkit-scanner, crawlkit-types)
 - **Client Libraries:** Python 100%, Go 100%, Node.js 100% (full marketplace surface incl. search/rate/download/verify as of 2026-09-11)
 
 ## Breaking Changes (v5.0.0)
@@ -52,6 +53,7 @@
 
 | Version | Date | Change |
 |---------|------|--------|
+| 6.0.0-alpha.6 | 2026-11-08 | Gap-closure integration: all ten competitive gaps (G1–G10), scoring wired (--min-score, scores section, history score rows), og:image persisted + rendered in share previews, MCP store-path validation, webhook secret hardening, rust-toolchain 1.97.0 |
 | 0.1.0 | 2026-07-22 | Initial release |
 | 0.1.1 | 2026-07-23 | Phase -1 complete |
 | 0.4.0 | 2026-07-23 | Major release: 28 analyzers, AI/WASM, REST API, cross-platform |
@@ -78,4 +80,4 @@
 
 ---
 
-*Historical phase record; current workspace version: 5.4.0*
+*Historical phase record; current workspace version: 6.0.0-alpha.6*

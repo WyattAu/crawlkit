@@ -125,6 +125,7 @@ proptest! {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         };
 
         storage.insert_page(&crawl_id, &page).unwrap();
@@ -177,6 +178,7 @@ proptest! {
                 h1_count: None,
                 heading_count: None,
             extractions: None,
+            og_image: None,
             };
             storage.insert_page(&crawl_id, &page).unwrap();
         }

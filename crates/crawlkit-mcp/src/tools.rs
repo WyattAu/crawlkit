@@ -48,11 +48,23 @@ fn resolve_db(path: &str) -> PathBuf {
 
 /// Open a crawl store, resolving `crawl_dir` and defaulting `crawl_id` to the
 /// latest crawl when absent.
+///
+/// Read-path validation: the store must already exist. `Storage::new` opens
+/// SQLite in create-if-missing mode, so opening a nonexistent path would
+/// silently materialize an empty `crawlkit.db` (with full schema) wherever the
+/// caller typo'd, then fail confusingly with "no crawls found". Reject it as
+/// invalid params instead, and never touch the filesystem beyond the stat.
 fn open_crawl(
     crawl_dir: &str,
     crawl_id: &Option<String>,
 ) -> Result<(crawlkit_engine::storage::Storage, String), ErrorData> {
     let db_path = resolve_db(crawl_dir);
+    if !db_path.exists() {
+        return Err(invalid_params(format!(
+            "crawl store not found at {} (pass an existing crawl directory or .db file)",
+            db_path.display()
+        )));
+    }
     let storage = crawlkit_engine::storage::Storage::new(&db_path)
         .map_err(|e| internal(format!("failed to open {}", db_path.display()), e))?;
     let id = match crawl_id {
@@ -427,6 +439,26 @@ mod tests {
         let dir = std::env::temp_dir();
         assert_eq!(resolve_db(dir.to_str().unwrap()), dir.join("crawlkit.db"));
         assert_eq!(resolve_db("/tmp/some.db"), PathBuf::from("/tmp/some.db"));
+    }
+
+    /// A read tool pointed at a path that does not exist must fail as invalid
+    /// params and must NOT create an empty store at that path (SQLite's
+    /// create-if-missing open previously materialized one on any typo).
+    #[test]
+    fn open_crawl_rejects_missing_store_without_creating_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("nowhere");
+        let err = open_crawl(
+            missing.to_str().unwrap(),
+            &Some("some-crawl-id".to_string()),
+        )
+        .err()
+        .expect("missing store must error");
+        assert_eq!(err.code.0, -32602, "expected invalid-params code");
+        assert!(
+            !missing.exists() && !missing.join("crawlkit.db").exists(),
+            "no store may be created at the missing path"
+        );
     }
 
     #[test]

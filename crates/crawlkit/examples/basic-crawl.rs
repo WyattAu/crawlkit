@@ -211,6 +211,7 @@ async fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         };
         if let Err(e) = storage.insert_page(&crawl_id, &page_data) {
             eprintln!("  Storage error: {e}");

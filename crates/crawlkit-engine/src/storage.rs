@@ -122,6 +122,10 @@ pub struct PageData {
     /// rules are configured for the crawl.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extractions: Option<String>,
+    /// The page's `og:image` content, resolved to an absolute URL when the
+    /// stored page declared one (absolute or page-relative).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub og_image: Option<String>,
 }
 
 #[allow(clippy::unwrap_used)]
@@ -156,6 +160,7 @@ impl Default for PageData {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         }
     }
 }
@@ -611,7 +616,7 @@ impl Storage {
         // booleans/counts) and read (`Option<i64>` in `row_to_page_data`).
         // TEXT affinity would coerce stored integers to strings and break
         // integer reads with `InvalidColumnType`.
-        let new_columns: [(&str, &str); 10] = [
+        let new_columns: [(&str, &str); 11] = [
             ("has_structured_data", "INTEGER"),
             ("schema_types", "TEXT"),
             ("viewport_ok", "INTEGER"),
@@ -622,6 +627,7 @@ impl Storage {
             ("h1_count", "INTEGER"),
             ("heading_count", "INTEGER"),
             ("extractions", "TEXT"),
+            ("og_image", "TEXT"),
         ];
         for (col, col_type) in new_columns {
             if !columns.contains(&col.to_string()) {
@@ -1050,6 +1056,7 @@ impl Storage {
     ///     h1_count: None,
     ///     heading_count: None,
     ///     extractions: None,
+    ///     og_image: None,
     /// };
     ///
     /// storage.insert_page(&crawl_id, &page).unwrap();
@@ -1061,8 +1068,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         tx.execute(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions, og_image)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
             params![
                 page.id,
                 crawl_id,
@@ -1092,6 +1099,7 @@ impl Storage {
                 page.h1_count.map(|v| v as i64),
                 page.heading_count.map(|v| v as i64),
                 page.extractions,
+                page.og_image,
             ],
         )?;
 
@@ -1134,8 +1142,8 @@ impl Storage {
         let tx = conn.unchecked_transaction()?;
 
         let mut page_stmt = tx.prepare(
-            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28)",
+            "INSERT OR REPLACE INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions, og_image)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, ?26, ?27, ?28, ?29)",
         )?;
         let mut link_stmt = tx.prepare(
             "INSERT INTO links (id, page_id, source_url, target_url, is_external) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -1171,6 +1179,7 @@ impl Storage {
                 page.h1_count.map(|v| v as i64),
                 page.heading_count.map(|v| v as i64),
                 page.extractions,
+                page.og_image,
             ])?;
 
             for link in &page.links {
@@ -1368,7 +1377,7 @@ impl Storage {
 
         let conn = self.conn.lock();
         let result = conn.query_row(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions, og_image
              FROM pages WHERE crawl_id = ?1 AND url = ?2",
             params![crawl_id, url],
             Self::row_to_page_data,
@@ -1419,6 +1428,7 @@ impl Storage {
             h1_count: row.get::<_, Option<i64>>(24)?.map(|v| v as usize),
             heading_count: row.get::<_, Option<i64>>(25)?.map(|v| v as usize),
             extractions: row.get(26)?,
+            og_image: row.get(27)?,
         })
     }
 
@@ -1466,6 +1476,7 @@ impl Storage {
     ///     h1_count: None,
     ///     heading_count: None,
     ///     extractions: None,
+    ///     og_image: None,
     /// };
     /// storage.insert_page(&crawl_id, &page).unwrap();
     ///
@@ -1476,7 +1487,7 @@ impl Storage {
     pub fn get_pages(&self, crawl_id: &str, limit: usize) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions, og_image
              FROM pages WHERE crawl_id = ?1 ORDER BY fetched_at ASC LIMIT ?2",
         )?;
 
@@ -1642,7 +1653,7 @@ impl Storage {
     ) -> Result<Vec<PageData>, StorageError> {
         let conn = self.conn.lock();
         let mut stmt = conn.prepare(
-            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions
+            "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, extractions, og_image
              FROM pages WHERE crawl_id = ?1 AND (tenant_id = ?2 OR tenant_id IS NULL)
              ORDER BY fetched_at ASC LIMIT ?3",
         )?;
@@ -2839,6 +2850,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         }
     }
 
@@ -3322,6 +3334,7 @@ mod tests {
             has_csp: Some(false),
             has_hsts: Some(true),
             images_total: Some(14),
+            og_image: Some("https://example.com/cover.jpg".to_string()),
             images_missing_alt: Some(3),
             h1_count: Some(1),
             heading_count: Some(12),
@@ -3369,6 +3382,7 @@ mod tests {
         assert_eq!(got.h1_count, page.h1_count);
         assert_eq!(got.heading_count, page.heading_count);
         assert_eq!(got.extractions, page.extractions);
+        assert_eq!(got.og_image, page.og_image);
     }
 
     #[test]
@@ -3395,6 +3409,7 @@ mod tests {
         assert_eq!(got.h1_count, page.h1_count);
         assert_eq!(got.heading_count, page.heading_count);
         assert_eq!(got.extractions, page.extractions);
+        assert_eq!(got.og_image, page.og_image);
     }
 
     // ---- Rank tracker storage tests ----

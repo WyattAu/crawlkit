@@ -560,6 +560,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         }
     }
 

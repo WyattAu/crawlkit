@@ -45,6 +45,7 @@ fn make_page_for_tenant(id: &str, url: &str, tenant: Option<&str>) -> PageData {
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     }
 }
 

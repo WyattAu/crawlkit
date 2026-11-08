@@ -86,16 +86,28 @@ impl CrawlkitMcp {
 
 /// Pure API-key check: `Ok` when the gate is disabled (`expected` is `None`)
 /// or the provided key matches, otherwise `Err` with the client-facing
-/// message. Extracted as a function so the gate is unit-testable without a
-/// live transport.
+/// message. The comparison is constant-time so a caller on a bridged
+/// (non-stdio) transport cannot recover the key by timing byte-wise
+/// short-circuits. Extracted as a function so the gate is unit-testable
+/// without a live transport.
 fn check_api_key(expected: Option<&str>, provided: Option<&str>) -> Result<(), String> {
+    use subtle::ConstantTimeEq;
     match expected {
         None => Ok(()),
-        Some(expected) if provided == Some(expected) => Ok(()),
-        Some(_) => Err(format!(
-            "unauthorized: requests must carry the API key in _meta.{}",
-            tools::META_API_KEY_FIELD
-        )),
+        Some(expected) => {
+            // Constant-time content comparison; `None` stays a miss (an
+            // empty-string key must not be bypassable by omitting the field).
+            let matched =
+                provided.is_some_and(|p| bool::from(expected.as_bytes().ct_eq(p.as_bytes())));
+            if matched {
+                Ok(())
+            } else {
+                Err(format!(
+                    "unauthorized: requests must carry the API key in _meta.{}",
+                    tools::META_API_KEY_FIELD
+                ))
+            }
+        }
     }
 }
 
@@ -287,6 +299,12 @@ mod tests {
         let err = check_api_key(Some("s3cret"), Some("wrong")).unwrap_err();
         assert!(err.contains(tools::META_API_KEY_FIELD));
         assert!(check_api_key(Some("s3cret"), None).is_err());
+        // Length mismatch must reject, and omitting the key must not
+        // accidentally match an empty-string configured key.
+        assert!(check_api_key(Some("s"), Some("s3cret")).is_err());
+        assert!(check_api_key(Some("s3cret"), Some("")).is_err());
+        assert!(check_api_key(Some(""), None).is_err());
+        assert!(check_api_key(Some(""), Some("")).is_ok());
     }
 
     /// Drive the real rmcp service over an in-memory duplex pipe — the same

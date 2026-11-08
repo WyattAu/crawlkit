@@ -345,6 +345,10 @@ jobs:
     env:
       SCCACHE_GHA_ENABLED: "true"
       RUSTC_WRAPPER: sccache
+      # rust-toolchain.toml pins the dev toolchain (1.97.0); rustup would
+      # prefer that file over the action-installed toolchain, so pin the env
+      # to keep this job verifying the workspace MSRV for real.
+      RUSTUP_TOOLCHAIN: "1.95.0"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: mozilla-actions/sccache-action@v0.0.11

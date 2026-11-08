@@ -52,6 +52,7 @@ fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         },
         PageData {
             id: "p2".into(),
@@ -82,6 +83,7 @@ fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         },
         PageData {
             id: "p3".into(),
@@ -112,6 +114,7 @@ fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         },
     ];
     storage.insert_pages(&crawl_id, &pages)?;
@@ -256,6 +259,7 @@ fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         },
         // p2 unchanged, p3 removed, p4 new
         PageData {
@@ -287,6 +291,7 @@ fn main() -> Result<()> {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         },
     ];
     storage2.insert_pages(&crawl_id2, &pages2)?;

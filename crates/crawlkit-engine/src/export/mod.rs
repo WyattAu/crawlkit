@@ -57,6 +57,7 @@ mod tests {
                 h1_count: None,
                 heading_count: None,
                 extractions: None,
+                og_image: None,
             },
             PageData {
                 id: "p2".into(),
@@ -87,6 +88,7 @@ mod tests {
                 h1_count: None,
                 heading_count: None,
                 extractions: None,
+                og_image: None,
             },
             PageData {
                 id: "p3".into(),
@@ -120,6 +122,7 @@ mod tests {
                 h1_count: None,
                 heading_count: None,
                 extractions: None,
+                og_image: None,
             },
         ];
         storage.insert_pages(crawl_id, &pages).unwrap();
@@ -497,6 +500,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         };
         storage.insert_pages(&crawl_id, &[page]).unwrap();
 
@@ -557,6 +561,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         };
         storage.insert_pages(&crawl_id, &[page]).unwrap();
 

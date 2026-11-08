@@ -1285,6 +1285,7 @@ mod tests {
             h1_count: Some(1),
             heading_count: Some(5),
             extractions: None,
+            og_image: None,
         }
     }
 

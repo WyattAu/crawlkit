@@ -196,6 +196,7 @@ fn row_to_page_data(row: &sqlx::postgres::PgRow) -> Result<PageData, sqlx::error
             .try_get::<Option<i64>, _>("heading_count")?
             .map(|v| v as usize),
         extractions: None,
+        og_image: row.try_get("og_image")?,
     })
 }
 
@@ -357,8 +358,8 @@ impl StorageBackend for PgStorage {
             let mut tx = pool.begin().await?;
 
             sqlx::query(
-                "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+                "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, og_image)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
                  ON CONFLICT (id) DO UPDATE SET
                      crawl_id = EXCLUDED.crawl_id,
                      url = EXCLUDED.url,
@@ -385,7 +386,8 @@ impl StorageBackend for PgStorage {
                      images_total = EXCLUDED.images_total,
                      images_missing_alt = EXCLUDED.images_missing_alt,
                      h1_count = EXCLUDED.h1_count,
-                     heading_count = EXCLUDED.heading_count",
+                     heading_count = EXCLUDED.heading_count,
+                     og_image = EXCLUDED.og_image",
             )
             .bind(&page.id)
             .bind(&crawl_id)
@@ -414,6 +416,7 @@ impl StorageBackend for PgStorage {
             .bind(page.images_missing_alt.map(|v| v as i64))
             .bind(page.h1_count.map(|v| v as i64))
             .bind(page.heading_count.map(|v| v as i64))
+            .bind(&page.og_image)
             .execute(&mut *tx)
             .await?;
 
@@ -451,8 +454,8 @@ impl StorageBackend for PgStorage {
 
             for page in &pages {
                 sqlx::query(
-                    "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
+                    "INSERT INTO pages (id, crawl_id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, og_image)
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
                      ON CONFLICT (id) DO UPDATE SET
                          crawl_id = EXCLUDED.crawl_id,
                          url = EXCLUDED.url,
@@ -479,7 +482,8 @@ impl StorageBackend for PgStorage {
                          images_total = EXCLUDED.images_total,
                          images_missing_alt = EXCLUDED.images_missing_alt,
                          h1_count = EXCLUDED.h1_count,
-                         heading_count = EXCLUDED.heading_count",
+                         heading_count = EXCLUDED.heading_count,
+                         og_image = EXCLUDED.og_image",
                 )
                 .bind(&page.id)
                 .bind(&crawl_id)
@@ -508,6 +512,7 @@ impl StorageBackend for PgStorage {
                 .bind(page.images_missing_alt.map(|v| v as i64))
                 .bind(page.h1_count.map(|v| v as i64))
                 .bind(page.heading_count.map(|v| v as i64))
+                .bind(&page.og_image)
                 .execute(&mut *tx)
                 .await?;
 
@@ -540,7 +545,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let result = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, og_image
                  FROM pages WHERE crawl_id = $1 AND url = $2",
             )
             .bind(&crawl_id)
@@ -565,7 +570,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, og_image
                  FROM pages WHERE crawl_id = $1 ORDER BY fetched_at ASC LIMIT $2",
             )
             .bind(&crawl_id)
@@ -594,7 +599,7 @@ impl StorageBackend for PgStorage {
         let rt = blocking_runtime().handle().clone();
         rt.block_on(async {
             let rows = sqlx::query(
-                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count
+                "SELECT id, url, final_url, status_code, title, description, canonical, word_count, load_time_ms, body_size, fetched_at, tenant_id, etag, last_modified, cwv_lcp, cwv_cls, cwv_inp, has_structured_data, schema_types, viewport_ok, has_csp, has_hsts, images_total, images_missing_alt, h1_count, heading_count, og_image
                  FROM pages WHERE crawl_id = $1 AND (tenant_id = $2 OR tenant_id IS NULL)
                  ORDER BY fetched_at ASC LIMIT $3",
             )
@@ -1341,6 +1346,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         }
     }
 
@@ -1557,6 +1563,7 @@ mod tests {
         page.images_missing_alt = Some(3);
         page.h1_count = Some(1);
         page.heading_count = Some(7);
+        page.og_image = Some("https://example.com/cover.jpg".to_string());
         storage.insert_page(&crawl_id, &page).unwrap();
 
         let retrieved = storage
@@ -1572,6 +1579,10 @@ mod tests {
         assert_eq!(retrieved.images_missing_alt, Some(3));
         assert_eq!(retrieved.h1_count, Some(1));
         assert_eq!(retrieved.heading_count, Some(7));
+        assert_eq!(
+            retrieved.og_image.as_deref(),
+            Some("https://example.com/cover.jpg")
+        );
         storage.finish().unwrap();
     }
 

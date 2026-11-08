@@ -42,6 +42,7 @@ fn make_page(id: &str, url: &str, status: u16) -> PageData {
         h1_count: None,
         heading_count: None,
         extractions: None,
+        og_image: None,
     }
 }
 

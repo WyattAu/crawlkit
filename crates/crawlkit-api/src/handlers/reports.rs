@@ -41,15 +41,26 @@ pub fn report_dir(db_path: &std::path::Path) -> PathBuf {
 
 /// Persist a report for `run_id`; returns the written path.
 ///
+/// `run_id` is validated here too (not just on the read side): the path is
+/// built from it, so a caller passing raw user input must not be able to
+/// escape the reports directory.
+///
 /// # Errors
 ///
 /// Returns the I/O error when the directory cannot be created or the file
-/// cannot be written.
+/// cannot be written, and [`std::io::ErrorKind::InvalidInput`] for a
+/// malformed `run_id`.
 pub fn store_report(
     db_path: &std::path::Path,
     run_id: &str,
     html: &str,
 ) -> std::io::Result<PathBuf> {
+    if !valid_run_id(run_id) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("invalid run id '{run_id}'"),
+        ));
+    }
     let dir = report_dir(db_path);
     std::fs::create_dir_all(&dir)?;
     let path = dir.join(format!("{run_id}.html"));
@@ -289,6 +300,24 @@ mod tests {
         assert!(!valid_run_id("a b"));
     }
 
+    /// The write path must refuse traversal ids just like the read path:
+    /// no file may be created outside the reports directory.
+    #[test]
+    fn store_report_rejects_traversal_run_ids() {
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("api.db");
+        for evil in ["../escape", "a/b", "", ".."] {
+            let err = store_report(&db_path, evil, "<html/>")
+                .expect_err("traversal run id must be rejected");
+            assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput);
+        }
+        assert!(
+            !dir.path().join("escape.html").exists(),
+            "no file may escape the reports dir"
+        );
+        assert!(!db_path.exists(), "no side effects outside reports/");
+    }
+
     // ENV_LOCK intentionally serializes CRAWLKIT_DB_PATH across the awaits below:
     // the async handlers under test mutate/read env-derived state, and parallel
     // tests must not race the process-global env. Test-only; scoped to this file.
@@ -368,6 +397,7 @@ mod tests {
             h1_count: None,
             heading_count: None,
             extractions: None,
+            og_image: None,
         };
         storage.insert_pages(&crawl_id, &[page]).unwrap();
         storage

@@ -641,6 +641,8 @@ dependencies = [
 [[package]]
 name = "breaker"
 version = "2.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f1ea7cb83eba349c1c4ba8978fecd16598b6c1d8d3dde7c0d0fe637157eb4469"
 dependencies = [
  "loom",
  "parking_lot",
@@ -5751,6 +5753,8 @@ dependencies = [
 [[package]]
 name = "throttle-kit"
 version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "55926fda5d1dfb83af51316e951904d044f7ce822d080ab79a6e444c2cbb977b"
 dependencies = [
  "thiserror 2.0.20",
  "tokio",
@@ -6975,6 +6979,7 @@ dependencies = [
 [[package]]
 name = "webhookkit"
 version = "2.2.4"
+source = "git+https://github.com/WyattAu/webhookkit?rev=49de820c61ed744d2a09bfcd766707ef6dee4b3b#49de820c61ed744d2a09bfcd766707ef6dee4b3b"
 dependencies = [
  "hex",
  "hmac 0.13.0",

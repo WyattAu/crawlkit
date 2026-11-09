@@ -641,8 +641,7 @@ dependencies = [
 [[package]]
 name = "breaker"
 version = "2.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f1ea7cb83eba349c1c4ba8978fecd16598b6c1d8d3dde7c0d0fe637157eb4469"
+source = "git+https://github.com/WyattAu/breaker?rev=0b19ccbdc3bf1ab384c40a0544532e45d928482b#0b19ccbdc3bf1ab384c40a0544532e45d928482b"
 dependencies = [
  "loom",
  "parking_lot",
@@ -5753,9 +5752,9 @@ dependencies = [
 [[package]]
 name = "throttle-kit"
 version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "55926fda5d1dfb83af51316e951904d044f7ce822d080ab79a6e444c2cbb977b"
+source = "git+https://github.com/WyattAu/ratelimit?rev=9f56ef9ec7e21fa378b2366c484fe7e9c47fc2a9#9f56ef9ec7e21fa378b2366c484fe7e9c47fc2a9"
 dependencies = [
+ "dashmap",
  "thiserror 2.0.20",
  "tokio",
  "tracing",

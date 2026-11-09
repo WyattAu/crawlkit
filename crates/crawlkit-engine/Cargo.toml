@@ -109,11 +109,11 @@ crawlkit-types = { version = "6.0.0-alpha.6", path = "../crawlkit-types" }
 # Consolidated estate rate limiter: crawlkit's limiter is a thin scheduler
 # over `ratelimit`'s GCRA cell. The integer-µs GCRA core is Lean-proven in
 # ratelimit/proofs (namespace `Ratelimit.Gcra`, THM-RATE-001..007).
-ratelimit = { version = "3.0", package = "throttle-kit", default-features = false }
+ratelimit = { git = "https://github.com/WyattAu/ratelimit", rev = "9f56ef9ec7e21fa378b2366c484fe7e9c47fc2a9", package = "throttle-kit" }
 # Consolidated estate circuit breaker: crawlkit's per-domain breaker
 # delegates its Closed/Open/HalfOpen FSM to `breaker` (consecutive-streak
 # tripping, fixed cooldown, success-threshold half-open recovery).
-breaker = { version = "2.0", default-features = false }
+breaker = { git = "https://github.com/WyattAu/breaker", rev = "0b19ccbdc3bf1ab384c40a0544532e45d928482b" }
 # Transfer-encoding negotiation. reqwest's own `gzip`/`brotli`/`deflate`
 # features strip `Content-Encoding` while decoding, which makes a compressed
 # response indistinguishable from an uncompressed one; crawlkit decodes

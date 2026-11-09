@@ -5,6 +5,7 @@
 //! Configuration can be supplied via CLI flags or a TOML config file.
 #![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used, clippy::panic))]
 
+#[cfg(feature = "full")]
 mod alerts;
 mod cli;
 
